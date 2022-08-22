@@ -19,7 +19,7 @@ pub fn read_test(vm: &mut Vm, text: &'static str) -> Value {
 pub fn exec(vm: &mut Vm, input: &'static str) -> Value {
     let exp = read_test(vm, input);
     let mut env = CompileEnvironment::new(vm);
-    let mut state = CompileState::new(env.vm_mut());
+    let mut state = CompileState::new();
     compile(&mut env, &mut state, exp, 0).unwrap();
     state.chunk.encode0(RET, Some(1)).unwrap();
     vm.execute(Arc::new(state.chunk)).unwrap();
@@ -29,7 +29,7 @@ pub fn exec(vm: &mut Vm, input: &'static str) -> Value {
 pub fn exec_compile_error(vm: &mut Vm, input: &'static str) {
     let exp = read_test(vm, input);
     let mut env = CompileEnvironment::new(vm);
-    let mut state = CompileState::new(env.vm_mut());
+    let mut state = CompileState::new();
     assert!(
         compile(&mut env, &mut state, exp, 0).is_err(),
         "expected compile error"
@@ -39,7 +39,7 @@ pub fn exec_compile_error(vm: &mut Vm, input: &'static str) {
 pub fn exec_runtime_error(vm: &mut Vm, input: &'static str) {
     let exp = read_test(vm, input);
     let mut env = CompileEnvironment::new(vm);
-    let mut state = CompileState::new(env.vm_mut());
+    let mut state = CompileState::new();
     compile(&mut env, &mut state, exp, 0).unwrap();
     state.chunk.encode0(RET, Some(1)).unwrap();
     assert!(

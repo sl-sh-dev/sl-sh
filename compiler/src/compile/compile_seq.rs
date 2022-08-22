@@ -9,7 +9,7 @@ pub(crate) fn compile_cons(
     result: usize,
 ) -> VMResult<bool> {
     match car {
-        Value::Symbol(i) if i == state.specials.list => {
+        Value::Symbol(i) if i == env.specials().list => {
             state.tail = false;
             let mut max = 0;
             for r in cdr {
@@ -24,7 +24,7 @@ pub(crate) fn compile_cons(
                 env.own_line(),
             )?;
         }
-        Value::Symbol(i) if i == state.specials.list_append => {
+        Value::Symbol(i) if i == env.specials().list_append => {
             state.tail = false;
             let mut max = 0;
             for r in cdr {
@@ -39,7 +39,7 @@ pub(crate) fn compile_cons(
                 env.own_line(),
             )?;
         }
-        Value::Symbol(i) if i == state.specials.cons => {
+        Value::Symbol(i) if i == env.specials().cons => {
             state.tail = false;
             if cdr.len() != 2 {
                 return Err(VMError::new_compile(format!(
@@ -58,7 +58,7 @@ pub(crate) fn compile_cons(
                 env.own_line(),
             )?;
         }
-        Value::Symbol(i) if i == state.specials.car => {
+        Value::Symbol(i) if i == env.specials().car => {
             state.tail = false;
             if cdr.len() != 1 {
                 return Err(VMError::new_compile(format!(
@@ -72,7 +72,7 @@ pub(crate) fn compile_cons(
                 .chunk
                 .encode2(CAR, result as u16, (result + 1) as u16, env.own_line())?;
         }
-        Value::Symbol(i) if i == state.specials.cdr => {
+        Value::Symbol(i) if i == env.specials().cdr => {
             state.tail = false;
             if cdr.len() != 1 {
                 return Err(VMError::new_compile(format!(
@@ -86,7 +86,7 @@ pub(crate) fn compile_cons(
                 .chunk
                 .encode2(CDR, result as u16, (result + 1) as u16, env.own_line())?;
         }
-        Value::Symbol(i) if i == state.specials.xar => {
+        Value::Symbol(i) if i == env.specials().xar => {
             state.tail = false;
             if cdr.len() != 2 {
                 return Err(VMError::new_compile(format!(
@@ -101,7 +101,7 @@ pub(crate) fn compile_cons(
                 .chunk
                 .encode2(XAR, result as u16, (result + 1) as u16, env.own_line())?;
         }
-        Value::Symbol(i) if i == state.specials.xdr => {
+        Value::Symbol(i) if i == env.specials().xdr => {
             state.tail = false;
             if cdr.len() != 2 {
                 return Err(VMError::new_compile(format!(
@@ -129,7 +129,7 @@ pub(crate) fn compile_vec(
     result: usize,
 ) -> VMResult<bool> {
     match car {
-        Value::Symbol(i) if i == state.specials.vec => {
+        Value::Symbol(i) if i == env.specials().vec => {
             state.tail = false;
             let mut max = 0;
             for r in cdr {
@@ -144,7 +144,7 @@ pub(crate) fn compile_vec(
                 env.own_line(),
             )?;
         }
-        Value::Symbol(i) if i == state.specials.make_vec => {
+        Value::Symbol(i) if i == env.specials().make_vec => {
             state.tail = false;
             if cdr.is_empty() {
                 state.chunk.encode3(
@@ -177,7 +177,7 @@ pub(crate) fn compile_vec(
                 )));
             }
         }
-        Value::Symbol(i) if i == state.specials.vec_push => {
+        Value::Symbol(i) if i == env.specials().vec_push => {
             state.tail = false;
             if cdr.len() != 2 {
                 return Err(VMError::new_compile(format!(
@@ -192,7 +192,7 @@ pub(crate) fn compile_vec(
                 .chunk
                 .encode2(VECPSH, result as u16, (result + 1) as u16, env.own_line())?;
         }
-        Value::Symbol(i) if i == state.specials.vec_pop => {
+        Value::Symbol(i) if i == env.specials().vec_pop => {
             state.tail = false;
             if cdr.len() != 1 {
                 return Err(VMError::new_compile(format!(
@@ -206,7 +206,7 @@ pub(crate) fn compile_vec(
                 .chunk
                 .encode2(VECPOP, (result + 1) as u16, result as u16, env.own_line())?;
         }
-        Value::Symbol(i) if i == state.specials.vec_nth => {
+        Value::Symbol(i) if i == env.specials().vec_nth => {
             state.tail = false;
             if cdr.len() != 2 {
                 return Err(VMError::new_compile(format!(
@@ -225,7 +225,7 @@ pub(crate) fn compile_vec(
                 env.own_line(),
             )?;
         }
-        Value::Symbol(i) if i == state.specials.vec_set => {
+        Value::Symbol(i) if i == env.specials().vec_set => {
             state.tail = false;
             if cdr.len() != 3 {
                 return Err(VMError::new_compile(format!(
@@ -245,7 +245,7 @@ pub(crate) fn compile_vec(
                 env.own_line(),
             )?;
         }
-        Value::Symbol(i) if i == state.specials.vec_len => {
+        Value::Symbol(i) if i == env.specials().vec_len => {
             state.tail = false;
             if cdr.len() != 1 {
                 return Err(VMError::new_compile(format!(
@@ -259,7 +259,7 @@ pub(crate) fn compile_vec(
                 .chunk
                 .encode2(VECLEN, result as u16, (result + 1) as u16, env.own_line())?;
         }
-        Value::Symbol(i) if i == state.specials.vec_clr => {
+        Value::Symbol(i) if i == env.specials().vec_clr => {
             state.tail = false;
             if cdr.len() != 1 {
                 return Err(VMError::new_compile(format!(

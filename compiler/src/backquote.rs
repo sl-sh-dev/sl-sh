@@ -328,7 +328,7 @@ mod tests {
         let exp = read_test(vm, input);
         if let Ok(exp) = exp {
             let mut env = CompileEnvironment::new(vm);
-            let mut state = CompileState::new(env.vm_mut());
+            let mut state = CompileState::new();
             compile(&mut env, &mut state, exp, 0)?;
             state.chunk.encode0(RET, Some(1))?;
             vm.execute(Arc::new(state.chunk))?;

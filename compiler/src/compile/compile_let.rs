@@ -5,7 +5,7 @@ use slvm::error::*;
 use slvm::opcodes::*;
 use slvm::value::*;
 
-use crate::compile::destructure::{compile_destructures, do_destructure, setup_dbg, DestructType};
+use crate::compile::destructure::{setup_dbg, DestructState, DestructType};
 use crate::compile::util::get_args_iter;
 use crate::state::*;
 use crate::{compile, CompileEnvironment};
@@ -26,8 +26,7 @@ fn let_inner(
     let mut cdr_iter = cdr.iter();
     let args = cdr_iter.next().unwrap(); // unwrap safe, length is at least 1
     let mut right_exps: Vec<(usize, Value)> = Vec::new();
-    let mut destructures = Vec::new();
-    let mut all_optionals = Vec::new();
+    let mut destruct_state = DestructState::new();
     env.set_line_val(state, *args);
     let args: Vec<Value> = get_args_iter(env, *args, "let")?.collect();
     let mut args_iter = args.iter();
@@ -36,7 +35,7 @@ fn let_inner(
         match a {
             Value::Symbol(i) => {
                 let reg = symbols.borrow_mut().insert(*i) + 1;
-                setup_dbg(state, reg, *i);
+                setup_dbg(env, state, reg, *i);
                 if let Some(r) = args_iter.next() {
                     right_exps.push((reg, *r));
                 } else {
@@ -45,35 +44,23 @@ fn let_inner(
             }
             Value::Vector(h) => {
                 let reg = symbols.borrow_mut().reserve_reg() + 1;
-                setup_dbg(state, reg, state.specials.scratch);
+                setup_dbg(env, state, reg, env.specials().scratch);
                 if let Some(r) = args_iter.next() {
                     right_exps.push((reg, *r));
                 } else {
                     return Err(VMError::new_compile("must have a value"));
                 }
-                do_destructure(
-                    env,
-                    state,
-                    DestructType::Vector(*h, reg),
-                    &mut all_optionals,
-                    &mut destructures,
-                )?;
+                destruct_state.do_destructure(env, state, DestructType::Vector(*h, reg))?;
             }
             Value::Map(h) => {
                 let reg = symbols.borrow_mut().reserve_reg() + 1;
-                setup_dbg(state, reg, state.specials.scratch);
+                setup_dbg(env, state, reg, env.specials().scratch);
                 if let Some(r) = args_iter.next() {
                     right_exps.push((reg, *r));
                 } else {
                     return Err(VMError::new_compile("must have a value"));
                 }
-                do_destructure(
-                    env,
-                    state,
-                    DestructType::Map(*h, reg),
-                    &mut all_optionals,
-                    &mut destructures,
-                )?;
+                destruct_state.do_destructure(env, state, DestructType::Map(*h, reg))?;
             }
             _ => return Err(VMError::new_compile("must be a symbol")),
         }
@@ -83,7 +70,7 @@ fn let_inner(
         compile(env, state, val, reg)?;
         free_reg = reg + 1;
     }
-    compile_destructures(env, state, &mut free_reg, &destructures, &all_optionals)?;
+    destruct_state.compile(env, state, &mut free_reg)?;
     let last_thing = if cdr.len() > 1 { cdr.len() - 2 } else { 0 };
     for (i, r) in cdr_iter.enumerate() {
         if i == last_thing {

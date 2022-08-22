@@ -45,7 +45,7 @@ fn compile_list(
         || compile_vec(env, state, car, cdr, result)?)
     {
         match car {
-            Value::Symbol(i) if i == state.specials.doc_string => {
+            Value::Symbol(i) if i == env.specials().doc_string => {
                 if cdr.len() == 1 {
                     state.doc_string = Some(cdr[0]);
                     return Ok(());
@@ -53,30 +53,30 @@ fn compile_list(
                     return Err(VMError::new_compile("Malformed doc-string form."));
                 }
             }
-            Value::Symbol(i) if i == state.specials.fn_ => {
+            Value::Symbol(i) if i == env.specials().fn_ => {
                 if cdr.len() > 1 {
                     compile_fn(env, state, cdr[0], &cdr[1..], result, false)?
                 } else {
                     return Err(VMError::new_compile("Malformed fn form."));
                 }
             }
-            Value::Symbol(i) if i == state.specials.mac_ => {
+            Value::Symbol(i) if i == env.specials().mac_ => {
                 if cdr.len() > 1 {
                     compile_fn(env, state, cdr[0], &cdr[1..], result, true)?
                 } else {
                     return Err(VMError::new_compile("Malformed macro form."));
                 }
             }
-            Value::Symbol(i) if i == state.specials.if_ => {
+            Value::Symbol(i) if i == env.specials().if_ => {
                 compile_if(env, state, cdr, result)?;
             }
-            Value::Symbol(i) if i == state.specials.while_ => {
+            Value::Symbol(i) if i == env.specials().while_ => {
                 let tail = state.tail;
                 state.tail = false;
                 compile_while(env, state, cdr, result)?;
                 state.tail = tail;
             }
-            Value::Symbol(i) if i == state.specials.do_ => {
+            Value::Symbol(i) if i == env.specials().do_ => {
                 let last_thing = cdr.len() - 1;
                 let old_tail = state.tail;
                 state.tail = false;
@@ -87,15 +87,15 @@ fn compile_list(
                     compile(env, state, *r, result)?;
                 }
             }
-            Value::Symbol(i) if i == state.specials.def => {
+            Value::Symbol(i) if i == env.specials().def => {
                 state.tail = false;
                 compile_def(env, state, cdr, result)?;
             }
-            Value::Symbol(i) if i == state.specials.set => {
+            Value::Symbol(i) if i == env.specials().set => {
                 state.tail = false;
                 compile_set(env, state, cdr, result)?;
             }
-            Value::Symbol(i) if i == state.specials.quote => {
+            Value::Symbol(i) if i == env.specials().quote => {
                 state.tail = false;
                 if cdr.len() != 1 {
                     return Err(VMError::new_compile(format!(
@@ -106,7 +106,7 @@ fn compile_list(
                 }
                 mkconst(env, state, cdr[0], result)?;
             }
-            Value::Symbol(i) if i == state.specials.backquote => {
+            Value::Symbol(i) if i == env.specials().backquote => {
                 state.tail = false;
                 if cdr.len() != 1 {
                     return Err(VMError::new_compile(format!(
@@ -117,13 +117,13 @@ fn compile_list(
                 }
                 backquote(env, state, cdr[0], result)?;
             }
-            Value::Symbol(i) if i == state.specials.recur => {
+            Value::Symbol(i) if i == env.specials().recur => {
                 compile_call_myself(env, state, cdr, result, true)?
             }
-            Value::Symbol(i) if i == state.specials.this_fn => {
+            Value::Symbol(i) if i == env.specials().this_fn => {
                 compile_call_myself(env, state, cdr, result, false)?
             }
-            Value::Symbol(i) if i == state.specials.eq => {
+            Value::Symbol(i) if i == env.specials().eq => {
                 if cdr.len() <= 1 {
                     return Err(VMError::new_compile("Requires at least two arguments."));
                 } else {
@@ -141,7 +141,7 @@ fn compile_list(
                     )?;
                 }
             }
-            Value::Symbol(i) if i == state.specials.equal => {
+            Value::Symbol(i) if i == env.specials().equal => {
                 if cdr.len() <= 1 {
                     return Err(VMError::new_compile("Requires at least two arguments. 2"));
                 } else {
@@ -159,7 +159,7 @@ fn compile_list(
                     )?;
                 }
             }
-            Value::Symbol(i) if i == state.specials.type_ => {
+            Value::Symbol(i) if i == env.specials().type_ => {
                 if cdr.len() != 1 {
                     return Err(VMError::new_compile("Requires one argument."));
                 } else {
@@ -172,7 +172,7 @@ fn compile_list(
                     )?;
                 }
             }
-            Value::Symbol(i) if i == state.specials.not => {
+            Value::Symbol(i) if i == env.specials().not => {
                 if cdr.len() != 1 {
                     return Err(VMError::new_compile("Requires one argument."));
                 } else {
@@ -182,7 +182,7 @@ fn compile_list(
                         .encode2(NOT, result as u16, (result + 1) as u16, env.own_line())?;
                 }
             }
-            Value::Symbol(i) if i == state.specials.err => {
+            Value::Symbol(i) if i == env.specials().err => {
                 let len = cdr.len();
                 if len != 1 && len != 2 {
                     return Err(VMError::new_compile("Requires one or two arguments."));
@@ -200,13 +200,13 @@ fn compile_list(
                         .encode2(ERR, result as u16, (result + 1) as u16, env.own_line())?;
                 }
             }
-            Value::Symbol(i) if i == state.specials.and => {
+            Value::Symbol(i) if i == env.specials().and => {
                 compile_and(env, state, cdr, result)?;
             }
-            Value::Symbol(i) if i == state.specials.or => {
+            Value::Symbol(i) if i == env.specials().or => {
                 compile_or(env, state, cdr, result)?;
             }
-            Value::Symbol(i) if i == state.specials.str_ => {
+            Value::Symbol(i) if i == env.specials().str_ => {
                 let mut max = 0;
                 for (i, v) in cdr.iter().enumerate() {
                     compile(env, state, *v, result + i + 1)?;
@@ -220,10 +220,10 @@ fn compile_list(
                     env.own_line(),
                 )?;
             }
-            Value::Symbol(i) if i == state.specials.let_ => {
+            Value::Symbol(i) if i == env.specials().let_ => {
                 compile_let(env, state, cdr, result)?;
             }
-            Value::Symbol(i) if i == state.specials.call_cc => {
+            Value::Symbol(i) if i == env.specials().call_cc => {
                 if cdr.len() != 1 {
                     return Err(VMError::new_compile("Requires one argument."));
                 }
@@ -232,7 +232,7 @@ fn compile_list(
                     .chunk
                     .encode2(CCC, result as u16, result as u16, env.own_line())?;
             }
-            Value::Symbol(i) if i == state.specials.defer => {
+            Value::Symbol(i) if i == env.specials().defer => {
                 if !cdr.is_empty() {
                     compile_fn(env, state, Value::Nil, &cdr[0..], result, false)?;
                     state.chunk.encode1(DFR, result as u16, env.own_line())?;
@@ -243,7 +243,7 @@ fn compile_list(
                     ));
                 }
             }
-            Value::Symbol(i) if i == state.specials.on_error => {
+            Value::Symbol(i) if i == env.specials().on_error => {
                 if cdr.len() != 1 {
                     return Err(VMError::new_compile("Requires one argument."));
                 }

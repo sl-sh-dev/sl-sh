@@ -30,7 +30,7 @@ fn load_one_expression(
 ) -> VMResult<(Arc<Chunk>, Option<Value>)> {
     let mut env = CompileEnvironment::new(vm);
     let line_num = env.line_num();
-    let mut state = CompileState::new_state(env.vm_mut(), name, line_num, None);
+    let mut state = CompileState::new_state(name, line_num, None);
     state.chunk.dbg_args = Some(Vec::new());
     state.doc_string = doc_string;
     if let Err(e) = pass1(&mut env, &mut state, exp) {
@@ -105,7 +105,7 @@ fn eval(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
     if let (Some(exp), None) = (registers.get(0), registers.get(1)) {
         let mut env = CompileEnvironment::new(vm);
         let line_num = env.line_num();
-        let mut state = CompileState::new_state(env.vm_mut(), "none/eval", line_num, None);
+        let mut state = CompileState::new_state("none/eval", line_num, None);
         state.chunk.dbg_args = Some(Vec::new());
         pass1(&mut env, &mut state, *exp)?;
         compile(&mut env, &mut state, *exp, 0)?;
@@ -176,8 +176,7 @@ fn main() {
             Ok(exps) => {
                 for exp in exps {
                     let line_num = env.line_num();
-                    let mut state =
-                        CompileState::new_state(env.vm_mut(), PROMPT_FN, line_num, None);
+                    let mut state = CompileState::new_state(PROMPT_FN, line_num, None);
                     if let Err(e) = pass1(&mut env, &mut state, exp) {
                         println!("Compile error, line {}: {}", env.line_num(), e);
                     }

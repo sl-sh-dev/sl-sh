@@ -35,7 +35,7 @@ pub(crate) fn compile_math(
     result: usize,
 ) -> VMResult<bool> {
     match car {
-        Value::Symbol(i) if i == state.specials.inc => {
+        Value::Symbol(i) if i == env.specials().inc => {
             let dest = if let Value::Symbol(si) = cdr[0] {
                 if let Some(idx) = state.get_symbol(si) {
                     idx + 1
@@ -71,7 +71,7 @@ pub(crate) fn compile_math(
                 return Err(VMError::new_compile("inc!: malformed"));
             }
         }
-        Value::Symbol(i) if i == state.specials.dec => {
+        Value::Symbol(i) if i == env.specials().dec => {
             let dest = if let Value::Symbol(si) = cdr[0] {
                 if let Some(idx) = state.get_symbol(si) {
                     idx + 1
@@ -107,7 +107,7 @@ pub(crate) fn compile_math(
                 return Err(VMError::new_compile("dec!: malformed"));
             }
         }
-        Value::Symbol(i) if i == state.specials.add => {
+        Value::Symbol(i) if i == env.specials().add => {
             if cdr.is_empty() {
                 compile(env, state, Value::Int(0), result)?;
             } else if cdr.len() == 1 {
@@ -129,7 +129,7 @@ pub(crate) fn compile_math(
                 }
             }
         }
-        Value::Symbol(i) if i == state.specials.sub => {
+        Value::Symbol(i) if i == env.specials().sub => {
             if cdr.is_empty() {
                 return Err(VMError::new_compile(
                     "Malformed -, requires at least one argument.",
@@ -157,7 +157,7 @@ pub(crate) fn compile_math(
                 }
             }
         }
-        Value::Symbol(i) if i == state.specials.mul => {
+        Value::Symbol(i) if i == env.specials().mul => {
             if cdr.is_empty() {
                 compile(env, state, Value::Int(1), result)?;
             } else if cdr.len() == 1 {
@@ -179,7 +179,7 @@ pub(crate) fn compile_math(
                 }
             }
         }
-        Value::Symbol(i) if i == state.specials.div => {
+        Value::Symbol(i) if i == env.specials().div => {
             if cdr.len() <= 1 {
                 return Err(VMError::new_compile(
                     "Malformed /, requires at least two arguments.",
@@ -201,22 +201,22 @@ pub(crate) fn compile_math(
                 }
             }
         }
-        Value::Symbol(i) if i == state.specials.numeq => {
+        Value::Symbol(i) if i == env.specials().numeq => {
             make_math_comp(env, state, cdr, result, NUMEQ)?;
         }
-        Value::Symbol(i) if i == state.specials.numneq => {
+        Value::Symbol(i) if i == env.specials().numneq => {
             make_math_comp(env, state, cdr, result, NUMNEQ)?;
         }
-        Value::Symbol(i) if i == state.specials.numlt => {
+        Value::Symbol(i) if i == env.specials().numlt => {
             make_math_comp(env, state, cdr, result, NUMLT)?;
         }
-        Value::Symbol(i) if i == state.specials.numlte => {
+        Value::Symbol(i) if i == env.specials().numlte => {
             make_math_comp(env, state, cdr, result, NUMLTE)?;
         }
-        Value::Symbol(i) if i == state.specials.numgt => {
+        Value::Symbol(i) if i == env.specials().numgt => {
             make_math_comp(env, state, cdr, result, NUMGT)?;
         }
-        Value::Symbol(i) if i == state.specials.numgte => {
+        Value::Symbol(i) if i == env.specials().numgte => {
             make_math_comp(env, state, cdr, result, NUMGTE)?;
         }
         _ => return Ok(false),

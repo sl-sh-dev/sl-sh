@@ -274,20 +274,24 @@ pub struct CompileState {
     pub symbols: Rc<RefCell<Symbols>>,
     pub constants: HashMap<Value, usize>,
     pub chunk: Chunk,
-    pub specials: Specials,
     pub max_regs: usize,
     pub tail: bool,
     pub defers: usize,
     pub doc_string: Option<Value>,
 }
 
+impl Default for CompileState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CompileState {
-    pub fn new(vm: &mut Vm) -> Self {
+    pub fn new() -> Self {
         CompileState {
             symbols: Rc::new(RefCell::new(Symbols::with_outer(None))),
             constants: HashMap::new(),
             chunk: Chunk::new("no_file", 1),
-            specials: Specials::new(vm),
             max_regs: 0,
             tail: false,
             defers: 0,
@@ -296,7 +300,6 @@ impl CompileState {
     }
 
     pub fn new_state(
-        vm: &mut Vm,
         file_name: &'static str,
         first_line: u32,
         outer: Option<Rc<RefCell<Symbols>>>,
@@ -306,23 +309,9 @@ impl CompileState {
             symbols,
             constants: HashMap::new(),
             chunk: Chunk::new(file_name, first_line),
-            specials: Specials::new(vm),
             max_regs: 0,
             tail: false,
             defers: 0,
-            doc_string: None,
-        }
-    }
-
-    pub fn new_temp(vm: &mut Vm, state: &CompileState, line: u32) -> Self {
-        CompileState {
-            symbols: state.symbols.clone(),
-            constants: HashMap::new(),
-            chunk: Chunk::new(state.chunk.file_name, line),
-            specials: Specials::new(vm),
-            max_regs: state.max_regs,
-            tail: state.tail,
-            defers: state.defers,
             doc_string: None,
         }
     }
@@ -350,14 +339,17 @@ pub struct CompileEnvironment<'vm> {
     vm: &'vm mut Vm,
     use_line: bool,
     line: u32,
+    specials: Specials,
 }
 
 impl<'vm> CompileEnvironment<'vm> {
     pub fn new(vm: &'vm mut Vm) -> Self {
+        let specials = Specials::new(vm);
         Self {
             vm,
             use_line: true,
             line: 1,
+            specials,
         }
     }
 
@@ -409,5 +401,9 @@ impl<'vm> CompileEnvironment<'vm> {
         } else {
             0
         }
+    }
+
+    pub fn specials(&self) -> &Specials {
+        &self.specials
     }
 }

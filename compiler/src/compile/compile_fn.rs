@@ -1,4 +1,4 @@
-use crate::compile::destructure::{compile_destructures, do_destructure, DestructType};
+use crate::compile::destructure::{DestructState, DestructType};
 use crate::compile::util::get_args_iter;
 use crate::pass1::pass1;
 use crate::{compile, CompileEnvironment, CompileState};
@@ -11,12 +11,8 @@ fn mk_state(
     args: Value,
 ) -> VMResult<(CompileState, Vec<Value>, Vec<DestructType>)> {
     let line = env.own_line().unwrap_or(1);
-    let mut new_state = CompileState::new_state(
-        env.vm_mut(),
-        state.chunk.file_name,
-        line,
-        Some(state.symbols.clone()),
-    );
+    let mut new_state =
+        CompileState::new_state(state.chunk.file_name, line, Some(state.symbols.clone()));
     env.set_line_val(&mut new_state, args);
     let args_iter: Vec<Value> = get_args_iter(env, args, "fn")?.collect();
     let mut opt = false;
@@ -35,9 +31,9 @@ fn mk_state(
         }
         match a {
             Value::Symbol(i) => {
-                if i == new_state.specials.rest {
+                if i == env.specials().rest {
                     rest = true;
-                } else if i == new_state.specials.optional {
+                } else if i == env.specials().optional {
                     opt = true;
                 } else {
                     //new_state.symbols.borrow_mut().data.borrow_mut().add_sym(i);
@@ -55,7 +51,7 @@ fn mk_state(
                     total_args += 1;
                 }
             }
-            Value::Keyword(i) if i == state.specials.numeq => {
+            Value::Keyword(i) if i == env.specials().numeq => {
                 if !opt {
                     return Err(VMError::new_compile(
                         "invalid args, := must come after % (optional)",
@@ -69,7 +65,7 @@ fn mk_state(
             Value::Vector(handle) => {
                 new_state.symbols.borrow_mut().reserve_reg();
                 if let Some(dbg_args) = new_state.chunk.dbg_args.as_mut() {
-                    dbg_args.push(new_state.specials.scratch);
+                    dbg_args.push(env.specials().scratch);
                 }
                 if opt {
                     new_state.chunk.opt_args += 1;
@@ -83,7 +79,7 @@ fn mk_state(
             Value::Map(handle) => {
                 new_state.symbols.borrow_mut().reserve_reg();
                 if let Some(dbg_args) = new_state.chunk.dbg_args.as_mut() {
-                    dbg_args.push(new_state.specials.scratch);
+                    dbg_args.push(env.specials().scratch);
                 }
                 if opt {
                     new_state.chunk.opt_args += 1;
@@ -131,25 +127,12 @@ pub(crate) fn compile_fn(
             (new_state.chunk.code.len() - start_offset) as i32,
         )?;
     }
-    let mut destructures = Vec::new();
-    let mut all_optionals = Vec::new();
+    let mut destruct_state = DestructState::new();
     for destruct_type in destructure_patterns {
-        do_destructure(
-            env,
-            &mut new_state,
-            destruct_type,
-            &mut all_optionals,
-            &mut destructures,
-        )?;
+        destruct_state.do_destructure(env, &mut new_state, destruct_type)?;
     }
     let mut free_reg = new_state.reserved_regs();
-    compile_destructures(
-        env,
-        &mut new_state,
-        &mut free_reg,
-        &destructures,
-        &all_optionals,
-    )?;
+    destruct_state.compile(env, &mut new_state, &mut free_reg)?;
     let reserved = new_state.reserved_regs();
     let last_thing = cdr.len() - 1;
     for (i, r) in cdr.iter().enumerate() {
