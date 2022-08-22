@@ -1,7 +1,7 @@
 use slvm::error::*;
-use slvm::Handle;
 use slvm::opcodes::*;
 use slvm::value::*;
+use slvm::Handle;
 
 use crate::backquote::*;
 use crate::compile::compile_call::{
@@ -262,16 +262,12 @@ fn compile_list(
                     }
                     if is_macro(env, global) {
                         let (mac, caps) = match global {
-                            Value::Lambda(h) => {
-                                (env.vm().get_lambda(h), None)
-                            }
+                            Value::Lambda(h) => (env.vm().get_lambda(h), None),
                             Value::Closure(h) => {
                                 let (mac, caps) = env.vm().get_closure(h);
                                 // Closures are read only so lets just break the lifetime away vs
                                 // allocate the same thing again...
-                                let caps = unsafe {
-                                    (caps as *const [Handle]).as_ref().unwrap()
-                                };
+                                let caps = unsafe { (caps as *const [Handle]).as_ref().unwrap() };
                                 (mac, Some(caps))
                             }
                             _ => panic!("Invalid macro!"),

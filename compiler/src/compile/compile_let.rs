@@ -329,5 +329,38 @@ mod tests {
             &mut vm,
             "(let ([x {a :a, b :b, c :c} y] [10 {:a 1 :b 2, :c 3}]) nil)",
         );
+
+        let result = exec(&mut vm, "(let ({a 1, b 0, c 2} [1 2 3]) (list a b c))");
+        let expected = read_test(&mut vm, "(2 1 3)");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(&mut vm, "(let ({a 1, b 0, c 2} '(1 2 3)) (list a b c))");
+        let expected = read_test(&mut vm, "(2 1 3)");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(&mut vm, "(let ({a 1, b 0, c 2} (list 1 2 3)) (list a b c))");
+        let expected = read_test(&mut vm, "(2 1 3)");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(
+            &mut vm,
+            "(let ({a :a, b :b, c :c} [:a 1, :b 2, :c 3]) `(~a ~b ~c))",
+        );
+        let expected = read_test(&mut vm, "(1 2 3)");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(
+            &mut vm,
+            "(let ({a :a, b :b, c :c} '(:a 1, :b 2, :c 3)) `(~a ~b ~c))",
+        );
+        let expected = read_test(&mut vm, "(1 2 3)");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(
+            &mut vm,
+            "(let ({a :a, b :b, c :c} (list :a 1, :b 2, :c 3)) `(~a ~b ~c))",
+        );
+        let expected = read_test(&mut vm, "(1 2 3)");
+        assert_vals(&vm, expected, result);
     }
 }

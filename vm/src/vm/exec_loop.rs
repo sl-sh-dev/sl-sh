@@ -1,8 +1,117 @@
 use crate::opcodes::*;
-use crate::{CallFrame, Chunk, Continuation, F64Wrap, VMError, VMErrorObj, Value, Vm};
+use crate::{CallFrame, Chunk, Continuation, F64Wrap, VMError, VMErrorObj, VMResult, Value, Vm};
 use std::sync::Arc;
 
 impl Vm {
+    #[inline]
+    fn map_destructure(
+        &mut self,
+        code: &[u8],
+        registers: &mut [Value],
+        wide: bool,
+    ) -> VMResult<()> {
+        let (dest, len, src) = decode3!(code, &mut self.ip, wide);
+        if len > 0 {
+            let len = len as usize;
+            let dest = dest as usize;
+            let val = get_reg_unref!(registers, src, self);
+            match val {
+                Value::Map(handle) => {
+                    let map = self.get_map(handle);
+                    for i in 0..len as usize {
+                        let key = get_reg_unref!(registers, dest + i, self);
+                        if let Some(item) = map.get(&key) {
+                            registers[dest + i] = *item;
+                        } else {
+                            registers[dest + i] = Value::Undefined;
+                        }
+                    }
+                }
+                Value::Vector(handle) => {
+                    let vector = self.get_vector(handle);
+                    for i in 0..len as usize {
+                        let key = get_reg_unref!(registers, dest + i, self);
+                        if key.is_int() {
+                            let key = key.get_int()?;
+                            if key >= 0 && key < vector.len() as i64 {
+                                registers[dest + i] = vector[key as usize];
+                            } else {
+                                return Err(VMError::new_vm("seq key out of bounds"));
+                            }
+                        } else {
+                            let mut iter = vector.iter();
+                            registers[dest + i] = Value::Undefined;
+                            while let Some(v) = iter.next() {
+                                if *v == key {
+                                    if let Some(value) = iter.next() {
+                                        registers[dest + i] = *value;
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                Value::List(handle, idx) => {
+                    let vector = &self.get_vector(handle)[idx as usize..];
+                    for i in 0..len as usize {
+                        let key = get_reg_unref!(registers, dest + i, self);
+                        if key.is_int() {
+                            let key = key.get_int()?;
+                            if key >= 0 && key < vector.len() as i64 {
+                                registers[dest + i] = vector[key as usize];
+                            } else {
+                                return Err(VMError::new_vm("seq key out of bounds"));
+                            }
+                        } else {
+                            let mut iter = vector.iter();
+                            registers[dest + i] = Value::Undefined;
+                            while let Some(v) = iter.next() {
+                                if *v == key {
+                                    if let Some(value) = iter.next() {
+                                        registers[dest + i] = *value;
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                Value::Pair(_) => {
+                    for i in 0..len as usize {
+                        let key = get_reg_unref!(registers, dest + i, self);
+                        if key.is_int() {
+                            let key = key.get_int()?;
+                            if key >= 0 {
+                                let mut iter = val.iter(self);
+                                if let Some(item) = iter.nth(key as usize) {
+                                    registers[dest + i] = item;
+                                } else {
+                                    return Err(VMError::new_vm("seq key out of bounds"));
+                                }
+                            } else {
+                                return Err(VMError::new_vm("seq key out of bounds"));
+                            }
+                        } else {
+                            let mut iter = val.iter(self);
+                            registers[dest + i] = Value::Undefined;
+                            while let Some(v) = iter.next() {
+                                if v == key {
+                                    if let Some(value) = iter.next() {
+                                        registers[dest + i] = value;
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => return Err(VMError::new_vm("not a map")),
+            }
+        }
+        Ok(())
+    }
+
     pub(super) fn exec_loop(&mut self, chunk: Arc<Chunk>) -> Result<(), (VMError, Arc<Chunk>)> {
         let mut registers = self.make_registers();
         let mut chunk = chunk;
@@ -147,26 +256,8 @@ impl Vm {
                     }
                 }
                 MDSC => {
-                    let (dest, len, src) = decode3!(chunk.code, &mut self.ip, wide);
-                    if len > 0 {
-                        let len = len as usize;
-                        let dest = dest as usize;
-                        let val = get_reg_unref!(registers, src, self);
-                        match val {
-                            Value::Map(handle) => {
-                                let map = self.get_map(handle);
-                                for i in 0..len as usize {
-                                    let key = get_reg_unref!(registers, dest + i, self);
-                                    if let Some(item) = map.get(&key) {
-                                        registers[dest + i] = *item;
-                                    } else {
-                                        registers[dest + i] = Value::Undefined;
-                                    }
-                                }
-                            }
-                            _ => return Err((VMError::new_vm("not a map"), chunk)),
-                        }
-                    }
+                    self.map_destructure(&chunk.code[..], registers, wide)
+                        .map_err(|e| (e, chunk.clone()))?;
                 }
                 COPY => {
                     let (_dest, _src) = decode2!(chunk.code, &mut self.ip, wide);

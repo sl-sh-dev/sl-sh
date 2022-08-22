@@ -76,12 +76,3 @@ pub fn sizeof_value(_vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
     }
     Ok(Value::UInt(std::mem::size_of::<Value>() as u64))
 }
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
-    }
-}
