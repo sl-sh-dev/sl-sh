@@ -1,4 +1,5 @@
 use slvm::error::*;
+use slvm::Handle;
 use slvm::opcodes::*;
 use slvm::value::*;
 
@@ -260,26 +261,26 @@ fn compile_list(
                         eprintln!("Warning: {} not defined.", env.vm().get_interned(i));
                     }
                     if is_macro(env, global) {
-                        match global {
+                        let (mac, caps) = match global {
                             Value::Lambda(h) => {
-                                let mac = env.vm().get_lambda(h);
-                                env.vm_mut().pause_gc();
-                                let exp = env.vm_mut().do_call(mac, cdr, None)?;
-                                env.vm_mut().unpause_gc();
-                                pass1(env, state, exp)?;
-                                compile(env, state, exp, result)?
+                                (env.vm().get_lambda(h), None)
                             }
                             Value::Closure(h) => {
                                 let (mac, caps) = env.vm().get_closure(h);
-                                let caps = caps.to_vec();
-                                env.vm_mut().pause_gc();
-                                let exp = env.vm_mut().do_call(mac, cdr, Some(&caps))?;
-                                env.vm_mut().unpause_gc();
-                                pass1(env, state, exp)?;
-                                compile(env, state, exp, result)?
+                                // Closures are read only so lets just break the lifetime away vs
+                                // allocate the same thing again...
+                                let caps = unsafe {
+                                    (caps as *const [Handle]).as_ref().unwrap()
+                                };
+                                (mac, Some(caps))
                             }
                             _ => panic!("Invalid macro!"),
-                        }
+                        };
+                        env.vm_mut().pause_gc();
+                        let exp = env.vm_mut().do_call(mac, cdr, caps)?;
+                        env.vm_mut().unpause_gc();
+                        pass1(env, state, exp)?;
+                        compile(env, state, exp, result)?
                     } else {
                         compile_callg(env, state, slot as u32, cdr, result)?
                     }
@@ -297,8 +298,20 @@ fn compile_list(
                     .get_pair(env.vm())
                     .expect("Pair/List not a Pair or List?");
                 env.set_line(state, h);
-                let ncdr: Vec<Value> = ncdr.iter(env.vm()).collect();
-                compile_list(env, state, ncar, &ncdr[..], result)?;
+                if let Value::List(h, idx) = ncdr {
+                    // This unsafe should be fine (it breaks the lifetime away from env) since the
+                    // vector that backs a list is read only.
+                    // Do this to avoid a useless allocation in the common case (see the code below).
+                    let ncdr = unsafe {
+                        (&env.vm().get_vector(h)[idx as usize..] as *const [Value])
+                            .as_ref()
+                            .unwrap()
+                    };
+                    compile_list(env, state, ncar, ncdr, result)?;
+                } else {
+                    let ncdr: Vec<Value> = ncdr.iter(env.vm()).collect();
+                    compile_list(env, state, ncar, &ncdr[..], result)?;
+                }
                 compile_call_reg(env, state, result as u16, cdr, result)?
             }
             _ => {
@@ -359,8 +372,20 @@ pub fn compile(
                 .get_pair(env.vm())
                 .expect("Pair/List not a Pair or List?");
             env.set_line(state, handle);
-            let cdr: Vec<Value> = cdr.iter(env.vm()).collect();
-            compile_list(env, state, car, &cdr[..], result)?;
+            if let Value::List(h, idx) = cdr {
+                // This unsafe should be fine (it breaks the lifetime away from env) since the
+                // vector that backs a list is read only.
+                // Do this to avoid a useless allocation in the common case (see the code below).
+                let cdr = unsafe {
+                    (&env.vm().get_vector(h)[idx as usize..] as *const [Value])
+                        .as_ref()
+                        .unwrap()
+                };
+                compile_list(env, state, car, cdr, result)?;
+            } else {
+                let cdr: Vec<Value> = cdr.iter(env.vm()).collect();
+                compile_list(env, state, car, &cdr[..], result)?;
+            }
         }
         Value::Symbol(i) => {
             if let Some(idx) = state.get_symbol(i) {
@@ -396,7 +421,6 @@ pub fn compile(
                 .encode2(REGU, result as u16, i as u16, env.own_line())?
         }
         _ => {
-            // XXX this used to ignore References but now does not, is that good?
             let const_i = state.add_constant(exp);
             state
                 .chunk
