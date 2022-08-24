@@ -526,12 +526,10 @@ fn get_arg_val(type_path: &syn::TypePath) -> MacroResult<ArgVal> {
 
 fn parse_value_stream(arg_name: syn::Ident, token_stream: TokenStream) -> TokenStream {
     quote! {
-        sl_sh::tryy_exp_enum!(
+        sl_sh::ret_err_exp_enum!(
                 #arg_name,
                 sl_sh::ArgType::Exp(#arg_name),
-                {
-                    #token_stream
-                },
+                #token_stream,
                 "sl_sh_fn macro is broken, apparently ArgType::Exp can't be parsed as ArgType::Exp"
             )
     }
@@ -539,12 +537,10 @@ fn parse_value_stream(arg_name: syn::Ident, token_stream: TokenStream) -> TokenS
 
 fn parse_optional_stream(arg_name: syn::Ident, token_stream: TokenStream) -> TokenStream {
     quote! {
-        sl_sh::tryy_exp_enum!(
+        sl_sh::ret_err_exp_enum!(
                 #arg_name,
                 sl_sh::ArgType::Opt(#arg_name),
-                {
-                    #token_stream
-                },
+                #token_stream,
                 "sl_sh_fn macro is broken, apparently ArgType::Opt can't be parsed as ArgType::Opt"
             )
     }
@@ -552,12 +548,10 @@ fn parse_optional_stream(arg_name: syn::Ident, token_stream: TokenStream) -> Tok
 
 fn parse_varargs_stream(arg_name: syn::Ident, token_stream: TokenStream) -> TokenStream {
     quote! {
-        sl_sh::tryy_exp_enum!(
+        sl_sh::ret_err_exp_enum!(
                 #arg_name,
                 sl_sh::ArgType::VarArgs(#arg_name),
-                {
-                    #token_stream
-                },
+                #token_stream,
                 "sl_sh_fn macro is broken, apparently ArgType::Opt can't be parsed as ArgType::Opt"
             )
     }
@@ -584,16 +578,11 @@ fn generate_builtin_fn2(
         arg_names.push(parse_name);
     }
     let orig_fn_call = quote! {
-        Ok(#original_fn_name(#(#arg_names),*).map(Into::into))
+        #original_fn_name(#(#arg_names),*).map(Into::into)
     };
 
     let mut prev_token_stream = orig_fn_call;
-    let fn_args = original_item_fn
-        .sig
-        .inputs
-        .iter()
-        .zip(arg_names.iter())
-        .rev();
+    let fn_args = original_item_fn.sig.inputs.iter().zip(arg_names.iter());
     for (fn_arg, ident) in fn_args {
         match fn_arg {
             FnArg::Typed(ty) => match &*ty.ty {
@@ -660,11 +649,11 @@ fn parse_type(
     //    path: syn::Path::from(Ident::new("i64", Span::call_site())),
     //};
     // TODO
-    //  - use passing style to determine ref/ref mut in tryy_exp_enum macro
+    //  - use passing style to determine ref/ref mut in ret_err_exp_enum macro
     //  - use val to determine type, Expressoin, Option<Expression>, Vec<Expression>
     let tokens = if ty.to_token_stream().to_string() == i64_ty.to_token_stream().to_string() {
         quote! {
-            sl_sh::tryy_exp_enum!(
+            sl_sh::ret_err_exp_enum!(
                     #arg_name.get().data,
                     sl_sh::ExpEnum::Int(#arg_name),
                     {
