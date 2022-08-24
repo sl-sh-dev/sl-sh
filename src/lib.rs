@@ -8,7 +8,7 @@ use syn::spanned::Spanned;
 use syn::token::Comma;
 use syn::{
     parse_macro_input, AngleBracketedGenericArguments, FnArg, Ident, Lit, Meta, NestedMeta,
-    PathArguments, PathSegment, ReturnType, Type, TypePath,
+    PathArguments, PathSegment, ReturnType, Type,
 };
 extern crate static_assertions;
 
@@ -47,7 +47,7 @@ fn build_sl_sh_expression_type() -> Type {
     let mut pun_seq = Punctuated::new();
     pun_seq.push(crate_path_segment);
     pun_seq.push(exp_enum_path_segment);
-    Type::Path(TypePath {
+    Type::Path(syn::TypePath {
         qself: None,
         path: syn::Path {
             leading_colon: None,
@@ -120,7 +120,7 @@ fn wrap_with_try_into_expression(ty: Type) -> Type {
     pun_seq.push(crate_path_segment);
     pun_seq.push(builtins_util_path_segment);
     pun_seq.push(try_into_expression_path_segment);
-    Type::Path(TypePath {
+    Type::Path(syn::TypePath {
         qself: None,
         path: syn::Path {
             leading_colon: None,
@@ -157,7 +157,7 @@ fn wrap_with_std_convert(ty: Type, convert_trait: &str) -> Type {
     pun_seq.push(std_path_segment);
     pun_seq.push(convert_path_segment);
     pun_seq.push(trait_path_segment);
-    Type::Path(TypePath {
+    Type::Path(syn::TypePath {
         qself: None,
         path: syn::Path {
             leading_colon: None,
@@ -221,7 +221,7 @@ fn get_documentation_for_fn(original_item_fn: &syn::ItemFn) -> MacroResult<Strin
 }
 
 fn is_valid_generic_type<'a>(
-    type_path: &TypePath,
+    type_path: &syn::TypePath,
     possible_types: &'a [&str],
 ) -> MacroResult<&'a str> {
     if type_path.path.segments.len() == 1 && type_path.path.segments.first().is_some() {
@@ -267,6 +267,13 @@ fn get_generic_argument_from_type(
     }
 }
 
+fn generate_assertions_code_for_return_type_conversions(return_type: &syn::Type) -> TokenStream2 {
+    let to_return_type = wrap_with_std_convert(build_sl_sh_expression_type(), "Into");
+    quote! {
+      static_assertions::assert_impl_all!(#return_type: #to_return_type);
+    }
+}
+
 fn generate_assertions_code_for_type_conversions(
     original_item_fn: &syn::ItemFn,
     return_type: &syn::Type,
@@ -283,10 +290,9 @@ fn generate_assertions_code_for_type_conversions(
           static_assertions::assert_impl_all!(#expression: #try_into_expression);
         });
     }
-    let to_return_type = wrap_with_std_convert(build_sl_sh_expression_type(), "Into");
-    conversion_assertions_code.push(quote! {
-      static_assertions::assert_impl_all!(#return_type: #to_return_type);
-    });
+    conversion_assertions_code.push(generate_assertions_code_for_return_type_conversions(
+        return_type,
+    ));
     Ok(conversion_assertions_code)
 }
 
@@ -518,8 +524,171 @@ fn get_arg_val(type_path: &syn::TypePath) -> MacroResult<ArgVal> {
     }
 }
 
+fn parse_value_stream(arg_name: syn::Ident, token_stream: TokenStream) -> TokenStream {
+    quote! {
+        sl_sh::tryy_exp_enum!(
+                #arg_name,
+                sl_sh::ArgType::Exp(#arg_name),
+                {
+                    #token_stream
+                },
+                "sl_sh_fn macro is broken, apparently ArgType::Exp can't be parsed as ArgType::Exp"
+            )
+    }
+}
+
+fn parse_optional_stream(arg_name: syn::Ident, token_stream: TokenStream) -> TokenStream {
+    quote! {
+        sl_sh::tryy_exp_enum!(
+                #arg_name,
+                sl_sh::ArgType::Opt(#arg_name),
+                {
+                    #token_stream
+                },
+                "sl_sh_fn macro is broken, apparently ArgType::Opt can't be parsed as ArgType::Opt"
+            )
+    }
+}
+
+fn parse_varargs_stream(arg_name: syn::Ident, token_stream: TokenStream) -> TokenStream {
+    quote! {
+        sl_sh::tryy_exp_enum!(
+                #arg_name,
+                sl_sh::ArgType::VarArgs(#arg_name),
+                {
+                    #token_stream
+                },
+                "sl_sh_fn macro is broken, apparently ArgType::Opt can't be parsed as ArgType::Opt"
+            )
+    }
+}
+
+fn get_parser_for_arg_val(val: ArgVal) -> fn(Ident, TokenStream) -> TokenStream {
+    match val {
+        ArgVal::Value => parse_value_stream,
+        ArgVal::Optional => parse_optional_stream,
+        ArgVal::Vec => parse_varargs_stream,
+    }
+}
+
+fn generate_builtin_fn2(
+    original_item_fn: &syn::ItemFn,
+    original_fn_name: &syn::Ident,
+    builtin_name: &syn::Ident,
+) -> MacroResult<TokenStream> {
+    let len = original_item_fn.sig.inputs.len();
+    let mut arg_names = vec![];
+    for i in 0..len {
+        let parse_name = "arg_".to_string() + &i.to_string();
+        let parse_name = Ident::new(&parse_name, Span::call_site());
+        arg_names.push(parse_name);
+    }
+    let orig_fn_call = quote! {
+        Ok(#original_fn_name(#(#arg_names),*).map(Into::into))
+    };
+
+    let mut prev_token_stream = orig_fn_call;
+    let fn_args = original_item_fn
+        .sig
+        .inputs
+        .iter()
+        .zip(arg_names.iter())
+        .rev();
+    for (fn_arg, ident) in fn_args {
+        match fn_arg {
+            FnArg::Typed(ty) => match &*ty.ty {
+                Type::Path(ty) => {
+                    let val = get_arg_val(ty)?;
+                    let parse_layer_1 = get_parser_for_arg_val(val);
+                    let passing_style = ArgPassingStyle::Move;
+                    prev_token_stream = parse_type(
+                        ty,
+                        prev_token_stream.clone(),
+                        val,
+                        ident,
+                        passing_style,
+                        parse_layer_1,
+                    );
+                }
+                Type::Reference(ty_ref) => match &*ty_ref.elem {
+                    Type::Path(ty) => {
+                        let val = get_arg_val(ty)?;
+                        let parse_layer_1 = get_parser_for_arg_val(val);
+                        let passing_style = if ty_ref.mutability.is_some() {
+                            ArgPassingStyle::MutReference
+                        } else {
+                            ArgPassingStyle::Reference
+                        };
+                        prev_token_stream = parse_type(
+                            ty,
+                            prev_token_stream.clone(),
+                            val,
+                            ident,
+                            passing_style,
+                            parse_layer_1,
+                        );
+                    }
+                    _ => {}
+                },
+                _ => {}
+            },
+            _ => {}
+        }
+    }
+    let tokens = quote! {
+        fn #builtin_name(arg_0: sl_sh::ArgType, arg_1: sl_sh::ArgType) -> sl_sh::LispResult<Expression> {
+            #prev_token_stream
+        }
+    };
+    Ok(tokens)
+}
+
+fn parse_type(
+    ty: &syn::TypePath,
+    inner: TokenStream,
+    _val: ArgVal,
+    arg_name: &syn::Ident,
+    _passing_style: ArgPassingStyle,
+    outer_parse: fn(Ident, TokenStream) -> TokenStream,
+) -> TokenStream {
+    let i64_ty = syn::TypePath {
+        qself: None,
+        path: syn::Path::from(Ident::new("i64", Span::call_site())),
+    };
+    //let exp_enum_type_path = syn::TypePath {
+    //    qself: None,
+    //    path: syn::Path::from(Ident::new("i64", Span::call_site())),
+    //};
+    // TODO
+    //  - use passing style to determine ref/ref mut in tryy_exp_enum macro
+    //  - use val to determine type, Expressoin, Option<Expression>, Vec<Expression>
+    let tokens = if ty.to_token_stream().to_string() == i64_ty.to_token_stream().to_string() {
+        quote! {
+            sl_sh::tryy_exp_enum!(
+                    #arg_name.get().data,
+                    sl_sh::ExpEnum::Int(#arg_name),
+                    {
+                        #inner
+                    },
+                    "sl_sh_fn macro is broken, apparently ArgType::Exp can't be parsed as ArgType::Exp"
+                )
+        }
+    } else {
+        syn::Error::new(ty.span(), "Unable to parse this type!").to_compile_error()
+    };
+    outer_parse(arg_name.clone(), tokens)
+}
+
 fn parse_src_function_arguments(original_item_fn: &syn::ItemFn) -> MacroResult<Vec<Arg>> {
     let mut parsed_args = vec![];
+    let len = original_item_fn.sig.inputs.len();
+    let mut arg_names = vec![];
+    for i in 0..len {
+        let parse_name = "arg_".to_string() + &i.to_string();
+        let parse_name = Ident::new(&parse_name, Span::call_site());
+        arg_names.push(parse_name);
+    }
+
     for fn_arg in original_item_fn.sig.inputs.iter() {
         match fn_arg {
             FnArg::Receiver(_) => {
@@ -540,12 +709,9 @@ fn parse_src_function_arguments(original_item_fn: &syn::ItemFn) -> MacroResult<V
                     match &*ty_ref.elem {
                         Type::Path(ty) => {
                             let val = get_arg_val(ty)?;
-                            //let lifetime = ty_ref.lifetime.clone();
                             let passing_style = if ty_ref.mutability.is_some() {
-                                //ArgPassingStyle::MutReference(lifetime)
                                 ArgPassingStyle::MutReference
                             } else {
-                                //ArgPassingStyle::Reference(lifetime)
                                 ArgPassingStyle::Reference
                             };
                             parsed_args.push(Arg { val, passing_style });
@@ -609,10 +775,146 @@ fn are_args_valid(original_item_fn: &syn::ItemFn, args: &[Arg]) -> MacroResult<(
     }
 }
 
-fn generate_sl_sh_fn2(original_item_fn: &syn::ItemFn) -> MacroResult<TokenStream2> {
+fn generate_sl_sh_fn2(
+    original_item_fn: &syn::ItemFn,
+    attr_args: syn::AttributeArgs,
+) -> MacroResult<TokenStream> {
+    let (fn_name, fn_name_attr, eval_values) = parse_attributes(original_item_fn, attr_args)?;
+    let doc_comments = get_documentation_for_fn(original_item_fn)?;
+    let args_len = original_item_fn.sig.inputs.len();
+    let (original_fn_name, builtin_name, parse_name, intern_name) = get_fn_names(original_item_fn);
+
+    let make_args = if eval_values {
+        quote! {
+            let args = sl_sh::builtins_util::make_args(environment, args)?;
+        }
+    } else {
+        quote! {
+            let args = sl_sh::builtins_util::make_args_eval_no_values(environment, args)?;
+        }
+    };
+
     let args = parse_src_function_arguments(original_item_fn)?;
-    are_args_valid(original_item_fn, args.as_slice())?;
-    Ok(quote!())
+    let builtin_fn = generate_builtin_fn2(original_item_fn, &original_fn_name, &builtin_name)?;
+    are_args_valid(original_item_fn, &args.as_slice())?;
+    let arg_types = to_arg_types(&args.as_slice());
+
+    // directly in this TokenStream enumerate the functions parse_ and intern_
+    // parse is responsible for using the environment to turn the Expressions
+    // into a list of ArgTypes. ArgTypes are the abstraction that allow
+    // Optional and VarArgs type parameters in native rust functions.
+    let tokens = quote! {
+        #builtin_fn
+
+        fn #parse_name(
+            environment: &mut sl_sh::environment::Environment,
+            args: &mut dyn Iterator<Item = sl_sh::types::Expression>,
+        ) -> sl_sh::LispResult<sl_sh::types::Expression> {
+            use std::convert::TryInto;
+            use sl_sh::builtins_util::ExpandVecToArgs;
+            #make_args
+            let #fn_name_attr = #fn_name;
+            const args_len: usize = #args_len;
+            #arg_types
+            let args = sl_sh::get_arg_types(fn_name, arg_types, args)?;
+            if args.len() == args_len {
+                match args.try_into() {
+                    Ok(params) => {
+                        let params: [sl_sh::ArgType; args_len] = params;
+                        #builtin_name.call_expand_args(params)
+                    },
+                    Err(e) => {
+                        Err(LispError::new(format!("{} is broken and can't parse its arguments..", #fn_name_attr, )))
+                    }
+                }
+            } else if args.len() > args_len {
+                Err(LispError::new(format!("{} given too many arguments, expected {}, got {}.", #fn_name_attr, args_len, args.len())))
+            } else {
+                Err(LispError::new(format!("{} not given enough arguments, expected {}, got {}.", #fn_name_attr, args_len, args.len())))
+            }
+        }
+
+        fn #intern_name<S: std::hash::BuildHasher>(
+            interner: &mut sl_sh::Interner,
+            data: &mut std::collections::HashMap<&'static str, (sl_sh::types::Expression, String), S>,
+        ) {
+            let #fn_name_attr = #fn_name;
+            data.insert(
+                interner.intern(#fn_name_attr),
+                sl_sh::types::Expression::make_function(#parse_name, #doc_comments),
+            );
+        }
+    };
+    Ok(tokens)
+}
+
+fn to_arg_types(args: &[Arg]) -> TokenStream {
+    let mut tokens = vec![];
+    for arg in args {
+        tokens.push(match (arg.val, arg.passing_style) {
+            (ArgVal::Value, ArgPassingStyle::MutReference) => {
+                quote! { sl_sh::builtins_util::Arg {
+                    val: sl_sh::builtins_util::ArgVal::Value,
+                    passing_style: sl_sh::builtins_util::ArgPassingStyle::MutReference
+                }}
+            }
+            (ArgVal::Optional, ArgPassingStyle::MutReference) => {
+                quote! { sl_sh::builtins_util::Arg {
+                    val: sl_sh::builtins_util::ArgVal::Optional,
+                    passing_style: sl_sh::builtins_util::ArgPassingStyle::MutReference
+                }}
+            }
+            (ArgVal::Vec, ArgPassingStyle::MutReference) => {
+                quote! { sl_sh::builtins_util::Arg {
+                    val: sl_sh::builtins_util::ArgVal::Vec,
+                    passing_style: sl_sh::builtins_util::ArgPassingStyle::MutReference
+                }}
+            }
+            (ArgVal::Value, ArgPassingStyle::Reference) => {
+                quote! {sl_sh::builtins_util::Arg {
+                    val: sl_sh::builtins_util::ArgVal::Value,
+                    passing_style: sl_sh::builtins_util::ArgPassingStyle::Reference
+                }}
+            }
+            (ArgVal::Optional, ArgPassingStyle::Reference) => {
+                quote! { sl_sh::builtins_util::Arg {
+                    val: sl_sh::builtins_util::ArgVal::Optional,
+                    passing_style: sl_sh::builtins_util::ArgPassingStyle::Reference
+                }}
+            }
+            (ArgVal::Vec, ArgPassingStyle::Reference) => {
+                quote! { sl_sh::builtins_util::Arg {
+                    val: sl_sh::builtins_util::ArgVal::Vec,
+                    passing_style: sl_sh::builtins_util::ArgPassingStyle::Reference
+                }}
+            }
+            (ArgVal::Value, ArgPassingStyle::Move) => {
+                quote! { sl_sh::builtins_util::Arg {
+                    val: sl_sh::builtins_util::ArgVal::Value,
+                    passing_style: sl_sh::builtins_util::ArgPassingStyle::Move
+                }}
+            }
+            (ArgVal::Optional, ArgPassingStyle::Move) => {
+                quote! { sl_sh::builtins_util::Arg {
+                    val: sl_sh::builtins_util::ArgVal::Optional,
+                    passing_style: sl_sh::builtins_util::ArgPassingStyle::Move
+                }}
+            }
+            (ArgVal::Vec, ArgPassingStyle::Move) => {
+                quote! { sl_sh::builtins_util::Arg {
+                    val: sl_sh::builtins_util::ArgVal::Vec,
+                    passing_style: sl_sh::builtins_util::ArgPassingStyle::Move
+                }}
+            }
+        });
+    }
+    let token_stream = quote! {
+        let arg_types = vec![ #(#tokens),* ];
+        for arg_type in &arg_types {
+            println!("{:?}", arg_type);
+        }
+    };
+    token_stream
 }
 
 #[proc_macro_attribute]
@@ -620,12 +922,12 @@ pub fn sl_sh_fn2(
     attr: proc_macro::TokenStream,
     input: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    let _attr_args = parse_macro_input!(attr as syn::AttributeArgs);
+    let attr_args = parse_macro_input!(attr as syn::AttributeArgs);
 
     let tokens = match syn::parse::<syn::Item>(input) {
         Ok(item) => match &item {
             syn::Item::Fn(original_item_fn) => {
-                let generated_code = match generate_sl_sh_fn2(original_item_fn) {
+                let generated_code = match generate_sl_sh_fn2(original_item_fn, attr_args) {
                     Ok(generated_code) => generated_code,
                     Err(e) => e.to_compile_error(),
                 };
