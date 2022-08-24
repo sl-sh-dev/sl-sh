@@ -2,6 +2,7 @@ use slvm::error::*;
 use slvm::opcodes::*;
 use slvm::value::*;
 use slvm::{Handle, Interned};
+use std::collections::HashMap;
 
 use crate::state::*;
 use crate::{compile, mkconst, CompileEnvironment};
@@ -213,43 +214,68 @@ impl DestructState {
         env: &mut CompileEnvironment,
         state: &mut CompileState,
         map_handle: Handle,
-        reg: usize,
+        current_reg: usize,
         stack: &mut Vec<DestructType>,
         start_reg: &mut usize,
     ) -> VMResult<()> {
+        let or_i = env.vm_mut().intern("or");
         let map = env.vm().get_map(map_handle);
         let mut keys = Vec::new();
+        let mut opt_comps = Vec::new();
+        let mut len = map.len();
+        let mut reg = current_reg;
+        let opt_map;
+        let optionals = if let Some(opts) = map.get(&Value::Keyword(or_i)) {
+            if let Value::Map(handle) = opts {
+                env.vm().get_map(*handle)
+            } else {
+                return Err(VMError::new_compile(":or must be followed by a map"));
+            }
+        } else {
+            opt_map = HashMap::new();
+            &opt_map
+        };
         for (key, val) in map {
             match key {
+                Value::Keyword(i) if *i == or_i => {
+                    len -= 1;
+                    opt_comps.push((reg, *val));
+                    continue; // Skip checking for optionals.
+                }
                 Value::Symbol(i) => {
-                    let reg = state.symbols.borrow_mut().insert(*i) + 1;
+                    reg = state.symbols.borrow_mut().insert(*i) + 1;
                     setup_dbg(env, state, reg, *i);
                     keys.push(*val);
                 }
                 Value::Vector(h) => {
-                    let reg = state.symbols.borrow_mut().reserve_reg() + 1;
+                    reg = state.symbols.borrow_mut().reserve_reg() + 1;
                     setup_dbg(env, state, reg, env.specials().scratch);
                     stack.push(DestructType::Vector(*h, reg));
                     keys.push(*val);
                 }
                 Value::Map(h) => {
-                    let reg = state.symbols.borrow_mut().reserve_reg() + 1;
+                    reg = state.symbols.borrow_mut().reserve_reg() + 1;
                     setup_dbg(env, state, reg, env.specials().scratch);
                     stack.push(DestructType::Map(*h, reg));
                     keys.push(*val);
                 }
                 _ => return Err(VMError::new_compile("not a valid destructure")),
             }
+            if let Some(opt_val) = optionals.get(val) {
+                opt_comps.push((reg, *opt_val));
+            }
         }
-        let len = map.len();
         self.destructures.push(Destructure {
             start_reg: *start_reg as u16,
             len: len as u16,
-            reg: reg as u16,
+            reg: current_reg as u16,
             map_keys: Some(keys),
             rest: false,
             allow_extra: false,
         });
+        if !opt_comps.is_empty() {
+            self.all_optionals.push(opt_comps);
+        }
         *start_reg += len;
         Ok(())
     }
@@ -284,7 +310,7 @@ impl DestructState {
         self.setup_destructures(env, state, free_reg)?;
         self.setup_optionals(env, state, *free_reg)?;
         let kw = Value::Keyword(env.vm_mut().intern("destructure"));
-        let err_str = Value::Keyword(env.vm_mut().intern("missing structure"));
+        let err_str = Value::StringConst(env.vm_mut().intern("missing structure"));
         // For each destructure raise an error if something was missing.
         for destructure in &self.destructures {
             state.chunk.encode2(

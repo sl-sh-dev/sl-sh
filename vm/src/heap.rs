@@ -457,6 +457,14 @@ impl Heap {
         }
     }
 
+    pub fn get_closure_captures(&self, handle: Handle) -> &[Handle] {
+        if let Some(Object::Closure(_, captures)) = self.objects.get(handle.idx) {
+            captures
+        } else {
+            panic!("Handle {} is not a closure!", handle.idx);
+        }
+    }
+
     pub fn get_continuation(&self, handle: Handle) -> &Continuation {
         if let Some(Object::Continuation(cont)) = self.objects.get(handle.idx) {
             cont

@@ -133,5 +133,26 @@ mod tests {
         );
         let expected = read_test(&mut vm, "(1 2 6 5)");
         assert_vals(&vm, expected, result);
+
+        let result = exec(
+            &mut vm,
+            "(do (def fnx (fn (a b & {k1 :key1, k2 :key2, :or {:key2 55}}) `(~a ~b ~k1 ~k2))) (fnx 1 2, :key1 6))",
+        );
+        let expected = read_test(&mut vm, "(1 2 6 55)");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(
+            &mut vm,
+            "(do (def fnx (fn (a b & {k1 :key1, k2 :key2, :or {:key1 66}}) `(~a ~b ~k1 ~k2))) (fnx 1 2, :key2 5))",
+        );
+        let expected = read_test(&mut vm, "(1 2 66 5)");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(
+            &mut vm,
+            "(do (def fnx (fn (a b & {k1 :key1, k2 :key2, :or {:key1 66, :key2 55}}) `(~a ~b ~k1 ~k2))) (dasm fnx)(fnx 1 2))",
+        );
+        let expected = read_test(&mut vm, "(1 2 66 55)");
+        assert_vals(&vm, expected, result);
     }
 }

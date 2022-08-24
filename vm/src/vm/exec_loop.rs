@@ -106,6 +106,11 @@ impl Vm {
                         }
                     }
                 }
+                Value::Nil => {
+                    for i in 0..len as usize {
+                        registers[dest + i] = Value::Undefined;
+                    }
+                }
                 _ => return Err(VMError::new_vm("not a map")),
             }
         }

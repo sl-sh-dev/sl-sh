@@ -176,8 +176,14 @@ impl Vm {
             } else {
                 num_args
             };
-            if num_args < (l.args + l.opt_args) {
-                for r in num_args..(l.args + l.opt_args) {
+            let end_arg = if l.rest {
+                // Do not clear the rest arg.
+                l.args + l.opt_args - 1
+            } else {
+                l.args + l.opt_args
+            };
+            if num_args < end_arg {
+                for r in num_args..end_arg {
                     Vm::mov_register(
                         registers,
                         first_reg as usize + (r + 1) as usize,
@@ -185,6 +191,21 @@ impl Vm {
                     );
                 }
             }
+        }
+        fn check_num_args(l: &Chunk, num_args: u16) -> VMResult<()> {
+            if l.rest {
+                if num_args < (l.args - 1) {
+                    return Err(VMError::new_vm(format!("To few arguments, expected at least {} got {}.", l.args - 1, num_args)));
+                }
+            } else {
+                if num_args < l.args {
+                    return Err(VMError::new_vm(format!("To few arguments, expected at least {} got {}.", l.args, num_args)));
+                }
+                if num_args > (l.args + l.opt_args) {
+                    return Err(VMError::new_vm(format!("To many arguments, expected no more than {} got {}.", (l.args + l.opt_args), num_args)));
+                }
+            }
+            Ok(())
         }
 
         let mut do_cont = false;
@@ -235,6 +256,7 @@ impl Vm {
             }
             Value::Lambda(handle) => {
                 let l = self.heap.get_lambda(handle);
+                check_num_args(&l, num_args).map_err(|e| (e, chunk.clone()))?;
                 if !tail_call {
                     let frame = self.make_call_frame(chunk, lambda, true);
                     Self::mov_register(registers, first_reg.into(), self.alloc_callframe(frame));
@@ -253,6 +275,8 @@ impl Vm {
                 Ok(l)
             }
             Value::Closure(handle) => {
+                let (l, _) = self.heap.get_closure(handle);
+                check_num_args(&l, num_args).map_err(|e| (e, chunk.clone()))?;
                 // Make a self (vm) with it's lifetime broken away so we can call setup_rest.
                 // This is safe because it does not touch caps, it needs a &mut self so it
                 // can heap allocate.
@@ -264,7 +288,7 @@ impl Vm {
                 } else {
                     None
                 };
-                let (l, caps) = self.heap.get_closure(handle);
+                let caps= self.heap.get_closure_captures(handle);
                 self.stack_max = self.stack_top + l.input_regs + l.extra_regs;
                 self.this_fn = Some(lambda);
                 self.ip = 0;
@@ -1120,6 +1144,7 @@ mod tests {
         let line = 1;
         chunk.encode3(ADD, 3, 1, 2, Some(line)).unwrap();
         chunk.encode1(SRET, 3, Some(line))?;
+        chunk.args = 2;
         let add = vm.alloc_lambda(Arc::new(chunk));
 
         let mut chunk = Chunk::new("no_file", 1);
@@ -1128,6 +1153,7 @@ mod tests {
         chunk.encode2(CONST, 2, const1, Some(line)).unwrap();
         chunk.encode3(ADD, 3, 1, 2, Some(line)).unwrap();
         chunk.encode1(SRET, 3, Some(line))?;
+        chunk.args = 1;
         let add_ten = vm.alloc_lambda(Arc::new(chunk));
 
         let mut chunk = Chunk::new("no_file", 1);
@@ -1160,6 +1186,7 @@ mod tests {
         let line = 1;
         chunk.encode3(ADD, 3, 1, 2, Some(line)).unwrap();
         chunk.encode1(SRET, 3, Some(line))?;
+        chunk.args = 2;
         let add = vm.alloc_lambda(Arc::new(chunk));
 
         let mut chunk = Chunk::new("no_file", 1);
@@ -1171,6 +1198,7 @@ mod tests {
         chunk.encode2(TCALL, 3, 2, Some(line)).unwrap();
         // The TCALL will keep HALT from executing.
         chunk.encode0(HALT, Some(line))?;
+        chunk.args = 1;
         let add_ten = vm.alloc_lambda(Arc::new(chunk));
 
         let mut chunk = Chunk::new("no_file", 1);
@@ -1227,6 +1255,7 @@ mod tests {
         chunk.encode2(MOV, 5, 2, Some(line)).unwrap();
         chunk.encode3(CALL, 10, 2, 3, Some(line)).unwrap();
         chunk.encode1(SRET, 3, Some(line))?;
+        chunk.args = 2;
         let add = vm.alloc_lambda(Arc::new(chunk));
 
         let mut chunk = Chunk::new("no_file", 1);
@@ -1235,6 +1264,7 @@ mod tests {
         chunk.encode2(CONST, 10, const1, Some(line)).unwrap();
         chunk.encode2(TCALL, 10, 2, Some(line)).unwrap();
         chunk.encode0(RET, Some(line))?;
+        chunk.args = 2;
         let tadd = vm.alloc_lambda(Arc::new(chunk));
 
         let mut chunk = Chunk::new("no_file", 1);
@@ -1244,6 +1274,7 @@ mod tests {
         chunk.encode2(MOV, 3, 1, Some(line)).unwrap();
         chunk.encode3(CALL, 4, 1, 2, Some(line)).unwrap();
         chunk.encode1(SRET, 2, Some(line))?;
+        chunk.args = 1;
         let add_ten = vm.alloc_lambda(Arc::new(chunk));
 
         let mut chunk = Chunk::new("no_file", 1);
