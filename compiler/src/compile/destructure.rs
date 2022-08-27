@@ -94,14 +94,14 @@ impl DestructState {
             for r in &destructure.register_labels {
                 match r {
                     Register::Named(i, sreg) => {
-                        let reg = state.symbols.borrow_mut().insert(*i) + 1;
+                        let reg = state.symbols.borrow_mut().insert(*i);
                         if reg != *sreg as usize {
                             panic!("Failed to line up regs {} vs {}", reg, *sreg);
                         }
                         setup_dbg(env, state, reg, *i);
                     }
                     Register::Reserved(sreg) => {
-                        let reg = state.symbols.borrow_mut().reserve_reg() + 1;
+                        let reg = state.symbols.borrow_mut().reserve_reg();
                         if reg != *sreg as usize {
                             panic!("Failed to line up regs 2");
                         }
@@ -317,7 +317,7 @@ impl DestructState {
         // Track the next available reg across all the destructuring so can handle shadowing properly.
         // This should stay in sync with the order names are applied otherwise local names will be
         // broken...
-        let mut next_reg = state.symbols.borrow().count() + 1;
+        let mut next_reg = state.symbols.borrow().count();
         while let Some(destruct_type) = stack.pop() {
             match destruct_type {
                 DestructType::Vector(vector, reg) => {

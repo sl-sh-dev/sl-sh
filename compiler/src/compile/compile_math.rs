@@ -38,7 +38,7 @@ pub(crate) fn compile_math(
         Value::Symbol(i) if i == env.specials().inc => {
             let dest = if let Value::Symbol(si) = cdr[0] {
                 if let Some(idx) = state.get_symbol(si) {
-                    idx + 1
+                    idx
                 } else if let Some(slot) = env.vm().global_intern_slot(i) {
                     state
                         .chunk
@@ -74,7 +74,7 @@ pub(crate) fn compile_math(
         Value::Symbol(i) if i == env.specials().dec => {
             let dest = if let Value::Symbol(si) = cdr[0] {
                 if let Some(idx) = state.get_symbol(si) {
-                    idx + 1
+                    idx
                 } else if let Some(slot) = env.vm().global_intern_slot(i) {
                     state
                         .chunk

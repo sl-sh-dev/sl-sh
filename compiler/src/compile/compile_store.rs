@@ -48,7 +48,7 @@ pub(crate) fn compile_set(
                 compile(env, state, cdr[1], result)?;
                 state
                     .chunk
-                    .encode2(SET, (idx + 1) as u16, result as u16, env.own_line())?;
+                    .encode2(SET, idx as u16, result as u16, env.own_line())?;
             } else if let Some(si_const) = env.vm().global_intern_slot(si) {
                 compile(env, state, cdr[1], result + 1)?;
                 state

@@ -40,22 +40,22 @@ fn let_inner(
         match a {
             Value::Symbol(i) => {
                 if symbols.borrow().contains_symbol(*i) {
-                    let reg = symbols.borrow_mut().reserve_reg() + 1;
+                    let reg = symbols.borrow_mut().reserve_reg();
                     right_exps.push((Some(*i), Some(reg), value, None));
                 } else {
-                    let reg = symbols.borrow_mut().insert(*i) + 1;
+                    let reg = symbols.borrow_mut().insert(*i);
                     setup_dbg(env, state, reg, *i);
                     right_exps.push((None, Some(reg), value, None));
                 }
             }
             Value::Vector(h) => {
-                let reg = symbols.borrow_mut().reserve_reg() + 1;
+                let reg = symbols.borrow_mut().reserve_reg();
                 setup_dbg(env, state, reg, env.specials().scratch);
                 let dtype = DestructType::Vector(*h, reg);
                 right_exps.push((None, Some(reg), value, Some(dtype)));
             }
             Value::Map(h) => {
-                let reg = symbols.borrow_mut().reserve_reg() + 1;
+                let reg = symbols.borrow_mut().reserve_reg();
                 setup_dbg(env, state, reg, env.specials().scratch);
                 let dtype = DestructType::Map(*h, reg);
                 right_exps.push((None, Some(reg), value, Some(dtype)));
@@ -71,7 +71,7 @@ fn let_inner(
                 // previous version of this name before we shadow it.
                 setup_dbg(env, state, reg, interned);
                 compile(env, state, val, reg)?;
-                symbols.borrow_mut().insert_reserved(interned, reg - 1);
+                symbols.borrow_mut().insert_reserved(interned, reg);
                 if free_reg < reg + 1 {
                     free_reg = reg + 1;
                 }

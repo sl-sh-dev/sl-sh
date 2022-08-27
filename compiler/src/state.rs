@@ -35,7 +35,7 @@ impl Symbols {
     pub fn with_outer(outer: Option<Rc<RefCell<Symbols>>>) -> Symbols {
         let data = Rc::new(RefCell::new(SymbolsInt {
             syms: HashMap::new(),
-            count: 0,
+            count: 1,
         }));
         Symbols {
             data,

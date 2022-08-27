@@ -36,8 +36,6 @@ fn mk_state(
                 } else if i == env.specials().optional {
                     opt = true;
                 } else {
-                    //new_state.symbols.borrow_mut().data.borrow_mut().add_sym(i);
-                    //let reg = symbols.borrow_mut().insert(*i) + 1;
                     new_state.symbols.borrow_mut().insert(i);
                     if let Some(dbg_args) = new_state.chunk.dbg_args.as_mut() {
                         dbg_args.push(i);
@@ -149,7 +147,7 @@ pub(crate) fn compile_fn(
     if !new_state.symbols.borrow().captures.borrow().is_empty() {
         let mut caps = Vec::new();
         for (_, _, c) in new_state.symbols.borrow().captures.borrow().iter() {
-            caps.push((*c + 1) as u32);
+            caps.push(*c as u32);
         }
         new_state.chunk.captures = Some(caps);
         closure = true;
