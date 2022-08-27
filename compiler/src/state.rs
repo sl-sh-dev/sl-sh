@@ -40,29 +40,24 @@ impl Symbols {
         Symbols {
             data,
             outer,
-            //namespace,
             captures: Rc::new(RefCell::new(Vec::new())),
         }
     }
 
-    pub fn with_let(source: Rc<RefCell<Symbols>>, result: usize) -> Symbols {
+    pub fn with_let(source: Rc<RefCell<Symbols>>) -> Symbols {
         let data = Rc::new(RefCell::new(SymbolsInt {
             syms: HashMap::new(),
-            count: 0,
+            count: source.borrow().data.borrow().count,
         }));
         {
             let mut datad = data.borrow_mut();
             for (key, val) in source.borrow().data.borrow().syms.iter() {
                 datad.syms.insert(*key, *val);
             }
-            if result > 0 {
-                datad.count = result - 1;
-            }
         }
         Symbols {
             data,
             outer: source.borrow().outer.clone(),
-            //namespace,
             captures: source.borrow().captures.clone(),
         }
     }
@@ -71,8 +66,7 @@ impl Symbols {
         self.data.borrow().syms.is_empty()
     }
 
-    pub fn len(&self) -> usize {
-        //self.data.borrow().syms.len()
+    pub fn count(&self) -> usize {
         self.data.borrow().count
     }
 
@@ -122,6 +116,11 @@ impl Symbols {
         data.syms.insert(key, count);
         data.count += 1;
         count
+    }
+
+    pub fn insert_reserved(&mut self, key: Interned, register: usize) {
+        let mut data = self.data.borrow_mut();
+        data.syms.insert(key, register);
     }
 
     pub fn insert_capture(&self, vm: &mut Vm, key: Interned) -> Option<usize> {
@@ -317,7 +316,7 @@ impl CompileState {
     }
 
     pub fn reserved_regs(&self) -> usize {
-        self.symbols.borrow().len() + 1
+        self.symbols.borrow().count() + 1
     }
 
     pub fn get_symbol(&self, sym: Interned) -> Option<usize> {

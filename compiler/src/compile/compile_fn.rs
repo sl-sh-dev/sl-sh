@@ -130,9 +130,9 @@ pub(crate) fn compile_fn(
     let mut destruct_state = DestructState::new();
     for destruct_type in destructure_patterns {
         destruct_state.do_destructure(env, &mut new_state, destruct_type)?;
+        let mut free_reg = new_state.reserved_regs();
+        destruct_state.compile(env, &mut new_state, &mut free_reg)?;
     }
-    let mut free_reg = new_state.reserved_regs();
-    destruct_state.compile(env, &mut new_state, &mut free_reg)?;
     let reserved = new_state.reserved_regs();
     let last_thing = cdr.len() - 1;
     for (i, r) in cdr.iter().enumerate() {

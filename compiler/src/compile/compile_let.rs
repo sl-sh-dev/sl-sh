@@ -4,11 +4,14 @@ use std::rc::Rc;
 use slvm::error::*;
 use slvm::opcodes::*;
 use slvm::value::*;
+use slvm::Interned;
 
 use crate::compile::destructure::{setup_dbg, DestructState, DestructType};
 use crate::compile::util::get_args_iter;
 use crate::state::*;
 use crate::{compile, CompileEnvironment};
+
+type RightSideExp = (Option<Interned>, Option<usize>, Value, Option<DestructType>);
 
 fn let_inner(
     env: &mut CompileEnvironment,
@@ -18,59 +21,79 @@ fn let_inner(
     old_tail: bool,
 ) -> VMResult<()> {
     let start_defers = state.defers;
-    let symbols = Rc::new(RefCell::new(Symbols::with_let(
-        state.symbols.clone(),
-        result,
-    )));
+    let symbols = Rc::new(RefCell::new(Symbols::with_let(state.symbols.clone())));
     state.symbols = symbols.clone();
     let mut cdr_iter = cdr.iter();
     let args = cdr_iter.next().unwrap(); // unwrap safe, length is at least 1
-    let mut right_exps: Vec<(usize, Value)> = Vec::new();
+    let mut right_exps: Vec<RightSideExp> = Vec::new();
     let mut destruct_state = DestructState::new();
     env.set_line_val(state, *args);
     let args: Vec<Value> = get_args_iter(env, *args, "let")?.collect();
     let mut args_iter = args.iter();
     while let Some(a) = args_iter.next() {
         env.set_line_val(state, *a);
+        let value = if let Some(r) = args_iter.next() {
+            *r
+        } else {
+            return Err(VMError::new_compile("symbol must have a value"));
+        };
         match a {
             Value::Symbol(i) => {
-                let reg = symbols.borrow_mut().insert(*i) + 1;
-                setup_dbg(env, state, reg, *i);
-                if let Some(r) = args_iter.next() {
-                    right_exps.push((reg, *r));
+                if symbols.borrow().contains_symbol(*i) {
+                    let reg = symbols.borrow_mut().reserve_reg() + 1;
+                    right_exps.push((Some(*i), Some(reg), value, None));
                 } else {
-                    return Err(VMError::new_compile("symbol must have a value"));
+                    let reg = symbols.borrow_mut().insert(*i) + 1;
+                    setup_dbg(env, state, reg, *i);
+                    right_exps.push((None, Some(reg), value, None));
                 }
             }
             Value::Vector(h) => {
                 let reg = symbols.borrow_mut().reserve_reg() + 1;
                 setup_dbg(env, state, reg, env.specials().scratch);
-                if let Some(r) = args_iter.next() {
-                    right_exps.push((reg, *r));
-                } else {
-                    return Err(VMError::new_compile("must have a value"));
-                }
-                destruct_state.do_destructure(env, state, DestructType::Vector(*h, reg))?;
+                let dtype = DestructType::Vector(*h, reg);
+                right_exps.push((None, Some(reg), value, Some(dtype)));
             }
             Value::Map(h) => {
                 let reg = symbols.borrow_mut().reserve_reg() + 1;
                 setup_dbg(env, state, reg, env.specials().scratch);
-                if let Some(r) = args_iter.next() {
-                    right_exps.push((reg, *r));
-                } else {
-                    return Err(VMError::new_compile("must have a value"));
-                }
-                destruct_state.do_destructure(env, state, DestructType::Map(*h, reg))?;
+                let dtype = DestructType::Map(*h, reg);
+                right_exps.push((None, Some(reg), value, Some(dtype)));
             }
             _ => return Err(VMError::new_compile("must be a symbol")),
         }
     }
     let mut free_reg = result;
-    for (reg, val) in right_exps {
-        compile(env, state, val, reg)?;
-        free_reg = reg + 1;
+    for (interned, reg, val, destruct_type) in right_exps {
+        match (interned, reg, destruct_type) {
+            (Some(interned), Some(reg), None) => {
+                // Use the reserved but unnamed reg.  Do this so we can access any
+                // previous version of this name before we shadow it.
+                setup_dbg(env, state, reg, interned);
+                compile(env, state, val, reg)?;
+                symbols.borrow_mut().insert_reserved(interned, reg - 1);
+                if free_reg < reg + 1 {
+                    free_reg = reg + 1;
+                }
+            }
+            (None, Some(reg), None) => {
+                compile(env, state, val, reg)?;
+                if free_reg < reg + 1 {
+                    free_reg = reg + 1;
+                }
+            }
+            (None, Some(reg), Some(dtype)) => {
+                compile(env, state, val, reg)?;
+                if free_reg < reg + 1 {
+                    free_reg = reg + 1;
+                }
+                destruct_state.do_destructure(env, state, dtype)?;
+                destruct_state.compile(env, state, &mut free_reg)?;
+                free_reg = state.reserved_regs();
+            }
+            _ => panic!("Broken let compile, both interned and a reg!"),
+        }
     }
-    destruct_state.compile(env, state, &mut free_reg)?;
     let last_thing = if cdr.len() > 1 { cdr.len() - 2 } else { 0 };
     for (i, r) in cdr_iter.enumerate() {
         if i == last_thing {
@@ -115,7 +138,8 @@ pub(crate) fn compile_let(
 mod tests {
     use super::*;
     use crate::test_utils::{assert_vals, exec, exec_compile_error, exec_runtime_error, read_test};
-    use builtins::print::prn;
+    use builtins::collections::make_hash;
+    use builtins::print::{dasm, prn};
     use slvm::Vm;
 
     #[test]
@@ -156,8 +180,8 @@ mod tests {
         let result = exec(
             &mut vm,
             "(let (fnx (fn (x) (if (= x 0) #t (fny (- x 1))))\
-                                      fny (fn (y) (if (= y 0) #t (fnx (- y 1)))))\
-                                   (fnx 10))",
+                        fny (fn (y) (if (= y 0) #t (fnx (- y 1)))))\
+                       (fnx 10))",
         );
         let expected = read_test(&mut vm, "#t");
         assert_vals(&vm, expected, result);
@@ -359,6 +383,77 @@ mod tests {
         let result = exec(
             &mut vm,
             "(let ({a :a, b :b, c :c} (list :a 1, :b 2, :c 3)) `(~a ~b ~c))",
+        );
+        let expected = read_test(&mut vm, "(1 2 3)");
+        assert_vals(&vm, expected, result);
+    }
+
+    #[test]
+    fn test_let_shadow() {
+        let mut vm = Vm::new();
+        vm.set_global("prn", Value::Builtin(CallFunc { func: prn }));
+        vm.set_global("dasm", Value::Builtin(CallFunc { func: dasm }));
+        vm.set_global("make-hash", Value::Builtin(CallFunc { func: make_hash }));
+
+        let result = exec(
+            &mut vm,
+            "(let (a1 10, b1 20, c1 30, a (- a1 9), b (- b1 18), c (- c1 27)) `(~a ~b ~c))",
+        );
+        let expected = read_test(&mut vm, "(1 2 3)");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(
+            &mut vm,
+            "(let (a 10, b 20, c 30, a (- a 9), b (- b 18), c (- c 27)) `(~a ~b ~c))",
+        );
+        let expected = read_test(&mut vm, "(1 2 3)");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(
+            &mut vm,
+            "(let (a 1, b 2, c 3, {a :a, b :b, c :c} (list :a a, :b b, :c c)) `(~a ~b ~c))",
+        );
+        let expected = read_test(&mut vm, "(1 2 3)");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(
+            &mut vm,
+            "(let (a1 10, b1 11, c1 12)(let (a 1, b 2, c 3, {a :a, b :b, c :c} (list :a a, :b b, :c c)) `(~a ~b ~c)))",
+        );
+        let expected = read_test(&mut vm, "(1 2 3)");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(
+            &mut vm,
+            "(let (a 10, b 2, c 0)(let (a (- a 9), b b, c (+ c 3)) `(~a ~b ~c)))",
+        );
+        let expected = read_test(&mut vm, "(1 2 3)");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(
+            &mut vm,
+            "(let (a 10, b 11, c 12)(let (a 1, b 2, c 3, [a b c] (list a, b, c)) `(~a ~b ~c)))",
+        );
+        let expected = read_test(&mut vm, "(1 2 3)");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(
+            &mut vm,
+            "(let (a 10, b1 11, c1 12)(let (a 1, b 2, c 3, {a :a, b :b, c :c} (list :a a, :b b, :c c)) `(~a ~b ~c)))",
+        );
+        let expected = read_test(&mut vm, "(1 2 3)");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(
+            &mut vm,
+            "(let (a 10, b 11, c 12)(let (a 1, b 2, c 3, {a :a, b :b, c :c} (make-hash :a a, :b b, :c c)) `(~a ~b ~c)))",
+        );
+        let expected = read_test(&mut vm, "(1 2 3)");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(
+            &mut vm,
+            "(do (def fnx (fn () (let (a 10, b 11, c 12)(let (a 1, b 2, c 3, {a :a, b :b, c :c} (make-hash :a a, :b b, :c c)) `(~a ~b ~c)))))(fnx))",
         );
         let expected = read_test(&mut vm, "(1 2 3)");
         assert_vals(&vm, expected, result);

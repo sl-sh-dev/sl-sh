@@ -7,6 +7,11 @@ use std::collections::HashMap;
 use crate::state::*;
 use crate::{compile, mkconst, CompileEnvironment};
 
+pub enum Register {
+    Named(Interned, u16),
+    Reserved(u16),
+}
+
 pub struct Destructure {
     start_reg: u16,
     len: u16,
@@ -14,6 +19,7 @@ pub struct Destructure {
     map_keys: Option<Vec<Value>>,
     rest: bool,
     allow_extra: bool,
+    register_labels: Vec<Register>,
 }
 
 pub enum DestructType {
@@ -83,6 +89,27 @@ impl DestructState {
                     env.own_line(),
                 )?;
             }
+
+            // Apply labels to registers so shadowing will work correctly.
+            for r in &destructure.register_labels {
+                match r {
+                    Register::Named(i, sreg) => {
+                        let reg = state.symbols.borrow_mut().insert(*i) + 1;
+                        if reg != *sreg as usize {
+                            panic!("Failed to line up regs {} vs {}", reg, *sreg);
+                        }
+                        setup_dbg(env, state, reg, *i);
+                    }
+                    Register::Reserved(sreg) => {
+                        let reg = state.symbols.borrow_mut().reserve_reg() + 1;
+                        if reg != *sreg as usize {
+                            panic!("Failed to line up regs 2");
+                        }
+                        setup_dbg(env, state, reg, env.specials().scratch);
+                    }
+                }
+            }
+
             let temp_max = (destructure.start_reg + destructure.len) as usize;
             if temp_max > *free_reg {
                 *free_reg = temp_max;
@@ -121,11 +148,10 @@ impl DestructState {
     fn do_vector_destructure(
         &mut self,
         env: &mut CompileEnvironment,
-        state: &mut CompileState,
         vector_handle: Handle,
         reg: usize,
         stack: &mut Vec<DestructType>,
-        start_reg: &mut usize,
+        next_reg: &mut usize,
     ) -> VMResult<()> {
         let vector = env.vm().get_vector(vector_handle);
         let mut len = vector.len();
@@ -135,6 +161,8 @@ impl DestructState {
         let mut rest_cnt = 0;
         let mut opt_comps = Vec::new();
         let mut allow_extra = false;
+        let mut register_labels = Vec::new();
+        let start_reg = *next_reg;
         for name in vector {
             if opt_set_next {
                 len -= 1;
@@ -163,23 +191,23 @@ impl DestructState {
                         }
                     }
                     Value::Symbol(i) => {
-                        let reg = state.symbols.borrow_mut().insert(*i) + 1;
-                        setup_dbg(env, state, reg, *i);
+                        register_labels.push(Register::Named(*i, *next_reg as u16));
                         if rest {
                             rest_cnt += 1;
                         } else if opt {
-                            opt_comps.push((reg, Value::Nil));
+                            opt_comps.push((*next_reg, Value::Nil));
                         }
+                        *next_reg += 1;
                     }
                     Value::Vector(h) => {
-                        let reg = state.symbols.borrow_mut().reserve_reg() + 1;
-                        setup_dbg(env, state, reg, env.specials().scratch);
-                        stack.push(DestructType::Vector(*h, reg));
+                        register_labels.push(Register::Reserved(*next_reg as u16));
+                        stack.push(DestructType::Vector(*h, *next_reg));
+                        *next_reg += 1;
                     }
                     Value::Map(h) => {
-                        let reg = state.symbols.borrow_mut().reserve_reg() + 1;
-                        setup_dbg(env, state, reg, env.specials().scratch);
-                        stack.push(DestructType::Map(*h, reg));
+                        register_labels.push(Register::Reserved(*next_reg as u16));
+                        stack.push(DestructType::Map(*h, *next_reg));
+                        *next_reg += 1;
                     }
                     _ => return Err(VMError::new_compile("not a valid destructure")),
                 }
@@ -195,36 +223,35 @@ impl DestructState {
             return Err(VMError::new_compile("not a valid destructure (invalid :=)"));
         }
         self.destructures.push(Destructure {
-            start_reg: *start_reg as u16,
+            start_reg: start_reg as u16,
             len: len as u16,
             reg: reg as u16,
             map_keys: None,
             rest,
             allow_extra,
+            register_labels,
         });
         if !opt_comps.is_empty() {
             self.all_optionals.push(opt_comps);
         }
-        *start_reg += len;
         Ok(())
     }
 
     fn do_map_destructure(
         &mut self,
         env: &mut CompileEnvironment,
-        state: &mut CompileState,
         map_handle: Handle,
         current_reg: usize,
         stack: &mut Vec<DestructType>,
-        start_reg: &mut usize,
+        next_reg: &mut usize,
     ) -> VMResult<()> {
         let or_i = env.vm_mut().intern("or");
         let map = env.vm().get_map(map_handle);
         let mut keys = Vec::new();
         let mut opt_comps = Vec::new();
         let mut len = map.len();
-        let mut reg = current_reg;
         let opt_map;
+        let mut register_labels = Vec::new();
         let optionals = if let Some(opts) = map.get(&Value::Keyword(or_i)) {
             if let Value::Map(handle) = opts {
                 env.vm().get_map(*handle)
@@ -235,48 +262,48 @@ impl DestructState {
             opt_map = HashMap::new();
             &opt_map
         };
+        let start_reg = *next_reg;
         for (key, val) in map {
             match key {
                 Value::Keyword(i) if *i == or_i => {
                     len -= 1;
-                    opt_comps.push((reg, *val));
                     continue; // Skip checking for optionals.
                 }
                 Value::Symbol(i) => {
-                    reg = state.symbols.borrow_mut().insert(*i) + 1;
-                    setup_dbg(env, state, reg, *i);
+                    register_labels.push(Register::Named(*i, *next_reg as u16));
                     keys.push(*val);
+                    *next_reg += 1;
                 }
                 Value::Vector(h) => {
-                    reg = state.symbols.borrow_mut().reserve_reg() + 1;
-                    setup_dbg(env, state, reg, env.specials().scratch);
-                    stack.push(DestructType::Vector(*h, reg));
+                    register_labels.push(Register::Reserved(*next_reg as u16));
+                    stack.push(DestructType::Vector(*h, *next_reg));
                     keys.push(*val);
+                    *next_reg += 1;
                 }
                 Value::Map(h) => {
-                    reg = state.symbols.borrow_mut().reserve_reg() + 1;
-                    setup_dbg(env, state, reg, env.specials().scratch);
-                    stack.push(DestructType::Map(*h, reg));
+                    register_labels.push(Register::Reserved(*next_reg as u16));
+                    stack.push(DestructType::Map(*h, *next_reg));
                     keys.push(*val);
+                    *next_reg += 1;
                 }
                 _ => return Err(VMError::new_compile("not a valid destructure")),
             }
             if let Some(opt_val) = optionals.get(val) {
-                opt_comps.push((reg, *opt_val));
+                opt_comps.push((*next_reg - 1, *opt_val));
             }
         }
         self.destructures.push(Destructure {
-            start_reg: *start_reg as u16,
+            start_reg: start_reg as u16,
             len: len as u16,
             reg: current_reg as u16,
             map_keys: Some(keys),
             rest: false,
             allow_extra: false,
+            register_labels,
         });
         if !opt_comps.is_empty() {
             self.all_optionals.push(opt_comps);
         }
-        *start_reg += len;
         Ok(())
     }
 
@@ -287,14 +314,17 @@ impl DestructState {
         destruct_type: DestructType,
     ) -> VMResult<()> {
         let mut stack = vec![destruct_type];
-        let mut start_reg = state.reserved_regs();
+        // Track the next available reg across all the destructuring so can handle shadowing properly.
+        // This should stay in sync with the order names are applied otherwise local names will be
+        // broken...
+        let mut next_reg = state.symbols.borrow().count() + 1;
         while let Some(destruct_type) = stack.pop() {
             match destruct_type {
                 DestructType::Vector(vector, reg) => {
-                    self.do_vector_destructure(env, state, vector, reg, &mut stack, &mut start_reg)?
+                    self.do_vector_destructure(env, vector, reg, &mut stack, &mut next_reg)?
                 }
                 DestructType::Map(map, reg) => {
-                    self.do_map_destructure(env, state, map, reg, &mut stack, &mut start_reg)?
+                    self.do_map_destructure(env, map, reg, &mut stack, &mut next_reg)?
                 }
             }
         }
@@ -302,7 +332,7 @@ impl DestructState {
     }
 
     pub fn compile(
-        &self,
+        &mut self,
         env: &mut CompileEnvironment,
         state: &mut CompileState,
         free_reg: &mut usize,
@@ -335,6 +365,8 @@ impl DestructState {
                 (state.chunk.code.len() - start_offset) as i32,
             )?;
         }
+        self.destructures.clear();
+        self.all_optionals.clear();
         Ok(())
     }
 }

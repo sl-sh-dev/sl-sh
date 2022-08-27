@@ -114,7 +114,6 @@ mod tests {
 
         let result = exec(
             &mut vm,
-            //"(do (def fnx (fn (a b [x [y y2] % z := 10] % [d d2] := [20 21]) `(~a ~b ~x ~y ~y2 ~z ~d ~d2))) (dasm fnx) (fnx 1 2 '(3 [4 5])))",
             "(do (def fnx (fn (a b [x [y y2] % z := 10] [d d2]) `(~a ~b ~x ~y ~y2 ~z ~d ~d2))) (dasm fnx) (fnx 1 2 '(3 [4 5]) [23 24]))",
         );
         let expected = read_test(&mut vm, "(1 2 3 4 5 10 23 24)");
