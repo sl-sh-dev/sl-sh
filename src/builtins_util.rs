@@ -622,7 +622,6 @@ pub fn get_arg_types(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::ArgType::Exp;
     use crate::LispResult;
     use std::collections::HashMap;
     use std::convert::TryFrom;
@@ -897,7 +896,10 @@ mod test {
                 ExpEnum::Int(int_0),
                 {
                     match exp_1 {
-                        None => optional_int_2_float(int_0, None),
+                        None => {
+                            let int_1 = None;
+                            optional_int_2_float(int_0, int_1)
+                        },
                         Some(exp_1) => {
                             let float = try_inner_exp_enum!(
                                 exp_1.get().data,
@@ -1312,23 +1314,6 @@ mod test {
         } else {
             Err(LispError::new("Too few args."))
         }
-    }
-
-    fn more_builtin_int_to_float(arg0: ArgType, arg1: ArgType) -> LispResult<Expression> {
-        try_exp_enum!(
-            arg0,
-            ArgType::Exp(arg0),
-            {
-                try_exp_enum!(
-                    arg1,
-                    ArgType::VarArgs(arg1),
-                    //{ builtin_int_to_float(arg0, arg1).map(Into::into) }?,
-                    { builtin_int_to_float(arg0, arg1) }?,
-                    "err"
-                )
-            }?,
-            "err"
-        )
     }
 
     fn builtin_int_to_float(
