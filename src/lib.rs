@@ -1,3 +1,4 @@
+use std::convert::identity;
 use quote::quote;
 use quote::ToTokens;
 use quote::__private::TokenStream;
@@ -6,10 +7,7 @@ use syn::__private::{Span, TokenStream2};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::Comma;
-use syn::{
-    parse_macro_input, AngleBracketedGenericArguments, FnArg, Ident, Lit, Meta, NestedMeta,
-    PathArguments, PathSegment, ReturnType, Type,
-};
+use syn::{parse_macro_input, AngleBracketedGenericArguments, FnArg, Ident, Lit, Meta, NestedMeta, PathArguments, PathSegment, ReturnType, Type, GenericArgument};
 extern crate static_assertions;
 
 type MacroResult<T> = Result<T, syn::Error>;
@@ -240,6 +238,28 @@ fn is_valid_generic_type<'a>(
                 possible_types
             ),
         ))
+}
+
+fn get_inner_arguments_from_generic_type_path(
+    type_path: &syn::TypePath,
+) -> Option<syn::TypePath> {
+    if type_path.path.segments.len() == 1 {
+        let path_segment = &type_path.path.segments.first()?;
+        if let PathArguments::AngleBracketed(args) = &path_segment.arguments {
+            if args.args.len() == 1 {
+                let ty = args.args.first()?;
+                match ty {
+                    GenericArgument::Type(ty) => {
+                        if let Type::Path(ref type_path) = ty {
+                            return Some(type_path.clone())
+                        }
+                    }
+                   _ => { }
+                }
+            }
+        }
+    }
+    None
 }
 
 fn get_generic_argument_from_type_path(
@@ -516,7 +536,7 @@ fn get_arg_val(type_path: &syn::TypePath) -> MacroResult<ArgVal> {
         } else {
             return Err(syn::Error::new(
                 type_path.span(),
-                "Received generic argument this macro is not programmed to handle!",
+                "Received generic argument this macro is not programmed to handle, only support Option and Vec!",
             ));
         }
     } else {
@@ -597,7 +617,7 @@ fn generate_builtin_fn2(
                         ident,
                         passing_style,
                         parse_layer_1,
-                    );
+                    )?;
                 }
                 Type::Reference(ty_ref) => match &*ty_ref.elem {
                     Type::Path(ty) => {
@@ -615,7 +635,7 @@ fn generate_builtin_fn2(
                             ident,
                             passing_style,
                             parse_layer_1,
-                        );
+                        )?;
                     }
                     _ => {}
                 },
@@ -632,18 +652,32 @@ fn generate_builtin_fn2(
     Ok(tokens)
 }
 
-fn parse_type(
-    ty: &syn::TypePath,
-    inner: TokenStream,
-    _val: ArgVal,
-    arg_name: &syn::Ident,
-    _passing_style: ArgPassingStyle,
-    outer_parse: fn(Ident, TokenStream) -> TokenStream,
-) -> TokenStream {
+fn rust_type_to_sl_sh_type(ty: &syn::TypePath) -> MacroResult<TokenStream> {
     let i64_ty = syn::TypePath {
         qself: None,
         path: syn::Path::from(Ident::new("i64", Span::call_site())),
     };
+
+    //TODO avoid clone?
+    let ty = get_inner_arguments_from_generic_type_path(ty).map_or_else(|| ty.clone(), identity);
+
+    if ty.to_token_stream().to_string() == i64_ty.to_token_stream().to_string() {
+        Ok(quote! {
+            sl_sh::ExpEnum::Int
+        })
+    } else {
+        Err(syn::Error::new(ty.span(), "Unable to parse this type!"))
+    }
+}
+
+fn parse_type(
+    ty: &syn::TypePath,
+    inner: TokenStream,
+    val: ArgVal,
+    arg_name: &syn::Ident,
+    _passing_style: ArgPassingStyle,
+    outer_parse: fn(Ident, TokenStream) -> TokenStream,
+) -> MacroResult<TokenStream> {
     //let exp_enum_type_path = syn::TypePath {
     //    qself: None,
     //    path: syn::Path::from(Ident::new("i64", Span::call_site())),
@@ -651,21 +685,48 @@ fn parse_type(
     // TODO
     //  - use passing style to determine ref/ref mut in ret_err_exp_enum macro
     //  - use val to determine type, Expressoin, Option<Expression>, Vec<Expression>
-    let tokens = if ty.to_token_stream().to_string() == i64_ty.to_token_stream().to_string() {
-        quote! {
-            sl_sh::ret_err_exp_enum!(
+    let sl_sh_type = rust_type_to_sl_sh_type(ty)?;
+    let tokens = match val {
+        ArgVal::Value => {
+            quote! {
+                sl_sh::ret_err_exp_enum!(
                     #arg_name.get().data,
-                    sl_sh::ExpEnum::Int(#arg_name),
+                    #sl_sh_type(#arg_name),
                     {
                         #inner
                     },
-                    "sl_sh_fn macro is broken, apparently ArgType::Exp can't be parsed as ArgType::Exp"
+                    "sl_sh_fn macro is broken, ArgType::Exp can't be parsed as ArgType::Exp"
                 )
+            }
         }
-    } else {
-        syn::Error::new(ty.span(), "Unable to parse this type!").to_compile_error()
+        ArgVal::Optional => {
+            quote! {
+                match #arg_name {
+                    None => {
+                        let #arg_name = None;
+                        #inner
+                    },
+                    Some(#arg_name) => {
+                        sl_sh::ret_err_exp_enum!(
+                            #arg_name.get().data,
+                            #sl_sh_type(#arg_name),
+                            {
+                                let #arg_name = Some(#arg_name);
+                                #inner
+                            },
+                            "sl_sh_fn macro is broken, ArgType::Opt can't be parsed as ArgType::Opt"
+                        )
+                    }
+                }
+            }
+        }
+        ArgVal::Vec => {
+            quote! {
+                // ok
+            }
+        }
     };
-    outer_parse(arg_name.clone(), tokens)
+    Ok(outer_parse(arg_name.clone(), tokens))
 }
 
 fn parse_src_function_arguments(original_item_fn: &syn::ItemFn) -> MacroResult<Vec<Arg>> {
