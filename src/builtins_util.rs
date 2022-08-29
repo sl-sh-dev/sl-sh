@@ -932,7 +932,7 @@ mod test {
             Expression::alloc_data(ExpEnum::Int(11)),
             Expression::alloc_data(ExpEnum::Int(2)),
         ]);
-        let result = arg_translate_int_2_float(myint0, myint1).unwrap();
+        let result = arg_translate_ints_2_float(myint0, myint1).unwrap();
         let res_d = &result.get().data;
         match res_d {
             ExpEnum::Float(f) => {

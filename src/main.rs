@@ -17,8 +17,30 @@ extern crate static_assertions;
 
 fn main() -> Result<(), LispError> {
     let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
+    let arg_1 = vec![
+        Expression::alloc_data(ExpEnum::Int(2)),
+        Expression::alloc_data(ExpEnum::Int(2)),
+        Expression::alloc_data(ExpEnum::Int(2)),
+        Expression::alloc_data(ExpEnum::Int(2)),
+    ];
+    let exp =
+        builtin_ints_to_float(sl_sh::ArgType::Exp(arg_0), sl_sh::ArgType::VarArgs(arg_1)).unwrap();
+    let exp_d = exp.get();
+    match exp_d.data {
+        ExpEnum::Float(f) => {
+            assert_eq!(16.0, f);
+            println!("variadic ints to float working");
+        }
+        _ => {
+            panic!("Should befloat.");
+        }
+    }
+
+    let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
     let arg_1 = Expression::alloc_data(ExpEnum::Int(8));
-    let exp = builtin_opt_int_to_float(sl_sh::ArgType::Exp(arg_0), sl_sh::ArgType::Opt(Some(arg_1))).unwrap();
+    let exp =
+        builtin_opt_int_to_float(sl_sh::ArgType::Exp(arg_0), sl_sh::ArgType::Opt(Some(arg_1)))
+            .unwrap();
     let exp_d = exp.get();
     match exp_d.data {
         ExpEnum::Float(f) => {
@@ -31,7 +53,8 @@ fn main() -> Result<(), LispError> {
     }
 
     let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
-    let exp = builtin_opt_int_to_float(sl_sh::ArgType::Exp(arg_0), sl_sh::ArgType::Opt(None)).unwrap();
+    let exp =
+        builtin_opt_int_to_float(sl_sh::ArgType::Exp(arg_0), sl_sh::ArgType::Opt(None)).unwrap();
     let exp_d = exp.get();
     match exp_d.data {
         ExpEnum::Float(f) => {
@@ -117,16 +140,6 @@ fn main() -> Result<(), LispError> {
     Ok(())
 }
 
-#[macro_export]
-macro_rules! try_inner_exp_enum {
-    ($expression:expr, $(|)? $( $pattern:pat_param )|+ $( if $guard: expr )? $(,)?, $eval:expr, $err:expr) => {
-        match $expression {
-            $( $pattern )|+ $( if $guard )? => $eval,
-            _ => return Err(LispError::new($err))
-        }
-    };
-}
-
 //use std::collections::HashMap;
 //fn hash_clear(exp: sl_sh::Expression) -> sl_sh::LispResult<sl_sh::Expression> {
 //    let mut map_d = exp.get_mut();
@@ -157,102 +170,21 @@ pub enum ArgType {
 /// my docs
 #[sl_sh_proc_macros::sl_sh_fn2(fn_name = "intofloat")]
 fn int_to_float(int: i64, ints: i64) -> sl_sh::LispResult<f64> {
-    //Ok(ints.iter().fold(int as f64, |sum, next| sum + *next as f64))
     Ok((int + ints) as f64)
 }
 
 /// my docs
 #[sl_sh_proc_macros::sl_sh_fn2(fn_name = "optintofloat")]
 fn opt_int_to_float(int: i64, ints: Option<i64>) -> sl_sh::LispResult<f64> {
-    //Ok(ints.iter().fold(int as f64, |sum, next| sum + *next as f64))
     Ok(ints.map_or(int as f64, |new| (int + new) as f64))
 }
 
+/// my docs
+#[sl_sh_proc_macros::sl_sh_fn2(fn_name = "intstofloat")]
+fn ints_to_float(int: i64, ints: Vec<i64>) -> sl_sh::LispResult<f64> {
+    Ok(ints.iter().fold(int as f64, |sum, next| sum + *next as f64))
+}
 
-//fn builtin_int_to_float(
-//    exp_0: sl_sh::ArgType,
-//    exp_1: sl_sh::ArgType,
-//) -> sl_sh::LispResult<sl_sh::types::Expression> {
-//    try_exp_enum!(
-//        exp_0,
-//        sl_sh::ArgType::Exp(exp_0),
-//        {
-//            try_exp_enum!(
-//                exp_1,
-//                sl_sh::ArgType::VarArgs(exp_1),
-//                //{ builtin_int_to_float(arg0, arg1).map(Into::into) }?,
-//                {
-//                    try_exp_enum!(
-//                        exp_0.get().data,
-//                        sl_sh::ExpEnum::Int(exp_0),
-//                        {
-//                            let iter = exp_1
-//                                .iter()
-//                                .map(|exp_1| {
-//                                    let int = try_inner_exp_enum!(
-//                                        exp_1.get().data,
-//                                        sl_sh::ExpEnum::Int(int_1),
-//                                        { int_1 },
-//                                        "Not an int_1 in this vec!"
-//                                    );
-//                                    Ok(int)
-//                                })
-//                                .collect::<sl_sh::LispResult<Vec<i64>>>()?;
-//                            int_to_float(exp_0, &iter).map(Into::into)
-//                        }?,
-//                        "err turning first arg to expenum::int"
-//                    )
-//                }?,
-//                "err turning exp to varargs"
-//            )
-//        }?,
-//        "err turning exp to exp"
-//    )
-//}
-
-// TODO vectors!?
-// aren't they done?
-
-//fn arg_translate_ints_2_float(arg_0: ArgType, arg_1: ArgType) -> crate::LispResult<Expression> {
-//    let exp_0 = try_inner_exp_enum!(arg_0, ArgType::Exp(exp), exp, "err");
-//    let exp_1 = try_inner_exp_enum!(arg_1, ArgType::VarArgs(exp), exp, "err");
-//    arg_unwrap_ints_2_float(exp_0, exp_1).map(Into::into)
-//}
-//
-//fn arg_unwrap_ints_2_float(exp_0: Expression, exp_1: Vec<Expression>) -> crate::LispResult<f64> {
-//    Ok({
-//        let float = try_inner_exp_enum!(
-//            exp_0.get().data,
-//            ExpEnum::Int(int_0),
-//            {
-//                ints_2_float(
-//                    int_0,
-//                    exp_1
-//                        .iter()
-//                        .map(|exp_1| {
-//                            let int = try_inner_exp_enum!(
-//                                exp_1.get().data,
-//                                ExpEnum::Int(int_1),
-//                                { int_1 },
-//                                "Not an int_1!"
-//                            );
-//                            int
-//                        })
-//                        .collect::<Vec<i64>>()?,
-//                )
-//            },
-//            "Not an int_0!"
-//        );
-//        float
-//    })
-//}
-//
-//fn ints_2_float(my_int: i64, my_o_ints: Vec<i64>) -> f64 {
-//    my_o_ints
-//        .iter()
-//        .fold(my_int as f64, |sum, val| sum + val as f64)
-//}
-//
 #[cfg(test)]
 mod test {
     use super::*;
@@ -262,73 +194,65 @@ mod test {
         arg_1: sl_sh::ArgType,
     ) -> sl_sh::LispResult<Expression> {
         match arg_1 {
-            sl_sh::ArgType::Opt(arg_1) => {
-                match arg_1 {
-                    None => {
-                        let arg_1 = None;
-                        match arg_0 {
-                            sl_sh::ArgType::Exp(arg_0) => {
-                                match arg_0.get().data {
-                                    sl_sh::ExpEnum::Int(arg_0) => {
-                                        opt_int_to_float(arg_0, arg_1).map(Into::into)
-                                    }
-                                    _ => {
-                                        return Err(
+            sl_sh::ArgType::Opt(arg_1) => match arg_1 {
+                None => {
+                    let arg_1 = None;
+                    match arg_0 {
+                        sl_sh::ArgType::Exp(arg_0) => match arg_0.get().data {
+                            sl_sh::ExpEnum::Int(arg_0) => {
+                                opt_int_to_float(arg_0, arg_1).map(Into::into)
+                            }
+                            _ => {
+                                return Err(
                                             LispError::new(
                                                 "sl_sh_fn macro is broken, ArgType::Exp can't be parsed as ArgType::Exp",
                                             ),
                                         );
-                                    }
-                                }
                             }
-                            _ => {
-                                return Err(
+                        },
+                        _ => {
+                            return Err(
                                     LispError::new(
                                         "sl_sh_fn macro is broken, apparently ArgType::Exp can't be parsed as ArgType::Exp",
                                     ),
                                 );
-                            }
                         }
                     }
-                    Some(arg_1) => {
-                        match arg_1.get().data {
-                            sl_sh::ExpEnum::Int(arg_1) => {
-                                let arg_1 = Some(arg_1);
-                                match arg_0 {
-                                    sl_sh::ArgType::Exp(arg_0) => {
-                                        match arg_0.get().data {
-                                            sl_sh::ExpEnum::Int(arg_0) => {
-                                                opt_int_to_float(arg_0, arg_1).map(Into::into)
-                                            }
-                                            _ => {
-                                                return Err(
+                }
+                Some(arg_1) => match arg_1.get().data {
+                    sl_sh::ExpEnum::Int(arg_1) => {
+                        let arg_1 = Some(arg_1);
+                        match arg_0 {
+                            sl_sh::ArgType::Exp(arg_0) => match arg_0.get().data {
+                                sl_sh::ExpEnum::Int(arg_0) => {
+                                    opt_int_to_float(arg_0, arg_1).map(Into::into)
+                                }
+                                _ => {
+                                    return Err(
                                                     LispError::new(
                                                         "sl_sh_fn macro is broken, ArgType::Exp can't be parsed as ArgType::Exp",
                                                     ),
                                                 );
-                                            }
-                                        }
-                                    }
-                                    _ => {
-                                        return Err(
+                                }
+                            },
+                            _ => {
+                                return Err(
                                             LispError::new(
                                                 "sl_sh_fn macro is broken, apparently ArgType::Exp can't be parsed as ArgType::Exp",
                                             ),
                                         );
-                                    }
-                                }
                             }
-                            _ => {
-                                return Err(
+                        }
+                    }
+                    _ => {
+                        return Err(
                                     LispError::new(
                                         "sl_sh_fn macro is broken, ArgType::Opt can't be parsed as ArgType::Opt",
                                     ),
                                 );
-                            }
-                        }
                     }
-                }
-            }
+                },
+            },
             _ => {
                 return Err(
                     LispError::new(
