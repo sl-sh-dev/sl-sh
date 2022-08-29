@@ -1,13 +1,16 @@
-use std::convert::identity;
 use quote::quote;
 use quote::ToTokens;
 use quote::__private::TokenStream;
+use std::convert::identity;
 use std::ops::Deref;
 use syn::__private::{Span, TokenStream2};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::Comma;
-use syn::{parse_macro_input, AngleBracketedGenericArguments, FnArg, Ident, Lit, Meta, NestedMeta, PathArguments, PathSegment, ReturnType, Type, GenericArgument};
+use syn::{
+    parse_macro_input, AngleBracketedGenericArguments, FnArg, GenericArgument, Ident, Lit, Meta,
+    NestedMeta, PathArguments, PathSegment, ReturnType, Type,
+};
 extern crate static_assertions;
 
 type MacroResult<T> = Result<T, syn::Error>;
@@ -240,9 +243,7 @@ fn is_valid_generic_type<'a>(
         ))
 }
 
-fn get_inner_arguments_from_generic_type_path(
-    type_path: &syn::TypePath,
-) -> Option<syn::TypePath> {
+fn get_inner_arguments_from_generic_type_path(type_path: &syn::TypePath) -> Option<syn::TypePath> {
     if type_path.path.segments.len() == 1 {
         let path_segment = &type_path.path.segments.first()?;
         if let PathArguments::AngleBracketed(args) = &path_segment.arguments {
@@ -251,10 +252,10 @@ fn get_inner_arguments_from_generic_type_path(
                 match ty {
                     GenericArgument::Type(ty) => {
                         if let Type::Path(ref type_path) = ty {
-                            return Some(type_path.clone())
+                            return Some(type_path.clone());
                         }
                     }
-                   _ => { }
+                    _ => {}
                 }
             }
         }
@@ -544,35 +545,35 @@ fn get_arg_val(type_path: &syn::TypePath) -> MacroResult<ArgVal> {
     }
 }
 
-fn parse_value_stream(arg_name: syn::Ident, token_stream: TokenStream) -> TokenStream {
+fn parse_value_stream(arg_name: syn::Ident, inner: TokenStream) -> TokenStream {
     quote! {
         sl_sh::ret_err_exp_enum!(
                 #arg_name,
                 sl_sh::ArgType::Exp(#arg_name),
-                #token_stream,
-                "sl_sh_fn macro is broken, apparently ArgType::Exp can't be parsed as ArgType::Exp"
+                #inner,
+                "sl_sh_fn macro is broken. ArgType::Exp can't be parsed as ArgType::Exp"
             )
     }
 }
 
-fn parse_optional_stream(arg_name: syn::Ident, token_stream: TokenStream) -> TokenStream {
+fn parse_optional_stream(arg_name: syn::Ident, inner: TokenStream) -> TokenStream {
     quote! {
         sl_sh::ret_err_exp_enum!(
                 #arg_name,
                 sl_sh::ArgType::Opt(#arg_name),
-                #token_stream,
-                "sl_sh_fn macro is broken, apparently ArgType::Opt can't be parsed as ArgType::Opt"
+                #inner,
+                "sl_sh_fn macro is broken. ArgType::Opt can't be parsed as ArgType::Opt"
             )
     }
 }
 
-fn parse_varargs_stream(arg_name: syn::Ident, token_stream: TokenStream) -> TokenStream {
+fn parse_varargs_stream(arg_name: syn::Ident, inner: TokenStream) -> TokenStream {
     quote! {
         sl_sh::ret_err_exp_enum!(
                 #arg_name,
                 sl_sh::ArgType::VarArgs(#arg_name),
-                #token_stream,
-                "sl_sh_fn macro is broken, apparently ArgType::Opt can't be parsed as ArgType::Opt"
+                #inner,
+                "sl_sh_fn macro is broken. ArgType::Vargs can't be parsed as ArgType::Vargs"
             )
     }
 }
@@ -666,10 +667,18 @@ fn rust_type_to_sl_sh_type(ty: &syn::TypePath) -> MacroResult<TokenStream> {
             sl_sh::ExpEnum::Int
         })
     } else {
-        Err(syn::Error::new(ty.span(), "Unable to parse this type!"))
+        Err(syn::Error::new(
+            ty.span(),
+            "Unable to parse this type to sl_sh!",
+        ))
     }
 }
 
+/// create the nested match statements to parse rust types into sl_sh types.
+/// the rust types will determine what sl_sh functions will be used for
+/// transformation. If this function throws errors it means that the
+/// inputs, val/passing style are wrong and aren't matching to the ArgType(s)
+/// properly, or the rust type lookup function is busted.
 fn parse_type(
     ty: &syn::TypePath,
     inner: TokenStream,
@@ -678,10 +687,6 @@ fn parse_type(
     _passing_style: ArgPassingStyle,
     outer_parse: fn(Ident, TokenStream) -> TokenStream,
 ) -> MacroResult<TokenStream> {
-    //let exp_enum_type_path = syn::TypePath {
-    //    qself: None,
-    //    path: syn::Path::from(Ident::new("i64", Span::call_site())),
-    //};
     // TODO
     //  - use passing style to determine ref/ref mut in ret_err_exp_enum macro
     //  - use val to determine type, Expressoin, Option<Expression>, Vec<Expression>
@@ -695,7 +700,7 @@ fn parse_type(
                     {
                         #inner
                     },
-                    "sl_sh_fn macro is broken, ArgType::Exp can't be parsed as ArgType::Exp"
+                    "sl_sh_fn macro parse type is broken. Unrecognized value type."
                 )
             }
         }
@@ -714,7 +719,7 @@ fn parse_type(
                                 let #arg_name = Some(#arg_name);
                                 #inner
                             },
-                            "sl_sh_fn macro is broken, ArgType::Opt can't be parsed as ArgType::Opt"
+                            "sl_sh_fn macro parse type is broken, Unrecognized optional type."
                         )
                     }
                 }
@@ -722,7 +727,20 @@ fn parse_type(
         }
         ArgVal::Vec => {
             quote! {
-                // ok
+                {
+                    let #arg_name = #arg_name
+                        .iter()
+                        .map(|#arg_name| {
+                            sl_sh::try_exp_enum!(
+                                #arg_name.get().data,
+                                #sl_sh_type(#arg_name),
+                                #arg_name,
+                                "sl_sh_fn macro parse type is broken, Unrecognized varargs type."
+                            )
+                        })
+                        .collect::<crate::LispResult<#ty>>()?;
+                    #inner
+                }
             }
         }
     };
@@ -958,13 +976,12 @@ fn to_arg_types(args: &[Arg]) -> TokenStream {
             }
         });
     }
-    let token_stream = quote! {
+    //for arg_type in &arg_types {
+    //    println!("{:?}", arg_type);
+    //}
+    quote! {
         let arg_types = vec![ #(#tokens),* ];
-        for arg_type in &arg_types {
-            println!("{:?}", arg_type);
-        }
-    };
-    token_stream
+    }
 }
 
 #[proc_macro_attribute]
