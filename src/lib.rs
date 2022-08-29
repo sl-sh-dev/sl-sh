@@ -674,6 +674,23 @@ fn rust_type_to_sl_sh_type(ty: &syn::TypePath) -> MacroResult<TokenStream> {
     }
 }
 
+/// return a tuple meant for the ret_err_exp_enum and try_exp_enum macros.
+/// first tuple is how to access the exp_enum data (mutable or immutable)
+/// second tuple is how to refer to the inner exp enum in a match pattern
+fn tokens_for_matching_references(
+    arg_name: &syn::Ident,
+    passing_style: ArgPassingStyle,
+) -> (TokenStream, TokenStream) {
+    match passing_style {
+        ArgPassingStyle::Move => (quote! {#arg_name.get().data}, quote! {#arg_name}),
+        ArgPassingStyle::Reference => (quote! {#arg_name.get().data}, quote! {ref #arg_name}),
+        ArgPassingStyle::MutReference => (
+            quote! {#arg_name.get_mut().data},
+            quote! {ref mut #arg_name},
+        ),
+    }
+}
+
 /// create the nested match statements to parse rust types into sl_sh types.
 /// the rust types will determine what sl_sh functions will be used for
 /// transformation. If this function throws errors it means that the
@@ -684,19 +701,22 @@ fn parse_type(
     inner: TokenStream,
     val: ArgVal,
     arg_name: &syn::Ident,
-    _passing_style: ArgPassingStyle,
+    passing_style: ArgPassingStyle,
     outer_parse: fn(Ident, TokenStream) -> TokenStream,
 ) -> MacroResult<TokenStream> {
     // TODO
     //  - use passing style to determine ref/ref mut in ret_err_exp_enum macro
     //  - use val to determine type, Expressoin, Option<Expression>, Vec<Expression>
     let sl_sh_type = rust_type_to_sl_sh_type(ty)?;
+    let reference_tokens = tokens_for_matching_references(arg_name, passing_style);
+    let ref_exp = reference_tokens.0;
+    let ref_match = reference_tokens.1;
     let tokens = match val {
         ArgVal::Value => {
             quote! {
                 sl_sh::ret_err_exp_enum!(
-                    #arg_name.get().data,
-                    #sl_sh_type(#arg_name),
+                    #ref_exp,
+                    #sl_sh_type(#ref_match),
                     {
                         #inner
                     },
@@ -713,8 +733,8 @@ fn parse_type(
                     },
                     Some(#arg_name) => {
                         sl_sh::ret_err_exp_enum!(
-                            #arg_name.get().data,
-                            #sl_sh_type(#arg_name),
+                            #ref_exp,
+                            #sl_sh_type(#ref_match),
                             {
                                 let #arg_name = Some(#arg_name);
                                 #inner
@@ -732,8 +752,8 @@ fn parse_type(
                         .iter()
                         .map(|#arg_name| {
                             sl_sh::try_exp_enum!(
-                                #arg_name.get().data,
-                                #sl_sh_type(#arg_name),
+                                #ref_exp,
+                                #sl_sh_type(#ref_match),
                                 #arg_name,
                                 "sl_sh_fn macro parse type is broken, Unrecognized varargs type."
                             )
