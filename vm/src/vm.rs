@@ -210,6 +210,10 @@ impl Vm {
         Ok(val)
     }
 
+    /// Runs a lambda.  Will save and restore the VM state even or error, chunk is expected to be a
+    /// callable with params and any captures (closure) in caps.
+    /// This is useful for macro expansion, eval and things like that.  It can be safely used while
+    /// the VM is currently executing bytecode.
     pub fn do_call(
         &mut self,
         chunk: Arc<Chunk>,
@@ -259,6 +263,8 @@ impl Vm {
         res
     }
 
+    /// Executes chunk.  Will save the current VM state and restore on success or leave it on error.
+    /// This allows a debugger to work with the "broken" image.
     pub fn execute(&mut self, chunk: Arc<Chunk>) -> VMResult<()> {
         let stack_top = self.stack_top;
         let stack_max = self.stack_max;
@@ -269,6 +275,8 @@ impl Vm {
         self.stack_top = self.stack_max;
         self.stack_max = self.stack_top + chunk.input_regs + chunk.extra_regs;
 
+        // Return on error without resetting the VM.
+        // This is to allow debugging a live image/vm.
         self.execute2(chunk)?;
 
         self.stack_top = stack_top;
@@ -277,6 +285,21 @@ impl Vm {
         self.this_fn = this_fn;
         self.on_error = on_error;
         Ok(())
+    }
+
+    /// Reset the VM to default settings.  Useful for cleaning up if you want to abort an execute()
+    /// that errored out.
+    pub fn reset(&mut self) {
+        self.this_fn = None;
+        self.on_error = None;
+        self.err_frame = None;
+        self.stack_top = 0;
+        self.stack_max = 0;
+        self.ip = 0;
+        self.current_ip = 0;
+        self.callframe_id = 0;
+        // XXX TODO- should probably run any defers before the reset.
+        self.defers = Vec::new();
     }
 
     fn execute2(&mut self, chunk: Arc<Chunk>) -> VMResult<()> {

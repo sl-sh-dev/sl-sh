@@ -316,7 +316,7 @@ impl CompileState {
     }
 
     pub fn reserved_regs(&self) -> usize {
-        self.symbols.borrow().count() + 1
+        self.symbols.borrow().count()
     }
 
     pub fn get_symbol(&self, sym: Interned) -> Option<usize> {

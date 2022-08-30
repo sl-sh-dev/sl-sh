@@ -367,6 +367,9 @@ impl DestructState {
         }
         self.destructures.clear();
         self.all_optionals.clear();
+        if state.max_regs < *free_reg {
+            state.max_regs = *free_reg;
+        }
         Ok(())
     }
 }

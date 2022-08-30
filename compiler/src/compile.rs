@@ -423,6 +423,8 @@ pub fn compile(
                 .encode2(CONST, result as u16, const_i as u16, env.own_line())?;
         }
     }
+    state.chunk.input_regs = 0;
+    state.chunk.extra_regs = state.max_regs;
     Ok(())
 }
 

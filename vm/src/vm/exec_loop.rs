@@ -124,7 +124,7 @@ impl Vm {
         let mut wide = false;
         // Clean up the working regs we are about to use.
         if chunk.extra_regs > 0 {
-            for r in chunk.input_regs..chunk.input_regs + chunk.extra_regs {
+            for r in chunk.input_regs..=chunk.input_regs + chunk.extra_regs {
                 Vm::mov_register(registers, r, Value::Undefined);
             }
         }

@@ -168,7 +168,6 @@ impl Vm {
                     let (rest_reg, h) = self.setup_rest(&l, registers, first_reg, num_args);
                     Self::mov_register(registers, rest_reg, h);
                 }
-                // XXX TODO- double check num args.
                 // XXX TODO- maybe test for stack overflow vs waiting for a panic.
                 clear_opts(&l, registers, first_reg, num_args);
                 Ok(l)
@@ -310,6 +309,12 @@ fn clear_opts(l: &Chunk, registers: &mut [Value], first_reg: u16, num_args: u16)
                 first_reg as usize + (r + 1) as usize,
                 Value::Undefined,
             );
+        }
+    }
+    // Clear extra regs so things like closures or globals don't get changed by mistake.
+    if l.extra_regs > 0 {
+        for r in l.input_regs + 1..=l.input_regs + l.extra_regs {
+            Vm::mov_register(registers, first_reg as usize + r, Value::Undefined);
         }
     }
 }

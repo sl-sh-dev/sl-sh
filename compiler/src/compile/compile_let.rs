@@ -137,7 +137,9 @@ pub(crate) fn compile_let(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::{assert_vals, exec, exec_compile_error, exec_runtime_error, read_test};
+    use crate::test_utils::{
+        assert_vals, exec, exec_compile_error, exec_runtime_error, read_test,
+    };
     use builtins::collections::make_hash;
     use builtins::print::{dasm, prn};
     use slvm::Vm;
@@ -146,6 +148,7 @@ mod tests {
     fn test_let() {
         let mut vm = Vm::new();
         vm.set_global("prn", Value::Builtin(CallFunc { func: prn }));
+        vm.set_global("dasm", Value::Builtin(CallFunc { func: dasm }));
 
         let result = exec(&mut vm, "(do (def x 3) (let (x 10) (set! x 1)) x)");
         let expected = read_test(&mut vm, "3");
@@ -184,6 +187,26 @@ mod tests {
                        (fnx 10))",
         );
         let expected = read_test(&mut vm, "#t");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(
+            &mut vm,
+            "(let (fny (fn (y) y))\
+                       (let (fnx (fn (x) (if (= x 0) #t (fny (- x 1))))\
+                             fny (fn (y) (if (= y 0) #t (fnx (- y 1)))))\
+                       (fny 10)))",
+        );
+        let expected = read_test(&mut vm, "8");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(
+            &mut vm,
+            "(do (def fnx (fn () (let (fny (fn (y) y))\
+                      (let (fnx (fn (x) (if (= x 0) #t (fny (- x 1))))\
+                            fny (fn (y) (if (= y 0) #t (fnx (- y 1)))))\
+                        (fny 10))))) (dasm fnx) (fnx))",
+        );
+        let expected = read_test(&mut vm, "8");
         assert_vals(&vm, expected, result);
 
         let result = exec(

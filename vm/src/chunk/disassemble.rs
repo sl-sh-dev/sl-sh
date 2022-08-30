@@ -879,6 +879,13 @@ impl Chunk {
             }
         }
         indent(indent_level);
+        println!(
+            "INPUTS: {} args/optional/rest {}/{}/{}",
+            self.input_regs, self.args, self.opt_args, self.rest
+        );
+        indent(indent_level);
+        println!("EXTRA REGS: {}", self.extra_regs);
+        indent(indent_level);
         println!("CONSTANTS:");
         for (i, v) in self.constants.iter().enumerate() {
             indent(indent_level);

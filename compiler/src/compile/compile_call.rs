@@ -28,6 +28,9 @@ pub(crate) fn compile_call(
     result: usize,
 ) -> VMResult<()> {
     let b_reg = result + cdr.len() + 1;
+    if b_reg > state.max_regs {
+        state.max_regs = b_reg;
+    }
     let const_i = state.add_constant(callable);
     let tail = state.tail && state.defers == 0;
     state.tail = false;
@@ -80,6 +83,9 @@ pub(crate) fn compile_call_reg(
     state.tail = false;
     let b_reg = if tail {
         let b_reg = result + cdr.len() + 2;
+        if b_reg > state.max_regs {
+            state.max_regs = b_reg;
+        }
         state
             .chunk
             .encode2(MOV, b_reg as u16, reg as u16, env.own_line())?;
