@@ -231,7 +231,8 @@ impl Vm {
         self.stack_max = self.stack_top + chunk.input_regs + chunk.extra_regs;
         self.stack[self.stack_top] = Value::UInt(params.len() as u64);
         if !params.is_empty() {
-            self.stack[self.stack_top + 1..=params.len()].copy_from_slice(params);
+            self.stack[self.stack_top + 1..self.stack_top + 1 + params.len()]
+                .copy_from_slice(params);
         }
         if chunk.rest {
             let registers = self.make_registers();
@@ -253,7 +254,7 @@ impl Vm {
         let res = if let Err(e) = self.execute2(chunk) {
             Err(e)
         } else {
-            Ok(self.stack[0])
+            Ok(self.stack[self.stack_top])
         };
         self.stack_top = stack_top;
         self.stack_max = stack_max;
@@ -265,7 +266,7 @@ impl Vm {
 
     /// Executes chunk.  Will save the current VM state and restore on success or leave it on error.
     /// This allows a debugger to work with the "broken" image.
-    pub fn execute(&mut self, chunk: Arc<Chunk>) -> VMResult<()> {
+    pub fn execute(&mut self, chunk: Arc<Chunk>) -> VMResult<Value> {
         let stack_top = self.stack_top;
         let stack_max = self.stack_max;
         let ip = self.ip;
@@ -278,13 +279,14 @@ impl Vm {
         // Return on error without resetting the VM.
         // This is to allow debugging a live image/vm.
         self.execute2(chunk)?;
+        let res = self.stack[self.stack_top];
 
         self.stack_top = stack_top;
         self.stack_max = stack_max;
         self.ip = ip;
         self.this_fn = this_fn;
         self.on_error = on_error;
-        Ok(())
+        Ok(res)
     }
 
     /// Reset the VM to default settings.  Useful for cleaning up if you want to abort an execute()

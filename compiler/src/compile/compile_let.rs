@@ -137,9 +137,7 @@ pub(crate) fn compile_let(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::{
-        assert_vals, exec, exec_compile_error, exec_runtime_error, read_test,
-    };
+    use crate::test_utils::{assert_vals, exec, exec_compile_error, exec_runtime_error, read_test};
     use builtins::collections::make_hash;
     use builtins::print::{dasm, prn};
     use slvm::Vm;

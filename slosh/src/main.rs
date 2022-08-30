@@ -95,8 +95,7 @@ fn load(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
         }
         let (chunk, new_doc_string) = result?;
         doc_string = new_doc_string;
-        reader_vm.execute(chunk)?;
-        last = reader_vm.get_stack(0);
+        last = reader_vm.execute(chunk)?;
     }
     Ok(last)
 }

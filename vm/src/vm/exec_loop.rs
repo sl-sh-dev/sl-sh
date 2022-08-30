@@ -636,7 +636,7 @@ impl Vm {
                     let (key, val) = decode2!(chunk.code, &mut self.ip, wide);
                     let key = get_reg_unref!(registers, key, self);
                     let val = get_reg_unref!(registers, val, self);
-                    let key = if let Value::Keyword(i) = key {
+                    let key_str = if let Value::Keyword(i) = key {
                         self.get_interned(i)
                     } else {
                         return Err((
@@ -647,7 +647,7 @@ impl Vm {
                     if let Value::StringConst(i) = val {
                         return Err((
                             VMError {
-                                key,
+                                key: key_str,
                                 obj: VMErrorObj::Message(self.get_interned(i).to_string()),
                             },
                             chunk,
@@ -655,7 +655,7 @@ impl Vm {
                     } else {
                         return Err((
                             VMError {
-                                key,
+                                key: key_str,
                                 obj: VMErrorObj::Object(val),
                             },
                             chunk,
