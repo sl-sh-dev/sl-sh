@@ -5,7 +5,7 @@ use crate::{compile, CompileEnvironment, CompileState};
 use slvm::{VMError, VMResult, Value, CLOSE, CONST, JMPNU, MOV, SRET};
 use std::sync::Arc;
 
-fn mk_state(
+pub fn mk_state(
     env: &mut CompileEnvironment,
     state: &mut CompileState,
     args: Value,
@@ -105,7 +105,7 @@ pub(crate) fn compile_fn(
 ) -> VMResult<()> {
     let (mut new_state, opt_comps, destructure_patterns) = mk_state(env, state, args)?;
     for r in cdr.iter() {
-        pass1(env, &mut new_state, *r).unwrap();
+        pass1(env, &mut new_state, *r)?;
     }
     let reserved = new_state.reserved_regs();
     for (i, r) in opt_comps.into_iter().enumerate() {
@@ -141,8 +141,7 @@ pub(crate) fn compile_fn(
     }
     new_state
         .chunk
-        .encode1(SRET, reserved as u16, env.own_line())
-        .unwrap();
+        .encode1(SRET, reserved as u16, env.own_line())?;
     let mut closure = false;
     if !new_state.symbols.borrow().captures.borrow().is_empty() {
         let mut caps = Vec::new();

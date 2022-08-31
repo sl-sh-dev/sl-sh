@@ -154,4 +154,20 @@ mod tests {
         let expected = read_test(&mut vm, "(1 2 66 55)");
         assert_vals(&vm, expected, result);
     }
+
+    #[test]
+    fn test_captures() {
+        let mut vm = Vm::new();
+        vm.set_global("prn", Value::Builtin(CallFunc { func: prn }));
+        vm.set_global("dasm", Value::Builtin(CallFunc { func: dasm }));
+
+        //let result = exec(&mut vm, "(do ((fn (a b c) ((fn () (let (x 10, y 20, z 30) (set! x 11) (def fnx (fn () (set! a 5)(set! b 6)(set! c 7)`(~a ~b ~c ~x ~y ~z))))(let (s 51, t 52, u 53)(def fny (fn () (list s t u)))))))1 2 3)(fnx))");
+        let result = exec(&mut vm, "(do ((fn (a b c) ((fn () (let (x 10, y 20, z 30) (set! x 11) (def fnx (fn () (set! a 5)(set! b 6)(list a b c x y z))))(let (s 51, t 52, u 53)(def fny (fn () (list s t u)))))))1 2 3)(fnx))");
+        let expected = read_test(&mut vm, "(5 6 3 11 20 30)");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(&mut vm, "(do ((fn (a b c) ((fn () (let (x 10, y 20, z 30) (set! x 11) (def fnx (fn () (set! a 5)(set! b 6)(set! c 7)`(~a ~b ~c ~x ~y ~z))))(let (s 51, t 52, u 53)(def fny (fn () `(~s ~t ~u)))))))1 2 3)(fnx)(fny))");
+        let expected = read_test(&mut vm, "(51 52 53)");
+        assert_vals(&vm, expected, result);
+    }
 }

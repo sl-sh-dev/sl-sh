@@ -23,6 +23,7 @@ fn let_inner(
     let start_defers = state.defers;
     let symbols = Rc::new(RefCell::new(Symbols::with_let(state.symbols.clone())));
     state.symbols = symbols.clone();
+    let first_reg = symbols.borrow().regs_count();
     let mut cdr_iter = cdr.iter();
     let args = cdr_iter.next().unwrap(); // unwrap safe, length is at least 1
     let mut right_exps: Vec<RightSideExp> = Vec::new();
@@ -105,6 +106,12 @@ fn let_inner(
         state
             .chunk
             .encode2(MOV, result as u16, free_reg as u16, env.own_line())?;
+    }
+    for i in first_reg..symbols.borrow().regs_count() {
+        if i != result {
+            // TODO- should probably add a bulk opcode for this sort of clearing.
+            state.chunk.encode1(CLRREG, i as u16, env.own_line())?;
+        }
     }
     for _ in start_defers..state.defers {
         state.chunk.encode0(DFRPOP, env.own_line())?;

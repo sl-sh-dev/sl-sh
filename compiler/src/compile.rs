@@ -18,7 +18,7 @@ use crate::state::*;
 
 mod compile_call;
 mod compile_cond;
-mod compile_fn;
+pub mod compile_fn;
 mod compile_let;
 mod compile_math;
 mod compile_seq;

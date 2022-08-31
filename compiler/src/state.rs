@@ -66,7 +66,7 @@ impl Symbols {
         self.data.borrow().syms.is_empty()
     }
 
-    pub fn count(&self) -> usize {
+    pub fn regs_count(&self) -> usize {
         self.data.borrow().count
     }
 
@@ -316,7 +316,7 @@ impl CompileState {
     }
 
     pub fn reserved_regs(&self) -> usize {
-        self.symbols.borrow().count()
+        self.symbols.borrow().regs_count()
     }
 
     pub fn get_symbol(&self, sym: Interned) -> Option<usize> {

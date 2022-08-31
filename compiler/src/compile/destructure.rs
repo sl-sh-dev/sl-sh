@@ -317,7 +317,7 @@ impl DestructState {
         // Track the next available reg across all the destructuring so can handle shadowing properly.
         // This should stay in sync with the order names are applied otherwise local names will be
         // broken...
-        let mut next_reg = state.symbols.borrow().count();
+        let mut next_reg = state.symbols.borrow().regs_count();
         while let Some(destruct_type) = stack.pop() {
             match destruct_type {
                 DestructType::Vector(vector, reg) => {
