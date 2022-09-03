@@ -1,15 +1,16 @@
+//TODO why am I using these __private versions, is it
+// just to skip out on some annoying .into()'s on TokenStream2
 use quote::quote;
 use quote::ToTokens;
 use quote::__private::TokenStream;
-use std::convert::identity;
 use std::ops::Deref;
 use syn::__private::{Span, TokenStream2};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::Comma;
 use syn::{
-    parse_macro_input, AngleBracketedGenericArguments, FnArg, GenericArgument, Ident, Lit, Meta,
-    NestedMeta, PathArguments, PathSegment, ReturnType, Type,
+    parse_macro_input, AngleBracketedGenericArguments, FnArg, Ident, Lit, Meta, NestedMeta,
+    PathArguments, PathSegment, ReturnType, Type,
 };
 extern crate static_assertions;
 
@@ -243,26 +244,6 @@ fn is_valid_generic_type<'a>(
         ))
 }
 
-fn get_inner_arguments_from_generic_type_path(type_path: &syn::TypePath) -> Option<syn::TypePath> {
-    if type_path.path.segments.len() == 1 {
-        let path_segment = &type_path.path.segments.first()?;
-        if let PathArguments::AngleBracketed(args) = &path_segment.arguments {
-            if args.args.len() == 1 {
-                let ty = args.args.first()?;
-                match ty {
-                    GenericArgument::Type(ty) => {
-                        if let Type::Path(ref type_path) = ty {
-                            return Some(type_path.clone());
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
-    }
-    None
-}
-
 fn get_generic_argument_from_type_path(
     type_path: &syn::TypePath,
 ) -> Option<(&syn::GenericArgument, &syn::TypePath)> {
@@ -483,13 +464,13 @@ fn generate_sl_sh_fns(
                         #builtin_name.call_expand_args(params)
                     },
                     Err(e) => {
-                        Err(LispError::new(format!("{} is broken and can't parse its arguments..", #fn_name_attr, )))
+                        Err(crate::types::LispError::new(format!("{} is broken and can't parse its arguments..", #fn_name_attr, )))
                     }
                 }
             } else if args.len() > args_len {
-                Err(LispError::new(format!("{} given too many arguments, expected {}, got {}.", #fn_name_attr, args_len, args.len())))
+                Err(crate::types::LispError::new(format!("{} given too many arguments, expected {}, got {}.", #fn_name_attr, args_len, args.len())))
             } else {
-                Err(LispError::new(format!("{} not given enough arguments, expected {}, got {}.", #fn_name_attr, args_len, args.len())))
+                Err(crate::types::LispError::new(format!("{} not given enough arguments, expected {}, got {}.", #fn_name_attr, args_len, args.len())))
             }
         }
 
@@ -545,7 +526,7 @@ fn get_arg_val(type_path: &syn::TypePath) -> MacroResult<ArgVal> {
     }
 }
 
-fn parse_value_stream(arg_name: syn::Ident, inner: TokenStream) -> TokenStream {
+fn parse_value(arg_name: &syn::Ident, inner: TokenStream) -> TokenStream {
     quote! {
         sl_sh::ret_err_exp_enum!(
                 #arg_name,
@@ -556,7 +537,7 @@ fn parse_value_stream(arg_name: syn::Ident, inner: TokenStream) -> TokenStream {
     }
 }
 
-fn parse_optional_stream(arg_name: syn::Ident, inner: TokenStream) -> TokenStream {
+fn parse_optional(arg_name: &syn::Ident, inner: TokenStream) -> TokenStream {
     quote! {
         sl_sh::ret_err_exp_enum!(
                 #arg_name,
@@ -567,7 +548,7 @@ fn parse_optional_stream(arg_name: syn::Ident, inner: TokenStream) -> TokenStrea
     }
 }
 
-fn parse_varargs_stream(arg_name: syn::Ident, inner: TokenStream) -> TokenStream {
+fn parse_varargs(arg_name: &syn::Ident, inner: TokenStream) -> TokenStream {
     quote! {
         sl_sh::ret_err_exp_enum!(
                 #arg_name,
@@ -578,11 +559,11 @@ fn parse_varargs_stream(arg_name: syn::Ident, inner: TokenStream) -> TokenStream
     }
 }
 
-fn get_parser_for_arg_val(val: ArgVal) -> fn(Ident, TokenStream) -> TokenStream {
+fn get_parser_for_arg_val(val: ArgVal) -> fn(&Ident, TokenStream) -> TokenStream {
     match val {
-        ArgVal::Value => parse_value_stream,
-        ArgVal::Optional => parse_optional_stream,
-        ArgVal::Vec => parse_varargs_stream,
+        ArgVal::Value => parse_value,
+        ArgVal::Optional => parse_optional,
+        ArgVal::Vec => parse_varargs,
     }
 }
 
@@ -592,14 +573,31 @@ fn generate_builtin_fn2(
     builtin_name: &syn::Ident,
 ) -> MacroResult<TokenStream> {
     let len = original_item_fn.sig.inputs.len();
+    // TODO this code can be saved but all rust types that map to sl_sh types will need a marker trait
+    //  otherwise, there's not a good way to check at compile time if the long ExpEnum match statement
+    //  will work at runtime.
+    //let (return_type, wrapper) = get_return_type(original_item_fn)?;
+    //let conversions_assertions_code =
+    //    generate_assertions_code_for_type_conversions(original_item_fn, &return_type)?;
     let mut arg_names = vec![];
+    let mut arg_types = vec![];
     for i in 0..len {
         let parse_name = "arg_".to_string() + &i.to_string();
         let parse_name = Ident::new(&parse_name, Span::call_site());
         arg_names.push(parse_name);
+        arg_types.push(quote! { sl_sh::ArgType })
     }
-    let orig_fn_call = quote! {
-        #original_fn_name(#(#arg_names),*).map(Into::into)
+    let orig_fn_call = match &original_item_fn.sig.output {
+        ReturnType::Default => {
+            quote! {
+                #original_fn_name(#(#arg_names),*)
+            }
+        }
+        ReturnType::Type(_, _) => {
+            quote! {
+                #original_fn_name(#(#arg_names),*).map(Into::into)
+            }
+        }
     };
 
     let mut prev_token_stream = orig_fn_call;
@@ -646,32 +644,11 @@ fn generate_builtin_fn2(
         }
     }
     let tokens = quote! {
-        fn #builtin_name(arg_0: sl_sh::ArgType, arg_1: sl_sh::ArgType) -> sl_sh::LispResult<Expression> {
+        fn #builtin_name(#(#arg_names: #arg_types),*) -> sl_sh::LispResult<()> {
             #prev_token_stream
         }
     };
     Ok(tokens)
-}
-
-fn rust_type_to_sl_sh_type(ty: &syn::TypePath) -> MacroResult<TokenStream> {
-    let i64_ty = syn::TypePath {
-        qself: None,
-        path: syn::Path::from(Ident::new("i64", Span::call_site())),
-    };
-
-    //TODO avoid clone?
-    let ty = get_inner_arguments_from_generic_type_path(ty).map_or_else(|| ty.clone(), identity);
-
-    if ty.to_token_stream().to_string() == i64_ty.to_token_stream().to_string() {
-        Ok(quote! {
-            sl_sh::ExpEnum::Int
-        })
-    } else {
-        Err(syn::Error::new(
-            ty.span(),
-            "Unable to parse this type to sl_sh!",
-        ))
-    }
 }
 
 /// return a tuple meant for the ret_err_exp_enum and try_exp_enum macros.
@@ -691,6 +668,174 @@ fn tokens_for_matching_references(
     }
 }
 
+fn parse_argval_varargs_type(
+    ty: &syn::TypePath,
+    arg_name: &Ident,
+    passing_style: ArgPassingStyle,
+    inner: TokenStream,
+) -> TokenStream {
+    //TODO assertion: it is *not* possible to do anything other than to treat
+    //  values inside of a Vec<Expression> as ArgPassingStyle::Move
+    //  1. is this true
+    //      if so, is it enforces at compile time (just throw an error here
+    //      or do it on the first pass.
+    //  2. if not, cool.
+    //  regardless inner must just return the parsed Expression. which is why
+    //  the value of inner that is passed in is quote! { #arg_name }
+    //  if the rust_native type is Vec<&mut HashMap> the borrow checker
+    //  could get in the way BUT, lifetimes might help...
+    //  ***NEED to test
+    let an_element_arg_value_type_parsing_code =
+        parse_argval_value_type(arg_name, passing_style, quote! { #arg_name }, false);
+    quote! {{
+        let #arg_name = #arg_name
+            .iter()
+            .map(|#arg_name| {
+                #an_element_arg_value_type_parsing_code
+            })
+            .collect::<crate::LispResult<#ty>>()?;
+        #inner
+    }}
+}
+
+/// for Option<Expression> values the ref_exp must first be parsed as an
+/// Option, and only in the case that the option is Some will it be
+/// necessary to match against every ExpEnum variant.
+fn parse_argval_optional_type(
+    arg_name: &Ident,
+    passing_style: ArgPassingStyle,
+    inner: TokenStream,
+) -> TokenStream {
+    let some_inner = quote! {
+        let #arg_name = Some(#arg_name);
+        #inner
+    };
+    // in the case that the value is some, which means the Expression is no longer
+    // wrapped in Option, the parse_argval_value_type can be repurposed but
+    // with the caveat that after the value of inner it is handed first wraps
+    // the matched ExpEnum in Some bound to the #arg_name like the
+    // rust native function expects.
+    let some_arg_value_type_parsing_code =
+        parse_argval_value_type(arg_name, passing_style, some_inner, true);
+    quote! {
+    match #arg_name {
+        None => {
+            let #arg_name = None;
+            #inner
+        }
+        Some(#arg_name) => {
+           #some_arg_value_type_parsing_code
+        }
+    };}
+}
+
+/// for regular Expression values (no Optional/VarArgs) ref_exp
+/// just needs to be matched based on it's ExpEnum variant.
+fn parse_argval_value_type(
+    arg_name: &Ident,
+    passing_style: ArgPassingStyle,
+    inner: TokenStream,
+    match_should_return: bool,
+) -> TokenStream {
+    let reference_tokens = tokens_for_matching_references(arg_name, passing_style);
+    let ref_exp = reference_tokens.0;
+    let ref_match = reference_tokens.1;
+    let final_token = if match_should_return {
+        quote! {}
+    } else {
+        quote! {;}
+    };
+    quote! {
+    match #ref_exp {
+        sl_sh::ExpEnum::True => {
+            let #arg_name = true;
+            #inner
+        }
+        sl_sh::ExpEnum::False => {
+            let #arg_name = false;
+            #inner
+        }
+        sl_sh::ExpEnum::Float(#ref_match) => {
+            #inner
+        }
+        sl_sh::ExpEnum::Int(#ref_match) => {
+            #inner
+        }
+        sl_sh::ExpEnum::Symbol(#ref_match, _) => {
+            #inner
+        }
+        sl_sh::ExpEnum::String(#ref_match, _) => {
+            #inner
+        }
+        sl_sh::ExpEnum::Char(#ref_match) => {
+            #inner
+        }
+        sl_sh::ExpEnum::CodePoint(#ref_match) => {
+            #inner
+        }
+        sl_sh::ExpEnum::HashMap(#ref_match) => {
+            #inner
+        }
+        sl_sh::ExpEnum::Process(#ref_match) => {
+            #inner
+        }
+        sl_sh::ExpEnum::File(#ref_match) => {
+            #inner
+        }
+        sl_sh::ExpEnum::Wrapper(#ref_match) => {
+            #inner
+        }
+        sl_sh::ExpEnum::Regex(#ref_match) => {
+            #inner
+        }
+        sl_sh::ExpEnum::Vector(#ref_match) => {
+            #inner
+        }
+        sl_sh::ExpEnum::Values(#ref_match) => {
+            #inner
+        }
+        sl_sh::ExpEnum::Nil => {
+            sl_sh::types::LispError::new(format!("ExpEnum::Nil not supported as input to sl_sh_fn proc macro."))
+        }
+        sl_sh::ExpEnum::Lambda(#ref_match) => {
+            sl_sh::types::LispError::new(format!("ExpEnum::Lambda not supported as input to sl_sh_fn proc macro."))
+        }
+        sl_sh::ExpEnum::Macro(#ref_match) => {
+            sl_sh::types::LispError::new(format!("ExpEnum::Macro not supported as input to sl_sh_fn proc macro."))
+        }
+        sl_sh::ExpEnum::Function(#ref_match) => {
+            sl_sh::types::LispError::new(format!("ExpEnum::Function not supported as input to sl_sh_fn proc macro."))
+        }
+        sl_sh::ExpEnum::LazyFn(_, _) => {
+            sl_sh::types::LispError::new(format!("ExpEnum::LazyFn not supported as input to sl_sh_fn proc macro."))
+        }
+        sl_sh::ExpEnum::Pair(_, _) => {
+            sl_sh::types::LispError::new(format!("ExpEnum::Pair not supported as input to sl_sh_fn proc macro."))
+        }
+        sl_sh::ExpEnum::DeclareDef => {
+            sl_sh::types::LispError::new(format!("ExpEnum::DeclareDef not supported as input to sl_sh_fn proc macro."))
+        }
+        sl_sh::ExpEnum::DeclareVar => {
+            sl_sh::types::LispError::new(format!("ExpEnum::DeclareVar not supported as input to sl_sh_fn proc macro."))
+        }
+        sl_sh::ExpEnum::DeclareFn => {
+            sl_sh::types::LispError::new(format!("ExpEnum::DeclareFn not supported as input to sl_sh_fn proc macro."))
+        }
+        sl_sh::ExpEnum::DeclareMacro => {
+            sl_sh::types::LispError::new(format!("ExpEnum::DeclareMacro not supported as input to sl_sh_fn proc macro."))
+        }
+        sl_sh::ExpEnum::Quote => {
+            sl_sh::types::LispError::new(format!("ExpEnum::Quote not supported as input to sl_sh_fn proc macro."))
+        }
+        sl_sh::ExpEnum::BackQuote => {
+            sl_sh::types::LispError::new(format!("ExpEnum::BackQuote not supported as input to sl_sh_fn proc macro."))
+        }
+        sl_sh::ExpEnum::Undefined => {
+            sl_sh::types::LispError::new(format!("ExpEnum::Undefined not supported as input to sl_sh_fn proc macro."))
+        }
+    }#final_token}
+}
+
 /// create the nested match statements to parse rust types into sl_sh types.
 /// the rust types will determine what sl_sh functions will be used for
 /// transformation. If this function throws errors it means that the
@@ -702,69 +847,14 @@ fn parse_type(
     val: ArgVal,
     arg_name: &syn::Ident,
     passing_style: ArgPassingStyle,
-    outer_parse: fn(Ident, TokenStream) -> TokenStream,
+    outer_parse: fn(&Ident, TokenStream) -> TokenStream,
 ) -> MacroResult<TokenStream> {
-    // TODO
-    //  - use passing style to determine ref/ref mut in ret_err_exp_enum macro
-    //  - use val to determine type, Expressoin, Option<Expression>, Vec<Expression>
-    let sl_sh_type = rust_type_to_sl_sh_type(ty)?;
-    let reference_tokens = tokens_for_matching_references(arg_name, passing_style);
-    let ref_exp = reference_tokens.0;
-    let ref_match = reference_tokens.1;
     let tokens = match val {
-        ArgVal::Value => {
-            quote! {
-                sl_sh::ret_err_exp_enum!(
-                    #ref_exp,
-                    #sl_sh_type(#ref_match),
-                    {
-                        #inner
-                    },
-                    "sl_sh_fn macro parse type is broken. Unrecognized value type."
-                )
-            }
-        }
-        ArgVal::Optional => {
-            quote! {
-                match #arg_name {
-                    None => {
-                        let #arg_name = None;
-                        #inner
-                    },
-                    Some(#arg_name) => {
-                        sl_sh::ret_err_exp_enum!(
-                            #ref_exp,
-                            #sl_sh_type(#ref_match),
-                            {
-                                let #arg_name = Some(#arg_name);
-                                #inner
-                            },
-                            "sl_sh_fn macro parse type is broken, Unrecognized optional type."
-                        )
-                    }
-                }
-            }
-        }
-        ArgVal::Vec => {
-            quote! {
-                {
-                    let #arg_name = #arg_name
-                        .iter()
-                        .map(|#arg_name| {
-                            sl_sh::try_exp_enum!(
-                                #ref_exp,
-                                #sl_sh_type(#ref_match),
-                                #arg_name,
-                                "sl_sh_fn macro parse type is broken, Unrecognized varargs type."
-                            )
-                        })
-                        .collect::<crate::LispResult<#ty>>()?;
-                    #inner
-                }
-            }
-        }
+        ArgVal::Value => parse_argval_value_type(arg_name, passing_style, inner, true),
+        ArgVal::Optional => parse_argval_optional_type(arg_name, passing_style, inner),
+        ArgVal::Vec => parse_argval_varargs_type(ty, arg_name, passing_style, inner),
     };
-    Ok(outer_parse(arg_name.clone(), tokens))
+    Ok(outer_parse(arg_name, tokens))
 }
 
 fn parse_src_function_arguments(original_item_fn: &syn::ItemFn) -> MacroResult<Vec<Arg>> {
@@ -912,13 +1002,13 @@ fn generate_sl_sh_fn2(
                         #builtin_name.call_expand_args(params)
                     },
                     Err(e) => {
-                        Err(LispError::new(format!("{} is broken and can't parse its arguments..", #fn_name_attr, )))
+                        Err(sl_sh::types::LispError::new(format!("{} is broken and can't parse its arguments..", #fn_name_attr, )))
                     }
                 }
             } else if args.len() > args_len {
-                Err(LispError::new(format!("{} given too many arguments, expected {}, got {}.", #fn_name_attr, args_len, args.len())))
+                Err(sl_sh::types::LispError::new(format!("{} given too many arguments, expected {}, got {}.", #fn_name_attr, args_len, args.len())))
             } else {
-                Err(LispError::new(format!("{} not given enough arguments, expected {}, got {}.", #fn_name_attr, args_len, args.len())))
+                Err(sl_sh::types::LispError::new(format!("{} not given enough arguments, expected {}, got {}.", #fn_name_attr, args_len, args.len())))
             }
         }
 
@@ -1268,6 +1358,10 @@ mod test {
 //TODO
 //  - functions that return optional.
 //  - functions that return values.
+//  - functions that return... nothing.
+// - sl_sh_fn2 macro should check if the rust function is just receiving an
+//      Expression type that doesn't need any of the type parsing code,
+//      the arg is fine after the outer parse function
 //  - support Option-al arguments... enhance get_input_types
 //      - builtins_file.rs
 //          + builtin_get_temp_file
@@ -1286,7 +1380,8 @@ mod test {
 //          + builtin_make_hash
 //          + builtin_hash_set
 // - macro needs to know if a function turns a LispResult<()> so it can know to return Ok(())
+//  or all functions are required to return LispResult<()> and those should really return Nil,
+//  in lisp world.
 // - should all macros just use the try_inner_exp_enum pattern?
 // - what about a ToString coercion for ExpEnum::Char/String/Symbol for rust functions that require them
 //  to turn into Strings.
-// - given i only need to implement TryInto and TryIntoExpression
