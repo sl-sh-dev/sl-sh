@@ -121,7 +121,7 @@ mod tests {
 
         let result = exec(
             &mut vm,
-            "(do (def fnx (fn (a b [x [y y2] % z := 10] % [d d2] := [20 21]) `(~a ~b ~x ~y ~y2 ~z ~d ~d2))) (dasm fnx) (fnx 1 2 '(3 [4 5])))",
+            "(do (def fnx (fn (a b [x [y y2] % z := 10] % [d d2] := [20 21]) `(~a ~b ~x ~y ~y2 ~z ~d ~d2))) (fnx 1 2 '(3 [4 5])))",
         );
         let expected = read_test(&mut vm, "(1 2 3 4 5 10 20 21)");
         assert_vals(&vm, expected, result);
@@ -161,13 +161,53 @@ mod tests {
         vm.set_global("prn", Value::Builtin(CallFunc { func: prn }));
         vm.set_global("dasm", Value::Builtin(CallFunc { func: dasm }));
 
-        //let result = exec(&mut vm, "(do ((fn (a b c) ((fn () (let (x 10, y 20, z 30) (set! x 11) (def fnx (fn () (set! a 5)(set! b 6)(set! c 7)`(~a ~b ~c ~x ~y ~z))))(let (s 51, t 52, u 53)(def fny (fn () (list s t u)))))))1 2 3)(fnx))");
+        let result = exec(&mut vm, "(do ((fn (a b c) ((fn () (let (x 10, y 20, z 30) (set! x 11) (def fnx (fn () (set! a 5)(set! b 6)`(~a ~b ~c ~x ~y ~z))))(let (s 51, t 52, u 53)(def fny (fn () (list s t u)))))))1 2 3)(fnx))");
+        let expected = read_test(&mut vm, "(5 6 3 11 20 30)");
+        assert_vals(&vm, expected, result);
+
         let result = exec(&mut vm, "(do ((fn (a b c) ((fn () (let (x 10, y 20, z 30) (set! x 11) (def fnx (fn () (set! a 5)(set! b 6)(list a b c x y z))))(let (s 51, t 52, u 53)(def fny (fn () (list s t u)))))))1 2 3)(fnx))");
         let expected = read_test(&mut vm, "(5 6 3 11 20 30)");
         assert_vals(&vm, expected, result);
 
-        let result = exec(&mut vm, "(do ((fn (a b c) ((fn () (let (x 10, y 20, z 30) (set! x 11) (def fnx (fn () (set! a 5)(set! b 6)(set! c 7)`(~a ~b ~c ~x ~y ~z))))(let (s 51, t 52, u 53)(def fny (fn () `(~s ~t ~u)))))))1 2 3)(fnx)(fny))");
+        //let result = crate::test_utils::exec_with_dump(&mut vm, "((fn (a b c) ((fn () (let (x 10, y 20, z 30) (set! x 11) (def fnx (fn () (set! a 5)(set! b 6)(set! c 7)`(~a ~b ~c ~x ~y ~z))))(let (s 51, t 52, u 53)(def fny (fn () `(~s ~t ~u)))))))1 2 3)(fnx)(fny)");
+        let result = exec(&mut vm, "((fn (a b c) ((fn () (let (x 10, y 20, z 30) (set! x 11) (def fnx (fn () (set! a 5)(set! b 6)(set! c 7)`(~a ~b ~c ~x ~y ~z))))(let (s 51, t 52, u 53)(def fny (fn () `(~s ~t ~u)))))))1 2 3)(fnx)(fny)");
         let expected = read_test(&mut vm, "(51 52 53)");
+        assert_vals(&vm, expected, result);
+    }
+
+    #[test]
+    fn test_on_error() {
+        let mut vm = Vm::new();
+        vm.set_global("prn", Value::Builtin(CallFunc { func: prn }));
+        vm.set_global("dasm", Value::Builtin(CallFunc { func: dasm }));
+
+        let def_macro = r#"
+        (def defmacro
+            (macro (name args & body)
+        `(def ~name (macro ~args ~@body))))"#;
+
+        let get_error = r#"
+        (defmacro get-error (& body)
+        `(let (old-error (on-error nil))
+            (defer (on-error old-error))
+            (call/cc (fn (k) (on-error (fn (key val) (k (cons key val))))
+            (cons :ok (do ~@body))))))"#;
+        exec(&mut vm, def_macro);
+        exec(&mut vm, get_error);
+
+        let result = exec(&mut vm, "(let (x 1, y 5) (cons :ok (+ x y)))");
+        let expected = read_test(&mut vm, "(:ok . 6)");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(&mut vm, "(get-error (let (x 1, y 5) (+ x y)))");
+        let expected = read_test(&mut vm, "(:ok . 6)");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(
+            &mut vm,
+            "(get-error (let (x 1, y 5) (err :test \"error\")(+ x y)))",
+        );
+        let expected = read_test(&mut vm, "(:test . \"error\")");
         assert_vals(&vm, expected, result);
     }
 }

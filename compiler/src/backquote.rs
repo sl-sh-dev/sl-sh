@@ -398,8 +398,6 @@ mod tests {
 
         let result = exec(&mut vm, "(do (def x \"xxx\") `~x)")?;
         let expected = read_test(&mut vm, "\"xxx\"").map_err(|e| VMError::new("read", e.reason))?;
-        //println!("XXXX {} {}", result.display_value(&vm), expected.display_value(&vm));
-        //println!("XXXX {:?} {:?}", result, expected);
         assert!(vm.is_equal_pair(expected, result)?.is_true());
 
         let result = exec(&mut vm, "`~5")?;

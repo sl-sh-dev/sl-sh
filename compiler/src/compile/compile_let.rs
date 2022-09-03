@@ -23,7 +23,11 @@ fn let_inner(
     let start_defers = state.defers;
     let symbols = Rc::new(RefCell::new(Symbols::with_let(state.symbols.clone())));
     state.symbols = symbols.clone();
-    let first_reg = symbols.borrow().regs_count();
+    let mut first_reg = symbols.borrow().regs_count();
+    while first_reg <= result {
+        // Make sure we do not step on the result or any other regs in temp use below it.
+        first_reg = symbols.borrow_mut().reserve_reg();
+    }
     let mut cdr_iter = cdr.iter();
     let args = cdr_iter.next().unwrap(); // unwrap safe, length is at least 1
     let mut right_exps: Vec<RightSideExp> = Vec::new();

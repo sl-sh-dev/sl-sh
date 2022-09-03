@@ -904,12 +904,22 @@ impl Vm {
                         _ => return Err((VMError::new_vm("CDR: Not a pair/conscell."), chunk)),
                     }
                 }
-                LIST => self
-                    .list(&chunk.code[..], registers, wide)
-                    .map_err(|e| (e, chunk.clone()))?,
-                APND => self
-                    .append(&chunk.code[..], registers, wide)
-                    .map_err(|e| (e, chunk.clone()))?,
+                LIST => {
+                    self.pause_gc();
+                    let r = self
+                        .list(&chunk.code[..], registers, wide)
+                        .map_err(|e| (e, chunk.clone()));
+                    self.unpause_gc();
+                    r?
+                }
+                APND => {
+                    self.pause_gc();
+                    let r = self
+                        .append(&chunk.code[..], registers, wide)
+                        .map_err(|e| (e, chunk.clone()));
+                    self.unpause_gc();
+                    r?;
+                }
                 XAR => self
                     .xar(&chunk.code[..], registers, wide)
                     .map_err(|e| (e, chunk.clone()))?,

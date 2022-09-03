@@ -1,3 +1,4 @@
+use crate::pass1::pass1;
 use crate::{compile, CompileEnvironment, CompileState, ReadError, Reader};
 use slvm::*;
 use std::sync::Arc;
@@ -14,6 +15,10 @@ pub fn read_test(vm: &mut Vm, text: &'static str) -> Value {
         vm.alloc_vector_ro(exps)
     };
     vm.unpause_gc();
+    // Make sure we don't GC this stuff.  Don't bother with unsticky since we are testing (not the GC).
+    if let Some(handle) = res.get_handle() {
+        vm.heap_sticky(handle);
+    }
     res
 }
 
@@ -22,9 +27,23 @@ pub fn exec(vm: &mut Vm, input: &'static str) -> Value {
     let exp = read_test(vm, input);
     let mut env = CompileEnvironment::new(vm);
     let mut state = CompileState::new();
-    compile(&mut env, &mut state, exp, 0).unwrap();
-    state.chunk.encode0(RET, Some(1)).unwrap();
-    vm.execute(Arc::new(state.chunk)).unwrap();
+    if let Value::Vector(_) = exp {
+        for e in exp.iter(env.vm()).collect::<Vec<Value>>() {
+            pass1(&mut env, &mut state, e).unwrap();
+            compile(&mut env, &mut state, e, 0).unwrap();
+        }
+        state.chunk.encode0(RET, Some(1)).unwrap();
+        env.vm_mut().execute(Arc::new(state.chunk)).unwrap();
+    } else {
+        if let Some(handle) = exp.get_handle() {
+            env.vm_mut().heap_sticky(handle);
+        }
+        pass1(&mut env, &mut state, exp).unwrap();
+        compile(&mut env, &mut state, exp, 0).unwrap();
+        state.chunk.encode0(RET, Some(1)).unwrap();
+        let chunk = Arc::new(state.chunk);
+        env.vm_mut().execute(chunk).unwrap();
+    }
     vm.stack()[0]
 }
 
@@ -34,9 +53,19 @@ pub fn exec_with_dump(vm: &mut Vm, input: &'static str) -> Value {
     let exp = read_test(vm, input);
     let mut env = CompileEnvironment::new(vm);
     let mut state = CompileState::new();
-    compile(&mut env, &mut state, exp, 0).unwrap();
-    state.chunk.encode0(RET, Some(1)).unwrap();
-    env.vm_mut().execute(Arc::new(state.chunk.clone())).unwrap();
+    if let Value::Vector(_) = exp {
+        for e in exp.iter(env.vm()).collect::<Vec<Value>>() {
+            pass1(&mut env, &mut state, e).unwrap();
+            compile(&mut env, &mut state, e, 0).unwrap();
+        }
+        state.chunk.encode0(RET, Some(1)).unwrap();
+        env.vm_mut().execute(Arc::new(state.chunk.clone())).unwrap();
+    } else {
+        pass1(&mut env, &mut state, exp).unwrap();
+        compile(&mut env, &mut state, exp, 0).unwrap();
+        state.chunk.encode0(RET, Some(1)).unwrap();
+        env.vm_mut().execute(Arc::new(state.chunk.clone())).unwrap();
+    }
 
     let mut reg_names = state.chunk.dbg_args.as_ref().map(|iargs| iargs.iter());
     for (i, r) in env.vm().stack()[0..=state.chunk.extra_regs]
