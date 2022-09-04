@@ -168,6 +168,37 @@ fn wrap_with_std_convert(ty: Type, convert_trait: &str) -> Type {
     })
 }
 
+/// returns the option of inner type and the wrapped generic type (None if it's
+/// not generic. If there is no return type None, None is returned. Throws
+/// an error if the generic return type is not in the list of predefined
+/// constants POSSIBLE_RESULT_TYPES.
+fn get_return_type2(
+    original_item_fn: &syn::ItemFn,
+) -> MacroResult<(Option<Type>, Option<&'static str>)> {
+    let return_type = match &original_item_fn.sig.output {
+        ReturnType::Default => return Ok((None, None)),
+        ReturnType::Type(_ra_arrow, ty) => *ty.clone(),
+    };
+
+    if let Some((inner_type, type_path)) = get_generic_argument_from_type(&return_type) {
+        let wrapper = is_valid_generic_type(type_path, POSSIBLE_RESULT_TYPES.as_slice())?;
+        match inner_type {
+            syn::GenericArgument::Type(ty) => Ok((Some(ty.clone()), Some(wrapper))),
+            _ => {
+                return Err(syn::Error::new(
+                    original_item_fn.span(),
+                    format!(
+                        "Functions of with generic arguments of type {:?} must contain Types, see syn::GenericArgument.",
+                        &POSSIBLE_RESULT_TYPES
+                    ),
+                ))
+            }
+        }
+    } else {
+        Ok((Some(return_type), None))
+    }
+}
+
 /// parse the return type of the rust function
 fn get_return_type(original_item_fn: &syn::ItemFn) -> MacroResult<(Type, Option<&'static str>)> {
     let return_type = match &original_item_fn.sig.output {
@@ -576,7 +607,8 @@ fn generate_builtin_fn2(
     // TODO this code can be saved but all rust types that map to sl_sh types will need a marker trait
     //  otherwise, there's not a good way to check at compile time if the long ExpEnum match statement
     //  will work at runtime.
-    //let (return_type, wrapper) = get_return_type(original_item_fn)?;
+    //  marker traits could
+    let (return_type, lisp_result) = get_return_type2(original_item_fn)?;
     //let conversions_assertions_code =
     //    generate_assertions_code_for_type_conversions(original_item_fn, &return_type)?;
     let mut arg_names = vec![];
@@ -587,17 +619,30 @@ fn generate_builtin_fn2(
         arg_names.push(parse_name);
         arg_types.push(quote! { sl_sh::ArgType })
     }
-    let orig_fn_call = match &original_item_fn.sig.output {
-        ReturnType::Default => {
-            quote! {
-                #original_fn_name(#(#arg_names),*)
-            }
+    // the original function call must return an Expression object
+    // this means all returned rust native types must implement TryIntoExpression
+    // this is nested inside the builtin expression which must always
+    // return a LispResult.
+    let original_fn_call = match (return_type.clone(), lisp_result) {
+        // coerce to a LispResult<Expression>
+        (Some(_), Some(_)) => quote! {
+            #original_fn_name(#(#arg_names),*).map(Into::into)
+        },
+        // coerce to Expression
+        (Some(_), None) => quote! {
+            Ok(#original_fn_name(#(#arg_names),*).into())
+        },
+        (None, Some(_)) => {
+            unreachable!("If this functions returns a LispResult it must also return a value.");
         }
-        ReturnType::Type(_, _) => {
-            quote! {
-                #original_fn_name(#(#arg_names),*).map(Into::into)
-            }
-        }
+        // no return
+        (None, None) => quote! {
+            #original_fn_name(#(#arg_names),*);
+            Ok(())
+        },
+    };
+    let orig_fn_call = quote! {
+        #original_fn_call
     };
 
     let mut prev_token_stream = orig_fn_call;
@@ -643,8 +688,17 @@ fn generate_builtin_fn2(
             _ => {}
         }
     }
+    let ret_tokens = match (return_type, lisp_result) {
+        (Some(return_type), _) => {
+            quote! { -> sl_sh::LispResult<#return_type> }
+        }
+        (None, Some(_)) => {
+            unreachable!("If this functions returns a LispResult it must also return a value.");
+        }
+        (None, None) => quote! { -> sl_sh::LispResult<()> },
+    };
     let tokens = quote! {
-        fn #builtin_name(#(#arg_names: #arg_types),*) -> sl_sh::LispResult<()> {
+        fn #builtin_name(#(#arg_names: #arg_types),*) #ret_tokens {
             #prev_token_stream
         }
     };
@@ -679,7 +733,7 @@ fn parse_argval_varargs_type(
     //  1. is this true
     //      if so, is it enforces at compile time (just throw an error here
     //      or do it on the first pass.
-    //  2. if not, cool.
+    //  2. if not, good.
     //  regardless inner must just return the parsed Expression. which is why
     //  the value of inner that is passed in is quote! { #arg_name }
     //  if the rust_native type is Vec<&mut HashMap> the borrow checker
@@ -687,6 +741,8 @@ fn parse_argval_varargs_type(
     //  ***NEED to test
     let an_element_arg_value_type_parsing_code =
         parse_argval_value_type(arg_name, passing_style, quote! { #arg_name }, false);
+    // TODO
+    //  if the above is true, we should only accept Vec<T: TryIntoExpression>
     quote! {{
         let #arg_name = #arg_name
             .iter()
@@ -747,92 +803,95 @@ fn parse_argval_value_type(
     };
     quote! {
     match #ref_exp {
-        sl_sh::ExpEnum::True => {
-            let #arg_name = true;
-            #inner
-        }
-        sl_sh::ExpEnum::False => {
-            let #arg_name = false;
-            #inner
-        }
-        sl_sh::ExpEnum::Float(#ref_match) => {
-            #inner
-        }
+        //sl_sh::ExpEnum::True => {
+        //    let #arg_name = true;
+        //    #inner
+        //}
+        //sl_sh::ExpEnum::False => {
+        //    let #arg_name = false;
+        //    #inner
+        //}
+        //sl_sh::ExpEnum::Float(#ref_match) => {
+        //    #inner
+        //}
         sl_sh::ExpEnum::Int(#ref_match) => {
             #inner
         }
-        sl_sh::ExpEnum::Symbol(#ref_match, _) => {
-            #inner
+        _ => {
+            return Err(sl_sh::types::LispError::new(format!(" not given enough arguments, expected , got .")))
         }
-        sl_sh::ExpEnum::String(#ref_match, _) => {
-            #inner
-        }
-        sl_sh::ExpEnum::Char(#ref_match) => {
-            #inner
-        }
-        sl_sh::ExpEnum::CodePoint(#ref_match) => {
-            #inner
-        }
-        sl_sh::ExpEnum::HashMap(#ref_match) => {
-            #inner
-        }
-        sl_sh::ExpEnum::Process(#ref_match) => {
-            #inner
-        }
-        sl_sh::ExpEnum::File(#ref_match) => {
-            #inner
-        }
-        sl_sh::ExpEnum::Wrapper(#ref_match) => {
-            #inner
-        }
-        sl_sh::ExpEnum::Regex(#ref_match) => {
-            #inner
-        }
-        sl_sh::ExpEnum::Vector(#ref_match) => {
-            #inner
-        }
-        sl_sh::ExpEnum::Values(#ref_match) => {
-            #inner
-        }
-        sl_sh::ExpEnum::Nil => {
-            sl_sh::types::LispError::new(format!("ExpEnum::Nil not supported as input to sl_sh_fn proc macro."))
-        }
-        sl_sh::ExpEnum::Lambda(#ref_match) => {
-            sl_sh::types::LispError::new(format!("ExpEnum::Lambda not supported as input to sl_sh_fn proc macro."))
-        }
-        sl_sh::ExpEnum::Macro(#ref_match) => {
-            sl_sh::types::LispError::new(format!("ExpEnum::Macro not supported as input to sl_sh_fn proc macro."))
-        }
-        sl_sh::ExpEnum::Function(#ref_match) => {
-            sl_sh::types::LispError::new(format!("ExpEnum::Function not supported as input to sl_sh_fn proc macro."))
-        }
-        sl_sh::ExpEnum::LazyFn(_, _) => {
-            sl_sh::types::LispError::new(format!("ExpEnum::LazyFn not supported as input to sl_sh_fn proc macro."))
-        }
-        sl_sh::ExpEnum::Pair(_, _) => {
-            sl_sh::types::LispError::new(format!("ExpEnum::Pair not supported as input to sl_sh_fn proc macro."))
-        }
-        sl_sh::ExpEnum::DeclareDef => {
-            sl_sh::types::LispError::new(format!("ExpEnum::DeclareDef not supported as input to sl_sh_fn proc macro."))
-        }
-        sl_sh::ExpEnum::DeclareVar => {
-            sl_sh::types::LispError::new(format!("ExpEnum::DeclareVar not supported as input to sl_sh_fn proc macro."))
-        }
-        sl_sh::ExpEnum::DeclareFn => {
-            sl_sh::types::LispError::new(format!("ExpEnum::DeclareFn not supported as input to sl_sh_fn proc macro."))
-        }
-        sl_sh::ExpEnum::DeclareMacro => {
-            sl_sh::types::LispError::new(format!("ExpEnum::DeclareMacro not supported as input to sl_sh_fn proc macro."))
-        }
-        sl_sh::ExpEnum::Quote => {
-            sl_sh::types::LispError::new(format!("ExpEnum::Quote not supported as input to sl_sh_fn proc macro."))
-        }
-        sl_sh::ExpEnum::BackQuote => {
-            sl_sh::types::LispError::new(format!("ExpEnum::BackQuote not supported as input to sl_sh_fn proc macro."))
-        }
-        sl_sh::ExpEnum::Undefined => {
-            sl_sh::types::LispError::new(format!("ExpEnum::Undefined not supported as input to sl_sh_fn proc macro."))
-        }
+        //sl_sh::ExpEnum::Symbol(#ref_match, _) => {
+        //    #inner
+        //}
+        //sl_sh::ExpEnum::String(#ref_match, _) => {
+        //    #inner
+        //}
+        //sl_sh::ExpEnum::Char(#ref_match) => {
+        //    #inner
+        //}
+        //sl_sh::ExpEnum::CodePoint(#ref_match) => {
+        //    #inner
+        //}
+        //sl_sh::ExpEnum::HashMap(#ref_match) => {
+        //    #inner
+        //}
+        //sl_sh::ExpEnum::Process(#ref_match) => {
+        //    #inner
+        //}
+        //sl_sh::ExpEnum::File(#ref_match) => {
+        //    #inner
+        //}
+        //sl_sh::ExpEnum::Wrapper(#ref_match) => {
+        //    #inner
+        //}
+        //sl_sh::ExpEnum::Regex(#ref_match) => {
+        //    #inner
+        //}
+        //sl_sh::ExpEnum::Vector(#ref_match) => {
+        //    #inner
+        //}
+        //sl_sh::ExpEnum::Values(#ref_match) => {
+        //    #inner
+        //}
+        //sl_sh::ExpEnum::Nil => {
+        //    sl_sh::types::LispError::new(format!("ExpEnum::Nil not supported as input to sl_sh_fn proc macro."))
+        //}
+        //sl_sh::ExpEnum::Lambda(#ref_match) => {
+        //    sl_sh::types::LispError::new(format!("ExpEnum::Lambda not supported as input to sl_sh_fn proc macro."))
+        //}
+        //sl_sh::ExpEnum::Macro(#ref_match) => {
+        //    sl_sh::types::LispError::new(format!("ExpEnum::Macro not supported as input to sl_sh_fn proc macro."))
+        //}
+        //sl_sh::ExpEnum::Function(#ref_match) => {
+        //    sl_sh::types::LispError::new(format!("ExpEnum::Function not supported as input to sl_sh_fn proc macro."))
+        //}
+        //sl_sh::ExpEnum::LazyFn(_, _) => {
+        //    sl_sh::types::LispError::new(format!("ExpEnum::LazyFn not supported as input to sl_sh_fn proc macro."))
+        //}
+        //sl_sh::ExpEnum::Pair(_, _) => {
+        //    sl_sh::types::LispError::new(format!("ExpEnum::Pair not supported as input to sl_sh_fn proc macro."))
+        //}
+        //sl_sh::ExpEnum::DeclareDef => {
+        //    sl_sh::types::LispError::new(format!("ExpEnum::DeclareDef not supported as input to sl_sh_fn proc macro."))
+        //}
+        //sl_sh::ExpEnum::DeclareVar => {
+        //    sl_sh::types::LispError::new(format!("ExpEnum::DeclareVar not supported as input to sl_sh_fn proc macro."))
+        //}
+        //sl_sh::ExpEnum::DeclareFn => {
+        //    sl_sh::types::LispError::new(format!("ExpEnum::DeclareFn not supported as input to sl_sh_fn proc macro."))
+        //}
+        //sl_sh::ExpEnum::DeclareMacro => {
+        //    sl_sh::types::LispError::new(format!("ExpEnum::DeclareMacro not supported as input to sl_sh_fn proc macro."))
+        //}
+        //sl_sh::ExpEnum::Quote => {
+        //    sl_sh::types::LispError::new(format!("ExpEnum::Quote not supported as input to sl_sh_fn proc macro."))
+        //}
+        //sl_sh::ExpEnum::BackQuote => {
+        //    sl_sh::types::LispError::new(format!("ExpEnum::BackQuote not supported as input to sl_sh_fn proc macro."))
+        //}
+        //sl_sh::ExpEnum::Undefined => {
+        //    sl_sh::types::LispError::new(format!("ExpEnum::Undefined not supported as input to sl_sh_fn proc macro."))
+        //}
     }#final_token}
 }
 
@@ -977,6 +1036,33 @@ fn generate_sl_sh_fn2(
     are_args_valid(original_item_fn, &args.as_slice())?;
     let arg_types = to_arg_types(&args.as_slice());
 
+    let (return_type, lisp_result) = get_return_type2(original_item_fn)?;
+
+    // these tokens are for calling the wrapper of the rust native function.
+    // Rust native functions may either return a lisp result, a value, or nothing.
+    let returns_none = "()" == return_type.to_token_stream().to_string();
+    let builtin_call_tokens = match (return_type, lisp_result, returns_none) {
+        (_, _, true) | (None, None, false) => {
+            quote! {
+                #builtin_name.call_expand_args(params)?;
+                Ok(sl_sh::types::Expression::make_nil())
+            }
+        }
+        (Some(_), Some(_), false) => {
+            quote! {
+                #builtin_name.call_expand_args(params)?
+            }
+        }
+        (Some(_), None, false) => {
+            quote! {
+                Ok(#builtin_name.call_expand_args(params))
+            }
+        }
+        (None, Some(_), false) => {
+            unreachable!("If this functions returns a LispResult it must also return a value.");
+        }
+    };
+
     // directly in this TokenStream enumerate the functions parse_ and intern_
     // parse is responsible for using the environment to turn the Expressions
     // into a list of ArgTypes. ArgTypes are the abstraction that allow
@@ -999,7 +1085,7 @@ fn generate_sl_sh_fn2(
                 match args.try_into() {
                     Ok(params) => {
                         let params: [sl_sh::ArgType; args_len] = params;
-                        #builtin_name.call_expand_args(params)
+                        #builtin_call_tokens
                     },
                     Err(e) => {
                         Err(sl_sh::types::LispError::new(format!("{} is broken and can't parse its arguments..", #fn_name_attr, )))
