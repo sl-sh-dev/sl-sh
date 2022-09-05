@@ -48,12 +48,17 @@ pub fn vec_to_list(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
         ));
     }
     if let Value::Vector(vhandle) = registers[0] {
-        let vector = vm.get_vector(vhandle).to_vec();
+        // Do this so we can use vector as a slice and not allocate a new useless vector instead.
+        // This is safe since we only call alloc_pair and that will not mess with vector.
+        // Note, this also needs register[0] to NOT be garbage collected during a call to alloc_pair,
+        // this should be fine since it is from a register and therefore will be a root.
+        let unsafe_vm: &mut Vm = unsafe { (vm as *mut Vm).as_mut().unwrap() };
+        let vector = vm.get_vector(vhandle);
 
         let mut last = Value::Nil;
         for item in vector.iter().rev() {
             let old_last = last;
-            last = vm.alloc_pair(*item, old_last);
+            last = unsafe_vm.alloc_pair(*item, old_last);
         }
         Ok(last)
     } else {
