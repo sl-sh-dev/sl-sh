@@ -612,14 +612,14 @@ fn make_orig_fn_call(
         // coerce to a LispResult<Expression>
         (Some(_), Some(_), true) => quote! {
             #original_fn_name(#(#arg_names),*)?;
-            return Ok(());
+            Ok(())
         },
         (Some(_), Some(_), false) => quote! {
             return #original_fn_name(#(#arg_names),*);
         },
         // coerce to Expression
         (Some(_), None, _) => quote! {
-            return Ok(#original_fn_name(#(#arg_names),*).into());
+            Ok(#original_fn_name(#(#arg_names),*).into())
         },
         (None, Some(_), _) => {
             unreachable!("If this functions returns a LispResult it must also return a value.");
@@ -627,7 +627,7 @@ fn make_orig_fn_call(
         // no return
         (None, None, _) => quote! {
             #original_fn_name(#(#arg_names),*);
-            return Ok(())
+            Ok(())
         },
     };
     Ok(quote! {
@@ -763,7 +763,7 @@ fn parse_argval_varargs_type(
     //  could get in the way BUT, lifetimes might help...
     //  ***NEED to test
     let an_element_arg_value_type_parsing_code =
-        parse_argval_value_type(arg_name, passing_style, quote! { #arg_name }, false);
+        parse_argval_value_type(arg_name, passing_style, quote! { Ok(#arg_name) });
     // TODO
     //  if the above is true, we should only accept Vec<T: TryIntoExpression>
     quote! {{
@@ -795,7 +795,7 @@ fn parse_argval_optional_type(
     // the matched ExpEnum in Some bound to the #arg_name like the
     // rust native function expects.
     let some_arg_value_type_parsing_code =
-        parse_argval_value_type(arg_name, passing_style, some_inner, false);
+        parse_argval_value_type(arg_name, passing_style, some_inner);
     quote! {
     match #arg_name {
         None => {
@@ -814,16 +814,10 @@ fn parse_argval_value_type(
     arg_name: &Ident,
     passing_style: ArgPassingStyle,
     inner: TokenStream,
-    match_should_return: bool,
 ) -> TokenStream {
     let reference_tokens = tokens_for_matching_references(arg_name, passing_style);
     let ref_exp = reference_tokens.0;
     let ref_match = reference_tokens.1;
-    let final_token = if match_should_return {
-        quote! {}
-    } else {
-        quote! {;}
-    };
     quote! {
     match #ref_exp {
         //sl_sh::ExpEnum::True => {
@@ -915,7 +909,7 @@ fn parse_argval_value_type(
         //sl_sh::ExpEnum::Undefined => {
         //    sl_sh::types::LispError::new(format!("ExpEnum::Undefined not supported as input to sl_sh_fn proc macro."))
         //}
-    }#final_token}
+    }}
 }
 
 /// create the nested match statements to parse rust types into sl_sh types.
@@ -932,7 +926,7 @@ fn parse_type(
     outer_parse: fn(&Ident, TokenStream) -> TokenStream,
 ) -> MacroResult<TokenStream> {
     let tokens = match val {
-        ArgVal::Value => parse_argval_value_type(arg_name, passing_style, inner, true),
+        ArgVal::Value => parse_argval_value_type(arg_name, passing_style, inner),
         ArgVal::Optional => parse_argval_optional_type(arg_name, passing_style, inner),
         ArgVal::Vec => parse_argval_varargs_type(ty, arg_name, passing_style, inner),
     };
@@ -1071,14 +1065,9 @@ fn generate_sl_sh_fn2(
                 Ok(sl_sh::types::Expression::make_nil())
             }
         }
-        (Some(_), Some(_), false) => {
+        (Some(_), _, false) => {
             quote! {
                 #builtin_name.call_expand_args(params).map(Into::into)
-            }
-        }
-        (Some(_), None, false) => {
-            quote! {
-                Ok(#builtin_name.call_expand_args(params).into())
             }
         }
         (None, Some(_), false) => {
