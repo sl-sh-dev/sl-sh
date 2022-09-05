@@ -9,7 +9,7 @@ use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::Comma;
 use syn::{
-    parse_macro_input, AngleBracketedGenericArguments, FnArg, Ident, Lit, Meta, NestedMeta,
+    parse_macro_input, AngleBracketedGenericArguments, FnArg, Ident, ItemFn, Lit, Meta, NestedMeta,
     PathArguments, PathSegment, ReturnType, Type,
 };
 extern crate static_assertions;
@@ -60,7 +60,7 @@ fn build_sl_sh_expression_type() -> Type {
 
 /// return the function names the macro will create. Given a base name, "base"
 /// return (base, builtin_base, arg_parse_base) tuple of Idents
-fn get_fn_names(original_item_fn: &syn::ItemFn) -> (Ident, Ident, Ident, Ident) {
+fn get_fn_names(original_item_fn: &ItemFn) -> (Ident, Ident, Ident, Ident) {
     let sig_ident = &original_item_fn.sig.ident;
     let name = sig_ident.to_string();
     let original_fn_name = Ident::new(&name, Span::call_site());
@@ -173,7 +173,7 @@ fn wrap_with_std_convert(ty: Type, convert_trait: &str) -> Type {
 /// an error if the generic return type is not in the list of predefined
 /// constants POSSIBLE_RESULT_TYPES.
 fn get_return_type2(
-    original_item_fn: &syn::ItemFn,
+    original_item_fn: &ItemFn,
 ) -> MacroResult<(Option<Type>, Option<&'static str>)> {
     let return_type = match &original_item_fn.sig.output {
         ReturnType::Default => return Ok((None, None)),
@@ -201,7 +201,7 @@ fn get_return_type2(
 }
 
 /// parse the return type of the rust function
-fn get_return_type(original_item_fn: &syn::ItemFn) -> MacroResult<(Type, Option<&'static str>)> {
+fn get_return_type(original_item_fn: &ItemFn) -> MacroResult<(Type, Option<&'static str>)> {
     let return_type = match &original_item_fn.sig.output {
         ReturnType::Default => {
             unimplemented!("Functions with attribute must return a value.");
@@ -230,7 +230,7 @@ fn get_return_type(original_item_fn: &syn::ItemFn) -> MacroResult<(Type, Option<
 
 /// Pull out every #doc attribute on the target fn for the proc macro attribute.
 /// Ignore any other attributes and only Err if there are no #doc attributes.
-fn get_documentation_for_fn(original_item_fn: &syn::ItemFn) -> MacroResult<String> {
+fn get_documentation_for_fn(original_item_fn: &ItemFn) -> MacroResult<String> {
     let mut docs = "".to_string();
     for attr in &original_item_fn.attrs {
         for path_segment in attr.path.segments.iter() {
@@ -309,7 +309,7 @@ fn generate_assertions_code_for_return_type_conversions(return_type: &syn::Type)
 }
 
 fn generate_assertions_code_for_type_conversions(
-    original_item_fn: &syn::ItemFn,
+    original_item_fn: &ItemFn,
     return_type: &syn::Type,
 ) -> MacroResult<Vec<TokenStream2>> {
     let inputs = &original_item_fn.sig.inputs;
@@ -331,7 +331,7 @@ fn generate_assertions_code_for_type_conversions(
 }
 
 fn get_attribute_value_with_key(
-    original_item_fn: &syn::ItemFn,
+    original_item_fn: &ItemFn,
     key: &str,
     values: &[(String, String)],
 ) -> MacroResult<Option<String>> {
@@ -383,7 +383,7 @@ fn get_attribute_name_value(nested_meta: &NestedMeta) -> MacroResult<(String, St
 
 fn generate_builtin_fn(
     args_len: usize,
-    original_item_fn: &syn::ItemFn,
+    original_item_fn: &ItemFn,
     fn_name: String,
     fn_name_attr: syn::Ident,
     builtin_name: syn::Ident,
@@ -422,7 +422,7 @@ fn generate_builtin_fn(
 }
 
 fn parse_attributes(
-    original_item_fn: &syn::ItemFn,
+    original_item_fn: &ItemFn,
     attr_args: syn::AttributeArgs,
 ) -> MacroResult<(String, Ident, bool)> {
     let vals = attr_args
@@ -450,7 +450,7 @@ fn parse_attributes(
 }
 
 fn generate_sl_sh_fns(
-    original_item_fn: &syn::ItemFn,
+    original_item_fn: &ItemFn,
     attr_args: syn::AttributeArgs,
 ) -> MacroResult<TokenStream2> {
     let (fn_name, fn_name_attr, eval_values) = parse_attributes(original_item_fn, attr_args)?;
@@ -599,17 +599,51 @@ fn get_parser_for_arg_val(val: ArgVal) -> fn(&Ident, TokenStream) -> TokenStream
     }
 }
 
-fn generate_builtin_fn2(
-    original_item_fn: &syn::ItemFn,
-    original_fn_name: &syn::Ident,
-    builtin_name: &syn::Ident,
+fn make_orig_fn_call(
+    original_item_fn: &ItemFn,
+    original_fn_name: &Ident,
+    arg_names: Vec<Ident>,
 ) -> MacroResult<TokenStream> {
+    // the original function call must return an Expression object
+    // this means all returned rust native types must implement TryIntoExpression
+    // this is nested inside the builtin expression which must always
+    // return a LispResult.
+    let (return_type, lisp_result) = get_return_type2(original_item_fn)?;
+    let returns_none = "()" == return_type.to_token_stream().to_string();
+    let original_fn_call = match (return_type.clone(), lisp_result, returns_none) {
+        // coerce to a LispResult<Expression>
+        (Some(_), Some(_), true) => quote! {
+            #original_fn_name(#(#arg_names),*)?;
+            return Ok(());
+        },
+        (Some(_), Some(_), false) => quote! {
+            return #original_fn_name(#(#arg_names),*);
+        },
+        // coerce to Expression
+        (Some(_), None, _) => quote! {
+            return Ok(#original_fn_name(#(#arg_names),*).into());
+        },
+        (None, Some(_), _) => {
+            unreachable!("If this functions returns a LispResult it must also return a value.");
+        }
+        // no return
+        (None, None, _) => quote! {
+            #original_fn_name(#(#arg_names),*);
+            return Ok(())
+        },
+    };
+    Ok(quote! {
+        #original_fn_call
+    })
+}
+
+fn make_arg_types(original_item_fn: &ItemFn) -> MacroResult<(Vec<Ident>, Vec<TokenStream>)> {
     let len = original_item_fn.sig.inputs.len();
     // TODO this code can be saved but all rust types that map to sl_sh types will need a marker trait
     //  otherwise, there's not a good way to check at compile time if the long ExpEnum match statement
     //  will work at runtime.
     //  marker traits could
-    let (return_type, lisp_result) = get_return_type2(original_item_fn)?;
+
     // TODO conversion for return type only.
     //let conversions_assertions_code =
     //    generate_assertions_code_for_type_conversions(original_item_fn, &return_type)?;
@@ -621,36 +655,16 @@ fn generate_builtin_fn2(
         arg_names.push(parse_name);
         arg_types.push(quote! { sl_sh::ArgType })
     }
-    // the original function call must return an Expression object
-    // this means all returned rust native types must implement TryIntoExpression
-    // this is nested inside the builtin expression which must always
-    // return a LispResult.
-    let returns_none = "()" == return_type.to_token_stream().to_string();
-    let original_fn_call = match (return_type.clone(), lisp_result, returns_none) {
-        // coerce to a LispResult<Expression>
-        (Some(_), Some(_), true) => quote! {
-            #original_fn_name(#(#arg_names),*)?;
-            Ok(())
-        },
-        (Some(_), Some(_), false) => quote! {
-            #original_fn_name(#(#arg_names),*)
-        },
-        // coerce to Expression
-        (Some(_), None, _) => quote! {
-            Ok(#original_fn_name(#(#arg_names),*).into())
-        },
-        (None, Some(_), _) => {
-            unreachable!("If this functions returns a LispResult it must also return a value.");
-        }
-        // no return
-        (None, None, _) => quote! {
-            #original_fn_name(#(#arg_names),*);
-            Ok(())
-        },
-    };
-    let orig_fn_call = quote! {
-        #original_fn_call
-    };
+    Ok((arg_names, arg_types))
+}
+
+fn generate_builtin_fn2(
+    original_item_fn: &ItemFn,
+    original_fn_name: &Ident,
+    builtin_name: &Ident,
+) -> MacroResult<TokenStream> {
+    let (arg_names, arg_types) = make_arg_types(original_item_fn)?;
+    let orig_fn_call = make_orig_fn_call(original_item_fn, original_fn_name, arg_names.clone())?;
 
     let mut prev_token_stream = orig_fn_call;
     let fn_args = original_item_fn.sig.inputs.iter().zip(arg_names.iter());
@@ -695,9 +709,11 @@ fn generate_builtin_fn2(
             _ => {}
         }
     }
+    let (return_type, lisp_result) = get_return_type2(original_item_fn)?;
+    let returns_none = "()" == return_type.to_token_stream().to_string();
     let ret_tokens = match (return_type, lisp_result, returns_none) {
         (Some(_), Some(_), true) | (None, None, _) | (Some(_), None, true) => {
-            quote! {-> sl_sh::LispResult<()>  }
+            quote! { -> sl_sh::LispResult<()> }
         }
         (Some(return_type), _, false) => {
             quote! { -> sl_sh::LispResult<#return_type> }
@@ -781,7 +797,7 @@ fn parse_argval_optional_type(
     // the matched ExpEnum in Some bound to the #arg_name like the
     // rust native function expects.
     let some_arg_value_type_parsing_code =
-        parse_argval_value_type(arg_name, passing_style, some_inner, true);
+        parse_argval_value_type(arg_name, passing_style, some_inner, false);
     quote! {
     match #arg_name {
         None => {
@@ -791,7 +807,7 @@ fn parse_argval_optional_type(
         Some(#arg_name) => {
            #some_arg_value_type_parsing_code
         }
-    };}
+    }}
 }
 
 /// for regular Expression values (no Optional/VarArgs) ref_exp
@@ -827,7 +843,7 @@ fn parse_argval_value_type(
             #inner
         }
         _ => {
-            return Err(sl_sh::types::LispError::new(format!(" not given enough arguments, expected , got .")))
+            return Err(sl_sh::types::LispError::new(format!(" not given enough arguments, expected , got .")));
         }
         //sl_sh::ExpEnum::Symbol(#ref_match, _) => {
         //    #inner
