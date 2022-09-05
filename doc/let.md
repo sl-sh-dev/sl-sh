@@ -61,6 +61,8 @@ For maps use {[name key]+} (i.e. a map of symbols to keys), if this map contains
 key to default value used for any missing keys.  It requires all keys to be included in the destructured map or to have a
 default.
 
+Note that destructures can be applied recursively and sequence destructure can contain map destructures and vice versa.
+
 ### Examples
 ```
 (def x '(1 2 3))
@@ -72,3 +74,8 @@ Produces (1 2 3).
 (let ([a b % c d] '(1 2)) (list a b c d))
 ```
 Produces (1 2 nil nil).
+
+```
+(let ({a :one, b 'two, c \"three\" [d e] :vec} {:one 1, two 2, \"three\" 3, :vec (4 5)}) (list a b c d e))
+```
+Produces (1 2 3 4 5).
