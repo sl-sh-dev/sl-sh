@@ -159,6 +159,18 @@ mod tests {
         vm.set_global("prn", Value::Builtin(CallFunc { func: prn }));
         vm.set_global("dasm", Value::Builtin(CallFunc { func: dasm }));
 
+        let result = exec(&mut vm, "(let (a 1, b 2, c 3) `(~a ~b ~c))");
+        let expected = read_test(&mut vm, "(1 2 3)");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(&mut vm, "(let (a 1, b 2, c 3) (let (b 20, c (+ b 10)) `(~a ~b ~c)))");
+        let expected = read_test(&mut vm, "(1 20 30)");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(&mut vm, "(let (a 1, b 2, c 3) (let (x (+ b 1), b 20, c (+ b 10)) `(~a ~x ~b ~c)))");
+        let expected = read_test(&mut vm, "(1 3 20 30)");
+        assert_vals(&vm, expected, result);
+
         let result = exec(&mut vm, "(do (def x 3) (let (x 10) (set! x 1)) x)");
         let expected = read_test(&mut vm, "3");
         assert_vals(&vm, expected, result);
@@ -275,6 +287,12 @@ mod tests {
     fn test_let_destructure() {
         let mut vm = Vm::new();
         vm.set_global("prn", Value::Builtin(CallFunc { func: prn }));
+
+        let result = exec(&mut vm, "\
+        (def x '(1 2 3))\
+        (let ([a b c] x) `(~a ~b ~c))");
+        let expected = read_test(&mut vm, "(1 2 3)");
+        assert_vals(&vm, expected, result);
 
         let result = exec(&mut vm, "(let ([a b % c d] '(1 2)) (list a b c d))");
         let expected = read_test(&mut vm, "(1 2 nil nil)");
