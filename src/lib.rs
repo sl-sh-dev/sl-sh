@@ -183,6 +183,7 @@ fn get_return_type2(
     if let Some((inner_type, type_path)) = get_generic_argument_from_type(&return_type) {
         let wrapper = is_valid_generic_type(type_path, POSSIBLE_RESULT_TYPES.as_slice())?;
         match inner_type {
+            //syn::GenericArgument::Type(ty) => Ok((Some(syn::Type::Path(type_path.clone())), Some(wrapper))),
             syn::GenericArgument::Type(ty) => Ok((Some(ty.clone()), Some(wrapper))),
             _ => {
                 return Err(syn::Error::new(
@@ -279,11 +280,11 @@ fn get_generic_argument_from_type_path(
     type_path: &syn::TypePath,
 ) -> Option<(&syn::GenericArgument, &syn::TypePath)> {
     if type_path.path.segments.len() == 1 {
-        let path_segment = &type_path.path.segments.first()?;
-        if let PathArguments::AngleBracketed(args) = &path_segment.arguments {
-            if args.args.len() == 1 {
-                let ty = args.args.first()?;
-                return Some((ty, type_path));
+        for path_segment in &type_path.path.segments.iter().rev().next() {
+            if let PathArguments::AngleBracketed(args) = &path_segment.arguments {
+                if let Some(ty) = args.args.iter().rev().next() {
+                    return Some((ty, type_path));
+                }
             }
         }
     }
@@ -609,6 +610,7 @@ fn generate_builtin_fn2(
     //  will work at runtime.
     //  marker traits could
     let (return_type, lisp_result) = get_return_type2(original_item_fn)?;
+    // TODO conversion for return type only.
     //let conversions_assertions_code =
     //    generate_assertions_code_for_type_conversions(original_item_fn, &return_type)?;
     let mut arg_names = vec![];
@@ -623,20 +625,25 @@ fn generate_builtin_fn2(
     // this means all returned rust native types must implement TryIntoExpression
     // this is nested inside the builtin expression which must always
     // return a LispResult.
-    let original_fn_call = match (return_type.clone(), lisp_result) {
+    let returns_none = "()" == return_type.to_token_stream().to_string();
+    let original_fn_call = match (return_type.clone(), lisp_result, returns_none) {
         // coerce to a LispResult<Expression>
-        (Some(_), Some(_)) => quote! {
-            #original_fn_name(#(#arg_names),*).map(Into::into)
+        (Some(_), Some(_), true) => quote! {
+            #original_fn_name(#(#arg_names),*)?;
+            Ok(())
+        },
+        (Some(_), Some(_), false) => quote! {
+            #original_fn_name(#(#arg_names),*)
         },
         // coerce to Expression
-        (Some(_), None) => quote! {
+        (Some(_), None, _) => quote! {
             Ok(#original_fn_name(#(#arg_names),*).into())
         },
-        (None, Some(_)) => {
+        (None, Some(_), _) => {
             unreachable!("If this functions returns a LispResult it must also return a value.");
         }
         // no return
-        (None, None) => quote! {
+        (None, None, _) => quote! {
             #original_fn_name(#(#arg_names),*);
             Ok(())
         },
@@ -688,14 +695,16 @@ fn generate_builtin_fn2(
             _ => {}
         }
     }
-    let ret_tokens = match (return_type, lisp_result) {
-        (Some(return_type), _) => {
+    let ret_tokens = match (return_type, lisp_result, returns_none) {
+        (Some(_), Some(_), true) | (None, None, _) | (Some(_), None, true) => {
+            quote! {-> sl_sh::LispResult<()>  }
+        }
+        (Some(return_type), _, false) => {
             quote! { -> sl_sh::LispResult<#return_type> }
         }
-        (None, Some(_)) => {
+        (None, _, _) => {
             unreachable!("If this functions returns a LispResult it must also return a value.");
         }
-        (None, None) => quote! { -> sl_sh::LispResult<()> },
     };
     let tokens = quote! {
         fn #builtin_name(#(#arg_names: #arg_types),*) #ret_tokens {
@@ -1050,12 +1059,12 @@ fn generate_sl_sh_fn2(
         }
         (Some(_), Some(_), false) => {
             quote! {
-                #builtin_name.call_expand_args(params)?
+                #builtin_name.call_expand_args(params).map(Into::into)
             }
         }
         (Some(_), None, false) => {
             quote! {
-                Ok(#builtin_name.call_expand_args(params))
+                Ok(#builtin_name.call_expand_args(params).into())
             }
         }
         (None, Some(_), false) => {

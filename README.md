@@ -65,8 +65,7 @@ These three methods are examples of methods where `..., eval_values = true)` is 
 Limitations
 -----------
 1. If a Result return type is needed for simplicity only LispResult is supported.
-2. Does not support variadic args.
-
+2. TypePath for LispResult must be bare can not be qualified with any type path, i.e. sl_sh::LispResult
 
 Example
 -------
