@@ -9,12 +9,13 @@ use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::Comma;
 use syn::{
-    parse_macro_input, AngleBracketedGenericArguments, FnArg, Ident, ItemFn, Lit, Meta, NestedMeta,
-    PathArguments, PathSegment, ReturnType, Type,
+    parse, parse_macro_input, AngleBracketedGenericArguments, AttributeArgs, Error, FnArg,
+    GenericArgument, Ident, Item, ItemFn, Lit, Meta, NestedMeta, Path, PathArguments, PathSegment,
+    ReturnType, Type, TypePath,
 };
 extern crate static_assertions;
 
-type MacroResult<T> = Result<T, syn::Error>;
+type MacroResult<T> = Result<T, Error>;
 
 const POSSIBLE_RESULT_TYPES: [&str; 1] = ["LispResult"];
 const POSSIBLE_ARG_TYPES: [&str; 2] = ["Option", "Vec"];
@@ -49,9 +50,9 @@ fn build_sl_sh_expression_type() -> Type {
     let mut pun_seq = Punctuated::new();
     pun_seq.push(crate_path_segment);
     pun_seq.push(exp_enum_path_segment);
-    Type::Path(syn::TypePath {
+    Type::Path(TypePath {
         qself: None,
-        path: syn::Path {
+        path: Path {
             leading_colon: None,
             segments: pun_seq,
         },
@@ -105,7 +106,7 @@ fn wrap_with_try_into_expression(ty: Type) -> Type {
         ident: Ident::new("builtins_util", Span::call_site()),
         arguments: PathArguments::None,
     };
-    let generic_argument = syn::GenericArgument::Type(ty);
+    let generic_argument = GenericArgument::Type(ty);
     let mut generic_pun_seq = Punctuated::new();
     generic_pun_seq.push(generic_argument);
     let generic_argument = AngleBracketedGenericArguments {
@@ -122,9 +123,9 @@ fn wrap_with_try_into_expression(ty: Type) -> Type {
     pun_seq.push(crate_path_segment);
     pun_seq.push(builtins_util_path_segment);
     pun_seq.push(try_into_expression_path_segment);
-    Type::Path(syn::TypePath {
+    Type::Path(TypePath {
         qself: None,
-        path: syn::Path {
+        path: Path {
             leading_colon: None,
             segments: pun_seq,
         },
@@ -142,7 +143,7 @@ fn wrap_with_std_convert(ty: Type, convert_trait: &str) -> Type {
         ident: Ident::new("convert", Span::call_site()),
         arguments: PathArguments::None,
     };
-    let generic_argument = syn::GenericArgument::Type(ty);
+    let generic_argument = GenericArgument::Type(ty);
     let mut generic_pun_seq = Punctuated::new();
     generic_pun_seq.push(generic_argument);
     let generic_argument = AngleBracketedGenericArguments {
@@ -159,9 +160,9 @@ fn wrap_with_std_convert(ty: Type, convert_trait: &str) -> Type {
     pun_seq.push(std_path_segment);
     pun_seq.push(convert_path_segment);
     pun_seq.push(trait_path_segment);
-    Type::Path(syn::TypePath {
+    Type::Path(TypePath {
         qself: None,
-        path: syn::Path {
+        path: Path {
             leading_colon: None,
             segments: pun_seq,
         },
@@ -183,13 +184,12 @@ fn get_return_type2(
     if let Some((inner_type, type_path)) = get_generic_argument_from_type(&return_type) {
         let wrapper = is_valid_generic_type(type_path, POSSIBLE_RESULT_TYPES.as_slice())?;
         match inner_type {
-            //syn::GenericArgument::Type(ty) => Ok((Some(syn::Type::Path(type_path.clone())), Some(wrapper))),
-            syn::GenericArgument::Type(ty) => Ok((Some(ty.clone()), Some(wrapper))),
+            GenericArgument::Type(ty) => Ok((Some(ty.clone()), Some(wrapper))),
             _ => {
-                return Err(syn::Error::new(
+                return Err(Error::new(
                     original_item_fn.span(),
                     format!(
-                        "Functions of with generic arguments of type {:?} must contain Types, see syn::GenericArgument.",
+                        "Functions of with generic arguments of type {:?} must contain Types, see GenericArgument.",
                         &POSSIBLE_RESULT_TYPES
                     ),
                 ))
@@ -212,12 +212,12 @@ fn get_return_type(original_item_fn: &ItemFn) -> MacroResult<(Type, Option<&'sta
     if let Some((inner_type, type_path)) = get_generic_argument_from_type(&return_type) {
         let wrapper = is_valid_generic_type(type_path, POSSIBLE_RESULT_TYPES.as_slice())?;
         match inner_type {
-            syn::GenericArgument::Type(ty) => Ok((ty.clone(), Some(wrapper))),
+            GenericArgument::Type(ty) => Ok((ty.clone(), Some(wrapper))),
             _ => {
-                return Err(syn::Error::new(
+                return Err(Error::new(
                     original_item_fn.span(),
                     format!(
-                        "Functions of with generic arguments of type {:?} must contain Types, see syn::GenericArgument.",
+                        "Functions of with generic arguments of type {:?} must contain Types, see GenericArgument.",
                         &POSSIBLE_RESULT_TYPES
                     ),
                 ))
@@ -245,7 +245,7 @@ fn get_documentation_for_fn(original_item_fn: &ItemFn) -> MacroResult<String> {
         }
     }
     if docs.is_empty() {
-        Err(syn::Error::new(
+        Err(Error::new(
             original_item_fn.span(),
             "Functions with this attribute included must have documentation.",
         ))
@@ -255,7 +255,7 @@ fn get_documentation_for_fn(original_item_fn: &ItemFn) -> MacroResult<String> {
 }
 
 fn is_valid_generic_type<'a>(
-    type_path: &syn::TypePath,
+    type_path: &TypePath,
     possible_types: &'a [&str],
 ) -> MacroResult<&'a str> {
     if type_path.path.segments.len() == 1 && type_path.path.segments.first().is_some() {
@@ -267,18 +267,18 @@ fn is_valid_generic_type<'a>(
             }
         }
     }
-    Err(syn::Error::new(
+    Err(Error::new(
             type_path.span(),
             format!(
-                "Functions of with generic arguments of type {:?} must contain Types, see syn::GenericArgument.",
+                "Functions of with generic arguments of type {:?} must contain Types, see GenericArgument.",
                 possible_types
             ),
         ))
 }
 
 fn get_generic_argument_from_type_path(
-    type_path: &syn::TypePath,
-) -> Option<(&syn::GenericArgument, &syn::TypePath)> {
+    type_path: &TypePath,
+) -> Option<(&GenericArgument, &TypePath)> {
     if type_path.path.segments.len() == 1 {
         for path_segment in &type_path.path.segments.iter().rev().next() {
             if let PathArguments::AngleBracketed(args) = &path_segment.arguments {
@@ -291,9 +291,7 @@ fn get_generic_argument_from_type_path(
     None
 }
 
-fn get_generic_argument_from_type(
-    ty: &syn::Type,
-) -> Option<(&syn::GenericArgument, &syn::TypePath)> {
+fn get_generic_argument_from_type(ty: &Type) -> Option<(&GenericArgument, &TypePath)> {
     if let Type::Path(ref type_path) = ty {
         get_generic_argument_from_type_path(type_path)
     } else {
@@ -301,7 +299,7 @@ fn get_generic_argument_from_type(
     }
 }
 
-fn generate_assertions_code_for_return_type_conversions(return_type: &syn::Type) -> TokenStream2 {
+fn generate_assertions_code_for_return_type_conversions(return_type: &Type) -> TokenStream2 {
     let to_return_type = wrap_with_std_convert(build_sl_sh_expression_type(), "Into");
     quote! {
       static_assertions::assert_impl_all!(#return_type: #to_return_type);
@@ -310,7 +308,7 @@ fn generate_assertions_code_for_return_type_conversions(return_type: &syn::Type)
 
 fn generate_assertions_code_for_type_conversions(
     original_item_fn: &ItemFn,
-    return_type: &syn::Type,
+    return_type: &Type,
 ) -> MacroResult<Vec<TokenStream2>> {
     let inputs = &original_item_fn.sig.inputs;
     let input_types = get_input_types(inputs);
@@ -336,7 +334,7 @@ fn get_attribute_value_with_key(
     values: &[(String, String)],
 ) -> MacroResult<Option<String>> {
     if values.is_empty() {
-        Err(syn::Error::new(
+        Err(Error::new(
             original_item_fn.span(),
             "sl_sh_fn requires at least one name-value pair, 'fn_name = \"<name-of-sl-sh-fun>\"'.",
         ))
@@ -363,18 +361,18 @@ fn get_attribute_name_value(nested_meta: &NestedMeta) -> MacroResult<(String, St
                     (Some(ident), Lit::Bool(b)) => {
                         Ok((ident.to_string(), b.value.to_string()))
                     }
-                    (_, _) => Err(syn::Error::new(
+                    (_, _) => Err(Error::new(
                         meta.span(),
                         "sl_sh_fn requires one name-value pair, 'fn_name'. Supports optional name-value pair 'eval_values = true')",
                     )),
                 }
             }
-            other => Err(syn::Error::new(
+            other => Err(Error::new(
                 other.span(),
                 "sl_sh_fn only supports one name-value pair attribute argument, 'fn_name'.",
             )),
         },
-        other => Err(syn::Error::new(
+        other => Err(Error::new(
             other.span(),
             "sl_sh_fn only supports one name-value pair attribute argument, 'fn_name'.",
         )),
@@ -385,9 +383,9 @@ fn generate_builtin_fn(
     args_len: usize,
     original_item_fn: &ItemFn,
     fn_name: String,
-    fn_name_attr: syn::Ident,
-    builtin_name: syn::Ident,
-    original_fn_name: syn::Ident,
+    fn_name_attr: Ident,
+    builtin_name: Ident,
+    original_fn_name: Ident,
 ) -> MacroResult<TokenStream> {
     let (return_type, wrapper) = get_return_type(original_item_fn)?;
     let conversions_assertions_code =
@@ -423,7 +421,7 @@ fn generate_builtin_fn(
 
 fn parse_attributes(
     original_item_fn: &ItemFn,
-    attr_args: syn::AttributeArgs,
+    attr_args: AttributeArgs,
 ) -> MacroResult<(String, Ident, bool)> {
     let vals = attr_args
         .iter()
@@ -432,7 +430,7 @@ fn parse_attributes(
     let fn_name_attr = "fn_name".to_string();
     let fn_name = get_attribute_value_with_key(original_item_fn, &fn_name_attr, vals.as_slice())?
         .ok_or_else(|| {
-        syn::Error::new(
+        Error::new(
             original_item_fn.span(),
             "sl_sh_fn requires name-value pair, 'fn_name'",
         )
@@ -451,7 +449,7 @@ fn parse_attributes(
 
 fn generate_sl_sh_fns(
     original_item_fn: &ItemFn,
-    attr_args: syn::AttributeArgs,
+    attr_args: AttributeArgs,
 ) -> MacroResult<TokenStream2> {
     let (fn_name, fn_name_attr, eval_values) = parse_attributes(original_item_fn, attr_args)?;
     let doc_comments = get_documentation_for_fn(original_item_fn)?;
@@ -540,7 +538,7 @@ struct Arg {
     passing_style: ArgPassingStyle,
 }
 
-fn get_arg_val(type_path: &syn::TypePath) -> MacroResult<ArgVal> {
+fn get_arg_val(type_path: &TypePath) -> MacroResult<ArgVal> {
     if let Some((_generic, type_path)) = get_generic_argument_from_type_path(type_path) {
         let wrapper = is_valid_generic_type(&type_path, POSSIBLE_ARG_TYPES.as_slice())?;
         if wrapper == "Option" {
@@ -548,7 +546,7 @@ fn get_arg_val(type_path: &syn::TypePath) -> MacroResult<ArgVal> {
         } else if wrapper == "Vec" {
             Ok(ArgVal::Vec)
         } else {
-            return Err(syn::Error::new(
+            return Err(Error::new(
                 type_path.span(),
                 "Received generic argument this macro is not programmed to handle, only support Option and Vec!",
             ));
@@ -558,7 +556,7 @@ fn get_arg_val(type_path: &syn::TypePath) -> MacroResult<ArgVal> {
     }
 }
 
-fn parse_value(arg_name: &syn::Ident, inner: TokenStream) -> TokenStream {
+fn parse_value(arg_name: &Ident, inner: TokenStream) -> TokenStream {
     quote! {
         sl_sh::ret_err_exp_enum!(
                 #arg_name,
@@ -569,7 +567,7 @@ fn parse_value(arg_name: &syn::Ident, inner: TokenStream) -> TokenStream {
     }
 }
 
-fn parse_optional(arg_name: &syn::Ident, inner: TokenStream) -> TokenStream {
+fn parse_optional(arg_name: &Ident, inner: TokenStream) -> TokenStream {
     quote! {
         sl_sh::ret_err_exp_enum!(
                 #arg_name,
@@ -580,7 +578,7 @@ fn parse_optional(arg_name: &syn::Ident, inner: TokenStream) -> TokenStream {
     }
 }
 
-fn parse_varargs(arg_name: &syn::Ident, inner: TokenStream) -> TokenStream {
+fn parse_varargs(arg_name: &Ident, inner: TokenStream) -> TokenStream {
     quote! {
         sl_sh::ret_err_exp_enum!(
                 #arg_name,
@@ -734,7 +732,7 @@ fn generate_builtin_fn2(
 /// first tuple is how to access the exp_enum data (mutable or immutable)
 /// second tuple is how to refer to the inner exp enum in a match pattern
 fn tokens_for_matching_references(
-    arg_name: &syn::Ident,
+    arg_name: &Ident,
     passing_style: ArgPassingStyle,
 ) -> (TokenStream, TokenStream) {
     match passing_style {
@@ -748,7 +746,7 @@ fn tokens_for_matching_references(
 }
 
 fn parse_argval_varargs_type(
-    ty: &syn::TypePath,
+    ty: &TypePath,
     arg_name: &Ident,
     passing_style: ArgPassingStyle,
     inner: TokenStream,
@@ -926,10 +924,10 @@ fn parse_argval_value_type(
 /// inputs, val/passing style are wrong and aren't matching to the ArgType(s)
 /// properly, or the rust type lookup function is busted.
 fn parse_type(
-    ty: &syn::TypePath,
+    ty: &TypePath,
     inner: TokenStream,
     val: ArgVal,
-    arg_name: &syn::Ident,
+    arg_name: &Ident,
     passing_style: ArgPassingStyle,
     outer_parse: fn(&Ident, TokenStream) -> TokenStream,
 ) -> MacroResult<TokenStream> {
@@ -941,7 +939,7 @@ fn parse_type(
     Ok(outer_parse(arg_name, tokens))
 }
 
-fn parse_src_function_arguments(original_item_fn: &syn::ItemFn) -> MacroResult<Vec<Arg>> {
+fn parse_src_function_arguments(original_item_fn: &ItemFn) -> MacroResult<Vec<Arg>> {
     let mut parsed_args = vec![];
     let len = original_item_fn.sig.inputs.len();
     let mut arg_names = vec![];
@@ -954,7 +952,7 @@ fn parse_src_function_arguments(original_item_fn: &syn::ItemFn) -> MacroResult<V
     for fn_arg in original_item_fn.sig.inputs.iter() {
         match fn_arg {
             FnArg::Receiver(_) => {
-                return Err(syn::Error::new(
+                return Err(Error::new(
                     original_item_fn.span(),
                     "Associated functions that take the self argument are not supported.",
                 ))
@@ -979,7 +977,7 @@ fn parse_src_function_arguments(original_item_fn: &syn::ItemFn) -> MacroResult<V
                             parsed_args.push(Arg { val, passing_style });
                         }
                         _ => {
-                            return Err(syn::Error::new(
+                            return Err(Error::new(
                                 original_item_fn.span(),
                                 &format!(
                                     "Only references/arguments of type path and reference are supported.: {:?})), ",
@@ -990,7 +988,7 @@ fn parse_src_function_arguments(original_item_fn: &syn::ItemFn) -> MacroResult<V
                     }
                 }
                 _ => {
-                    return Err(syn::Error::new(
+                    return Err(Error::new(
                         original_item_fn.span(),
                         &format!(
                             "Only references/arguments of type path and reference are supported.: {:?})), ",
@@ -1004,7 +1002,7 @@ fn parse_src_function_arguments(original_item_fn: &syn::ItemFn) -> MacroResult<V
     Ok(parsed_args)
 }
 
-fn are_args_valid(original_item_fn: &syn::ItemFn, args: &[Arg]) -> MacroResult<()> {
+fn are_args_valid(original_item_fn: &ItemFn, args: &[Arg]) -> MacroResult<()> {
     if args.is_empty() || args.len() == 1 {
         Ok(())
     } else {
@@ -1013,13 +1011,13 @@ fn are_args_valid(original_item_fn: &syn::ItemFn, args: &[Arg]) -> MacroResult<(
         for (i, arg) in args.iter().rev().enumerate() {
             match (i, arg.val, found_opt, found_value) {
                 (i, ArgVal::Vec, _, _) if i > 0 => {
-                    return Err(syn::Error::new(
+                    return Err(Error::new(
                         original_item_fn.span(),
                         "Only one Vec argument is supported and it must be the last argument.",
                     ));
                 }
                 (_, ArgVal::Optional, _, true) => {
-                    return Err(syn::Error::new(
+                    return Err(Error::new(
                         original_item_fn.span(),
                         "Optional argument(s) must be placed last.",
                     ));
@@ -1038,8 +1036,8 @@ fn are_args_valid(original_item_fn: &syn::ItemFn, args: &[Arg]) -> MacroResult<(
 }
 
 fn generate_sl_sh_fn2(
-    original_item_fn: &syn::ItemFn,
-    attr_args: syn::AttributeArgs,
+    original_item_fn: &ItemFn,
+    attr_args: AttributeArgs,
 ) -> MacroResult<TokenStream> {
     let (fn_name, fn_name_attr, eval_values) = parse_attributes(original_item_fn, attr_args)?;
     let doc_comments = get_documentation_for_fn(original_item_fn)?;
@@ -1210,11 +1208,11 @@ pub fn sl_sh_fn2(
     attr: proc_macro::TokenStream,
     input: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    let attr_args = parse_macro_input!(attr as syn::AttributeArgs);
+    let attr_args = parse_macro_input!(attr as AttributeArgs);
 
-    let tokens = match syn::parse::<syn::Item>(input) {
+    let tokens = match parse::<Item>(input) {
         Ok(item) => match &item {
-            syn::Item::Fn(original_item_fn) => {
+            Item::Fn(original_item_fn) => {
                 let generated_code = match generate_sl_sh_fn2(original_item_fn, attr_args) {
                     Ok(generated_code) => generated_code,
                     Err(e) => e.to_compile_error(),
@@ -1226,12 +1224,10 @@ pub fn sl_sh_fn2(
                     #original_fn_code
                 }
             }
-            _ => syn::Error::new(item.span(), "This attribute only supports functions.")
+            _ => Error::new(item.span(), "This attribute only supports functions.")
                 .to_compile_error(),
         },
-        Err(e) => {
-            syn::Error::new(e.span(), "Failed to parse proc_macro_attribute.").to_compile_error()
-        }
+        Err(e) => Error::new(e.span(), "Failed to parse proc_macro_attribute.").to_compile_error(),
     };
 
     proc_macro::TokenStream::from(tokens)
@@ -1242,11 +1238,11 @@ pub fn sl_sh_fn(
     attr: proc_macro::TokenStream,
     input: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    let attr_args = parse_macro_input!(attr as syn::AttributeArgs);
+    let attr_args = parse_macro_input!(attr as AttributeArgs);
 
-    let tokens = match syn::parse::<syn::Item>(input) {
+    let tokens = match parse::<Item>(input) {
         Ok(item) => match &item {
-            syn::Item::Fn(original_item_fn) => {
+            Item::Fn(original_item_fn) => {
                 let generated_sl_sh_fns: TokenStream2 =
                     match generate_sl_sh_fns(original_item_fn, attr_args) {
                         Ok(generated_code) => generated_code,
@@ -1259,12 +1255,10 @@ pub fn sl_sh_fn(
                     #generated_sl_sh_fns
                 }
             }
-            _ => syn::Error::new(item.span(), "This attribute only supports functions.")
+            _ => Error::new(item.span(), "This attribute only supports functions.")
                 .to_compile_error(),
         },
-        Err(e) => {
-            syn::Error::new(e.span(), "Failed to parse proc_macro_attribute.").to_compile_error()
-        }
+        Err(e) => Error::new(e.span(), "Failed to parse proc_macro_attribute.").to_compile_error(),
     };
 
     proc_macro::TokenStream::from(tokens)
