@@ -16,103 +16,121 @@ use nix::{
 extern crate static_assertions;
 
 fn check_int_functions() {
-    let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
-    let arg_1 = vec![
-        Expression::alloc_data(ExpEnum::Int(2)),
-        Expression::alloc_data(ExpEnum::Int(2)),
-        Expression::alloc_data(ExpEnum::Int(2)),
-        Expression::alloc_data(ExpEnum::Int(2)),
-    ];
-    let exp =
-        builtin_ints_to_float(sl_sh::ArgType::Exp(arg_0), sl_sh::ArgType::VarArgs(arg_1)).unwrap();
-    assert_eq!(16.0, exp);
-    println!("var args function working!");
+    //let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
+    //let arg_1 = vec![
+    //    Expression::alloc_data(ExpEnum::Int(2)),
+    //    Expression::alloc_data(ExpEnum::Int(2)),
+    //    Expression::alloc_data(ExpEnum::Int(2)),
+    //    Expression::alloc_data(ExpEnum::Int(2)),
+    //];
+    //let exp =
+    //    builtin_ints_to_float(sl_sh::ArgType::Exp(arg_0), sl_sh::ArgType::VarArgs(arg_1)).unwrap();
+    //assert_eq!(16.0, exp);
+    //println!("var args function working!");
 
-    let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
-    let f = builtin_opt_fallible_int_to_float(
-        sl_sh::ArgType::Exp(arg_0),
-        sl_sh::ArgType::Opt(Some(Expression::alloc_data(ExpEnum::Int(8)))),
-    )
-    .unwrap();
-    assert_eq!(16.0, f);
-    println!("Opt fallible function that takes Some and returns bare float is ok.");
+    //let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
+    //let f = builtin_opt_fallible_int_to_float(
+    //    sl_sh::ArgType::Exp(arg_0),
+    //    sl_sh::ArgType::Opt(Some(Expression::alloc_data(ExpEnum::Int(8)))),
+    //)
+    //.unwrap();
+    //assert_eq!(16.0, f);
+    //println!("Opt fallible function that takes Some and returns bare float is ok.");
 
-    let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
-    let f =
-        builtin_opt_fallible_int_to_float(sl_sh::ArgType::Exp(arg_0), sl_sh::ArgType::Opt(None))
-            .unwrap();
-    assert_eq!(8.0, f);
-    println!("Opt fallible function that takes none and returns bare float is ok.");
-    // non fallibe opts (refers to function they call, builtin_ always returns LispResult
-    let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
-    let f = builtin_opt_int_to_float(
-        sl_sh::ArgType::Exp(arg_0),
-        sl_sh::ArgType::Opt(Some(Expression::alloc_data(ExpEnum::Int(8)))),
-    )
-    .unwrap();
-    assert_eq!(16.0, f);
-    println!("Opt function that takes Some and returns bare float is ok.");
+    //let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
+    //let f =
+    //    builtin_opt_fallible_int_to_float(sl_sh::ArgType::Exp(arg_0), sl_sh::ArgType::Opt(None))
+    //        .unwrap();
+    //assert_eq!(8.0, f);
+    //println!("Opt fallible function that takes none and returns bare float is ok.");
+    //// non fallibe opts (refers to function they call, builtin_ always returns LispResult
+    //let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
+    //let f = builtin_opt_int_to_float(
+    //    sl_sh::ArgType::Exp(arg_0),
+    //    sl_sh::ArgType::Opt(Some(Expression::alloc_data(ExpEnum::Int(8)))),
+    //)
+    //.unwrap();
+    //assert_eq!(16.0, f);
+    //println!("Opt function that takes Some and returns bare float is ok.");
 
-    let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
-    let f =
-        builtin_opt_int_to_float(sl_sh::ArgType::Exp(arg_0), sl_sh::ArgType::Opt(None)).unwrap();
-    assert_eq!(8.0, f);
-    println!("Opt function that takes none and returns bare float is ok.");
+    //let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
+    //let f =
+    //    builtin_opt_int_to_float(sl_sh::ArgType::Exp(arg_0), sl_sh::ArgType::Opt(None)).unwrap();
+    //assert_eq!(8.0, f);
+    //println!("Opt function that takes none and returns bare float is ok.");
 
-    let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
-    let exp: Expression =
-        builtin_opt_int_to_float(sl_sh::ArgType::Exp(arg_0), sl_sh::ArgType::Opt(None))
-            .unwrap()
-            .into();
-    let exp_d = exp.get();
-    match exp_d.data {
-        ExpEnum::Float(f) => {
-            assert_eq!(8.0, f);
-            println!("tricky optional int to float working");
+    //let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
+    //let exp: Expression =
+    //    builtin_opt_int_to_float(sl_sh::ArgType::Exp(arg_0), sl_sh::ArgType::Opt(None))
+    //        .unwrap()
+    //        .into();
+    //let exp_d = exp.get();
+    //match exp_d.data {
+    //    ExpEnum::Float(f) => {
+    //        assert_eq!(8.0, f);
+    //        println!("tricky optional int to float working");
+    //    }
+    //    _ => {
+    //        panic!("Should be float.");
+    //    }
+    //}
+
+    //let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
+    //let arg_1 = Expression::alloc_data(ExpEnum::Int(8));
+    //let exp: Expression =
+    //    builtin_int_to_float(sl_sh::ArgType::Exp(arg_0), sl_sh::ArgType::Exp(arg_1))
+    //        .unwrap()
+    //        .into();
+    //let exp_d = exp.get();
+    //match exp_d.data {
+    //    ExpEnum::Float(f) => {
+    //        assert_eq!(16.0, f);
+    //        println!("basic int to float working");
+    //    }
+    //    _ => {
+    //        panic!("Should befloat.");
+    //    }
+    //}
+    //let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
+    //let exp: Expression = builtin_one_int_to_float(sl_sh::ArgType::Exp(arg_0))
+    //    .unwrap()
+    //    .into();
+    //let exp_d = exp.get();
+    //match exp_d.data {
+    //    ExpEnum::Float(f) => {
+    //        assert_eq!(8.0, f);
+    //        println!("basic int to float working");
+    //    }
+    //    _ => {
+    //        panic!("Should befloat.");
+    //    }
+    //}
+    //let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
+    //builtin_print_the_int(sl_sh::ArgType::Exp(arg_0)).unwrap();
+
+    //let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
+    //assert!(builtin_print_the_fallible_int(sl_sh::ArgType::Exp(arg_0)).is_ok());
+
+    //let arg_0 = Expression::alloc_data(ExpEnum::Int(9));
+    //assert!(builtin_print_the_fallible_int(sl_sh::ArgType::Exp(arg_0)).is_err());
+    let mut my_map = HashMap::new();
+    my_map.insert("meow", Expression::make_nil());
+    my_map.insert("meow1", Expression::make_nil());
+    my_map.insert("meow2", Expression::make_nil());
+    let exp = Expression::alloc_data(ExpEnum::HashMap(my_map));
+    let exp_clone = exp.clone();
+
+    let arg_type = sl_sh::builtins_util::ArgType::Exp(exp.clone());
+    builtin_my_hash_clear(arg_type).unwrap();
+    let exp_enum = &exp.get().data;
+    match exp_enum {
+        ExpEnum::HashMap(map) => {
+            assert!(map.is_empty())
         }
         _ => {
-            panic!("Should be float.");
+            panic!("map is empty!");
         }
     }
-
-    let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
-    let arg_1 = Expression::alloc_data(ExpEnum::Int(8));
-    let exp: Expression =
-        builtin_int_to_float(sl_sh::ArgType::Exp(arg_0), sl_sh::ArgType::Exp(arg_1))
-            .unwrap()
-            .into();
-    let exp_d = exp.get();
-    match exp_d.data {
-        ExpEnum::Float(f) => {
-            assert_eq!(16.0, f);
-            println!("basic int to float working");
-        }
-        _ => {
-            panic!("Should befloat.");
-        }
-    }
-    let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
-    let exp: Expression = builtin_one_int_to_float(sl_sh::ArgType::Exp(arg_0))
-        .unwrap()
-        .into();
-    let exp_d = exp.get();
-    match exp_d.data {
-        ExpEnum::Float(f) => {
-            assert_eq!(8.0, f);
-            println!("basic int to float working");
-        }
-        _ => {
-            panic!("Should befloat.");
-        }
-    }
-    let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
-    builtin_print_the_int(sl_sh::ArgType::Exp(arg_0)).unwrap();
-
-    let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
-    assert!(builtin_print_the_fallible_int(sl_sh::ArgType::Exp(arg_0)).is_ok());
-
-    let arg_0 = Expression::alloc_data(ExpEnum::Int(9));
-    assert!(builtin_print_the_fallible_int(sl_sh::ArgType::Exp(arg_0)).is_err());
 }
 
 fn main() -> Result<(), LispError> {
@@ -195,68 +213,105 @@ fn main() -> Result<(), LispError> {
 use sl_sh::{ExpEnum, Expression, LispResult};
 //use sl_sh::{ExpEnum, LispResult};
 
-#[derive(Debug, Clone)]
-pub enum ArgType {
-    Exp(Expression),
-    Opt(Option<Expression>),
-    VarArgs(Vec<Expression>),
+///// my docs
+//#[sl_sh_proc_macros::sl_sh_fn2(fn_name = "printint")]
+//fn print_the_int(int: i64) {
+//    println!("the int!: {}.", int as f64);
+//}
+//
+///// my docs
+//#[sl_sh_proc_macros::sl_sh_fn2(fn_name = "printint")]
+//fn print_the_fallible_int(int: i64) -> LispResult<()> {
+//    if int % 2 == 0 {
+//        println!("the fallible int!: {}.", int as f64);
+//        Ok(())
+//    } else {
+//        Err(LispError::new("int % 2 must be equal to 0."))
+//    }
+//}
+//
+///// my docs
+//#[sl_sh_proc_macros::sl_sh_fn2(fn_name = "oneintofloat")]
+//fn one_int_to_float(int: i64) -> LispResult<f64> {
+//    Ok(int as f64)
+//}
+//
+///// my docs
+//#[sl_sh_proc_macros::sl_sh_fn2(fn_name = "intofloat")]
+//fn int_to_float(int0: i64, int1: i64) -> LispResult<f64> {
+//    Ok((int0 + int1) as f64)
+//}
+//
+///// my docs
+//#[sl_sh_proc_macros::sl_sh_fn2(fn_name = "optintofloat")]
+//fn opt_fallible_int_to_float(int: i64, ints: Option<i64>) -> LispResult<f64> {
+//    Ok(ints.map_or(int as f64, |new| (int + new) as f64))
+//}
+//
+///// my docs
+//#[sl_sh_proc_macros::sl_sh_fn2(fn_name = "optintofloat")]
+//fn opt_int_to_float(int: i64, ints: Option<i64>) -> f64 {
+//    ints.map_or(int as f64, |new| (int + new) as f64)
+//}
+//
+///// my docs
+//#[sl_sh_proc_macros::sl_sh_fn2(fn_name = "intstofloat")]
+//fn ints_to_float(int: i64, ints: Vec<i64>) -> LispResult<f64> {
+//    Ok(ints.iter().fold(int as f64, |sum, next| sum + *next as f64))
+//}
+
+use std::collections::HashMap;
+/// my docs
+//#[sl_sh_proc_macros::sl_sh_fn2(fn_name = "my_hash_clear")]
+fn my_hash_clear(inner_map: &mut HashMap<&str, Expression>) -> LispResult<()> {
+    inner_map.clear();
+    Ok(())
 }
 
-/// my docs
-#[sl_sh_proc_macros::sl_sh_fn2(fn_name = "printint")]
-fn print_the_int(int: i64) {
-    println!("the int!: {}.", int as f64);
-}
-
-/// my docs
-#[sl_sh_proc_macros::sl_sh_fn2(fn_name = "printint")]
-fn print_the_fallible_int(int: i64) -> LispResult<()> {
-    if int % 2 == 0 {
-        println!("the fallible int!: {}.", int as f64);
-        Ok(())
-    } else {
-        Err(LispError::new("int % 2 must be equal to 0."))
+fn builtin_my_hash_clear(arg_0: sl_sh::ArgType) -> sl_sh::LispResult<()> {
+    match arg_0 {
+        sl_sh::ArgType::Exp(arg_0) => match arg_0.get_mut().data {
+            sl_sh::ExpEnum::HashMap(ref mut arg_0) => {
+                my_hash_clear(arg_0)?;
+                Ok(())
+            }
+            _ => {
+                return Err(sl_sh::types::LispError::new("lame"));
+            }
+        },
+        _ => {
+            return Err(LispError::new(
+                "sl_sh_fn macro is broken. ArgType::Exp can't be parsed as ArgType::Exp",
+            ))
+        }
     }
 }
-
-/// my docs
-#[sl_sh_proc_macros::sl_sh_fn2(fn_name = "oneintofloat")]
-fn one_int_to_float(int: i64) -> LispResult<f64> {
-    Ok(int as f64)
+fn parse_my_hash_clear(
+    environment: &mut sl_sh::environment::Environment,
+    args: &mut dyn Iterator<Item = sl_sh::types::Expression>,
+) -> sl_sh::LispResult<sl_sh::types::Expression> {
+    use sl_sh::builtins_util::ExpandVecToArgs;
+    use std::convert::TryInto;
+    let args = sl_sh::builtins_util::make_args_eval_no_values(environment, args)?;
+    let fn_name = "my_hash_clear";
+    const args_len: usize = 1usize;
+    let arg_types = vec![sl_sh::builtins_util::Arg {
+        val: sl_sh::builtins_util::ArgVal::Value,
+        passing_style: sl_sh::builtins_util::ArgPassingStyle::MutReference,
+    }];
+    let args = sl_sh::get_arg_types(fn_name, arg_types, args)?;
+    if args.len() == args_len {
+        match args.try_into() {
+            Ok(params) => {
+                let params: [sl_sh::ArgType; args_len] = params;
+                builtin_my_hash_clear.call_expand_args(params)?;
+                Ok(sl_sh::types::Expression::make_nil())
+            }
+            Err(e) => Err(sl_sh::types::LispError::new("lame")),
+        }
+    } else if args.len() > args_len {
+        Err(sl_sh::types::LispError::new("lame"))
+    } else {
+        Err(sl_sh::types::LispError::new("lame"))
+    }
 }
-
-/// my docs
-#[sl_sh_proc_macros::sl_sh_fn2(fn_name = "intofloat")]
-fn int_to_float(int0: i64, int1: i64) -> LispResult<f64> {
-    Ok((int0 + int1) as f64)
-}
-
-/// my docs
-#[sl_sh_proc_macros::sl_sh_fn2(fn_name = "optintofloat")]
-fn opt_fallible_int_to_float(int: i64, ints: Option<i64>) -> LispResult<f64> {
-    Ok(ints.map_or(int as f64, |new| (int + new) as f64))
-}
-
-/// my docs
-#[sl_sh_proc_macros::sl_sh_fn2(fn_name = "optintofloat")]
-fn opt_int_to_float(int: i64, ints: Option<i64>) -> f64 {
-    ints.map_or(int as f64, |new| (int + new) as f64)
-}
-
-/// my docs
-#[sl_sh_proc_macros::sl_sh_fn2(fn_name = "intstofloat")]
-fn ints_to_float(int: i64, ints: Vec<i64>) -> LispResult<f64> {
-    Ok(ints.iter().fold(int as f64, |sum, next| sum + *next as f64))
-}
-
-///// my docs
-//#[sl_sh_proc_macros::sl_sh_fn2(fn_name = "my_hash_clear")]
-//fn my_hash_clear(inner_map: &mut HashMap<&str, Expression>) -> LispResult<()> {
-//    inner_map.clear();
-//    Ok(())
-//}
-
-//#[cfg(test)]
-//mod test {
-//    use super::*;
-//}
