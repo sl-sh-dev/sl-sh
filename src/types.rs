@@ -1124,9 +1124,11 @@ mod test {
     //    }
 
     use std::collections::HashMap;
+    use std::convert::TryFrom;
     use std::fmt::Debug;
+    use std::marker::PhantomData;
 
-    pub struct SlshExpression<T>(T);
+    pub struct SlshExpression<T>(T, Rc<RefCell<ExpObj>>);
 
     pub trait SlshMarker<T>: AsRef<T> {}
 
@@ -1138,15 +1140,60 @@ mod test {
         }
     }
 
-    pub struct HashMapSlshExpression<'a>(SlshExpression<&'a mut HashMap<&'a str, Expression>>);
+    pub struct PhantomSlshExpression<T>(Rc<RefCell<ExpObj>>, PhantomData<T>);
 
-    pub struct HashMapWrap<'a> {
-        map: HashMapSlshExpression<'a>,
+    impl<T> PhantomSlshExpression<T> {
+        pub fn new(exp_obj: Rc<RefCell<ExpObj>>) -> PhantomSlshExpression<T> {
+            PhantomSlshExpression(exp_obj, PhantomData::default())
+        }
     }
 
-    impl<'a> AsRef<HashMap<&'a str, Expression>> for HashMapWrap<'a> {
-        fn as_ref(&self) -> &HashMap<&'a str, Expression> {
-            self.map.0.as_ref()
+    trait DoSomething<T> {
+        fn do_something(
+            &self,
+            fun: fn(T) -> crate::LispResult<Expression>,
+        ) -> crate::LispResult<Expression>
+        where
+            Self: Sized;
+    }
+
+    impl<'a> DoSomething<&'a HashMap<&'a str, Expression>>
+        for PhantomSlshExpression<&'a HashMap<&'a str, Expression>>
+    {
+        fn do_something(
+            &self,
+            fun: fn(&'a HashMap<&'a str, Expression>) -> crate::LispResult<Expression>,
+        ) -> crate::LispResult<Expression>
+        where
+            Self: Sized,
+        {
+            let borrow = self.0.borrow();
+            let display_name = borrow.data.to_string();
+            match &borrow.data {
+                ExpEnum::HashMap(map) => fun(map),
+                _ => Err(LispError::new(format!(
+                    "Can't turn {} into a HashMap.",
+                    display_name
+                ))),
+            }
+        }
+    }
+
+    // could the computation be done... inside this tryfrom?
+    impl<'a> TryFrom<Rc<RefCell<ExpObj>>> for PhantomSlshExpression<&'a HashMap<&'a str, Expression>> {
+        type Error = LispError;
+
+        fn try_from(value: Rc<RefCell<ExpObj>>) -> Result<Self, Self::Error> {
+            let copy = value.clone();
+            let display_name = value.borrow().data.to_string();
+            let borrow = value.borrow();
+            match &borrow.data {
+                ExpEnum::HashMap(_) => Ok(PhantomSlshExpression::new(copy)),
+                _ => Err(LispError::new(format!(
+                    "Can't turn {} into a HashMap.",
+                    display_name
+                ))),
+            }
         }
     }
 
@@ -1158,17 +1205,23 @@ mod test {
         my_map.insert("meow2", Expression::make_nil());
         let exp = Expression::alloc_data(ExpEnum::HashMap(my_map.clone()));
         let my_map_clone = my_map.clone();
-        let map = &SlshExpression(&my_map);
-        test_wrap_generic(&my_map_clone, map);
-        let exp_rc = exp.hack_clone();
+        let pdata: PhantomSlshExpression<&mut HashMap<&str, Expression>> =
+            PhantomSlshExpression::new(exp.hack_clone());
+        match pdata {
+            PhantomSlshExpression(_, _) => {}
+        }
+        //let exp_rc = exp.hack_clone();
+        //let map = <SlshExpression<&HashMap<&str, Expression>>>::try_from(exp_rc).unwrap();
+        //assert_eq!(&my_map_clone, map.as_ref())
+        //test_wrap_generic(&my_map_clone, &map);
     }
 
-    fn test_wrap_generic<T>(t0: &T, t1: &impl SlshMarker<T>)
+    fn test_wrap_generic<'a, T>(t0: &T, t1: &impl SlshMarker<&'a T>)
     where
-        T: PartialEq + Debug,
+        T: PartialEq + Debug + 'a,
     {
         let t1 = t1.as_ref();
-        assert_eq!(t0, t1)
+        assert_eq!(t0, *t1)
     }
 
     //impl AsRef<Option<HashMap<&'static str, Expression>>> for ExpObj {
