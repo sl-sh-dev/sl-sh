@@ -14,6 +14,7 @@ use crate::environment::*;
 use crate::eval::call_lambda;
 use crate::process::*;
 use crate::symbols::*;
+use crate::types::test::SlshMarker;
 use crate::unix::fd_to_file;
 
 #[derive(Clone, Debug)]
@@ -529,6 +530,10 @@ pub struct Expression {
 }
 
 impl Expression {
+    pub fn hack_clone(&self) -> Rc<RefCell<ExpObj>> {
+        self.data.clone()
+    }
+
     pub fn copy(&self) -> Expression {
         Expression {
             data: Rc::new(RefCell::new(self.data.borrow().copy())),
@@ -1052,6 +1057,157 @@ impl Expression {
         let mut handle = stdout.lock();
         self.writef(environment, &mut handle)
     }
+
+    //    pub fn to_wrapper<T>(&self) -> Result<Wrapper<T>, LispError> {
+    //        match self.get().data {
+    //            ExpEnum::Int(int) => {
+    //                let mut wrapper = Wrapper::new();
+    //                wrapper.accept(int);
+    //                Ok(wrapper)
+    //            }
+    //            _ => Err(LispError::new("Does not support")),
+    //        }
+    //    }
+}
+
+//pub struct Wrapper<T>(Option<T>);
+//
+//impl<T> Wrapper<T> {
+//    pub fn new() -> Self {
+//        Wrapper(None)
+//    }
+//
+//    pub fn accept(&mut self, t: T) {
+//        self.0 = t;
+//    }
+//}
+//
+//impl<T> AsRef<T> for Wrapper<T> {
+//    fn as_ref(&self) -> &T {
+//        &self.0
+//    }
+//}
+//
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::try_inner_hash_map;
+
+    #[test]
+    fn test_hack_clone() {
+        let mut my_map = HashMap::new();
+        my_map.insert("meow", Expression::make_nil());
+        my_map.insert("meow1", Expression::make_nil());
+        my_map.insert("meow2", Expression::make_nil());
+        let exp = Expression::alloc_data(ExpEnum::HashMap(my_map));
+        let mut exp_obj: Rc<RefCell<ExpObj>> = exp.hack_clone();
+        //let fns = match exp_obj.get_mut().data {
+        //    ExpEnum::HashMap(_) => try_inner_hash_map! {},
+        //    //ExpEnum::Int(_) => {}
+        //    _ => {
+        //        panic!("not the right type");
+        //    }
+        //};
+        //fns();
+    }
+
+    //    #[test]
+    //    fn letstest() {
+    //        let exp = Expression::alloc_data(ExpEnum::Int(3));
+    //        let actual = exp.to_wrapper().unwrap();
+    //        assert!(4, actual.as_ref());
+    //    }
+    //
+    //    fn add_int(i0: i64) -> i64 {
+    //        i0 + 1
+    //    }
+
+    use std::collections::HashMap;
+    use std::fmt::Debug;
+
+    pub struct SlshExpression<T>(T);
+
+    pub trait SlshMarker<T>: AsRef<T> {}
+
+    impl<T> SlshMarker<T> for SlshExpression<T> {}
+
+    impl<T> AsRef<T> for SlshExpression<T> {
+        fn as_ref(&self) -> &T {
+            &self.0
+        }
+    }
+
+    pub struct HashMapSlshExpression<'a>(SlshExpression<&'a mut HashMap<&'a str, Expression>>);
+
+    pub struct HashMapWrap<'a> {
+        map: HashMapSlshExpression<'a>,
+    }
+
+    impl<'a> AsRef<HashMap<&'a str, Expression>> for HashMapWrap<'a> {
+        fn as_ref(&self) -> &HashMap<&'a str, Expression> {
+            self.map.0.as_ref()
+        }
+    }
+
+    #[test]
+    fn test_wrap() {
+        let mut my_map = HashMap::new();
+        my_map.insert("meow", Expression::make_nil());
+        my_map.insert("meow1", Expression::make_nil());
+        my_map.insert("meow2", Expression::make_nil());
+        let exp = Expression::alloc_data(ExpEnum::HashMap(my_map.clone()));
+        let my_map_clone = my_map.clone();
+        let map = &SlshExpression(&my_map);
+        test_wrap_generic(&my_map_clone, map);
+        let exp_rc = exp.hack_clone();
+    }
+
+    fn test_wrap_generic<T>(t0: &T, t1: &impl SlshMarker<T>)
+    where
+        T: PartialEq + Debug,
+    {
+        let t1 = t1.as_ref();
+        assert_eq!(t0, t1)
+    }
+
+    //impl AsRef<Option<HashMap<&'static str, Expression>>> for ExpObj {
+    //    fn as_ref(&self) -> &Option<HashMap<&'static str, Expression>> {
+    //        &match &self.data {
+    //            ExpEnum::HashMap(map) => {
+    //                Some(*map)
+    //            }
+    //            _ => {
+    //                None
+    //            }
+    //        }
+    //    }
+    //}
+    //
+
+    //impl<'a> TryFrom<&'a Expression> for &'a mut HashMap<&'static str, Expression> {
+    //    type Error = LispError;
+    //    fn try_from(exp: &'a Expression) -> Result<Self, Self::Error> {
+    //        let exp_clone = exp.clone();
+    //        match exp_clone.get_mut().data {
+    //            ExpEnum::HashMap(ref mut map) => {
+    //                // ok
+    //                Ok(map)
+    //            },
+    //            _ => Err(LispError::new(
+    //                "Can only convert HashMap from ExpEnum::HashMap.",
+    //            )),
+    //        }
+    //    }
+    //}
+
+    //impl TryIntoExpression<i64> for Expression {
+    //    type Error = LispError;
+    //
+    //    fn human_readable_dest_type(&self) -> String {
+    //        ExpEnum::Int(Default::default()).to_string()
+    //    }
+    //}
 }
 
 impl AsRef<Expression> for Expression {

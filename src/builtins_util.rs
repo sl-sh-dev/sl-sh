@@ -451,6 +451,52 @@ macro_rules! try_exp_enum {
     }
 }
 
+//#[macro_export]
+//macro_rules! try_inner_thing {
+//    sl_sh::ExpEnum::Float(#ref_match) => {
+//        #inner
+//    }
+//    sl_sh::ExpEnum::Int(#ref_match) => {
+//        #inner
+//    }
+//    sl_sh::ExpEnum::HashMap(#ref_match) => {
+//        #inner
+//    }
+//    _ => {
+//        return Err(sl_sh::types::LispError::new(format!(" not given enough arguments, expected , got .")));
+//    }
+//}
+
+#[macro_export]
+macro_rules! try_inner_int {
+    ($expression:expr, $name:ident, $eval:expr, $err:expr) => {
+        match &mut $expression.get_mut().data {
+            ExpEnum::Int(ref mut $name)=> $eval,
+            _ => return Err(LispError::new($err))
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! try_inner_float {
+    ($expression:expr, $name:ident, $eval:expr, $err:expr) => {
+        match &mut $expression.get_mut().data {
+            ExpEnum::Float(ref mut $name)=> $eval,
+            _ => return Err(LispError::new($err))
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! try_inner_hash_map {
+    ($expression:expr, $name:ident, $eval:expr, $err:expr) => {
+        match &mut $expression.get_mut().data {
+            ExpEnum::HashMap(ref mut $name)=> $eval,
+            _ => return Err(LispError::new($err))
+        }
+    };
+}
+
 #[macro_export]
 macro_rules! try_inner_exp_enum {
     ($expression:expr, $(|)? $( $pattern:pat_param )|+ $( if $guard: expr )? $(,)?, $eval:expr, $err:expr) => {
@@ -620,6 +666,135 @@ pub fn get_arg_types(
 }
 
 #[cfg(test)]
+mod testmore {
+    use super::*;
+    use std::cell::RefCell;
+    use std::collections::HashMap;
+    use std::rc::Rc;
+    use crate::{ExpEnum, Expression, LispError, LispResult};
+
+    pub trait ToType {
+        fn make() -> ExpTypes;
+    }
+
+    struct Ints { 
+    }
+    struct Floats {}
+    struct HashMaps {}
+
+    impl ToType for Ints {
+        fn make() -> ExpTypes {
+            ExpTypes::Ints
+        }
+    }
+
+    impl ToType for Floats {
+        fn make() -> ExpTypes {
+            ExpTypes::Floats
+        }
+    }
+
+    impl ToType for ExpEnum {
+        fn make() -> ExpTypes {
+            ExpTypes::HashMaps
+        }
+    }
+    
+    enum ExpTypes {
+        Floats,
+        Ints,
+        HashMaps,
+    }
+
+    impl ExpTypes {
+        fn new<T: ToType>() -> Self {
+            T::make()
+        }
+    }
+    
+    #[test]
+    fn sometest() {
+        use std::rc::Rc;
+        let mut thing = 7;
+        let ref_cell = RefCell::new(thing);
+        let rc = Rc::new(ref_cell);
+        println!("count after creating a = {}", Rc::strong_count(&rc));
+        {
+            let rc2 = Rc::clone(&rc);
+            println!("count after creating b = {}", Rc::strong_count(&rc));
+        }
+        println!("count after dropping b = {}", Rc::strong_count(&rc));
+    }
+    
+    //struct Closure<F, T> where for<'a> F: Fn(&'a Expression) -> &'a T {
+    //    data: Expression,
+    //    func: F,
+    //}
+
+    //impl<F, T> Closure<F, T>
+    //    where for<'a> F: Fn(&'a Expression) -> &'a T,
+    //{
+    //    fn call(&self) -> &T {
+    //        (self.func)(&self.data)
+    //    }
+    //}
+
+    //fn do_it(data: &Expression) -> LispResult<&T> { 
+    //    let exp_obj = data.try_unwrap().map_err(|e| {
+    //        LispError::new("Failed to ref type from Expression.")
+    //    })?;
+    //    match exp_obj.data
+    //}
+
+    //#[test]
+    //fn test_closure() {
+    //    //let clo = Closure { data: (0, 1), func: do_it };
+    //    //println!("{}", clo.call());
+    //}
+    
+    
+    // TODO what if there was a marker trait like, can convert,
+    // trait Convert {}
+    //  then each type that can implements a subtrait of it,
+    // then what we do is use the convert trait, 
+    
+    #[test]
+    fn test_thing() -> LispResult<()> {
+        fn do_it_hash_map(data: &Expression) -> LispResult<()> { 
+            let exp = data.clone();
+            try_inner_hash_map!(exp, arg_0, {
+                    arg_0.clear();
+                }, "Tried to turn this into a HashMap.");
+            let x = match &mut exp.get_mut().data {
+                ExpEnum::HashMap(ref mut arg_0)=> {
+                    arg_0.clear();
+                    Ok(())
+                },
+                _ => Err(LispError::new("lame"))
+            };
+            x
+        }
+        let mut my_map = HashMap::new();
+        my_map.insert("meow", Expression::make_nil());
+        my_map.insert("meow1", Expression::make_nil());
+        my_map.insert("meow2", Expression::make_nil());
+        let exp = Expression::alloc_data(ExpEnum::HashMap(my_map));
+        let exp_clone = exp.clone();
+        do_it_hash_map(&exp_clone).unwrap();
+        let exp_enum = &exp_clone.get().data;
+        match exp_enum {
+            ExpEnum::HashMap(map) => {
+                assert!(map.is_empty())
+            }
+            _ => {
+                panic!("map is empty!");
+            }
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
 mod test {
     use super::*;
     use crate::LispResult;
@@ -714,6 +889,42 @@ mod test {
     }
 
     fn arg_unwrap_clear_hash_map(exp_0: Expression) -> crate::LispResult<()> {
+        //TODO if you need to finagle some code in to this macro call, maybe
+        // inlining (with the procedural macro) the function that can receive
+        // the provided hash map would work to establish an interface,
+        // the inlined function could obviously take the correct/provided
+        // ty: Type argument the function had for that argument, and the
+        // art would be getting a reference to an equivalent function
+        // and copying some of it's code, e.g. if we had some way
+        // of supplying a trait that hooked us up with the name of such
+        // a function? then we could steal that functions internals?
+        // fn does_hash_map_things() {
+        //  //here is code we'd grab and steal;
+        //  try_inner_exp_enum!
+        // }
+        // maybe traits could be used to make sure a given type always has
+        // the correct function supplier? the trait would HAVE to be
+        // declared on a type that (at compile time) would be checked to
+        // make sure it has the correct trait, similar to the static assertions
+        // we do now. in theory the trait/subtrait the declare argument has on
+        // it would clue  us in to try_inner_hash_map or try_inner_int etc.
+        // it relies on whether or not it's impossible to at compile time look
+        // at the internals of the functions these functions provide and so
+        // something with them. alternatively, what if the trait could return
+        // a reference to try_inner_exp_enum!
+        //
+        // complicate macrO_rules like this: https://stackoverflow.com/questions/50008535/calling-functions-with-different-numbers-of-arguments-in-rust-macros
+        // make me wonder if it's possible to write a macro that could just do this but?
+        //
+        // Since we have the type at compile time, what if we could turn
+        // an Expression into a type that wraps the Expression but exposes
+        // the inner ExpEnum as a generic type.
+        // so
+        // ```
+        // let my_obj: Wrapper<T> = Expression::into_wrapper();
+        // have wrapper impl AsRef, so it can "downcast" to a HashMap
+        // ```
+        
         try_exp_enum!(
             exp_0.get_mut().data,
             ExpEnum::HashMap(ref mut hash_map),
