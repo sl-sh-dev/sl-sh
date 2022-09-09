@@ -667,10 +667,8 @@ pub fn get_arg_types(
 
 #[cfg(test)]
 mod testmore {
-    use super::*;
     use std::cell::RefCell;
     use std::collections::HashMap;
-    use std::rc::Rc;
     use crate::{ExpEnum, Expression, LispError, LispResult};
 
     pub trait ToType {
