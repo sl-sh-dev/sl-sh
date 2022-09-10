@@ -363,6 +363,7 @@ impl Vm {
             Value::Value(handle) => {
                 *(self.get_value_mut(*handle)) = val;
             }
+            // Can not set globals since they could be temporarily in any reg...
             //Value::Global(idx) => self.globals.set(*idx, val),
             _ => registers[idx] = val,
         }

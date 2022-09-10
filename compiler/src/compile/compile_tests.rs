@@ -173,6 +173,14 @@ mod tests {
         let result = exec(&mut vm, "((fn (a b c) ((fn () (let (x 10, y 20, z 30) (set! x 11) (def fnx (fn () (set! a 5)(set! b 6)(set! c 7)`(~a ~b ~c ~x ~y ~z))))(let (s 51, t 52, u 53)(def fny (fn () `(~s ~t ~u)))))))1 2 3)(fnx)(fny)");
         let expected = read_test(&mut vm, "(51 52 53)");
         assert_vals(&vm, expected, result);
+
+        let result = exec(&mut vm, "(def x 1)((fn (x) (def fnx (fn () x))) 2)(fnx)");
+        let expected = read_test(&mut vm, "2");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(&mut vm, "(def x 1)((fn () (let (x 3) (def fnx (fn () x)))))(fnx)");
+        let expected = read_test(&mut vm, "3");
+        assert_vals(&vm, expected, result);
     }
 
     #[test]

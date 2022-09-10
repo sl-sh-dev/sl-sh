@@ -278,7 +278,7 @@ impl Vm {
                 SET => {
                     let (dest, src) = decode2!(chunk.code, &mut self.ip, wide);
                     let val = get_reg_unref!(registers, src, self);
-                    //            self.set_register(registers, dest as usize, val);
+                    // self.set_register(registers, dest as usize, val);
                     match &get_reg!(registers, dest) {
                         Value::Value(handle) => {
                             *(self.get_value_mut(*handle)) = val;
