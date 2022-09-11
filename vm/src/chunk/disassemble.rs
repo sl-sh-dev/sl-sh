@@ -114,10 +114,12 @@ macro_rules! disassemble_immediate_global {
     ($code:expr, $wide:expr, $vm:expr) => {{
         if $wide {
             let idx = decode_u32_enum!($code)?;
-            print!("{:#010x}:{}", idx, $vm.global_name(idx as usize));
+            //print!("{:#010x}:{}", idx, $vm.global_name(idx as usize));
+            print!("{:#010x}", idx);
         } else {
             let idx = decode_u16_enum!($code)?;
-            print!("{:#06x}:{}", idx, $vm.global_name(idx as usize));
+            //print!("{:#06x}:{}", idx, $vm.global_name(idx as usize));
+            print!("{:#06x}", idx);
         }
     }};
 }
@@ -130,7 +132,7 @@ macro_rules! disassemble_jump_offset {
 }
 
 impl Chunk {
-    fn disassemble_instruction<I>(chunk: I, op: OpCode, wide: bool, vm: &Vm) -> VMResult<bool>
+    fn disassemble_instruction<I>(chunk: I, op: OpCode, wide: bool, _vm: &Vm) -> VMResult<bool>
     where
         I: IntoIterator<Item = (usize, u8)>,
     {
@@ -182,16 +184,6 @@ impl Chunk {
                 println!();
                 Ok(false)
             }
-            REF => {
-                print!("REF({:#04x})    \t", REF);
-                disassemble_operand!(code, true, wide);
-                print!("\t");
-                print!("G[");
-                disassemble_operand!(code, true, wide);
-                print!("]");
-                println!();
-                Ok(false)
-            }
             DEF => {
                 print!("DEF({:#04x})    \t", DEF);
                 print!("G[");
@@ -217,7 +209,7 @@ impl Chunk {
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 print!("G[");
-                disassemble_immediate_global!(code, wide, vm);
+                disassemble_immediate_global!(code, wide, _vm);
                 print!("]");
                 println!();
                 Ok(false)
@@ -351,7 +343,7 @@ impl Chunk {
             CALLG => {
                 print!("CALLG({:#04x})  \t", CALLG);
                 print!("G[");
-                disassemble_immediate_global!(code, wide, vm);
+                disassemble_immediate_global!(code, wide, _vm);
                 print!("]");
                 print!("\t");
                 disassemble_immediate!(code, wide);
@@ -371,7 +363,7 @@ impl Chunk {
             TCALLG => {
                 print!("TCALLG({:#04x}) \t", TCALLG);
                 print!("G[");
-                disassemble_immediate_global!(code, wide, vm);
+                disassemble_immediate_global!(code, wide, _vm);
                 print!("]");
                 print!("\t");
                 disassemble_immediate!(code, wide);

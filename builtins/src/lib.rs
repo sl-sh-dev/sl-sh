@@ -3,7 +3,6 @@ use slvm::{VMError, VMResult, Value, Vm};
 pub mod collections;
 pub mod print;
 pub mod string;
-pub mod utils;
 
 pub fn get_prop(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
     if registers.len() != 2 {
@@ -18,13 +17,6 @@ pub fn get_prop(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
     };
     match registers[0] {
         Value::Global(idx) => Ok(vm.get_global_property(idx, key).unwrap_or(Value::Nil)),
-        Value::Symbol(si) => {
-            if let Some(idx) = vm.global_intern_slot(si) {
-                Ok(vm.get_global_property(idx, key).unwrap_or(Value::Nil))
-            } else {
-                Ok(Value::Nil)
-            }
-        }
         _ => {
             let handle = registers[0].get_handle().ok_or_else(|| {
                 VMError::new_vm("get-prop: Not a heap object or global symbol".to_string())

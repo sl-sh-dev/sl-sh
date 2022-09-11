@@ -292,24 +292,6 @@ impl Vm {
                     let val = chunk.constants[src as usize];
                     self.set_register(registers, dest as usize, val);
                 }
-                REF => {
-                    let (dest, src) = decode2!(chunk.code, &mut self.ip, wide);
-                    let idx = match get_reg!(registers, src) {
-                        Value::Symbol(s) => {
-                            if let Some(i) = self.globals.interned_slot(s) {
-                                i as u32
-                            } else {
-                                return Err((VMError::new_vm("REF: Symbol not global."), chunk));
-                            }
-                        }
-                        Value::Global(i) => i,
-                        _ => return Err((VMError::new_vm("REF: Not a symbol."), chunk)),
-                    };
-                    if let Value::Undefined = self.globals.get(idx as u32) {
-                        return Err((VMError::new_vm("REF: Symbol is not defined."), chunk));
-                    }
-                    Self::mov_register(registers, dest as usize, Value::Global(idx));
-                }
                 DEF => {
                     let (dest, src) = decode2!(chunk.code, &mut self.ip, wide);
                     let val = get_reg_unref!(registers, src, self);

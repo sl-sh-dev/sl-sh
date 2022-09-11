@@ -10,28 +10,27 @@ const STACK_BASE: OpCode = 0x04;
 pub const MOV: OpCode = STACK_BASE + 1; // MOV A B - R(A) = R(B) does not respect closed over values
 pub const SET: OpCode = STACK_BASE + 2; // SET A B - R(A) = R(B) respecting local closed over values
 pub const CONST: OpCode = STACK_BASE + 3; // CONST A B - R(A) = K(B)
-pub const REF: OpCode = STACK_BASE + 4; // REF A B - R(A) = G[R(B)]
-pub const DEF: OpCode = STACK_BASE + 5; // DEF A B - G[R(A)] = R(B)
-pub const DEFV: OpCode = STACK_BASE + 6; // DEFV A B - G[R(A)] = R(B) if G[R(A)] is undefined
-pub const REFI: OpCode = STACK_BASE + 7; // REFI A B - R(A) = G[B]
-pub const CLRREG: OpCode = STACK_BASE + 8; // CLRREG A - R(A) = UNDEFINED (ignores a closed over value)
-pub const REGT: OpCode = STACK_BASE + 9; // REGT A - R(A) = TRUE
-pub const REGF: OpCode = STACK_BASE + 10; // REGF A - R(A) = FALSE
-pub const REGN: OpCode = STACK_BASE + 11; // REGN A - R(A) = NIL
-pub const REGC: OpCode = STACK_BASE + 12; // REGC A - R(A) = UNDEFINED
-pub const REGB: OpCode = STACK_BASE + 13; // REGB A B - R(A) = Byte(B)
-pub const REGI: OpCode = STACK_BASE + 14; // REGI A B - R(A) = Int(B)
-pub const REGU: OpCode = STACK_BASE + 15; // REGU A B - R(A) = UInt(B)
-pub const CLOSE: OpCode = STACK_BASE + 16; // CLOSE A B - R(A) = closure derived from lambda in R(B)
-pub const BMOV: OpCode = STACK_BASE + 17; // BMOV A B C - R(A)..R(A+C) = R(B)..R(B+C) does not respect closed over values
-pub const LDSC: OpCode = STACK_BASE + 18; // LDSC A B C - R(A)..R(A+B) = destructured list or vec in R(C) (ignore leftover values)
-pub const LDSCR: OpCode = STACK_BASE + 19; // LDSCR A B C - R(A)..R(A+B) = destructured list or vec in R(C) (R(A+B) gets all leftover values)
-pub const MDSC: OpCode = STACK_BASE + 20; // MDSC A B C - R(A)..R(A+B) = destructured map in R(C) (ignore leftover values), R(A..) start with keys
-pub const COPY: OpCode = STACK_BASE + 21; // COPY A B - R(A) = deep copy of R(B)
-pub const FRZ: OpCode = STACK_BASE + 22; // FRZ A - R(A) if a heap object will be made read only
+pub const DEF: OpCode = STACK_BASE + 4; // DEF A B - G[R(A)] = R(B)
+pub const DEFV: OpCode = STACK_BASE + 5; // DEFV A B - G[R(A)] = R(B) if G[R(A)] is undefined
+pub const REFI: OpCode = STACK_BASE + 6; // REFI A B - R(A) = G[B]
+pub const CLRREG: OpCode = STACK_BASE + 7; // CLRREG A - R(A) = UNDEFINED (ignores a closed over value)
+pub const REGT: OpCode = STACK_BASE + 8; // REGT A - R(A) = TRUE
+pub const REGF: OpCode = STACK_BASE + 9; // REGF A - R(A) = FALSE
+pub const REGN: OpCode = STACK_BASE + 10; // REGN A - R(A) = NIL
+pub const REGC: OpCode = STACK_BASE + 11; // REGC A - R(A) = UNDEFINED
+pub const REGB: OpCode = STACK_BASE + 12; // REGB A B - R(A) = Byte(B)
+pub const REGI: OpCode = STACK_BASE + 13; // REGI A B - R(A) = Int(B)
+pub const REGU: OpCode = STACK_BASE + 14; // REGU A B - R(A) = UInt(B)
+pub const CLOSE: OpCode = STACK_BASE + 15; // CLOSE A B - R(A) = closure derived from lambda in R(B)
+pub const BMOV: OpCode = STACK_BASE + 16; // BMOV A B C - R(A)..R(A+C) = R(B)..R(B+C) does not respect closed over values
+pub const LDSC: OpCode = STACK_BASE + 17; // LDSC A B C - R(A)..R(A+B) = destructured list or vec in R(C) (ignore leftover values)
+pub const LDSCR: OpCode = STACK_BASE + 18; // LDSCR A B C - R(A)..R(A+B) = destructured list or vec in R(C) (R(A+B) gets all leftover values)
+pub const MDSC: OpCode = STACK_BASE + 19; // MDSC A B C - R(A)..R(A+B) = destructured map in R(C) (ignore leftover values), R(A..) start with keys
+pub const COPY: OpCode = STACK_BASE + 20; // COPY A B - R(A) = deep copy of R(B)
+pub const FRZ: OpCode = STACK_BASE + 21; // FRZ A - R(A) if a heap object will be made read only
 
 // Flow control
-const FLOW_BASE: OpCode = STACK_BASE + 23;
+const FLOW_BASE: OpCode = STACK_BASE + 22;
 // CALL A B C - Call fn R(A) with B args with R(C) as first reg/param
 pub const CALL: OpCode = FLOW_BASE;
 // TCALL A B - Tail Call fn R(A) with B args with existing stack/regs

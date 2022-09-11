@@ -339,6 +339,7 @@ pub struct CompileEnvironment<'vm> {
     use_line: bool,
     line: u32,
     specials: Specials,
+    global_map: HashMap<Interned, usize>,
 }
 
 impl<'vm> CompileEnvironment<'vm> {
@@ -349,6 +350,7 @@ impl<'vm> CompileEnvironment<'vm> {
             use_line: true,
             line: 1,
             specials,
+            global_map: HashMap::new(),
         }
     }
 
@@ -404,5 +406,44 @@ impl<'vm> CompileEnvironment<'vm> {
 
     pub fn specials(&self) -> &Specials {
         &self.specials
+    }
+
+    pub fn global_intern_slot(&self, symbol: Interned) -> Option<u32> {
+        self.global_map.get(&symbol).copied().map(|i| i as u32)
+    }
+
+    pub fn reserve_global(&mut self, symbol: Interned) -> u32 {
+        if let Some(idx) = self.global_map.get(&symbol) {
+            *idx as u32
+        } else {
+            let idx = self.vm.reserve_global();
+            self.global_map.insert(symbol, idx as usize);
+            idx
+        }
+    }
+
+    pub fn set_global(&mut self, string: &str, value: Value) -> Value {
+        let sym = self.vm.intern(string);
+        let slot = self.reserve_global(sym);
+        self.vm.set_global(slot, value);
+        Value::Global(slot)
+    }
+
+    pub fn dump_globals(&self) {
+        println!("GLOBALS:");
+        let mut ordered_keys = Vec::with_capacity(self.global_map.len());
+        ordered_keys.resize(self.global_map.len(), "");
+        for (k, v) in self.global_map.iter() {
+            ordered_keys[*v] = self.vm.get_interned(*k);
+        }
+        for (i, k) in ordered_keys.iter().enumerate() {
+            println!(
+                "({:#010x})/{}: {}",
+                i,
+                *k,
+                self.vm.get_global(i as u32).display_value(self.vm)
+            );
+        }
+        println!();
     }
 }

@@ -23,14 +23,13 @@ pub fn read_test(vm: &mut Vm, text: &'static str) -> Value {
 }
 
 /// Read input, compile and execute the result and return the Value this produces.
-pub fn exec(vm: &mut Vm, input: &'static str) -> Value {
-    let exp = read_test(vm, input);
-    let mut env = CompileEnvironment::new(vm);
+pub fn exec(env: &mut CompileEnvironment, input: &'static str) -> Value {
+    let exp = read_test(env.vm_mut(), input);
     let mut state = CompileState::new();
     if let Value::Vector(_) = exp {
         for e in exp.iter(env.vm()).collect::<Vec<Value>>() {
-            pass1(&mut env, &mut state, e).unwrap();
-            compile(&mut env, &mut state, e, 0).unwrap();
+            pass1(env, &mut state, e).unwrap();
+            compile(env, &mut state, e, 0).unwrap();
         }
         state.chunk.encode0(RET, Some(1)).unwrap();
         env.vm_mut().execute(Arc::new(state.chunk)).unwrap();
@@ -38,31 +37,30 @@ pub fn exec(vm: &mut Vm, input: &'static str) -> Value {
         if let Some(handle) = exp.get_handle() {
             env.vm_mut().heap_sticky(handle);
         }
-        pass1(&mut env, &mut state, exp).unwrap();
-        compile(&mut env, &mut state, exp, 0).unwrap();
+        pass1(env, &mut state, exp).unwrap();
+        compile(env, &mut state, exp, 0).unwrap();
         state.chunk.encode0(RET, Some(1)).unwrap();
         let chunk = Arc::new(state.chunk);
         env.vm_mut().execute(chunk).unwrap();
     }
-    vm.stack()[0]
+    env.vm().stack()[0]
 }
 
 /// Same as exec() but dump the registers and disassembled bytecode after executing.
 /// Only use this when debugging a test, otherwise use exec().
-pub fn exec_with_dump(vm: &mut Vm, input: &'static str) -> Value {
-    let exp = read_test(vm, input);
-    let mut env = CompileEnvironment::new(vm);
+pub fn exec_with_dump(env: &mut CompileEnvironment, input: &'static str) -> Value {
+    let exp = read_test(env.vm_mut(), input);
     let mut state = CompileState::new();
     if let Value::Vector(_) = exp {
         for e in exp.iter(env.vm()).collect::<Vec<Value>>() {
-            pass1(&mut env, &mut state, e).unwrap();
-            compile(&mut env, &mut state, e, 0).unwrap();
+            pass1(env, &mut state, e).unwrap();
+            compile(env, &mut state, e, 0).unwrap();
         }
         state.chunk.encode0(RET, Some(1)).unwrap();
         env.vm_mut().execute(Arc::new(state.chunk.clone())).unwrap();
     } else {
-        pass1(&mut env, &mut state, exp).unwrap();
-        compile(&mut env, &mut state, exp, 0).unwrap();
+        pass1(env, &mut state, exp).unwrap();
+        compile(env, &mut state, exp, 0).unwrap();
         state.chunk.encode0(RET, Some(1)).unwrap();
         env.vm_mut().execute(Arc::new(state.chunk.clone())).unwrap();
     }
@@ -103,33 +101,31 @@ pub fn exec_with_dump(vm: &mut Vm, input: &'static str) -> Value {
     }
     let _ = state.chunk.disassemble_chunk(env.vm(), 0);
 
-    vm.stack()[0]
+    env.vm().stack()[0]
 }
 
 /// Read and compile input and fail if compiling does not result in an error.
-pub fn exec_compile_error(vm: &mut Vm, input: &'static str) {
-    let exp = read_test(vm, input);
-    let mut env = CompileEnvironment::new(vm);
+pub fn exec_compile_error(env: &mut CompileEnvironment, input: &'static str) {
+    let exp = read_test(env.vm_mut(), input);
     let mut state = CompileState::new();
     assert!(
-        compile(&mut env, &mut state, exp, 0).is_err(),
+        compile(env, &mut state, exp, 0).is_err(),
         "expected compile error"
     );
-    vm.reset();
+    env.vm_mut().reset();
 }
 
 /// Read, compile and execute input and fail if execution does not result in an error.
-pub fn exec_runtime_error(vm: &mut Vm, input: &'static str) {
-    let exp = read_test(vm, input);
-    let mut env = CompileEnvironment::new(vm);
+pub fn exec_runtime_error(env: &mut CompileEnvironment, input: &'static str) {
+    let exp = read_test(env.vm_mut(), input);
     let mut state = CompileState::new();
-    compile(&mut env, &mut state, exp, 0).unwrap();
+    compile(env, &mut state, exp, 0).unwrap();
     state.chunk.encode0(RET, Some(1)).unwrap();
     assert!(
-        vm.execute(Arc::new(state.chunk)).is_err(),
+        env.vm_mut().execute(Arc::new(state.chunk)).is_err(),
         "expected runtime error"
     );
-    vm.reset();
+    env.vm_mut().reset();
 }
 
 /// Assert that val1 and val2 are the same.

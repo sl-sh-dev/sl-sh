@@ -254,7 +254,7 @@ fn compile_list(
             Value::Symbol(i) => {
                 if let Some(idx) = state.get_symbol(i) {
                     compile_call_reg(env, state, idx as u16, cdr, result)?
-                } else if let Some(slot) = env.vm().global_intern_slot(i) {
+                } else if let Some(slot) = env.global_intern_slot(i) {
                     // Have to at least pre-declare a global.
                     let global = env.vm().get_global(slot);
                     if let Value::Undefined = global {
@@ -390,7 +390,7 @@ pub fn compile(
                         .chunk
                         .encode2(MOV, result as u16, idx as u16, env.own_line())?;
                 }
-            } else if let Some(slot) = env.vm().global_intern_slot(i) {
+            } else if let Some(slot) = env.global_intern_slot(i) {
                 state
                     .chunk
                     .encode_refi(result as u16, slot, env.own_line())?;

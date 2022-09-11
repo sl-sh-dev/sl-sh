@@ -43,7 +43,7 @@ fn main() -> Result<(), VMError> {
     chunk.encode2(MOV, 10, 15, Some(1))?;
     chunk.encode2(CONST, 10, 15, Some(1))?;
     chunk.encode2(CONST, 0x8fff, 0x9fff, Some(1))?;
-    chunk.encode2(REF, 1, 2, Some(2))?;
+    chunk.encode2(REFI, 1, 2, Some(2))?;
     chunk.encode3(CONS, 1, 2, 3, None)?;
     chunk.encode2(DEF, 1, 2, Some(4))?;
     chunk.encode0(JMP, Some(5))?;

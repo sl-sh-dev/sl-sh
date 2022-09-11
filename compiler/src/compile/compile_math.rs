@@ -39,7 +39,7 @@ pub(crate) fn compile_math(
             let dest = if let Value::Symbol(si) = cdr[0] {
                 if let Some(idx) = state.get_symbol(si) {
                     idx
-                } else if let Some(slot) = env.vm().global_intern_slot(i) {
+                } else if let Some(slot) = env.global_intern_slot(i) {
                     state
                         .chunk
                         .encode_refi(result as u16, slot, env.own_line())?;
@@ -75,7 +75,7 @@ pub(crate) fn compile_math(
             let dest = if let Value::Symbol(si) = cdr[0] {
                 if let Some(idx) = state.get_symbol(si) {
                     idx
-                } else if let Some(slot) = env.vm().global_intern_slot(i) {
+                } else if let Some(slot) = env.global_intern_slot(i) {
                     state
                         .chunk
                         .encode_refi(result as u16, slot, env.own_line())?;

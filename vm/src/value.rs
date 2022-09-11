@@ -482,7 +482,6 @@ impl Value {
 #[derive(Clone, Debug)]
 pub struct Globals {
     objects: Vec<Value>,
-    objects_map: HashMap<Interned, usize>,
     props: HashMap<u32, Arc<HashMap<Interned, Value>>>,
 }
 
@@ -496,46 +495,18 @@ impl Globals {
     pub fn new() -> Self {
         Globals {
             objects: Vec::new(),
-            objects_map: HashMap::new(),
             props: HashMap::new(),
         }
     }
 
-    pub fn interned_slot(&self, symbol: Interned) -> Option<u32> {
-        self.objects_map.get(&symbol).copied().map(|i| i as u32)
-    }
-
-    pub fn reserve(&mut self, symbol: Interned) -> u32 {
-        if let Some(idx) = self.objects_map.get(&symbol) {
-            *idx as u32
-        } else {
-            let index = self.objects.len();
-            self.objects.push(Value::Undefined);
-            self.objects_map.insert(symbol, index);
-            index as u32
-        }
+    pub fn reserve(&mut self) -> u32 {
+        let index = self.objects.len();
+        self.objects.push(Value::Undefined);
+        index as u32
     }
 
     pub fn set(&mut self, idx: u32, val: Value) {
         self.objects[idx as usize] = val;
-    }
-
-    pub fn get_interned(&self, symbol: Interned) -> Value {
-        if let Some(idx) = self.objects_map.get(&symbol) {
-            self.objects
-                .get(*idx)
-                .map_or_else(|| Value::Undefined, |v| *v)
-        } else {
-            Value::Undefined
-        }
-    }
-
-    pub fn get_if_interned(&self, symbol: Interned) -> Option<Value> {
-        if let Some(idx) = self.objects_map.get(&symbol) {
-            self.objects.get(*idx).copied()
-        } else {
-            None
-        }
     }
 
     pub fn get(&self, idx: u32) -> Value {
@@ -550,31 +521,6 @@ impl Globals {
                 heap.mark(handle);
             }
         });
-    }
-
-    pub fn dump(&self, vm: &Vm) {
-        let mut ordered_keys = Vec::with_capacity(self.objects_map.len());
-        ordered_keys.resize(self.objects_map.len(), "");
-        for (k, v) in self.objects_map.iter() {
-            ordered_keys[*v] = vm.get_interned(*k);
-        }
-        for (i, k) in ordered_keys.iter().enumerate() {
-            println!(
-                "({:#010x})/{}: {}",
-                i,
-                *k,
-                self.objects[i].display_value(vm)
-            );
-        }
-    }
-
-    pub fn index_to_name(&self, vm: &Vm, idx: usize) -> &'static str {
-        for (k, v) in self.objects_map.iter() {
-            if *v == idx {
-                return vm.get_interned(*k);
-            }
-        }
-        "#<N/A>"
     }
 
     pub fn get_property(&self, global: u32, prop: Interned) -> Option<Value> {

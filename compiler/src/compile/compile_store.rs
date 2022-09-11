@@ -11,14 +11,14 @@ pub(crate) fn compile_def(
         (_, None) => return Err(VMError::new_compile("def: expected symbol")),
         (1, Some(Value::Symbol(si))) => {
             // 'def symbol' predeclares a symbol to be used later, no bytecode.
-            let si_const = env.vm_mut().reserve_index(*si);
+            let si_const = env.reserve_global(*si);
             if let Some(doc_string) = state.doc_string {
                 let key = env.vm_mut().intern("doc-string");
                 env.vm_mut().set_global_property(si_const, key, doc_string);
             }
         }
         (2, Some(Value::Symbol(si))) => {
-            let si_const = env.vm_mut().reserve_index(*si);
+            let si_const = env.reserve_global(*si);
             if let Some(doc_string) = state.doc_string {
                 let key = env.vm_mut().intern("doc-string");
                 env.vm_mut().set_global_property(si_const, key, doc_string);
@@ -49,7 +49,7 @@ pub(crate) fn compile_set(
                 state
                     .chunk
                     .encode2(SET, idx as u16, result as u16, env.own_line())?;
-            } else if let Some(si_const) = env.vm().global_intern_slot(si) {
+            } else if let Some(si_const) = env.global_intern_slot(si) {
                 compile(env, state, cdr[1], result + 1)?;
                 state
                     .chunk

@@ -86,32 +86,13 @@ impl Vm {
         self.interner.get_if_interned(string)
     }
 
-    pub fn reserve_symbol(&mut self, string: &str) -> Value {
-        let sym = self.interner.intern(string);
-        Value::Global(self.globals.reserve(sym))
-    }
-
-    pub fn reserve_interned(&mut self, i: Interned) -> Value {
-        Value::Global(self.globals.reserve(i))
-    }
-
-    pub fn reserve_index(&mut self, i: Interned) -> u32 {
-        self.globals.reserve(i)
-    }
-
-    pub fn set_global(&mut self, string: &str, value: Value) -> Value {
-        let sym = self.interner.intern(string);
-        let slot = self.globals.reserve(sym);
+    pub fn set_global(&mut self, slot: u32, value: Value) -> Value {
         self.globals.set(slot, value);
         Value::Global(slot)
     }
 
-    pub fn intern_to_global(&self, i: Interned) -> Option<Value> {
-        self.globals.get_if_interned(i)
-    }
-
-    pub fn global_intern_slot(&self, i: Interned) -> Option<u32> {
-        self.globals.interned_slot(i)
+    pub fn reserve_global(&mut self) -> u32 {
+        self.globals.reserve()
     }
 
     pub fn get_call_stack(&self) -> CallStackIter {
