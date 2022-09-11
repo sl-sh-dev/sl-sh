@@ -182,6 +182,7 @@ fn get_return_type2(
     };
 
     if let Some((inner_type, type_path)) = get_generic_argument_from_type(&return_type) {
+        //TODO this function does not need to return MacroResult, should enforce LispResult return type at compile time.
         let wrapper = is_valid_generic_type(type_path, POSSIBLE_RESULT_TYPES.as_slice())?;
         match inner_type {
             GenericArgument::Type(ty) => Ok((Some(ty.clone()), Some(wrapper))),
@@ -192,7 +193,7 @@ fn get_return_type2(
                         "Functions of with generic arguments of type {:?} must contain Types, see GenericArgument.",
                         &POSSIBLE_RESULT_TYPES
                     ),
-                ))
+                ));
             }
         }
     } else {
@@ -252,6 +253,22 @@ fn get_documentation_for_fn(original_item_fn: &ItemFn) -> MacroResult<String> {
     } else {
         Ok(docs)
     }
+}
+
+fn opt_is_valid_generic_type<'a>(
+    type_path: &TypePath,
+    possible_types: &'a [&str],
+) -> Option<&'a str> {
+    if type_path.path.segments.len() == 1 && type_path.path.segments.first().is_some() {
+        let path_segment = &type_path.path.segments.first().unwrap();
+        let ident = &path_segment.ident;
+        for type_name in possible_types {
+            if ident == type_name {
+                return Some(type_name);
+            }
+        }
+    }
+    None
 }
 
 fn is_valid_generic_type<'a>(
@@ -540,20 +557,20 @@ struct Arg {
 
 fn get_arg_val(type_path: &TypePath) -> MacroResult<ArgVal> {
     if let Some((_generic, type_path)) = get_generic_argument_from_type_path(type_path) {
-        let wrapper = is_valid_generic_type(&type_path, POSSIBLE_ARG_TYPES.as_slice())?;
-        if wrapper == "Option" {
-            Ok(ArgVal::Optional)
-        } else if wrapper == "Vec" {
-            Ok(ArgVal::Vec)
-        } else {
-            return Err(Error::new(
-                type_path.span(),
-                "Received generic argument this macro is not programmed to handle, only support Option and Vec!",
-            ));
+        //TODO any way around relying on match TypePaths on Option and Vec, would be better if they
+        // supported something like a marker trait.?
+        let wrapper = opt_is_valid_generic_type(type_path, POSSIBLE_ARG_TYPES.as_slice());
+        match wrapper {
+            Some(wrapper) if wrapper == "Option" => {
+                return Ok(ArgVal::Optional);
+            }
+            Some(wrapper) if wrapper == "Vec" => {
+                return Ok(ArgVal::Vec);
+            }
+            _ => {}
         }
-    } else {
-        Ok(ArgVal::Value)
     }
+    Ok(ArgVal::Value)
 }
 
 fn parse_value(arg_name: &Ident, inner: TokenStream) -> TokenStream {
@@ -608,7 +625,7 @@ fn make_orig_fn_call(
     // return a LispResult.
     let (return_type, lisp_result) = get_return_type2(original_item_fn)?;
     let returns_none = "()" == return_type.to_token_stream().to_string();
-    let original_fn_call = match (return_type.clone(), lisp_result, returns_none) {
+    let original_fn_call = match (return_type, lisp_result, returns_none) {
         // coerce to a LispResult<Expression>
         (Some(_), Some(_), true) => quote! {
             #original_fn_name(#(#arg_names),*)?;
@@ -637,12 +654,8 @@ fn make_orig_fn_call(
 
 fn make_arg_types(original_item_fn: &ItemFn) -> MacroResult<(Vec<Ident>, Vec<TokenStream>)> {
     let len = original_item_fn.sig.inputs.len();
-    // TODO this code can be saved but all rust types that map to sl_sh types will need a marker trait
-    //  otherwise, there's not a good way to check at compile time if the long ExpEnum match statement
-    //  will work at runtime.
-    //  marker traits could
-
-    // TODO conversion for return type only.
+    // TODO conversion for return type and arguments that enforece the TypeExpression and/or
+    //  RustProcedure implementations.
     //let conversions_assertions_code =
     //    generate_assertions_code_for_type_conversions(original_item_fn, &return_type)?;
     let mut arg_names = vec![];
@@ -660,6 +673,8 @@ fn generate_builtin_fn2(
     original_item_fn: &ItemFn,
     original_fn_name: &Ident,
     builtin_name: &Ident,
+    fn_name: &str,
+    fn_name_attr: &Ident,
 ) -> MacroResult<TokenStream> {
     let (arg_names, arg_types) = make_arg_types(original_item_fn)?;
     let orig_fn_call = make_orig_fn_call(original_item_fn, original_fn_name, arg_names.clone())?;
@@ -667,14 +682,15 @@ fn generate_builtin_fn2(
     let mut prev_token_stream = orig_fn_call;
     let fn_args = original_item_fn.sig.inputs.iter().zip(arg_names.iter());
     for (fn_arg, ident) in fn_args {
-        match fn_arg {
-            FnArg::Typed(ty) => match &*ty.ty {
+        if let FnArg::Typed(ty) = fn_arg {
+            match &*ty.ty {
                 Type::Path(ty) => {
                     let val = get_arg_val(ty)?;
                     let parse_layer_1 = get_parser_for_arg_val(val);
                     let passing_style = ArgPassingStyle::Move;
                     prev_token_stream = parse_type(
                         ty,
+                        fn_name_attr,
                         prev_token_stream.clone(),
                         val,
                         ident,
@@ -682,8 +698,8 @@ fn generate_builtin_fn2(
                         parse_layer_1,
                     )?;
                 }
-                Type::Reference(ty_ref) => match &*ty_ref.elem {
-                    Type::Path(ty) => {
+                Type::Reference(ty_ref) => {
+                    if let Type::Path(ty) = &*ty_ref.elem {
                         let val = get_arg_val(ty)?;
                         let parse_layer_1 = get_parser_for_arg_val(val);
                         let passing_style = if ty_ref.mutability.is_some() {
@@ -693,6 +709,7 @@ fn generate_builtin_fn2(
                         };
                         prev_token_stream = parse_type(
                             ty,
+                            fn_name_attr,
                             prev_token_stream.clone(),
                             val,
                             ident,
@@ -700,11 +717,9 @@ fn generate_builtin_fn2(
                             parse_layer_1,
                         )?;
                     }
-                    _ => {}
-                },
+                }
                 _ => {}
-            },
-            _ => {}
+            }
         }
     }
     let (return_type, lisp_result) = get_return_type2(original_item_fn)?;
@@ -722,6 +737,7 @@ fn generate_builtin_fn2(
     };
     let tokens = quote! {
         fn #builtin_name(#(#arg_names: #arg_types),*) #ret_tokens {
+            let #fn_name_attr = #fn_name;
             #prev_token_stream
         }
     };
@@ -731,22 +747,36 @@ fn generate_builtin_fn2(
 /// return a tuple meant for the ret_err_exp_enum and try_exp_enum macros.
 /// first tuple is how to access the exp_enum data (mutable or immutable)
 /// second tuple is how to refer to the inner exp enum in a match pattern
+/// third tuple is how to refer to the inner exp enum referent type in
+/// an function call.
+/// TODO no longer need first or second value?
 fn tokens_for_matching_references(
     arg_name: &Ident,
     passing_style: ArgPassingStyle,
-) -> (TokenStream, TokenStream) {
+    ty: &TypePath,
+) -> (TokenStream, TokenStream, TokenStream) {
     match passing_style {
-        ArgPassingStyle::Move => (quote! {#arg_name.get().data}, quote! {#arg_name}),
-        ArgPassingStyle::Reference => (quote! {#arg_name.get().data}, quote! {ref #arg_name}),
+        ArgPassingStyle::Move => (
+            quote! {#arg_name.get().data},
+            quote! {#arg_name},
+            quote! {#ty},
+        ),
+        ArgPassingStyle::Reference => (
+            quote! {#arg_name.get().data},
+            quote! {ref #arg_name},
+            quote! {&#ty},
+        ),
         ArgPassingStyle::MutReference => (
             quote! {#arg_name.get_mut().data},
             quote! {ref mut #arg_name},
+            quote! {& mut #ty},
         ),
     }
 }
 
 fn parse_argval_varargs_type(
     ty: &TypePath,
+    fn_name_attr: &Ident,
     arg_name: &Ident,
     passing_style: ArgPassingStyle,
     inner: TokenStream,
@@ -762,8 +792,13 @@ fn parse_argval_varargs_type(
     //  if the rust_native type is Vec<&mut HashMap> the borrow checker
     //  could get in the way BUT, lifetimes might help...
     //  ***NEED to test
-    let an_element_arg_value_type_parsing_code =
-        parse_argval_value_type(arg_name, passing_style, quote! { Ok(#arg_name) });
+    let an_element_arg_value_type_parsing_code = parse_argval_value_type(
+        ty,
+        fn_name_attr,
+        arg_name,
+        passing_style,
+        quote! { Ok(#arg_name) },
+    );
     // TODO
     //  if the above is true, we should only accept Vec<T: TryIntoExpression>
     quote! {{
@@ -781,6 +816,8 @@ fn parse_argval_varargs_type(
 /// Option, and only in the case that the option is Some will it be
 /// necessary to match against every ExpEnum variant.
 fn parse_argval_optional_type(
+    ty: &TypePath,
+    fn_name_attr: &Ident,
     arg_name: &Ident,
     passing_style: ArgPassingStyle,
     inner: TokenStream,
@@ -795,7 +832,7 @@ fn parse_argval_optional_type(
     // the matched ExpEnum in Some bound to the #arg_name like the
     // rust native function expects.
     let some_arg_value_type_parsing_code =
-        parse_argval_value_type(arg_name, passing_style, some_inner);
+        parse_argval_value_type(ty, fn_name_attr, arg_name, passing_style, some_inner);
     quote! {
     match #arg_name {
         None => {
@@ -811,105 +848,27 @@ fn parse_argval_optional_type(
 /// for regular Expression values (no Optional/VarArgs) ref_exp
 /// just needs to be matched based on it's ExpEnum variant.
 fn parse_argval_value_type(
+    ty: &TypePath,
+    fn_name_attr: &Ident,
     arg_name: &Ident,
     passing_style: ArgPassingStyle,
     inner: TokenStream,
 ) -> TokenStream {
-    let reference_tokens = tokens_for_matching_references(arg_name, passing_style);
+    let reference_tokens = tokens_for_matching_references(arg_name, passing_style, ty);
     let ref_exp = reference_tokens.0;
     let ref_match = reference_tokens.1;
+    let fn_ref = reference_tokens.2;
     quote! {
-    match #ref_exp {
-        //sl_sh::ExpEnum::True => {
-        //    let #arg_name = true;
-        //    #inner
-        //}
-        //sl_sh::ExpEnum::False => {
-        //    let #arg_name = false;
-        //    #inner
-        //}
-        //sl_sh::ExpEnum::Float(#ref_match) => {
-        //    #inner
-        //}
-        sl_sh::ExpEnum::Int(#ref_match) => {
-            #inner
+        {
+            use sl_sh::types::RustProcedure;
+            let pdata: sl_sh::types::TypedExpression<#ty> =
+                sl_sh::types::TypedExpression::new(#arg_name);
+            let hash_clear = |#arg_name: #fn_ref| {
+                #inner
+            };
+            pdata.apply(#fn_name_attr, hash_clear)
         }
-        _ => {
-            return Err(sl_sh::types::LispError::new(format!(" not given enough arguments, expected , got .")));
-        }
-        //sl_sh::ExpEnum::Symbol(#ref_match, _) => {
-        //    #inner
-        //}
-        //sl_sh::ExpEnum::String(#ref_match, _) => {
-        //    #inner
-        //}
-        //sl_sh::ExpEnum::Char(#ref_match) => {
-        //    #inner
-        //}
-        //sl_sh::ExpEnum::CodePoint(#ref_match) => {
-        //    #inner
-        //}
-        //sl_sh::ExpEnum::HashMap(#ref_match) => {
-        //    #inner
-        //}
-        //sl_sh::ExpEnum::Process(#ref_match) => {
-        //    #inner
-        //}
-        //sl_sh::ExpEnum::File(#ref_match) => {
-        //    #inner
-        //}
-        //sl_sh::ExpEnum::Wrapper(#ref_match) => {
-        //    #inner
-        //}
-        //sl_sh::ExpEnum::Regex(#ref_match) => {
-        //    #inner
-        //}
-        //sl_sh::ExpEnum::Vector(#ref_match) => {
-        //    #inner
-        //}
-        //sl_sh::ExpEnum::Values(#ref_match) => {
-        //    #inner
-        //}
-        //sl_sh::ExpEnum::Nil => {
-        //    sl_sh::types::LispError::new(format!("ExpEnum::Nil not supported as input to sl_sh_fn proc macro."))
-        //}
-        //sl_sh::ExpEnum::Lambda(#ref_match) => {
-        //    sl_sh::types::LispError::new(format!("ExpEnum::Lambda not supported as input to sl_sh_fn proc macro."))
-        //}
-        //sl_sh::ExpEnum::Macro(#ref_match) => {
-        //    sl_sh::types::LispError::new(format!("ExpEnum::Macro not supported as input to sl_sh_fn proc macro."))
-        //}
-        //sl_sh::ExpEnum::Function(#ref_match) => {
-        //    sl_sh::types::LispError::new(format!("ExpEnum::Function not supported as input to sl_sh_fn proc macro."))
-        //}
-        //sl_sh::ExpEnum::LazyFn(_, _) => {
-        //    sl_sh::types::LispError::new(format!("ExpEnum::LazyFn not supported as input to sl_sh_fn proc macro."))
-        //}
-        //sl_sh::ExpEnum::Pair(_, _) => {
-        //    sl_sh::types::LispError::new(format!("ExpEnum::Pair not supported as input to sl_sh_fn proc macro."))
-        //}
-        //sl_sh::ExpEnum::DeclareDef => {
-        //    sl_sh::types::LispError::new(format!("ExpEnum::DeclareDef not supported as input to sl_sh_fn proc macro."))
-        //}
-        //sl_sh::ExpEnum::DeclareVar => {
-        //    sl_sh::types::LispError::new(format!("ExpEnum::DeclareVar not supported as input to sl_sh_fn proc macro."))
-        //}
-        //sl_sh::ExpEnum::DeclareFn => {
-        //    sl_sh::types::LispError::new(format!("ExpEnum::DeclareFn not supported as input to sl_sh_fn proc macro."))
-        //}
-        //sl_sh::ExpEnum::DeclareMacro => {
-        //    sl_sh::types::LispError::new(format!("ExpEnum::DeclareMacro not supported as input to sl_sh_fn proc macro."))
-        //}
-        //sl_sh::ExpEnum::Quote => {
-        //    sl_sh::types::LispError::new(format!("ExpEnum::Quote not supported as input to sl_sh_fn proc macro."))
-        //}
-        //sl_sh::ExpEnum::BackQuote => {
-        //    sl_sh::types::LispError::new(format!("ExpEnum::BackQuote not supported as input to sl_sh_fn proc macro."))
-        //}
-        //sl_sh::ExpEnum::Undefined => {
-        //    sl_sh::types::LispError::new(format!("ExpEnum::Undefined not supported as input to sl_sh_fn proc macro."))
-        //}
-    }}
+    }
 }
 
 /// create the nested match statements to parse rust types into sl_sh types.
@@ -919,6 +878,7 @@ fn parse_argval_value_type(
 /// properly, or the rust type lookup function is busted.
 fn parse_type(
     ty: &TypePath,
+    fn_name_attr: &Ident,
     inner: TokenStream,
     val: ArgVal,
     arg_name: &Ident,
@@ -926,9 +886,11 @@ fn parse_type(
     outer_parse: fn(&Ident, TokenStream) -> TokenStream,
 ) -> MacroResult<TokenStream> {
     let tokens = match val {
-        ArgVal::Value => parse_argval_value_type(arg_name, passing_style, inner),
-        ArgVal::Optional => parse_argval_optional_type(arg_name, passing_style, inner),
-        ArgVal::Vec => parse_argval_varargs_type(ty, arg_name, passing_style, inner),
+        ArgVal::Value => parse_argval_value_type(ty, fn_name_attr, arg_name, passing_style, inner),
+        ArgVal::Optional => {
+            parse_argval_optional_type(ty, fn_name_attr, arg_name, passing_style, inner)
+        }
+        ArgVal::Vec => parse_argval_varargs_type(ty, fn_name_attr, arg_name, passing_style, inner),
     };
     Ok(outer_parse(arg_name, tokens))
 }
@@ -1049,9 +1011,15 @@ fn generate_sl_sh_fn2(
     };
 
     let args = parse_src_function_arguments(original_item_fn)?;
-    let builtin_fn = generate_builtin_fn2(original_item_fn, &original_fn_name, &builtin_name)?;
-    are_args_valid(original_item_fn, &args.as_slice())?;
-    let arg_types = to_arg_types(&args.as_slice());
+    let builtin_fn = generate_builtin_fn2(
+        original_item_fn,
+        &original_fn_name,
+        &builtin_name,
+        &fn_name,
+        &fn_name_attr,
+    )?;
+    are_args_valid(original_item_fn, args.as_slice())?;
+    let arg_types = to_arg_types(args.as_slice());
 
     let (return_type, lisp_result) = get_return_type2(original_item_fn)?;
 

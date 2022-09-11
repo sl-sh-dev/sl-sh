@@ -66,6 +66,8 @@ Limitations
 -----------
 1. If a Result return type is needed for simplicity only LispResult is supported.
 2. TypePath for LispResult must be bare can not be qualified with any type path, i.e. sl_sh::LispResult
+// TODO make a marker trait for sl_sh::LispResult, Vec, and Opt so those can be used to to do compile
+// time checks instead of matching TypePath's
 
 Example
 -------
