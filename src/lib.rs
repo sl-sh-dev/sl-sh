@@ -629,7 +629,7 @@ fn make_orig_fn_call(
         // coerce to a LispResult<Expression>
         (Some(_), Some(_), true) => quote! {
             #original_fn_name(#(#arg_names),*)?;
-            Ok(())
+            Ok(sl_sh::types::Expression::make_nil())
         },
         (Some(_), Some(_), false) => quote! {
             return #original_fn_name(#(#arg_names),*);
@@ -722,21 +722,8 @@ fn generate_builtin_fn2(
             }
         }
     }
-    let (return_type, lisp_result) = get_return_type2(original_item_fn)?;
-    let returns_none = "()" == return_type.to_token_stream().to_string();
-    let ret_tokens = match (return_type, lisp_result, returns_none) {
-        (Some(_), Some(_), true) | (None, None, _) | (Some(_), None, true) => {
-            quote! { -> sl_sh::LispResult<()> }
-        }
-        (Some(return_type), _, false) => {
-            quote! { -> sl_sh::LispResult<#return_type> }
-        }
-        (None, _, _) => {
-            unreachable!("If this functions returns a LispResult it must also return a value.");
-        }
-    };
     let tokens = quote! {
-        fn #builtin_name(#(#arg_names: #arg_types),*) #ret_tokens {
+        fn #builtin_name(#(#arg_names: #arg_types),*) -> sl_sh::LispResult<sl_sh::types::Expression> {
             let #fn_name_attr = #fn_name;
             #prev_token_stream
         }
@@ -744,33 +731,13 @@ fn generate_builtin_fn2(
     Ok(tokens)
 }
 
-/// return a tuple meant for the ret_err_exp_enum and try_exp_enum macros.
-/// first tuple is how to access the exp_enum data (mutable or immutable)
-/// second tuple is how to refer to the inner exp enum in a match pattern
-/// third tuple is how to refer to the inner exp enum referent type in
+/// return a code for how to refer to the inner exp enum referent type in
 /// an function call.
-/// TODO no longer need first or second value?
-fn tokens_for_matching_references(
-    arg_name: &Ident,
-    passing_style: ArgPassingStyle,
-    ty: &TypePath,
-) -> (TokenStream, TokenStream, TokenStream) {
+fn tokens_for_matching_references(passing_style: ArgPassingStyle, ty: &TypePath) -> TokenStream {
     match passing_style {
-        ArgPassingStyle::Move => (
-            quote! {#arg_name.get().data},
-            quote! {#arg_name},
-            quote! {#ty},
-        ),
-        ArgPassingStyle::Reference => (
-            quote! {#arg_name.get().data},
-            quote! {ref #arg_name},
-            quote! {&#ty},
-        ),
-        ArgPassingStyle::MutReference => (
-            quote! {#arg_name.get_mut().data},
-            quote! {ref mut #arg_name},
-            quote! {& mut #ty},
-        ),
+        ArgPassingStyle::Move => quote! {#ty},
+        ArgPassingStyle::Reference => quote! {&#ty},
+        ArgPassingStyle::MutReference => quote! {& mut #ty},
     }
 }
 
@@ -854,10 +821,7 @@ fn parse_argval_value_type(
     passing_style: ArgPassingStyle,
     inner: TokenStream,
 ) -> TokenStream {
-    let reference_tokens = tokens_for_matching_references(arg_name, passing_style, ty);
-    let ref_exp = reference_tokens.0;
-    let ref_match = reference_tokens.1;
-    let fn_ref = reference_tokens.2;
+    let fn_ref = tokens_for_matching_references(passing_style, ty);
     quote! {
         {
             use sl_sh::types::RustProcedure;
@@ -1021,28 +985,6 @@ fn generate_sl_sh_fn2(
     are_args_valid(original_item_fn, args.as_slice())?;
     let arg_types = to_arg_types(args.as_slice());
 
-    let (return_type, lisp_result) = get_return_type2(original_item_fn)?;
-
-    // these tokens are for calling the wrapper of the rust native function.
-    // Rust native functions may either return a lisp result, a value, or nothing.
-    let returns_none = "()" == return_type.to_token_stream().to_string();
-    let builtin_call_tokens = match (return_type, lisp_result, returns_none) {
-        (_, _, true) | (None, None, false) => {
-            quote! {
-                #builtin_name.call_expand_args(params)?;
-                Ok(sl_sh::types::Expression::make_nil())
-            }
-        }
-        (Some(_), _, false) => {
-            quote! {
-                #builtin_name.call_expand_args(params).map(Into::into)
-            }
-        }
-        (None, Some(_), false) => {
-            unreachable!("If this functions returns a LispResult it must also return a value.");
-        }
-    };
-
     // directly in this TokenStream enumerate the functions parse_ and intern_
     // parse is responsible for using the environment to turn the Expressions
     // into a list of ArgTypes. ArgTypes are the abstraction that allow
@@ -1065,7 +1007,7 @@ fn generate_sl_sh_fn2(
                 match args.try_into() {
                     Ok(params) => {
                         let params: [sl_sh::ArgType; args_len] = params;
-                        #builtin_call_tokens
+                        #builtin_name.call_expand_args(params)
                     },
                     Err(e) => {
                         Err(sl_sh::types::LispError::new(format!("{} is broken and can't parse its arguments..", #fn_name_attr, )))
