@@ -7,6 +7,7 @@ use std::fmt;
 use std::fs::File;
 use std::io::{self, BufReader, BufWriter, Read, Write};
 use std::iter;
+use std::marker::PhantomData;
 use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
 
@@ -15,6 +16,7 @@ use crate::eval::call_lambda;
 use crate::process::*;
 use crate::symbols::*;
 use crate::unix::fd_to_file;
+use crate::ErrorStrings;
 
 #[derive(Clone, Debug)]
 pub struct LispError {
@@ -1102,46 +1104,109 @@ impl From<&mut ExpEnum> for Expression {
     }
 }
 
+pub struct TypedExpression<T>(Expression, PhantomData<T>);
+
+impl<T> TypedExpression<T> {
+    pub fn new(exp_obj: Expression) -> TypedExpression<T> {
+        TypedExpression(exp_obj, PhantomData::default())
+    }
+}
+
+pub trait RustProcedure<T, F> {
+    fn apply(&self, fn_name: &str, fun: F) -> crate::LispResult<Expression>
+    where
+        Self: Sized,
+        F: FnOnce(&mut T) -> crate::LispResult<Expression>;
+}
+
+// TODO question, what is the best way to support Option and Vec
+//  types? Can there be a blanket implementation for them or must
+//  the logic that handles them be embedded entirely into the FnOnce.
+//impl<F, T> RustProcedure<Option<T>, F> for TypedExpression<T>
+//where
+//    F: FnOnce(Option<T>) -> crate::LispResult<Expression>,
+//{
+//    fn apply(&self, fn_name: &str, fun: F) -> crate::LispResult<Expression> {}
+//}
+
+impl<F> RustProcedure<HashMap<&str, Expression>, F> for TypedExpression<HashMap<&str, Expression>>
+where
+    F: FnOnce(&mut HashMap<&str, Expression>) -> crate::LispResult<Expression>,
+{
+    fn apply(&self, fn_name: &str, fun: F) -> crate::LispResult<Expression> {
+        let mut borrow = self.0.data.borrow_mut();
+        let display_name = borrow.data.to_string();
+        match &mut borrow.data {
+            ExpEnum::HashMap(map) => fun(map),
+            _ => Err(LispError::new(ErrorStrings::mismatched_type(
+                fn_name,
+                "HashMap<&str, Expression",
+                &display_name,
+            ))),
+        }
+    }
+}
+
+impl<F> RustProcedure<Expression, F> for TypedExpression<Expression>
+where
+    F: FnOnce(Expression) -> crate::LispResult<Expression>,
+{
+    fn apply(&self, _fn_name: &str, fun: F) -> crate::LispResult<Expression> {
+        fun(self.0.clone())
+    }
+}
+
+impl<F> RustProcedure<&Expression, F> for TypedExpression<&Expression>
+where
+    F: FnOnce(&Expression) -> crate::LispResult<Expression>,
+{
+    fn apply(&self, _fn_name: &str, fun: F) -> crate::LispResult<Expression> {
+        fun(&self.0)
+    }
+}
+
+impl<F> RustProcedure<i64, F> for TypedExpression<i64>
+where
+    F: FnOnce(i64) -> crate::LispResult<Expression>,
+{
+    fn apply(&self, fn_name: &str, fun: F) -> crate::LispResult<Expression> {
+        let mut borrow = self.0.data.borrow_mut();
+        let display_name = borrow.data.to_string();
+        match &mut borrow.data {
+            ExpEnum::Int(num) => fun(*num),
+            _ => Err(LispError::new(ErrorStrings::mismatched_type(
+                fn_name,
+                "Int",
+                &display_name,
+            ))),
+        }
+    }
+}
+
+impl<F> RustProcedure<f64, F> for TypedExpression<f64>
+where
+    F: FnOnce(f64) -> crate::LispResult<Expression>,
+{
+    fn apply(&self, fn_name: &str, fun: F) -> crate::LispResult<Expression> {
+        let mut borrow = self.0.data.borrow_mut();
+        let display_name = borrow.data.to_string();
+        match &mut borrow.data {
+            ExpEnum::Float(num) => fun(*num),
+            _ => Err(LispError::new(ErrorStrings::mismatched_type(
+                fn_name,
+                "Float",
+                &display_name,
+            ))),
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::{try_exp_enum, try_inner_exp_enum, ArgType, LispResult};
     use std::collections::HashMap;
     use std::marker::PhantomData;
-
-    pub struct TypedExpression<T>(Expression, PhantomData<T>);
-
-    impl<T> TypedExpression<T> {
-        pub fn new(exp_obj: Expression) -> TypedExpression<T> {
-            TypedExpression(exp_obj, PhantomData::default())
-        }
-    }
-
-    trait RustProcedure<T, F> {
-        fn apply(&self, fun: F) -> crate::LispResult<Expression>
-        where
-            Self: Sized,
-            F: FnOnce(&mut T) -> crate::LispResult<Expression>;
-    }
-
-    impl<F> RustProcedure<HashMap<&str, Expression>, F> for TypedExpression<HashMap<&str, Expression>>
-    where
-        F: FnOnce(&mut HashMap<&str, Expression>) -> crate::LispResult<Expression>,
-    {
-        fn apply(&self, fun: F) -> crate::LispResult<Expression> {
-            let mut borrow = self.0.data.borrow_mut();
-            let display_name = borrow.data.to_string();
-            match &mut borrow.data {
-                ExpEnum::HashMap(map) => {
-                    let f = fun(map);
-                    f
-                }
-                _ => Err(LispError::new(format!(
-                    "Can't turn {} into a HashMap.",
-                    display_name
-                ))),
-            }
-        }
-    }
 
     fn my_hash_print(
         map0: &mut HashMap<&str, Expression>,
@@ -1160,6 +1225,7 @@ mod test {
 
     #[test]
     fn test_wrap() {
+        let fn_name = "test_wrap-hash-operations";
         let mut my_map = HashMap::new();
         my_map.insert("meow", Expression::make_nil());
         my_map.insert("meow1", Expression::make_nil());
@@ -1179,15 +1245,15 @@ mod test {
                 my_hash_print(map0, map1)?;
                 Ok(Expression::make_nil())
             };
-            pdata.apply(hash_clear)
+            pdata.apply(fn_name, hash_clear)
         };
-        pdata.apply(hash_clear).unwrap();
+        pdata.apply(fn_name, hash_clear).unwrap();
 
         let hash_clear = |map: &mut HashMap<&str, Expression>| {
             my_hash_clear(map)?;
             Ok(Expression::make_nil())
         };
-        pdata.apply(hash_clear).unwrap();
+        pdata.apply(fn_name, hash_clear).unwrap();
         let borrow = exp_clone.data.borrow();
         match &borrow.data {
             ExpEnum::HashMap(map) => {
@@ -1199,22 +1265,48 @@ mod test {
         }
     }
 
-    impl<F> RustProcedure<Expression, F> for TypedExpression<Expression>
-    where
-        F: FnOnce(Expression) -> crate::LispResult<Expression>,
-    {
-        fn apply(&self, fun: F) -> crate::LispResult<Expression> {
-            fun(self.0.clone())
-        }
+    #[test]
+    fn with_some_hashmaps_test() {
+        let mut hash_map0 = HashMap::new();
+        hash_map0.insert("meow0", Expression::alloc_data(ExpEnum::Int(7)));
+        hash_map0.insert("meow1", Expression::alloc_data(ExpEnum::Int(11)));
+        let myint0 = ArgType::Exp(Expression::alloc_data(ExpEnum::HashMap(hash_map0)));
+        let mut hash_map1 = HashMap::new();
+        hash_map1.insert("woof0", Expression::alloc_data(ExpEnum::Int(7)));
+        hash_map1.insert("woof1", Expression::alloc_data(ExpEnum::Int(11)));
+        let myint1 = ArgType::Exp(Expression::alloc_data(ExpEnum::HashMap(hash_map1)));
+        arg_translate_print_hash_map(myint0, myint1).unwrap();
     }
 
-    impl<F> RustProcedure<&Expression, F> for TypedExpression<&Expression>
-    where
-        F: FnOnce(&Expression) -> crate::LispResult<Expression>,
-    {
-        fn apply(&self, fun: F) -> crate::LispResult<Expression> {
-            fun(&self.0)
-        }
+    fn arg_translate_print_hash_map(exp0: ArgType, exp1: ArgType) -> LispResult<Expression> {
+        try_inner_exp_enum!(
+            exp0,
+            ArgType::Exp(exp0),
+            {
+                try_inner_exp_enum!(
+                    exp1,
+                    ArgType::Exp(exp1),
+                    builtin_print_hash_map(exp0, exp1),
+                    "err"
+                )
+            },
+            "err"
+        )
+    }
+
+    fn builtin_print_hash_map(exp0: Expression, exp1: Expression) -> LispResult<Expression> {
+        let fn_name = "print_hash_map";
+        let pdata: TypedExpression<HashMap<&'static str, Expression>> = TypedExpression::new(exp0);
+        let hash_clear = |map0: &mut HashMap<&str, Expression>| {
+            let pdata: TypedExpression<HashMap<&'static str, Expression>> =
+                TypedExpression::new(exp1);
+            let hash_clear = |map1: &mut HashMap<&str, Expression>| {
+                my_hash_print(map0, map1)?;
+                Ok(Expression::make_nil())
+            };
+            pdata.apply(fn_name, hash_clear)
+        };
+        pdata.apply(fn_name, hash_clear)
     }
 
     #[test]
