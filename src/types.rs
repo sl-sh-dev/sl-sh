@@ -16,7 +16,7 @@ use crate::eval::call_lambda;
 use crate::process::*;
 use crate::symbols::*;
 use crate::unix::fd_to_file;
-use crate::ErrorStrings;
+use crate::{ErrorStrings, LispResult};
 
 #[derive(Clone, Debug)]
 pub struct LispError {
@@ -1112,11 +1112,19 @@ impl<T> TypedExpression<T> {
     }
 }
 
-pub trait RustProcedure<T, F> {
-    fn apply(&self, fn_name: &str, fun: F) -> crate::LispResult<Expression>
-    where
-        Self: Sized,
-        F: FnOnce(&mut T) -> crate::LispResult<Expression>;
+pub trait RustProcedureRef<T, F>
+where
+    Self: Sized,
+    F: FnOnce(&mut T) -> crate::LispResult<Expression>,
+{
+    fn apply_ref_mut(&self, fn_name: &str, fun: F) -> crate::LispResult<Expression>;
+}
+pub trait RustProcedure<T, F>
+where
+    Self: Sized,
+    F: FnOnce(T) -> crate::LispResult<Expression>,
+{
+    fn apply(&self, fn_name: &str, fun: F) -> crate::LispResult<Expression>;
 }
 
 // TODO question, what is the best way to support Option and Vec
@@ -1129,11 +1137,12 @@ pub trait RustProcedure<T, F> {
 //    fn apply(&self, fn_name: &str, fun: F) -> crate::LispResult<Expression> {}
 //}
 
-impl<F> RustProcedure<HashMap<&str, Expression>, F> for TypedExpression<HashMap<&str, Expression>>
+impl<F> RustProcedureRef<HashMap<&str, Expression>, F>
+    for TypedExpression<HashMap<&str, Expression>>
 where
     F: FnOnce(&mut HashMap<&str, Expression>) -> crate::LispResult<Expression>,
 {
-    fn apply(&self, fn_name: &str, fun: F) -> crate::LispResult<Expression> {
+    fn apply_ref_mut(&self, fn_name: &str, fun: F) -> crate::LispResult<Expression> {
         let mut borrow = self.0.data.borrow_mut();
         let display_name = borrow.data.to_string();
         match &mut borrow.data {
@@ -1147,6 +1156,33 @@ where
     }
 }
 
+impl<F> RustProcedure<HashMap<&str, Expression>, F> for TypedExpression<HashMap<&str, Expression>>
+where
+    F: FnOnce(HashMap<&str, Expression>) -> crate::LispResult<Expression>,
+{
+    fn apply(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
+        let mut borrow = self.0.data.borrow_mut();
+        let display_name = borrow.data.to_string();
+        match &mut borrow.data {
+            ExpEnum::HashMap(map) => fun(map.clone()),
+            _ => Err(LispError::new(ErrorStrings::mismatched_type(
+                fn_name,
+                "HashMap<&str, Expression",
+                &display_name,
+            ))),
+        }
+    }
+}
+
+impl<F> RustProcedureRef<Expression, F> for TypedExpression<Expression>
+where
+    F: FnOnce(&mut Expression) -> crate::LispResult<Expression>,
+{
+    fn apply_ref_mut(&self, _fn_name: &str, fun: F) -> crate::LispResult<Expression> {
+        fun(&mut self.0.clone())
+    }
+}
+
 impl<F> RustProcedure<Expression, F> for TypedExpression<Expression>
 where
     F: FnOnce(Expression) -> crate::LispResult<Expression>,
@@ -1156,12 +1192,21 @@ where
     }
 }
 
-impl<F> RustProcedure<&Expression, F> for TypedExpression<&Expression>
+impl<F> RustProcedureRef<i64, F> for TypedExpression<i64>
 where
-    F: FnOnce(&Expression) -> crate::LispResult<Expression>,
+    F: FnOnce(&mut i64) -> crate::LispResult<Expression>,
 {
-    fn apply(&self, _fn_name: &str, fun: F) -> crate::LispResult<Expression> {
-        fun(&self.0)
+    fn apply_ref_mut(&self, fn_name: &str, fun: F) -> crate::LispResult<Expression> {
+        let mut borrow = self.0.data.borrow_mut();
+        let display_name = borrow.data.to_string();
+        match &mut borrow.data {
+            ExpEnum::Int(num) => fun(num),
+            _ => Err(LispError::new(ErrorStrings::mismatched_type(
+                fn_name,
+                "Int",
+                &display_name,
+            ))),
+        }
     }
 }
 
@@ -1177,6 +1222,24 @@ where
             _ => Err(LispError::new(ErrorStrings::mismatched_type(
                 fn_name,
                 "Int",
+                &display_name,
+            ))),
+        }
+    }
+}
+
+impl<F> RustProcedureRef<f64, F> for TypedExpression<f64>
+where
+    F: FnOnce(&mut f64) -> crate::LispResult<Expression>,
+{
+    fn apply_ref_mut(&self, fn_name: &str, fun: F) -> crate::LispResult<Expression> {
+        let mut borrow = self.0.data.borrow_mut();
+        let display_name = borrow.data.to_string();
+        match &mut borrow.data {
+            ExpEnum::Float(num) => fun(num),
+            _ => Err(LispError::new(ErrorStrings::mismatched_type(
+                fn_name,
+                "Float",
                 &display_name,
             ))),
         }
