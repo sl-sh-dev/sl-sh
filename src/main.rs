@@ -91,28 +91,28 @@ fn check_int_functions() {
     //        panic!("Should befloat.");
     //    }
     //}
-    //let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
-    //let exp: Expression = builtin_one_int_to_float(sl_sh::ArgType::Exp(arg_0))
-    //    .unwrap()
-    //    .into();
-    //let exp_d = exp.get();
-    //match exp_d.data {
-    //    ExpEnum::Float(f) => {
-    //        assert_eq!(8.0, f);
-    //        println!("basic int to float working");
-    //    }
-    //    _ => {
-    //        panic!("Should befloat.");
-    //    }
-    //}
+    let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
+    let exp: Expression = builtin_one_int_to_float(sl_sh::ArgType::Exp(arg_0))
+        .unwrap()
+        .into();
+    let exp_d = exp.get();
+    match exp_d.data {
+        ExpEnum::Float(f) => {
+            assert_eq!(8.0, f);
+            println!("basic int to float working");
+        }
+        _ => {
+            panic!("Should befloat.");
+        }
+    }
     let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
     builtin_print_the_int(sl_sh::ArgType::Exp(arg_0)).unwrap();
 
-    //let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
-    //assert!(builtin_print_the_fallible_int(sl_sh::ArgType::Exp(arg_0)).is_ok());
+    let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
+    assert!(builtin_print_the_fallible_int(sl_sh::ArgType::Exp(arg_0)).is_ok());
 
-    //let arg_0 = Expression::alloc_data(ExpEnum::Int(9));
-    //assert!(builtin_print_the_fallible_int(sl_sh::ArgType::Exp(arg_0)).is_err());
+    let arg_0 = Expression::alloc_data(ExpEnum::Int(9));
+    assert!(builtin_print_the_fallible_int(sl_sh::ArgType::Exp(arg_0)).is_err());
     let mut my_map = HashMap::new();
     my_map.insert("meow", Expression::make_nil());
     my_map.insert("meow1", Expression::make_nil());
@@ -225,23 +225,23 @@ fn print_the_int(int: i64) {
     println!("the int!: {}.", int as f64);
 }
 
-///// my docs
-//#[sl_sh_proc_macros::sl_sh_fn2(fn_name = "printint")]
-//fn print_the_fallible_int(int: i64) -> LispResult<()> {
-//    if int % 2 == 0 {
-//        println!("the fallible int!: {}.", int as f64);
-//        Ok(())
-//    } else {
-//        Err(LispError::new("int % 2 must be equal to 0."))
-//    }
-//}
-//
-///// my docs
-//#[sl_sh_proc_macros::sl_sh_fn2(fn_name = "oneintofloat")]
-//fn one_int_to_float(int: i64) -> LispResult<f64> {
-//    Ok(int as f64)
-//}
-//
+/// my docs
+#[sl_sh_proc_macros::sl_sh_fn2(fn_name = "printint")]
+fn print_the_fallible_int(int: i64) -> LispResult<()> {
+    if int % 2 == 0 {
+        println!("the fallible int!: {}.", int as f64);
+        Ok(())
+    } else {
+        Err(LispError::new("int % 2 must be equal to 0."))
+    }
+}
+
+/// my docs
+#[sl_sh_proc_macros::sl_sh_fn2(fn_name = "oneintofloat")]
+fn one_int_to_float(int: i64) -> LispResult<f64> {
+    Ok(int as f64)
+}
+
 ///// my docs
 //#[sl_sh_proc_macros::sl_sh_fn2(fn_name = "intofloat")]
 //fn int_to_float(int0: i64, int1: i64) -> LispResult<f64> {
