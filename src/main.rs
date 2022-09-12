@@ -43,7 +43,7 @@ fn check_int_functions() {
     //        .unwrap();
     //assert_eq!(8.0, f);
     //println!("Opt fallible function that takes none and returns bare float is ok.");
-    //// non fallibe opts (refers to function they call, builtin_ always returns LispResult
+    //// non fallible opts (refers to function they call, builtin_ always returns LispResult
     //let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
     //let f = builtin_opt_int_to_float(
     //    sl_sh::ArgType::Exp(arg_0),
@@ -118,14 +118,35 @@ fn check_int_functions() {
     my_map.insert("meow1", Expression::make_nil());
     my_map.insert("meow2", Expression::make_nil());
     let exp = Expression::alloc_data(ExpEnum::HashMap(my_map));
-    let exp_clone = exp.clone();
+    //let exp_clone = exp.clone();
 
     let arg_type = sl_sh::builtins_util::ArgType::Exp(exp.clone());
-    builtin_my_hash_clear(arg_type).unwrap();
+    builtin_my_fallible_hash_clear(arg_type).unwrap();
     let exp_enum = &exp.get().data;
     match exp_enum {
         ExpEnum::HashMap(map) => {
-            assert!(map.is_empty())
+            assert!(map.is_empty());
+            println!("map is empty!");
+        }
+        _ => {
+            panic!("map is empty!");
+        }
+    }
+
+    let mut my_map = HashMap::new();
+    my_map.insert("meow", Expression::make_nil());
+    my_map.insert("meow1", Expression::make_nil());
+    my_map.insert("meow2", Expression::make_nil());
+    let exp = Expression::alloc_data(ExpEnum::HashMap(my_map));
+    //let exp_clone = exp.clone();
+
+    let arg_type = sl_sh::builtins_util::ArgType::Exp(exp.clone());
+    builtin_my_hash_clear(arg_type);
+    let exp_enum = &exp.get().data;
+    match exp_enum {
+        ExpEnum::HashMap(map) => {
+            assert!(map.is_empty());
+            println!("map is empty!");
         }
         _ => {
             panic!("map is empty!");
@@ -261,57 +282,16 @@ use sl_sh::{ExpEnum, Expression, LispResult};
 //}
 
 use std::collections::HashMap;
+
 /// my docs
-//#[sl_sh_proc_macros::sl_sh_fn2(fn_name = "my_hash_clear")]
-fn my_hash_clear(inner_map: &mut HashMap<&str, Expression>) -> LispResult<()> {
+#[sl_sh_proc_macros::sl_sh_fn2(fn_name = "my_hash_clear")]
+fn my_fallible_hash_clear(inner_map: &mut HashMap<&str, Expression>) -> LispResult<()> {
     inner_map.clear();
     Ok(())
 }
 
-fn builtin_my_hash_clear(arg_0: sl_sh::ArgType) -> sl_sh::LispResult<()> {
-    match arg_0 {
-        sl_sh::ArgType::Exp(arg_0) => match arg_0.get_mut().data {
-            sl_sh::ExpEnum::HashMap(ref mut arg_0) => {
-                my_hash_clear(arg_0)?;
-                Ok(())
-            }
-            _ => {
-                return Err(sl_sh::types::LispError::new("lame"));
-            }
-        },
-        _ => {
-            return Err(LispError::new(
-                "sl_sh_fn macro is broken. ArgType::Exp can't be parsed as ArgType::Exp",
-            ))
-        }
-    }
-}
-fn parse_my_hash_clear(
-    environment: &mut sl_sh::environment::Environment,
-    args: &mut dyn Iterator<Item = sl_sh::types::Expression>,
-) -> sl_sh::LispResult<sl_sh::types::Expression> {
-    use sl_sh::builtins_util::ExpandVecToArgs;
-    use std::convert::TryInto;
-    let args = sl_sh::builtins_util::make_args_eval_no_values(environment, args)?;
-    let fn_name = "my_hash_clear";
-    const args_len: usize = 1usize;
-    let arg_types = vec![sl_sh::builtins_util::Arg {
-        val: sl_sh::builtins_util::ArgVal::Value,
-        passing_style: sl_sh::builtins_util::ArgPassingStyle::MutReference,
-    }];
-    let args = sl_sh::get_arg_types(fn_name, arg_types, args)?;
-    if args.len() == args_len {
-        match args.try_into() {
-            Ok(params) => {
-                let params: [sl_sh::ArgType; args_len] = params;
-                builtin_my_hash_clear.call_expand_args(params)?;
-                Ok(sl_sh::types::Expression::make_nil())
-            }
-            Err(e) => Err(sl_sh::types::LispError::new("lame")),
-        }
-    } else if args.len() > args_len {
-        Err(sl_sh::types::LispError::new("lame"))
-    } else {
-        Err(sl_sh::types::LispError::new("lame"))
-    }
+/// my docs
+#[sl_sh_proc_macros::sl_sh_fn2(fn_name = "my_hash_clear")]
+fn my_hash_clear(inner_map: &mut HashMap<&str, Expression>) {
+    inner_map.clear();
 }
