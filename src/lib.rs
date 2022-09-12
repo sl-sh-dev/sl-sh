@@ -656,7 +656,7 @@ fn make_orig_fn_call(
 fn make_arg_types(original_item_fn: &ItemFn) -> MacroResult<(Vec<Ident>, Vec<TokenStream>)> {
     let len = original_item_fn.sig.inputs.len();
     // TODO conversion for return type and arguments that enforece the TypeExpression and/or
-    //  RustProcedure implementations.
+    //  RustProcedureRef implementations.
     //let conversions_assertions_code =
     //    generate_assertions_code_for_type_conversions(original_item_fn, &return_type)?;
     let mut arg_names = vec![];
@@ -828,15 +828,29 @@ fn parse_argval_value_type(
     inner: TokenStream,
 ) -> TokenStream {
     let fn_ref = tokens_for_matching_references(passing_style, ty);
-    quote! {
-        {
-            use sl_sh::types::RustProcedure;
-            let pdata: sl_sh::types::TypedExpression<#ty> =
-                sl_sh::types::TypedExpression::new(#arg_name);
-            let hash_clear = |#arg_name: #fn_ref| {
-                #inner
-            };
-            pdata.apply(#fn_name_attr, hash_clear)
+    match passing_style {
+        ArgPassingStyle::Move => {
+            quote! {{
+                use sl_sh::types::RustProcedure;
+                let typed_data: sl_sh::types::TypedExpression<#ty> =
+                    sl_sh::types::TypedExpression::new(#arg_name);
+                let hash_clear = |#arg_name: #fn_ref| -> sl_sh::LispResult<sl_sh::types::Expression> {
+                    #inner
+                };
+                typed_data.apply(#fn_name_attr, hash_clear)
+            }}
+        }
+        _ => {
+            // some reference
+            quote! {{
+                use sl_sh::types::RustProcedureRef;
+                let typed_data: sl_sh::types::TypedExpression<#ty> =
+                    sl_sh::types::TypedExpression::new(#arg_name);
+                let hash_clear = |#arg_name: #fn_ref| -> sl_sh::LispResult<sl_sh::types::Expression> {
+                    #inner
+                };
+                typed_data.apply_ref_mut(#fn_name_attr, hash_clear)
+            }}
         }
     }
 }
