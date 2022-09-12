@@ -105,8 +105,8 @@ fn check_int_functions() {
     //        panic!("Should befloat.");
     //    }
     //}
-    //let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
-    //builtin_print_the_int(sl_sh::ArgType::Exp(arg_0)).unwrap();
+    let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
+    builtin_print_the_int(sl_sh::ArgType::Exp(arg_0)).unwrap();
 
     //let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
     //assert!(builtin_print_the_fallible_int(sl_sh::ArgType::Exp(arg_0)).is_ok());
@@ -141,7 +141,7 @@ fn check_int_functions() {
     //let exp_clone = exp.clone();
 
     let arg_type = sl_sh::builtins_util::ArgType::Exp(exp.clone());
-    builtin_my_hash_clear(arg_type);
+    builtin_my_hash_clear(arg_type).unwrap();
     let exp_enum = &exp.get().data;
     match exp_enum {
         ExpEnum::HashMap(map) => {
@@ -216,30 +216,15 @@ fn main() -> Result<(), LispError> {
     Ok(())
 }
 
-//use std::collections::HashMap;
-//fn hash_clear(exp: sl_sh::Expression) -> sl_sh::LispResult<sl_sh::Expression> {
-//    let mut map_d = exp.get_mut();
-//    let thing = &mut map_d.data;
-//    try_inner_exp_enum!(
-//        &mut map_d.data,
-//        sl_sh::ExpEnum::HashMap(inner_map),
-//        {
-//            inner_map.clear();
-//            return Ok(exp.clone());
-//        },
-//        "meow"
-//    );
-//}
-
 use sl_sh::{ExpEnum, Expression, LispResult};
 //use sl_sh::{ExpEnum, LispResult};
 
-///// my docs
-//#[sl_sh_proc_macros::sl_sh_fn2(fn_name = "printint")]
-//fn print_the_int(int: i64) {
-//    println!("the int!: {}.", int as f64);
-//}
-//
+/// my docs
+#[sl_sh_proc_macros::sl_sh_fn2(fn_name = "printint")]
+fn print_the_int(int: i64) {
+    println!("the int!: {}.", int as f64);
+}
+
 ///// my docs
 //#[sl_sh_proc_macros::sl_sh_fn2(fn_name = "printint")]
 //fn print_the_fallible_int(int: i64) -> LispResult<()> {
