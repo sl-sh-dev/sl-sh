@@ -618,6 +618,7 @@ fn make_orig_fn_call(
     original_item_fn: &ItemFn,
     original_fn_name: &Ident,
     arg_names: Vec<Ident>,
+    fn_name_attr: &Ident,
 ) -> MacroResult<TokenStream> {
     // the original function call must return an Expression object
     // this means all returned rust native types must implement TryIntoExpression
@@ -632,7 +633,7 @@ fn make_orig_fn_call(
             Ok(sl_sh::types::Expression::make_nil())
         },
         (Some(_), Some(_), false) => quote! {
-            return #original_fn_name(#(#arg_names),*);
+            #original_fn_name(#(#arg_names),*)?.try_into_for(#fn_name_attr)
         },
         // coerce to Expression
         (Some(_), None, _) => quote! {
@@ -644,7 +645,7 @@ fn make_orig_fn_call(
         // no return
         (None, None, _) => quote! {
             #original_fn_name(#(#arg_names),*);
-            Ok(())
+            Ok(sl_sh::types::Expression::make_nil())
         },
     };
     Ok(quote! {
@@ -677,7 +678,12 @@ fn generate_builtin_fn2(
     fn_name_attr: &Ident,
 ) -> MacroResult<TokenStream> {
     let (arg_names, arg_types) = make_arg_types(original_item_fn)?;
-    let orig_fn_call = make_orig_fn_call(original_item_fn, original_fn_name, arg_names.clone())?;
+    let orig_fn_call = make_orig_fn_call(
+        original_item_fn,
+        original_fn_name,
+        arg_names.clone(),
+        fn_name_attr,
+    )?;
 
     let mut prev_token_stream = orig_fn_call;
     let fn_args = original_item_fn.sig.inputs.iter().zip(arg_names.iter());
