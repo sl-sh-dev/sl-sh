@@ -821,17 +821,31 @@ fn parse_argval_value_type(
     passing_style: ArgPassingStyle,
     inner: TokenStream,
 ) -> TokenStream {
+    let orig_ty = ty;
+    let ty = if let Some((ty, type_path)) = get_generic_argument_from_type_path(ty) {
+        let wrapper = opt_is_valid_generic_type(type_path, POSSIBLE_ARG_TYPES.as_slice());
+        match (ty, wrapper) {
+            (GenericArgument::Type(ty), Some(_)) => match ty {
+                Type::Path(path) => path,
+                _ => orig_ty,
+            },
+            (_, _) => orig_ty,
+        }
+    } else {
+        ty
+    };
     let fn_ref = tokens_for_matching_references(passing_style, ty);
+
     match passing_style {
         ArgPassingStyle::Move => {
             quote! {{
                 use sl_sh::types::RustProcedure;
                 let typed_data: sl_sh::types::TypedExpression<#ty> =
                     sl_sh::types::TypedExpression::new(#arg_name);
-                let hash_clear = |#arg_name: #fn_ref| -> sl_sh::LispResult<sl_sh::types::Expression> {
+                let callback = |#arg_name: #fn_ref| -> sl_sh::LispResult<sl_sh::types::Expression> {
                     #inner
                 };
-                typed_data.apply(#fn_name_attr, hash_clear)
+                typed_data.apply(#fn_name_attr, callback)
             }}
         }
         _ => {
@@ -840,10 +854,10 @@ fn parse_argval_value_type(
                 use sl_sh::types::RustProcedureRef;
                 let typed_data: sl_sh::types::TypedExpression<#ty> =
                     sl_sh::types::TypedExpression::new(#arg_name);
-                let hash_clear = |#arg_name: #fn_ref| -> sl_sh::LispResult<sl_sh::types::Expression> {
+                let callback = |#arg_name: #fn_ref| -> sl_sh::LispResult<sl_sh::types::Expression> {
                     #inner
                 };
-                typed_data.apply_ref_mut(#fn_name_attr, hash_clear)
+                typed_data.apply_ref_mut(#fn_name_attr, callback)
             }}
         }
     }
