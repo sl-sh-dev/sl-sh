@@ -429,6 +429,11 @@ impl<'vm> CompileEnvironment<'vm> {
         Value::Global(slot)
     }
 
+    pub fn set_global_builtin(&mut self, string: &str, func: CallFuncSig) -> Value {
+        let f_val = self.vm.add_builtin(func);
+        self.set_global(string, f_val)
+    }
+
     pub fn dump_globals(&self) {
         println!("GLOBALS:");
         let mut ordered_keys = Vec::with_capacity(self.global_map.len());

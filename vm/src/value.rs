@@ -115,7 +115,7 @@ pub enum Value {
     Keyword(Interned),
     StringConst(Interned),
     Global(u32),
-    Builtin(CallFunc),
+    Builtin(u32),
     True,
     False,
     Nil,

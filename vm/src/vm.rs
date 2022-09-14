@@ -23,6 +23,7 @@ pub struct Vm {
     heap: Heap,
     stack: Vec<Value>,
     globals: Globals,
+    buitins: Vec<CallFunc>,
     this_fn: Option<Value>,
     on_error: Option<Value>,
 
@@ -51,6 +52,7 @@ impl Vm {
             heap: Heap::new(),
             stack,
             globals,
+            buitins: Vec::new(),
             this_fn: None,
             on_error: None,
             err_frame: None,
@@ -104,6 +106,12 @@ impl Vm {
             }
         };
         Ok(val)
+    }
+
+    pub fn add_builtin(&mut self, func: CallFuncSig) -> Value {
+        let result = self.buitins.len();
+        self.buitins.push(CallFunc { func });
+        Value::Builtin(result as u32)
     }
 
     pub fn is_equal_pair(&self, val1: Value, val2: Value) -> VMResult<Value> {
@@ -931,7 +939,7 @@ mod tests {
         let mut vm = Vm::new();
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
-        let const1 = chunk.add_constant(Value::Builtin(CallFunc { func: add_b })) as u16;
+        let const1 = chunk.add_constant(vm.add_builtin(add_b)) as u16;
         chunk.encode2(CONST, 10, const1, Some(line)).unwrap();
         chunk.encode2(MOV, 4, 1, Some(line)).unwrap();
         chunk.encode2(MOV, 5, 2, Some(line)).unwrap();
@@ -942,7 +950,7 @@ mod tests {
 
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
-        let const1 = chunk.add_constant(Value::Builtin(CallFunc { func: add_b })) as u16;
+        let const1 = chunk.add_constant(vm.add_builtin(add_b)) as u16;
         chunk.encode2(CONST, 10, const1, Some(line)).unwrap();
         chunk.encode2(TCALL, 10, 2, Some(line)).unwrap();
         chunk.encode0(RET, Some(line))?;
@@ -951,7 +959,7 @@ mod tests {
 
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
-        let const1 = chunk.add_constant(Value::Builtin(CallFunc { func: add_10 })) as u16;
+        let const1 = chunk.add_constant(vm.add_builtin(add_10)) as u16;
         chunk.encode2(CONST, 4, const1, Some(line)).unwrap();
         chunk.encode2(MOV, 3, 1, Some(line)).unwrap();
         chunk.encode3(CALL, 4, 1, 2, Some(line)).unwrap();
@@ -966,7 +974,7 @@ mod tests {
         vm.stack[3] = Value::Int(6);
         vm.stack[4] = Value::Int(3);
         vm.stack[8] = Value::Int(12);
-        let const1 = chunk.add_constant(Value::Builtin(CallFunc { func: make_str })) as u16;
+        let const1 = chunk.add_constant(vm.add_builtin(make_str)) as u16;
         chunk.encode3(CALL, 0, 2, 2, Some(line)).unwrap();
         chunk.encode3(CALL, 1, 1, 7, Some(line)).unwrap();
         chunk.encode2(CONST, 15, const1, Some(line)).unwrap();
@@ -993,7 +1001,7 @@ mod tests {
         vm.stack[3] = Value::Int(6);
         vm.stack[4] = Value::Int(3);
         vm.stack[6] = Value::Int(12);
-        let const1 = chunk.add_constant(Value::Builtin(CallFunc { func: make_str })) as u16;
+        let const1 = chunk.add_constant(vm.add_builtin(make_str)) as u16;
         chunk.encode3(CALL, 0, 2, 2, Some(line)).unwrap();
         chunk.encode3(CALL, 1, 1, 5, Some(line)).unwrap();
         chunk.encode2(CONST, 10, const1, Some(line)).unwrap();

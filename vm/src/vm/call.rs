@@ -109,10 +109,11 @@ impl Vm {
     ) -> Result<Arc<Chunk>, (VMError, Arc<Chunk>)> {
         let mut do_cont = false;
         let result = match lambda {
-            Value::Builtin(f) => {
+            Value::Builtin(f_idx) => {
                 let last_reg = (first_reg + num_args + 1) as usize;
                 // Useful if the builtin runs bytecode that errors otherwise a waste...
                 let frame = self.make_call_frame(chunk.clone(), lambda, false);
+                let f = self.buitins[f_idx as usize];
                 let res = (f.func)(self, &registers[(first_reg + 1) as usize..last_reg]).map_err(
                     |e| {
                         if self.err_frame().is_some() {

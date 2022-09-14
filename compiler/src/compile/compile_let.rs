@@ -157,8 +157,8 @@ mod tests {
     fn test_let() {
         let mut vm = Vm::new();
         let mut env = CompileEnvironment::new(&mut vm);
-        env.set_global("prn", Value::Builtin(CallFunc { func: prn }));
-        env.set_global("dasm", Value::Builtin(CallFunc { func: dasm }));
+        env.set_global_builtin("prn", prn);
+        env.set_global_builtin("dasm", dasm);
 
         let result = exec(&mut env, "(let (a 1, b 2, c 3) `(~a ~b ~c))");
         let expected = read_test(env.vm_mut(), "(1 2 3)");
@@ -294,7 +294,7 @@ mod tests {
     fn test_let_destructure() {
         let mut vm = Vm::new();
         let mut env = CompileEnvironment::new(&mut vm);
-        env.set_global("prn", Value::Builtin(CallFunc { func: prn }));
+        env.set_global_builtin("prn", prn);
 
         let result = exec(
             &mut env,
@@ -456,9 +456,9 @@ mod tests {
     fn test_let_shadow() {
         let mut vm = Vm::new();
         let mut env = CompileEnvironment::new(&mut vm);
-        env.set_global("prn", Value::Builtin(CallFunc { func: prn }));
-        env.set_global("dasm", Value::Builtin(CallFunc { func: dasm }));
-        env.set_global("make-hash", Value::Builtin(CallFunc { func: make_hash }));
+        env.set_global_builtin("prn", prn);
+        env.set_global_builtin("dasm", dasm);
+        env.set_global_builtin("make-hash", make_hash);
 
         let result = exec(
             &mut env,

@@ -9,7 +9,7 @@ mod tests {
     fn test_def_set() {
         let mut vm = Vm::new();
         let mut env = CompileEnvironment::new(&mut vm);
-        env.set_global("prn", Value::Builtin(CallFunc { func: prn }));
+        env.set_global_builtin("prn", prn);
         let result = exec(&mut env, "(do (def x 3) x)");
         let expected = read_test(env.vm_mut(), "3");
         assert_vals(env.vm(), expected, result);
@@ -56,8 +56,8 @@ mod tests {
     fn test_fn() {
         let mut vm = Vm::new();
         let mut env = CompileEnvironment::new(&mut vm);
-        env.set_global("prn", Value::Builtin(CallFunc { func: prn }));
-        env.set_global("dasm", Value::Builtin(CallFunc { func: dasm }));
+        env.set_global_builtin("prn", prn);
+        env.set_global_builtin("dasm", dasm);
         let result = exec(&mut env, "((fn () 1))");
         let expected = read_test(env.vm_mut(), "1");
         assert_vals(env.vm(), expected, result);
@@ -165,8 +165,8 @@ mod tests {
     fn test_captures() {
         let mut vm = Vm::new();
         let mut env = CompileEnvironment::new(&mut vm);
-        env.set_global("prn", Value::Builtin(CallFunc { func: prn }));
-        env.set_global("dasm", Value::Builtin(CallFunc { func: dasm }));
+        env.set_global_builtin("prn", prn);
+        env.set_global_builtin("dasm", dasm);
 
         let result = exec(&mut env, "(do ((fn (a b c) ((fn () (let (x 10, y 20, z 30) (set! x 11) (def fnx (fn () (set! a 5)(set! b 6)`(~a ~b ~c ~x ~y ~z))))(let (s 51, t 52, u 53)(def fny (fn () (list s t u)))))))1 2 3)(fnx))");
         let expected = read_test(env.vm_mut(), "(5 6 3 11 20 30)");
@@ -197,8 +197,8 @@ mod tests {
     fn test_on_error() {
         let mut vm = Vm::new();
         let mut env = CompileEnvironment::new(&mut vm);
-        env.set_global("prn", Value::Builtin(CallFunc { func: prn }));
-        env.set_global("dasm", Value::Builtin(CallFunc { func: dasm }));
+        env.set_global_builtin("prn", prn);
+        env.set_global_builtin("dasm", dasm);
 
         let def_macro = r#"
         (def defmacro

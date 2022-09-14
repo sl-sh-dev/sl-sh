@@ -121,7 +121,7 @@ fn eval(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
 const PROMPT_FN: &str = "prompt";
 
 pub fn add_builtin(env: &mut CompileEnvironment, name: &str, func: CallFuncSig, doc_string: &str) {
-    if let Value::Global(si) = env.set_global(name, Value::Builtin(CallFunc { func })) {
+    if let Value::Global(si) = env.set_global_builtin(name, func) {
         let key = env.vm_mut().intern("doc-string");
         let s = env.vm_mut().alloc_string(doc_string.to_string());
         env.vm_mut().set_global_property(si, key, s);
@@ -350,24 +350,16 @@ fn main() {
     let mut vm = Vm::new();
     let mut env = CompileEnvironment::new(&mut vm);
     setup_vecs(&mut env);
-    env.set_global("pr", Value::Builtin(CallFunc { func: pr }));
-    env.set_global("prn", Value::Builtin(CallFunc { func: prn }));
-    env.set_global("dasm", Value::Builtin(CallFunc { func: dasm }));
-    env.set_global("load", Value::Builtin(CallFunc { func: load }));
-    env.set_global("make-hash", Value::Builtin(CallFunc { func: make_hash }));
-    env.set_global("get-prop", Value::Builtin(CallFunc { func: get_prop }));
-    env.set_global("set-prop", Value::Builtin(CallFunc { func: set_prop }));
-    env.set_global("eval", Value::Builtin(CallFunc { func: eval }));
-    env.set_global(
-        "sizeof-heap-object",
-        Value::Builtin(CallFunc {
-            func: sizeof_heap_object,
-        }),
-    );
-    env.set_global(
-        "sizeof-value",
-        Value::Builtin(CallFunc { func: sizeof_value }),
-    );
+    env.set_global_builtin("pr", pr);
+    env.set_global_builtin("prn", prn);
+    env.set_global_builtin("dasm", dasm);
+    env.set_global_builtin("load", load);
+    env.set_global_builtin("make-hash", make_hash);
+    env.set_global_builtin("get-prop", get_prop);
+    env.set_global_builtin("set-prop", set_prop);
+    env.set_global_builtin("eval", eval);
+    env.set_global_builtin("sizeof-heap-object", sizeof_heap_object);
+    env.set_global_builtin("sizeof-value", sizeof_value);
     loop {
         let res = match con.read_line(Prompt::from("slosh> "), None) {
             Ok(input) => input,
