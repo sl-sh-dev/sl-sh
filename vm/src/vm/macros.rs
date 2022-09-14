@@ -126,7 +126,7 @@ macro_rules! compare_int {
         }
         let val = if val { Value::True } else { Value::False };
         if $move {
-            Vm::mov_register($registers, dest as usize, val);
+            GVm::<ENV>::mov_register($registers, dest as usize, val);
         } else {
             $vm.set_register($registers, dest as usize, val);
         }
@@ -156,7 +156,7 @@ macro_rules! binary_math {
             )))
         };
         if $move {
-            Vm::mov_register($registers, dest as usize, val);
+            GVm::<ENV>::mov_register($registers, dest as usize, val);
         } else {
             $vm.set_register($registers, dest as usize, val);
         }
@@ -184,7 +184,7 @@ macro_rules! div_math {
             ))
         };
         if $move {
-            Vm::mov_register($registers, dest as usize, val);
+            GVm::<ENV>::mov_register($registers, dest as usize, val);
         } else {
             $vm.set_register($registers, dest as usize, val);
         }

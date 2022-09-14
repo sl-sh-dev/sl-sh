@@ -7,46 +7,46 @@ use std::sync::Arc;
 use crate::error::*;
 use crate::heap::*;
 use crate::interner::*;
-use crate::vm::Vm;
+use crate::vm::GVm;
 
-pub type CallFuncSig = fn(vm: &mut Vm, registers: &[Value]) -> VMResult<Value>;
+pub type CallFuncSig<ENV> = fn(vm: &mut GVm<ENV>, registers: &[Value]) -> VMResult<Value>;
 #[derive(Copy, Clone)]
-pub struct CallFunc {
-    pub func: CallFuncSig,
+pub struct CallFunc<ENV> {
+    pub func: CallFuncSig<ENV>,
 }
 
-impl PartialEq for CallFunc {
-    fn eq(&self, other: &CallFunc) -> bool {
+impl<ENV> PartialEq for CallFunc<ENV> {
+    fn eq(&self, other: &CallFunc<ENV>) -> bool {
         std::ptr::eq(
-            self.func as *const CallFuncSig,
-            other.func as *const CallFuncSig,
+            self.func as *const CallFuncSig<ENV>,
+            other.func as *const CallFuncSig<ENV>,
         )
     }
 }
 
-impl Eq for CallFunc {}
+impl<ENV> Eq for CallFunc<ENV> {}
 
-impl Hash for CallFunc {
+impl<ENV> Hash for CallFunc<ENV> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         state.write_usize(self.func as usize);
     }
 }
 
-impl fmt::Debug for CallFunc {
+impl<ENV> fmt::Debug for CallFunc<ENV> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "...")
     }
 }
 
-pub struct PairIter<'vm> {
-    vm: &'vm Vm,
+pub struct PairIter<'vm, ENV> {
+    vm: &'vm GVm<ENV>,
     current: Option<Value>,
     dotted: bool,
 }
 
-impl<'vm> PairIter<'vm> {
-    pub fn new(vm: &'vm Vm, exp: Value) -> PairIter {
-        PairIter {
+impl<'vm, ENV> PairIter<'vm, ENV> {
+    pub fn new(vm: &'vm GVm<ENV>, exp: Value) -> Self {
+        Self {
             vm,
             current: Some(exp),
             dotted: false,
@@ -58,7 +58,7 @@ impl<'vm> PairIter<'vm> {
     }
 }
 
-impl<'vm> Iterator for PairIter<'vm> {
+impl<'vm, ENV> Iterator for PairIter<'vm, ENV> {
     type Item = Value;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -151,7 +151,7 @@ impl Value {
 
     // This is used a LOT in a tight loop and this inline seems to help.
     #[inline(always)]
-    pub fn unref(self, vm: &Vm) -> Value {
+    pub fn unref<ENV>(self, vm: &GVm<ENV>) -> Value {
         // This is pointless from a logic standpoint but it makes the vm loop
         // faster...
         if !self.is_indirect() {
@@ -238,7 +238,7 @@ impl Value {
         }
     }
 
-    pub fn get_string<'vm>(&self, vm: &'vm Vm) -> VMResult<&'vm str> {
+    pub fn get_string<'vm, ENV>(&self, vm: &'vm GVm<ENV>) -> VMResult<&'vm str> {
         match &self {
             Value::String(h) => Ok(vm.get_string(*h)),
             Value::StringConst(i) => Ok(vm.get_interned(*i)),
@@ -280,7 +280,7 @@ impl Value {
         }
     }
 
-    pub fn get_pair(&self, vm: &Vm) -> Option<(Value, Value)> {
+    pub fn get_pair<ENV>(&self, vm: &GVm<ENV>) -> Option<(Value, Value)> {
         match &self {
             Value::Pair(handle) => {
                 let (car, cdr) = vm.get_pair(*handle);
@@ -305,7 +305,7 @@ impl Value {
         }
     }
 
-    pub fn iter<'vm>(&self, vm: &'vm Vm) -> Box<dyn Iterator<Item = Value> + 'vm> {
+    pub fn iter<'vm, ENV>(&self, vm: &'vm GVm<ENV>) -> Box<dyn Iterator<Item = Value> + 'vm> {
         match &self.unref(vm) {
             Value::Pair(_) => Box::new(PairIter::new(vm, *self)),
             Value::List(handle, start) => {
@@ -316,8 +316,12 @@ impl Value {
         }
     }
 
-    pub fn display_value(&self, vm: &Vm) -> String {
-        fn list_out_iter(vm: &Vm, res: &mut String, itr: &mut dyn Iterator<Item = Value>) {
+    pub fn display_value<ENV>(&self, vm: &GVm<ENV>) -> String {
+        fn list_out_iter<ENV>(
+            vm: &GVm<ENV>,
+            res: &mut String,
+            itr: &mut dyn Iterator<Item = Value>,
+        ) {
             let mut first = true;
             for p in itr {
                 if !first {
@@ -328,7 +332,7 @@ impl Value {
                 res.push_str(&p.display_value(vm));
             }
         }
-        fn list_out(vm: &Vm, res: &mut String, lst: Value) {
+        fn list_out<ENV>(vm: &GVm<ENV>, res: &mut String, lst: Value) {
             let mut first = true;
             let mut cdr = lst;
             loop {
@@ -419,7 +423,7 @@ impl Value {
         }
     }
 
-    pub fn pretty_value(&self, vm: &Vm) -> String {
+    pub fn pretty_value<ENV>(&self, vm: &GVm<ENV>) -> String {
         match self {
             Value::StringConst(i) => vm.get_interned(*i).to_string(),
             Value::CodePoint(ch) => format!("{}", ch),
@@ -432,7 +436,7 @@ impl Value {
         }
     }
 
-    pub fn display_type(&self, vm: &Vm) -> &'static str {
+    pub fn display_type<ENV>(&self, vm: &GVm<ENV>) -> &'static str {
         match self {
             Value::True => "True",
             Value::False => "False",
@@ -464,7 +468,7 @@ impl Value {
         }
     }
 
-    pub fn is_proper_list(&self, vm: &Vm) -> bool {
+    pub fn is_proper_list<ENV>(&self, vm: &GVm<ENV>) -> bool {
         // does not detect empty (nil) lists on purpose.
         if let Value::Pair(handle) = self {
             let (_car, cdr) = vm.get_pair(*handle);

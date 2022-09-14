@@ -120,7 +120,12 @@ fn eval(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
 
 const PROMPT_FN: &str = "prompt";
 
-pub fn add_builtin(env: &mut CompileEnvironment, name: &str, func: CallFuncSig, doc_string: &str) {
+pub fn add_builtin(
+    env: &mut CompileEnvironment,
+    name: &str,
+    func: CallFuncSig<()>,
+    doc_string: &str,
+) {
     if let Value::Global(si) = env.set_global_builtin(name, func) {
         let key = env.vm_mut().intern("doc-string");
         let s = env.vm_mut().alloc_string(doc_string.to_string());

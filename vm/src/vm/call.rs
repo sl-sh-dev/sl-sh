@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 use crate::chunk::*;
 use crate::heap::*;
-use crate::{VMError, VMResult, Value, Vm};
+use crate::{GVm, VMError, VMResult, Value};
 
 /// Vm functions to handle runtime calling of anything callable.
 
-impl Vm {
+impl<ENV> GVm<ENV> {
     /// Setup the rest (&) arguments for a callable.
     pub(crate) fn setup_rest(
         &mut self,
@@ -113,7 +113,7 @@ impl Vm {
                 let last_reg = (first_reg + num_args + 1) as usize;
                 // Useful if the builtin runs bytecode that errors otherwise a waste...
                 let frame = self.make_call_frame(chunk.clone(), lambda, false);
-                let f = self.buitins[f_idx as usize];
+                let f = &self.buitins[f_idx as usize];
                 let res = (f.func)(self, &registers[(first_reg + 1) as usize..last_reg]).map_err(
                     |e| {
                         if self.err_frame().is_some() {
@@ -170,7 +170,7 @@ impl Vm {
                     Self::mov_register(registers, rest_reg, h);
                 }
                 // XXX TODO- maybe test for stack overflow vs waiting for a panic.
-                clear_opts(&l, registers, first_reg, num_args);
+                clear_opts::<ENV>(&l, registers, first_reg, num_args);
                 Ok(l)
             }
             Value::Closure(handle) => {
@@ -179,7 +179,7 @@ impl Vm {
                 // Make a self (vm) with it's lifetime broken away so we can call setup_rest.
                 // This is safe because it does not touch caps, it needs a &mut self so it
                 // can heap allocate.
-                let unsafe_vm: &mut Vm = unsafe { (self as *mut Vm).as_mut().unwrap() };
+                let unsafe_vm: &mut GVm<ENV> = unsafe { (self as *mut GVm<ENV>).as_mut().unwrap() };
                 let frame = if !tail_call {
                     let frame = self.make_call_frame(chunk, lambda, true);
                     self.stack_top += first_reg as usize;
@@ -206,7 +206,7 @@ impl Vm {
                 if let Some(frame) = frame {
                     Self::mov_register(registers, first_reg.into(), self.alloc_callframe(frame));
                 }
-                clear_opts(&l, registers, first_reg, num_args);
+                clear_opts::<ENV>(&l, registers, first_reg, num_args);
                 Ok(l)
             }
             Value::Continuation(handle) => {
@@ -289,7 +289,7 @@ impl Vm {
 
 /// Clear out the unused optional regs.
 /// Will clear working set to avoid writing to globals or closures by accident.
-fn clear_opts(l: &Chunk, registers: &mut [Value], first_reg: u16, num_args: u16) {
+fn clear_opts<ENV>(l: &Chunk, registers: &mut [Value], first_reg: u16, num_args: u16) {
     // First clear any optional arguments.
     let num_args = if l.rest && num_args == 0 {
         // Always have at least 1 arg if we have a rest argument.
@@ -305,7 +305,7 @@ fn clear_opts(l: &Chunk, registers: &mut [Value], first_reg: u16, num_args: u16)
     };
     if num_args < end_arg {
         for r in num_args..end_arg {
-            Vm::mov_register(
+            GVm::<ENV>::mov_register(
                 registers,
                 first_reg as usize + (r + 1) as usize,
                 Value::Undefined,
@@ -315,7 +315,7 @@ fn clear_opts(l: &Chunk, registers: &mut [Value], first_reg: u16, num_args: u16)
     // Clear extra regs so things like closures or globals don't get changed by mistake.
     if l.extra_regs > 0 {
         for r in l.input_regs + 1..=l.input_regs + l.extra_regs {
-            Vm::mov_register(registers, first_reg as usize + r, Value::Undefined);
+            GVm::<ENV>::mov_register(registers, first_reg as usize + r, Value::Undefined);
         }
     }
 }

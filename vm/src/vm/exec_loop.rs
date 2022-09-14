@@ -1,8 +1,8 @@
 use crate::opcodes::*;
-use crate::{CallFrame, Chunk, Continuation, F64Wrap, VMError, VMErrorObj, VMResult, Value, Vm};
+use crate::{CallFrame, Chunk, Continuation, F64Wrap, GVm, VMError, VMErrorObj, VMResult, Value};
 use std::sync::Arc;
 
-impl Vm {
+impl<ENV> GVm<ENV> {
     #[inline]
     fn map_destructure(
         &mut self,
@@ -125,7 +125,7 @@ impl Vm {
         // Clean up the working regs we are about to use.
         if chunk.extra_regs > 0 {
             for r in chunk.input_regs..=chunk.input_regs + chunk.extra_regs {
-                Vm::mov_register(registers, r, Value::Undefined);
+                GVm::<ENV>::mov_register(registers, r, Value::Undefined);
             }
         }
         loop {

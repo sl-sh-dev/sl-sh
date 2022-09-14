@@ -1,6 +1,6 @@
-use crate::{decode2, decode3, decode_u16, get_reg_unref, VMError, VMResult, Value, Vm};
+use crate::{decode2, decode3, decode_u16, get_reg_unref, GVm, VMError, VMResult, Value};
 
-impl Vm {
+impl<ENV> GVm<ENV> {
     pub(super) fn list(
         &mut self,
         code: &[u8],

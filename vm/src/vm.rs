@@ -7,7 +7,6 @@ use crate::interner::*;
 use crate::value::*;
 
 mod cons;
-pub mod print;
 mod storage;
 #[macro_use]
 pub mod macros;
@@ -17,13 +16,12 @@ mod exec_loop;
 
 const STACK_CAP: usize = 1024;
 
-#[derive(Debug)]
-pub struct Vm {
+pub struct GVm<ENV> {
     interner: Interner,
     heap: Heap,
     stack: Vec<Value>,
     globals: Globals,
-    buitins: Vec<CallFunc>,
+    buitins: Vec<CallFunc<ENV>>,
     this_fn: Option<Value>,
     on_error: Option<Value>,
 
@@ -34,20 +32,29 @@ pub struct Vm {
     current_ip: usize,
     callframe_id: usize,
     defers: Vec<Value>,
+    env: ENV,
 }
 
-impl Default for Vm {
+pub type Vm = GVm<()>;
+
+impl Default for GVm<()> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Vm {
+impl GVm<()> {
     pub fn new() -> Self {
+        GVm::new_with_env(())
+    }
+}
+
+impl<ENV> GVm<ENV> {
+    pub fn new_with_env(env: ENV) -> Self {
         let globals = Globals::new();
         let mut stack = Vec::with_capacity(STACK_CAP);
         stack.resize(1024, Value::Undefined);
-        Vm {
+        Self {
             interner: Interner::with_capacity(8192),
             heap: Heap::new(),
             stack,
@@ -62,7 +69,16 @@ impl Vm {
             current_ip: 0,
             callframe_id: 0,
             defers: Vec::new(),
+            env,
         }
+    }
+
+    pub fn env(&self) -> &ENV {
+        &self.env
+    }
+
+    pub fn env_mut(&mut self) -> &mut ENV {
+        &mut self.env
     }
 
     // Need to break the registers lifetime away from self or we can not do much...
@@ -108,7 +124,7 @@ impl Vm {
         Ok(val)
     }
 
-    pub fn add_builtin(&mut self, func: CallFuncSig) -> Value {
+    pub fn add_builtin(&mut self, func: CallFuncSig<ENV>) -> Value {
         let result = self.buitins.len();
         self.buitins.push(CallFunc { func });
         Value::Builtin(result as u32)

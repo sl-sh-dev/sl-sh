@@ -7,18 +7,18 @@ use crate::get_reg;
 use crate::heap::*;
 use crate::interner::*;
 use crate::value::*;
-use crate::Vm;
+use crate::GVm;
 
 /// Vm code to access storage, heap, stack, globals, etc.
 
-pub struct CallStackIter<'vm> {
-    vm: &'vm Vm,
+pub struct CallStackIter<'vm, ENV> {
+    vm: &'vm GVm<ENV>,
     current: usize,
     last_current: usize,
 }
 
-impl<'vm> CallStackIter<'vm> {
-    pub fn new(vm: &'vm Vm) -> Self {
+impl<'vm, ENV> CallStackIter<'vm, ENV> {
+    pub fn new(vm: &'vm GVm<ENV>) -> Self {
         CallStackIter {
             vm,
             current: vm.stack_top,
@@ -27,7 +27,7 @@ impl<'vm> CallStackIter<'vm> {
     }
 }
 
-impl<'vm> Iterator for CallStackIter<'vm> {
+impl<'vm, ENV> Iterator for CallStackIter<'vm, ENV> {
     type Item = &'vm CallFrame;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -45,7 +45,7 @@ impl<'vm> Iterator for CallStackIter<'vm> {
     }
 }
 
-impl Vm {
+impl<ENV> GVm<ENV> {
     pub fn clear_err_frame(&mut self) {
         self.err_frame = None;
     }
@@ -95,7 +95,7 @@ impl Vm {
         self.globals.reserve()
     }
 
-    pub fn get_call_stack(&self) -> CallStackIter {
+    pub fn get_call_stack(&self) -> CallStackIter<ENV> {
         CallStackIter::new(self)
     }
 
