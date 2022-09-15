@@ -369,6 +369,12 @@ impl TryFrom<Expression> for bool {
     }
 }
 
+impl From<()> for Expression {
+    fn from(_: ()) -> Self {
+        Expression::make_nil()
+    }
+}
+
 impl TryIntoExpression<bool> for Expression {
     type Error = LispError;
 
@@ -1380,35 +1386,6 @@ mod test {
         } else {
             Err(LispError::new("Too few args."))
         }
-    }
-
-    fn builtin_int_to_float(
-        exp_0: crate::Expression,
-        exp_1: Vec<crate::Expression>,
-    ) -> crate::LispResult<crate::types::Expression> {
-        Ok({
-            let float = try_inner_exp_enum!(
-                exp_0.get().data,
-                ExpEnum::Int(int_0),
-                {
-                    let iter = exp_1
-                        .iter()
-                        .map(|exp_1| {
-                            let int = try_inner_exp_enum!(
-                                exp_1.get().data,
-                                ExpEnum::Int(int_1),
-                                { int_1 },
-                                "Not an int_1!"
-                            );
-                            Ok(int)
-                        })
-                        .collect::<crate::LispResult<Vec<i64>>>()?;
-                    int_to_float(int_0, &iter)
-                }?,
-                "Not an int_0!"
-            );
-            float.into()
-        })
     }
 
     fn super_builtin_int_to_float(
