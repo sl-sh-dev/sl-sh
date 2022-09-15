@@ -654,10 +654,6 @@ fn make_orig_fn_call(
 
 fn make_arg_types(original_item_fn: &ItemFn) -> MacroResult<(Vec<Ident>, Vec<TokenStream>)> {
     let len = original_item_fn.sig.inputs.len();
-    // TODO conversion for return type and arguments that enforece the TypeExpression and/or
-    //  RustProcedureRef implementations.
-    //let conversions_assertions_code =
-    //    generate_assertions_code_for_type_conversions(original_item_fn, &return_type)?;
     let mut arg_names = vec![];
     let mut arg_types = vec![];
     for i in 0..len {
@@ -722,8 +718,18 @@ fn generate_builtin_fn2(
             }
         }
     }
+    let (return_type, _) = get_return_type2(original_item_fn)?;
+    // TODO conversion for return type and arguments that enforce the TypeExpression and/or
+    //  RustProcedureRef implementations.
+    let mut conversions_assertions_code = vec![];
+    if let Some(return_type) = return_type {
+        conversions_assertions_code.push(generate_assertions_code_for_return_type_conversions(
+            &return_type,
+        ));
+    }
     let tokens = quote! {
         fn #builtin_name(#(#arg_names: #arg_types),*) -> sl_sh::LispResult<sl_sh::types::Expression> {
+            #(#conversions_assertions_code)*
             let #fn_name_attr = #fn_name;
             #prev_token_stream
         }
@@ -750,8 +756,10 @@ fn parse_argval_varargs_type(
     // TODO
     //  we should only accept Vec<T: TryIntoExpression> should
     //  be in conversions_assertions_code
+    let wrapped_ty = get_type_or_wrapped_type2(ty);
     quote! {{
         use sl_sh::builtins_util::TryIntoExpression;
+        static_assertions::assert_impl_all!(sl_sh::types::Expression: sl_sh::builtins_util::TryIntoExpression<#wrapped_ty>);
         let #arg_name = #arg_name
             .iter()
             .map(|#arg_name| {
@@ -795,17 +803,15 @@ fn parse_argval_optional_type(
     }}
 }
 
-/// for regular Expression values (no Optional/VarArgs) ref_exp
-/// just needs to be matched based on it's ExpEnum variant.
-fn parse_argval_value_type(
-    ty: &TypePath,
-    fn_name_attr: &Ident,
-    arg_name: &Ident,
-    passing_style: ArgPassingStyle,
-    inner: TokenStream,
-) -> TokenStream {
+/// at this point the macro is only operating on types it expects
+/// which are any rust types, any rust types wrapped in Option,
+/// and any rust types wrapped in Vec. If in the future this is
+/// confusing wrapper types can be made, i.e. SlshVarArgs,
+/// so normal rust Vec could be used without being turned into
+/// a SlshVarArgs
+fn get_type_or_wrapped_type2(ty: &TypePath) -> &TypePath {
     let orig_ty = ty;
-    let ty = if let Some((ty, type_path)) = get_generic_argument_from_type_path(ty) {
+    if let Some((ty, type_path)) = get_generic_argument_from_type_path(ty) {
         let wrapper = opt_is_valid_generic_type(type_path, POSSIBLE_ARG_TYPES.as_slice());
         match (ty, wrapper) {
             (GenericArgument::Type(ty), Some(_)) => match ty {
@@ -816,7 +822,19 @@ fn parse_argval_value_type(
         }
     } else {
         ty
-    };
+    }
+}
+
+/// for regular Expression values (no Optional/VarArgs) ref_exp
+/// just needs to be matched based on it's ExpEnum variant.
+fn parse_argval_value_type(
+    ty: &TypePath,
+    fn_name_attr: &Ident,
+    arg_name: &Ident,
+    passing_style: ArgPassingStyle,
+    inner: TokenStream,
+) -> TokenStream {
+    let ty = get_type_or_wrapped_type2(ty);
     let fn_ref = tokens_for_matching_references(passing_style, ty);
 
     match passing_style {
