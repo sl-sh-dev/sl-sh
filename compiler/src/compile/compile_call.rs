@@ -1,8 +1,9 @@
-use crate::{compile, CompileEnvironment, CompileState};
+use crate::{compile, CompileState, SloshVm};
+use compile_state::state::SloshVmTrait;
 use slvm::{VMResult, Value, BMOV, CALL, CALLM, CONST, MOV, TCALL, TCALLM};
 
 fn compile_params(
-    env: &mut CompileEnvironment,
+    env: &mut SloshVm,
     state: &mut CompileState,
     cdr: &[Value],
     result: usize,
@@ -21,7 +22,7 @@ fn compile_params(
 }
 
 pub(crate) fn compile_call(
-    env: &mut CompileEnvironment,
+    env: &mut SloshVm,
     state: &mut CompileState,
     callable: Value,
     cdr: &[Value],
@@ -52,7 +53,7 @@ pub(crate) fn compile_call(
 }
 
 pub(crate) fn compile_callg(
-    env: &mut CompileEnvironment,
+    env: &mut SloshVm,
     state: &mut CompileState,
     global: u32,
     cdr: &[Value],
@@ -73,7 +74,7 @@ pub(crate) fn compile_callg(
 }
 
 pub(crate) fn compile_call_reg(
-    env: &mut CompileEnvironment,
+    env: &mut SloshVm,
     state: &mut CompileState,
     reg: u16,
     cdr: &[Value],
@@ -108,7 +109,7 @@ pub(crate) fn compile_call_reg(
 }
 
 pub(crate) fn compile_call_myself(
-    env: &mut CompileEnvironment,
+    env: &mut SloshVm,
     state: &mut CompileState,
     cdr: &[Value],
     result: usize,

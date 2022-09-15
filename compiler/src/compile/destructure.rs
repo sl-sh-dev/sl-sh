@@ -4,8 +4,8 @@ use slvm::value::*;
 use slvm::{Handle, Interned};
 use std::collections::HashMap;
 
-use crate::state::*;
-use crate::{compile, mkconst, CompileEnvironment};
+use crate::{compile, mkconst, SloshVm};
+use compile_state::state::*;
 
 pub enum Register {
     Named(Interned, u16),
@@ -32,7 +32,7 @@ pub struct DestructState {
     destructures: Vec<Destructure>,
 }
 
-pub fn setup_dbg(env: &CompileEnvironment, state: &mut CompileState, reg: usize, name: Interned) {
+pub fn setup_dbg(env: &SloshVm, state: &mut CompileState, reg: usize, name: Interned) {
     if let Some(dbg_args) = state.chunk.dbg_args.as_mut() {
         if dbg_args.len() < reg - 1 {
             dbg_args.resize(reg - 1, env.specials().scratch);
@@ -56,7 +56,7 @@ impl DestructState {
 
     fn setup_destructures(
         &self,
-        env: &mut CompileEnvironment,
+        env: &mut SloshVm,
         state: &mut CompileState,
         free_reg: &mut usize,
     ) -> VMResult<()> {
@@ -120,7 +120,7 @@ impl DestructState {
 
     fn setup_optionals(
         &self,
-        env: &mut CompileEnvironment,
+        env: &mut SloshVm,
         state: &mut CompileState,
         free_reg: usize,
     ) -> VMResult<()> {
@@ -147,13 +147,13 @@ impl DestructState {
 
     fn do_vector_destructure(
         &mut self,
-        env: &mut CompileEnvironment,
+        env: &mut SloshVm,
         vector_handle: Handle,
         reg: usize,
         stack: &mut Vec<DestructType>,
         next_reg: &mut usize,
     ) -> VMResult<()> {
-        let vector = env.vm().get_vector(vector_handle);
+        let vector = env.get_vector(vector_handle);
         let mut len = vector.len();
         let mut rest = false;
         let mut opt = false;
@@ -239,14 +239,14 @@ impl DestructState {
 
     fn do_map_destructure(
         &mut self,
-        env: &mut CompileEnvironment,
+        env: &mut SloshVm,
         map_handle: Handle,
         current_reg: usize,
         stack: &mut Vec<DestructType>,
         next_reg: &mut usize,
     ) -> VMResult<()> {
-        let or_i = env.vm_mut().intern("or");
-        let map = env.vm().get_map(map_handle);
+        let or_i = env.intern("or");
+        let map = env.get_map(map_handle);
         let mut keys = Vec::new();
         let mut opt_comps = Vec::new();
         let mut len = map.len();
@@ -254,7 +254,7 @@ impl DestructState {
         let mut register_labels = Vec::new();
         let optionals = if let Some(opts) = map.get(&Value::Keyword(or_i)) {
             if let Value::Map(handle) = opts {
-                env.vm().get_map(*handle)
+                env.get_map(*handle)
             } else {
                 return Err(VMError::new_compile(":or must be followed by a map"));
             }
@@ -309,7 +309,7 @@ impl DestructState {
 
     pub fn do_destructure(
         &mut self,
-        env: &mut CompileEnvironment,
+        env: &mut SloshVm,
         state: &mut CompileState,
         destruct_type: DestructType,
     ) -> VMResult<()> {
@@ -333,14 +333,14 @@ impl DestructState {
 
     pub fn compile(
         &mut self,
-        env: &mut CompileEnvironment,
+        env: &mut SloshVm,
         state: &mut CompileState,
         free_reg: &mut usize,
     ) -> VMResult<()> {
         self.setup_destructures(env, state, free_reg)?;
         self.setup_optionals(env, state, *free_reg)?;
-        let kw = Value::Keyword(env.vm_mut().intern("destructure"));
-        let err_str = Value::StringConst(env.vm_mut().intern("missing structure"));
+        let kw = Value::Keyword(env.intern("destructure"));
+        let err_str = Value::StringConst(env.intern("missing structure"));
         // For each destructure raise an error if something was missing.
         for destructure in &self.destructures {
             state.chunk.encode2(

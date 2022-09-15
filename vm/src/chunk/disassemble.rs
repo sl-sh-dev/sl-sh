@@ -1,5 +1,5 @@
 use crate::opcodes::*;
-use crate::{Chunk, VMError, VMResult, Value, Vm};
+use crate::{Chunk, GVm, VMError, VMResult, Value};
 
 #[macro_export]
 macro_rules! decode_u8_enum {
@@ -132,7 +132,12 @@ macro_rules! disassemble_jump_offset {
 }
 
 impl Chunk {
-    fn disassemble_instruction<I>(chunk: I, op: OpCode, wide: bool, _vm: &Vm) -> VMResult<bool>
+    fn disassemble_instruction<I, ENV>(
+        chunk: I,
+        op: OpCode,
+        wide: bool,
+        _vm: &GVm<ENV>,
+    ) -> VMResult<bool>
     where
         I: IntoIterator<Item = (usize, u8)>,
     {
@@ -864,7 +869,7 @@ impl Chunk {
         }
     }
 
-    pub fn disassemble_chunk(&self, vm: &Vm, indent_level: u16) -> VMResult<()> {
+    pub fn disassemble_chunk<ENV>(&self, vm: &GVm<ENV>, indent_level: u16) -> VMResult<()> {
         fn indent(indent_level: u16) {
             for _ in 0..indent_level {
                 print!("\t");

@@ -1,7 +1,8 @@
-use slvm::{VMError, VMResult, Value, Vm};
+use crate::SloshVm;
+use slvm::{VMError, VMResult, Value};
 use std::collections::HashMap;
 
-pub fn vec_slice(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+pub fn vec_slice(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let (vector, start, end) = match registers.len() {
         2 => {
             if let (Value::Vector(vector), Ok(start)) = (registers[0], registers[1].get_int()) {
@@ -40,7 +41,7 @@ pub fn vec_slice(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-pub fn vec_to_list(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+pub fn vec_to_list(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if registers.len() != 1 {
         return Err(VMError::new_vm(
             "vec->list: Invalid arguments (requires one vector)".to_string(),
@@ -51,7 +52,7 @@ pub fn vec_to_list(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
         // This is safe since we only call alloc_pair and that will not mess with vector.
         // Note, this also needs register[0] to NOT be garbage collected during a call to alloc_pair,
         // this should be fine since it is from a register and therefore will be a root.
-        let unsafe_vm: &mut Vm = unsafe { (vm as *mut Vm).as_mut().unwrap() };
+        let unsafe_vm: &mut SloshVm = unsafe { (vm as *mut SloshVm).as_mut().unwrap() };
         let vector = vm.get_vector(vhandle);
 
         let mut last = Value::Nil;
@@ -67,7 +68,7 @@ pub fn vec_to_list(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-pub fn make_hash(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+pub fn make_hash(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if registers.len() % 2 != 0 {
         return Err(VMError::new_vm(
             "make-hash: Invalid arguments (must be even, [key val]*)".to_string(),
@@ -81,7 +82,7 @@ pub fn make_hash(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
     Ok(vm.alloc_map(map))
 }
 
-pub fn hash_set(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+pub fn hash_set(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();
     if let (Some(Value::Map(map_handle)), Some(key), Some(val), None) =
         (i.next(), i.next(), i.next(), i.next())
@@ -96,7 +97,7 @@ pub fn hash_set(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-pub fn hash_remove(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+pub fn hash_remove(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();
     if let (Some(Value::Map(map_handle)), Some(key), None) = (i.next(), i.next(), i.next()) {
         let map = vm.get_map_mut(*map_handle)?;
@@ -112,7 +113,7 @@ pub fn hash_remove(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-pub fn hash_get(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+pub fn hash_get(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();
     if let (Some(Value::Map(map_handle)), Some(key), default, None) =
         (i.next(), i.next(), i.next(), i.next())
@@ -132,7 +133,7 @@ pub fn hash_get(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-pub fn hash_hashkey(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+pub fn hash_hashkey(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();
     if let (Some(Value::Map(map_handle)), Some(key), None) = (i.next(), i.next(), i.next()) {
         let map = vm.get_map(*map_handle);
@@ -148,7 +149,7 @@ pub fn hash_hashkey(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-pub fn hash_keys(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+pub fn hash_keys(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();
     if let (Some(Value::Map(map_handle)), None) = (i.next(), i.next()) {
         let map = vm.get_map(*map_handle);
@@ -162,7 +163,7 @@ pub fn hash_keys(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-pub fn hash_clear(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+pub fn hash_clear(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();
     if let (Some(Value::Map(map_handle)), None) = (i.next(), i.next()) {
         let map = vm.get_map_mut(*map_handle)?;

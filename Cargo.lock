@@ -18,6 +18,7 @@ checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 name = "builtins"
 version = "0.1.0"
 dependencies = [
+ "compile_state",
  "slvm",
 ]
 
@@ -44,6 +45,13 @@ dependencies = [
  "num-traits",
  "time",
  "winapi",
+]
+
+[[package]]
+name = "compile_state"
+version = "0.1.0"
+dependencies = [
+ "slvm",
 ]
 
 [[package]]
@@ -177,6 +185,7 @@ version = "0.1.0"
 dependencies = [
  "builtins",
  "chrono",
+ "compile_state",
  "slvm",
  "unicode-segmentation",
  "unicode_reader",
@@ -213,6 +222,7 @@ name = "slosh"
 version = "0.1.0"
 dependencies = [
  "builtins",
+ "compile_state",
  "sl-compiler",
  "sl-liner",
  "slvm",

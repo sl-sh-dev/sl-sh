@@ -1,8 +1,7 @@
 pub mod reader;
 pub use crate::reader::*;
 
-pub mod state;
-pub use crate::state::*;
+pub use compile_state::state::*;
 
 pub mod config;
 pub use crate::config::*;

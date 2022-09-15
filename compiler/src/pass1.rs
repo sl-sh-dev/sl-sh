@@ -1,20 +1,18 @@
 use crate::compile_fn::mk_state;
-use crate::{CompileEnvironment, CompileState};
+use crate::{CompileState, SloshVm};
 use slvm::{VMResult, Value};
 
-pub fn pass1(env: &mut CompileEnvironment, state: &mut CompileState, exp: Value) -> VMResult<()> {
-    let fn_ = env.vm_mut().intern("fn");
-    let mac_ = env.vm_mut().intern("macro");
+pub fn pass1(env: &mut SloshVm, state: &mut CompileState, exp: Value) -> VMResult<()> {
+    let fn_ = env.intern("fn");
+    let mac_ = env.intern("macro");
     match exp {
         Value::Pair(_) | Value::List(_, _) => {
-            let (car, cdr) = exp
-                .get_pair(env.vm())
-                .expect("Pair/List not a Pair or List?");
+            let (car, cdr) = exp.get_pair(env).expect("Pair/List not a Pair or List?");
             // Do an extra pass1 on lambda's so we can get all captures upfront.
             if let Value::Symbol(i) = car {
                 if i == fn_ || i == mac_ {
                     // XXX boo on this collect.
-                    let cdr = cdr.iter(env.vm()).collect::<Vec<Value>>();
+                    let cdr = cdr.iter(env).collect::<Vec<Value>>();
                     if !cdr.is_empty() {
                         let (mut new_state, _, _) = mk_state(env, state, cdr[0])?;
                         for r in cdr[1..].iter() {
@@ -25,13 +23,13 @@ pub fn pass1(env: &mut CompileEnvironment, state: &mut CompileState, exp: Value)
                 }
             }
             // XXX boo on this collect.
-            for r in exp.iter(env.vm()).collect::<Vec<Value>>() {
+            for r in exp.iter(env).collect::<Vec<Value>>() {
                 pass1(env, state, r)?;
             }
         }
         Value::Symbol(i) => {
             if state.get_symbol(i).is_none() && state.symbols.borrow().can_capture(i) {
-                state.symbols.borrow_mut().insert_capture(env.vm_mut(), i);
+                state.symbols.borrow_mut().insert_capture(env, i);
                 if let Some(dbg_args) = state.chunk.dbg_args.as_mut() {
                     dbg_args.push(i);
                 }

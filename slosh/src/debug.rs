@@ -6,14 +6,13 @@ use std::iter::*;
 
 use slvm::heap::*;
 use slvm::value::*;
-use slvm::vm::*;
 
 use sl_compiler::reader::*;
 
-use sl_compiler::CompileEnvironment;
+use compile_state::state::{SloshVm, SloshVmTrait};
 use sl_liner::{Context, Prompt};
 
-fn dump_regs(vm: &Vm, frame: &CallFrame) {
+fn dump_regs(vm: &SloshVm, frame: &CallFrame) {
     let start = frame.stack_top;
     let end = frame.stack_top + frame.chunk.input_regs + frame.chunk.extra_regs + 1;
     let regs = vm.get_registers(start, end);
@@ -50,7 +49,7 @@ fn dump_regs(vm: &Vm, frame: &CallFrame) {
     }
 }
 
-fn dump_stack(vm: &Vm) {
+fn dump_stack(vm: &SloshVm) {
     //println!("Stack from 0 to {}", vm.stack_max() - 1);
     let mut reg_names = None;
     let mut chunks = VecDeque::new();
@@ -107,13 +106,13 @@ fn dump_stack(vm: &Vm) {
     }
 }
 
-pub fn debug(env: &mut CompileEnvironment) {
-    let abort = env.vm_mut().intern("abort");
-    let globals = env.vm_mut().intern("globals");
-    let dasm = env.vm_mut().intern("dasm");
-    let regs = env.vm_mut().intern("regs");
-    let regs_raw = env.vm_mut().intern("regs-raw");
-    let stack = env.vm_mut().intern("stack");
+pub fn debug(env: &mut SloshVm) {
+    let abort = env.intern("abort");
+    let globals = env.intern("globals");
+    let dasm = env.intern("dasm");
+    let regs = env.intern("regs");
+    let regs_raw = env.intern("regs-raw");
+    let stack = env.intern("stack");
     let mut con = Context::new();
 
     if let Err(e) = con.history.set_file_name_and_load_history("history_debug") {
@@ -152,7 +151,7 @@ pub fn debug(env: &mut CompileEnvironment) {
         //let text: &str = &res;
         //let text = unsafe { &*(text as *const str) };
         //let exps = read_all(vm, &mut reader_state, text);
-        let mut exps = Reader::from_string(res, env.vm_mut(), "", 1, 0);
+        let mut exps = Reader::from_string(res, env, "", 1, 0);
         //match exps {
         //    Ok(exps) => {
         //let mut exps = exps.iter();
@@ -163,9 +162,9 @@ pub fn debug(env: &mut CompileEnvironment) {
                 if let Some(Ok(parm)) = exps.next() {
                     if let Ok(stk_idx) = parm.get_int() {
                         let stk_idx = stk_idx.abs() as usize;
-                        for (i, frame) in env.vm().get_call_stack().enumerate() {
+                        for (i, frame) in env.get_call_stack().enumerate() {
                             if i + 1 == stk_idx {
-                                if let Err(e) = frame.chunk.disassemble_chunk(env.vm(), 0) {
+                                if let Err(e) = frame.chunk.disassemble_chunk(env, 0) {
                                     println!("Error in disassembly: {}", e);
                                 }
                                 break;
@@ -174,8 +173,8 @@ pub fn debug(env: &mut CompileEnvironment) {
                     } else {
                         println!("Param not an int.");
                     }
-                } else if let Some(err_frame) = env.vm().err_frame() {
-                    if let Err(e) = err_frame.chunk.disassemble_chunk(env.vm(), 0) {
+                } else if let Some(err_frame) = env.err_frame() {
+                    if let Err(e) = err_frame.chunk.disassemble_chunk(env, 0) {
                         println!("Error in disassembly: {}", e);
                     }
                 } else {
@@ -186,26 +185,26 @@ pub fn debug(env: &mut CompileEnvironment) {
                 if let Some(Ok(parm)) = exps.next() {
                     if let Ok(stk_idx) = parm.get_int() {
                         let stk_idx = stk_idx.abs() as usize;
-                        for (i, frame) in env.vm().get_call_stack().enumerate() {
+                        for (i, frame) in env.get_call_stack().enumerate() {
                             if i + 1 == stk_idx {
-                                dump_regs(env.vm(), frame);
+                                dump_regs(env, frame);
                                 break;
                             }
                         }
                     } else {
                         println!("Param not an int.");
                     }
-                } else if let Some(err_frame) = env.vm().err_frame() {
-                    dump_regs(env.vm(), err_frame);
+                } else if let Some(err_frame) = env.err_frame() {
+                    dump_regs(env, err_frame);
                 } else {
                     println!("At top level.");
                 }
             }
             Some(Ok(Value::Keyword(k))) if k == regs_raw => {
-                dump_stack(env.vm());
+                dump_stack(env);
             }
             Some(Ok(Value::Keyword(k))) if k == stack => {
-                if let Some(frame) = env.vm().err_frame() {
+                if let Some(frame) = env.err_frame() {
                     let ip = frame.current_ip;
                     let line = frame.chunk.offset_to_line(ip).unwrap_or(0);
                     println!(
@@ -213,7 +212,7 @@ pub fn debug(env: &mut CompileEnvironment) {
                         frame.chunk.file_name, line, ip
                     );
                 }
-                for frame in env.vm().get_call_stack() {
+                for frame in env.get_call_stack() {
                     let ip = frame.current_ip;
                     let line = frame.chunk.offset_to_line(ip).unwrap_or(0);
                     println!(

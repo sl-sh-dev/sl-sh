@@ -1,8 +1,9 @@
-use crate::{compile, CompileEnvironment, CompileState};
+use crate::{compile, CompileState, SloshVm};
+use compile_state::state::SloshVmTrait;
 use slvm::*;
 
 fn make_math_comp(
-    env: &mut CompileEnvironment,
+    env: &mut SloshVm,
     state: &mut CompileState,
     cdr: &[Value],
     result: usize,
@@ -28,7 +29,7 @@ fn make_math_comp(
 }
 
 pub(crate) fn compile_math(
-    env: &mut CompileEnvironment,
+    env: &mut SloshVm,
     state: &mut CompileState,
     car: Value,
     cdr: &[Value],
@@ -45,7 +46,7 @@ pub(crate) fn compile_math(
                         .encode_refi(result as u16, slot, env.own_line())?;
                     result
                 } else {
-                    let sym = env.vm().get_interned(i);
+                    let sym = env.get_interned(i);
                     return Err(VMError::new_compile(format!("Symbol {sym} not defined (maybe you need to use 'def {sym}' to pre-declare it).")));
                 }
             } else {
@@ -81,7 +82,7 @@ pub(crate) fn compile_math(
                         .encode_refi(result as u16, slot, env.own_line())?;
                     result
                 } else {
-                    let sym = env.vm().get_interned(i);
+                    let sym = env.get_interned(i);
                     return Err(VMError::new_compile(format!("Symbol {sym} not defined (maybe you need to use 'def {sym}' to pre-declare it).")));
                 }
             } else {

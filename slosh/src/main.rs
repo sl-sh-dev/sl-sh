@@ -6,11 +6,10 @@ use std::sync::Arc;
 use slvm::error::*;
 use slvm::opcodes::*;
 use slvm::value::*;
-use slvm::vm::*;
 
+use compile_state::state::*;
 use sl_compiler::compile::*;
 use sl_compiler::reader::*;
-use sl_compiler::state::*;
 
 use builtins::collections::{make_hash, vec_slice, vec_to_list};
 use builtins::print::{dasm, display_value, pr, prn};
@@ -23,44 +22,43 @@ use debug::*;
 use sl_compiler::pass1::pass1;
 
 fn load_one_expression(
-    vm: &mut Vm,
+    vm: &mut SloshVm,
     exp: Value,
     name: &'static str,
     doc_string: Option<Value>,
 ) -> VMResult<(Arc<Chunk>, Option<Value>)> {
-    let mut env = CompileEnvironment::new(vm);
-    let line_num = env.line_num();
+    let line_num = vm.line_num();
     let mut state = CompileState::new_state(name, line_num, None);
     state.chunk.dbg_args = Some(Vec::new());
     state.doc_string = doc_string;
-    if let Err(e) = pass1(&mut env, &mut state, exp) {
+    if let Err(e) = pass1(vm, &mut state, exp) {
         println!(
             "Compile error (pass one), {}, line {}: {}",
             name,
-            env.line_num(),
+            vm.line_num(),
             e
         );
         return Err(e);
     }
-    if let Err(e) = compile(&mut env, &mut state, exp, 0) {
+    if let Err(e) = compile(vm, &mut state, exp, 0) {
         println!(
             "Compile error, {} line {}: {} exp: {}",
             name,
-            env.line_num(),
+            vm.line_num(),
             e,
-            exp.display_value(env.vm())
+            exp.display_value(vm)
         );
         return Err(e);
     }
-    if let Err(e) = state.chunk.encode0(RET, env.own_line()) {
-        println!("Compile error, {} line {}: {}", name, env.line_num(), e);
+    if let Err(e) = state.chunk.encode0(RET, vm.own_line()) {
+        println!("Compile error, {} line {}: {}", name, vm.line_num(), e);
         return Err(e);
     }
     state.chunk.extra_regs = state.max_regs;
     Ok((Arc::new(state.chunk), state.doc_string))
 }
 
-fn load(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+fn load(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if registers.len() != 1 {
         return Err(VMError::new_compile(
             "load: wrong number of args, expected one",
@@ -100,9 +98,9 @@ fn load(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
     Ok(last)
 }
 
-fn eval(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+fn eval(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if let (Some(exp), None) = (registers.get(0), registers.get(1)) {
-        let mut env = CompileEnvironment::new(vm);
+        let mut env = new_slosh_vm();
         let line_num = env.line_num();
         let mut state = CompileState::new_state("none/eval", line_num, None);
         state.chunk.dbg_args = Some(Vec::new());
@@ -121,27 +119,27 @@ fn eval(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
 const PROMPT_FN: &str = "prompt";
 
 pub fn add_builtin(
-    env: &mut CompileEnvironment,
+    env: &mut SloshVm,
     name: &str,
-    func: CallFuncSig<()>,
+    func: CallFuncSig<CompileEnvironment>,
     doc_string: &str,
 ) {
     if let Value::Global(si) = env.set_global_builtin(name, func) {
-        let key = env.vm_mut().intern("doc-string");
-        let s = env.vm_mut().alloc_string(doc_string.to_string());
-        env.vm_mut().set_global_property(si, key, s);
+        let key = env.intern("doc-string");
+        let s = env.alloc_string(doc_string.to_string());
+        env.set_global_property(si, key, s);
     }
 }
 
-pub fn add_docstring(env: &mut CompileEnvironment, name: &str, doc_string: &str) {
-    if let Value::Global(si) = env.set_global(name, Value::Undefined) {
-        let key = env.vm_mut().intern("doc-string");
-        let s = env.vm_mut().alloc_string(doc_string.to_string());
-        env.vm_mut().set_global_property(si, key, s);
+pub fn add_docstring(env: &mut SloshVm, name: &str, doc_string: &str) {
+    if let Value::Global(si) = env.set_named_global(name, Value::Undefined) {
+        let key = env.intern("doc-string");
+        let s = env.alloc_string(doc_string.to_string());
+        env.set_global_property(si, key, s);
     }
 }
 
-pub fn setup_vecs(env: &mut CompileEnvironment) {
+pub fn setup_vecs(env: &mut SloshVm) {
     add_docstring(
         env,
         "vec",
@@ -352,8 +350,7 @@ fn main() {
     if let Err(e) = con.history.set_file_name_and_load_history("history") {
         println!("Error loading history: {}", e);
     }
-    let mut vm = Vm::new();
-    let mut env = CompileEnvironment::new(&mut vm);
+    let mut env = new_slosh_vm();
     setup_vecs(&mut env);
     env.set_global_builtin("pr", pr);
     env.set_global_builtin("prn", prn);
@@ -387,7 +384,7 @@ fn main() {
         }
 
         con.history.push(&res).expect("Failed to push history.");
-        let reader = Reader::from_string(res, env.vm_mut(), "", 1, 0);
+        let reader = Reader::from_string(res, &mut env, "", 1, 0);
         let exps: Result<Vec<Value>, ReadError> = reader.collect();
         match exps {
             Ok(exps) => {
@@ -404,9 +401,9 @@ fn main() {
                         println!("Compile error, line {}: {}", env.line_num(), e);
                     }
                     let chunk = Arc::new(state.chunk.clone());
-                    if let Err(err) = env.vm_mut().execute(chunk) {
-                        println!("ERROR: {}", err.display(env.vm()));
-                        if let Some(err_frame) = env.vm().err_frame() {
+                    if let Err(err) = env.execute(chunk) {
+                        println!("ERROR: {}", err.display(&env));
+                        if let Some(err_frame) = env.err_frame() {
                             let ip = err_frame.current_ip;
                             let line = err_frame.chunk.offset_to_line(ip).unwrap_or(0);
                             println!(
@@ -416,8 +413,8 @@ fn main() {
                         }
                         debug(&mut env);
                     } else {
-                        let reg = env.vm().get_stack(0);
-                        println!("{}", display_value(env.vm_mut(), reg));
+                        let reg = env.get_stack(0);
+                        println!("{}", display_value(&env, reg));
                     }
                 }
             }

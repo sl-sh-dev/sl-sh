@@ -1,8 +1,9 @@
-use crate::{compile, CompileEnvironment, CompileState};
+use crate::{compile, CompileState, SloshVm};
+use compile_state::state::SloshVmTrait;
 use slvm::*;
 
 pub(crate) fn compile_def(
-    env: &mut CompileEnvironment,
+    env: &mut SloshVm,
     state: &mut CompileState,
     cdr: &[Value],
     result: usize,
@@ -11,17 +12,17 @@ pub(crate) fn compile_def(
         (_, None) => return Err(VMError::new_compile("def: expected symbol")),
         (1, Some(Value::Symbol(si))) => {
             // 'def symbol' predeclares a symbol to be used later, no bytecode.
-            let si_const = env.reserve_global(*si);
+            let si_const = env.get_reserve_global(*si);
             if let Some(doc_string) = state.doc_string {
-                let key = env.vm_mut().intern("doc-string");
-                env.vm_mut().set_global_property(si_const, key, doc_string);
+                let key = env.intern("doc-string");
+                env.set_global_property(si_const, key, doc_string);
             }
         }
         (2, Some(Value::Symbol(si))) => {
-            let si_const = env.reserve_global(*si);
+            let si_const = env.get_reserve_global(*si);
             if let Some(doc_string) = state.doc_string {
-                let key = env.vm_mut().intern("doc-string");
-                env.vm_mut().set_global_property(si_const, key, doc_string);
+                let key = env.intern("doc-string");
+                env.set_global_property(si_const, key, doc_string);
             }
             compile(env, state, cdr[1], result + 1)?;
             state
@@ -37,7 +38,7 @@ pub(crate) fn compile_def(
 }
 
 pub(crate) fn compile_set(
-    env: &mut CompileEnvironment,
+    env: &mut SloshVm,
     state: &mut CompileState,
     cdr: &[Value],
     result: usize,
@@ -58,7 +59,7 @@ pub(crate) fn compile_set(
                     .chunk
                     .encode2(DEF, result as u16, (result + 1) as u16, env.own_line())?;
             } else {
-                let sym = env.vm().get_interned(si);
+                let sym = env.get_interned(si);
                 return Err(VMError::new_compile(format!("Symbol {sym} not defined (maybe you need to use 'def {sym}' to pre-declare it).")));
             }
         } else {

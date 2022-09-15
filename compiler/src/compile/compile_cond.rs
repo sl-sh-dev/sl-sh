@@ -1,8 +1,9 @@
-use crate::{compile, CompileEnvironment, CompileState};
+use crate::{compile, CompileState, SloshVm};
+use compile_state::state::SloshVmTrait;
 use slvm::*;
 
 pub(crate) fn compile_if(
-    env: &mut CompileEnvironment,
+    env: &mut SloshVm,
     state: &mut CompileState,
     cdr: &[Value],
     result: usize,
@@ -51,7 +52,7 @@ pub(crate) fn compile_if(
 }
 
 pub(crate) fn compile_while(
-    env: &mut CompileEnvironment,
+    env: &mut SloshVm,
     state: &mut CompileState,
     cdr: &[Value],
     result: usize,
@@ -84,7 +85,7 @@ pub(crate) fn compile_while(
 }
 
 pub(crate) fn compile_and(
-    env: &mut CompileEnvironment,
+    env: &mut SloshVm,
     state: &mut CompileState,
     cdr: &[Value],
     result: usize,
@@ -122,7 +123,7 @@ pub(crate) fn compile_and(
 }
 
 pub(crate) fn compile_or(
-    env: &mut CompileEnvironment,
+    env: &mut SloshVm,
     state: &mut CompileState,
     cdr: &[Value],
     result: usize,

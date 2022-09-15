@@ -1,6 +1,7 @@
-use slvm::{VMError, VMResult, Value, Vm};
+use crate::SloshVm;
+use slvm::{VMError, VMResult, Value};
 
-pub fn str_trim(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+pub fn str_trim(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();
     if let (Some(string), None) = (i.next(), i.next()) {
         let string = string.get_string(vm)?.trim().to_string();
@@ -10,7 +11,7 @@ pub fn str_trim(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-pub fn str_ltrim(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+pub fn str_ltrim(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();
     if let (Some(string), None) = (i.next(), i.next()) {
         let string = string.get_string(vm)?.trim_start().to_string();
@@ -20,7 +21,7 @@ pub fn str_ltrim(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-pub fn str_rtrim(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+pub fn str_rtrim(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();
     if let (Some(string), None) = (i.next(), i.next()) {
         let string = string.get_string(vm)?.trim_end().to_string();
@@ -30,7 +31,7 @@ pub fn str_rtrim(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-pub fn str_replace(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+pub fn str_replace(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();
     if let (Some(string), Some(from), Some(to), None) = (i.next(), i.next(), i.next(), i.next()) {
         let from = from.get_string(vm)?;
@@ -44,7 +45,7 @@ pub fn str_replace(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-pub fn str_contains(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+pub fn str_contains(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();
     if let (Some(string), Some(pat), None) = (i.next(), i.next(), i.next()) {
         let string = string.get_string(vm)?;

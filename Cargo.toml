@@ -5,4 +5,5 @@ members = [
     "compiler",
     "vm",
     "builtins",
+    "compile_state",
 ]

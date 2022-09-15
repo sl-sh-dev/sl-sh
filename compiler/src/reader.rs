@@ -6,8 +6,8 @@ use std::fs::File;
 use std::io::{BufReader, Cursor};
 use std::num::{ParseFloatError, ParseIntError};
 
+use compile_state::state::SloshVm;
 use slvm::value::*;
-use slvm::vm::*;
 use slvm::Chunk;
 use unicode_reader::Graphemes;
 
@@ -67,7 +67,7 @@ impl fmt::Display for ReadError {
 
 //#[derive(Clone, Debug)]
 pub struct Reader<'vm> {
-    vm: &'vm mut Vm,
+    vm: &'vm mut SloshVm,
     char_iter: Option<Box<ReaderCharIter>>,
     pub file_name: &'static str,
 }
@@ -145,7 +145,7 @@ enum ReadReturn {
 impl<'vm> Reader<'vm> {
     pub fn from_file(
         src: File,
-        vm: &'vm mut Vm,
+        vm: &'vm mut SloshVm,
         file_name: &'static str,
         line: usize,
         column: usize,
@@ -175,7 +175,7 @@ impl<'vm> Reader<'vm> {
 
     pub fn from_string(
         src: String,
-        vm: &'vm mut Vm,
+        vm: &'vm mut SloshVm,
         file_name: &'static str,
         line: usize,
         column: usize,
@@ -211,7 +211,7 @@ impl<'vm> Reader<'vm> {
         self.char_iter.as_ref().expect("Invalid Reader!").column
     }
 
-    pub fn vm(&mut self) -> &mut Vm {
+    pub fn vm(&mut self) -> &mut SloshVm {
         self.vm
     }
 
@@ -835,7 +835,7 @@ impl<'vm> Reader<'vm> {
     }
 
     fn unquote_splice(&mut self, exp: Value) -> bool {
-        fn is_splice(vm: &mut Vm, car: Value) -> bool {
+        fn is_splice(vm: &mut SloshVm, car: Value) -> bool {
             if let Value::Symbol(si) = car {
                 if si == vm.intern("unquote-splice") {
                     return true;
@@ -1234,8 +1234,9 @@ impl<'vm> Reader<'vm> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use compile_state::state::{new_slosh_vm, SloshVm};
 
-    fn to_strs(vm: &mut Vm, output: &mut Vec<String>, exp: Value) {
+    fn to_strs(vm: &mut SloshVm, output: &mut Vec<String>, exp: Value) {
         match exp {
             Value::Pair(h) => {
                 let (e1, e2) = vm.get_pair(h);
@@ -1281,7 +1282,7 @@ mod tests {
         }
     }
 
-    fn read_test(vm: &mut Vm, text: &'static str) -> Result<Value, ReadError> {
+    fn read_test(vm: &mut SloshVm, text: &'static str) -> Result<Value, ReadError> {
         let reader = Reader::from_string(text.to_string(), vm, "", 1, 0);
         let exps: Vec<Value> = reader.collect::<Result<Vec<Value>, ReadError>>()?;
         // Don't exit early without unpausing....
@@ -1295,7 +1296,7 @@ mod tests {
         res
     }
 
-    fn tokenize(vm: &mut Vm, input: &'static str) -> Vec<String> {
+    fn tokenize(vm: &mut SloshVm, input: &'static str) -> Vec<String> {
         let exp = read_test(vm, input);
         let mut tokens = Vec::new();
         if let Ok(exp) = exp {
@@ -1306,7 +1307,7 @@ mod tests {
         tokens
     }
 
-    fn tokenize_err(vm: &mut Vm, input: &'static str) -> ReadError {
+    fn tokenize_err(vm: &mut SloshVm, input: &'static str) -> ReadError {
         let exp = read_test(vm, input);
         if let Err(err) = exp {
             err
@@ -1315,7 +1316,7 @@ mod tests {
         }
     }
 
-    fn tokenize_wrap(vm: &mut Vm, input: &str) -> Vec<String> {
+    fn tokenize_wrap(vm: &mut SloshVm, input: &str) -> Vec<String> {
         let mut tokens = Vec::new();
         let mut token_exps = Vec::new();
         let read_iter = Reader::from_string(input.to_string(), vm, "", 1, 0);
@@ -1327,8 +1328,8 @@ mod tests {
         tokens
     }
 
-    fn build_def_vm() -> Vm {
-        Vm::new()
+    fn build_def_vm() -> SloshVm {
+        new_slosh_vm()
     }
 
     #[test]

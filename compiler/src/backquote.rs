@@ -1,11 +1,10 @@
 use slvm::error::*;
 use slvm::interner::Interned;
 use slvm::value::*;
-use slvm::vm::*;
 
 use crate::compile::*;
 use crate::pass1::pass1;
-use crate::state::*;
+use compile_state::state::*;
 
 macro_rules! is_tag {
     ($vm:expr, $exp:expr, $form:expr) => {{
@@ -76,7 +75,7 @@ pub struct Tag {
 }
 
 impl Tag {
-    pub fn new(vm: &mut Vm) -> Self {
+    pub fn new(vm: &mut SloshVm) -> Self {
         Tag {
             backquote: vm.intern("back-quote"),
             unquote: vm.intern("unquote"),
@@ -85,40 +84,40 @@ impl Tag {
         }
     }
 
-    pub fn is_backquote(&self, vm: &Vm, exp: Value) -> bool {
+    pub fn is_backquote(&self, vm: &SloshVm, exp: Value) -> bool {
         is_tag!(vm, exp, self.backquote)
     }
 
-    pub fn is_unquote(&self, vm: &Vm, exp: Value) -> bool {
+    pub fn is_unquote(&self, vm: &SloshVm, exp: Value) -> bool {
         is_tag!(vm, exp, self.unquote)
     }
 
-    pub fn is_splice(&self, vm: &Vm, exp: Value) -> bool {
+    pub fn is_splice(&self, vm: &SloshVm, exp: Value) -> bool {
         is_tag!(vm, exp, self.splice)
     }
 
-    pub fn is_splice_bang(&self, vm: &Vm, exp: Value) -> bool {
+    pub fn is_splice_bang(&self, vm: &SloshVm, exp: Value) -> bool {
         is_tag!(vm, exp, self.splice_bang)
     }
 
-    pub fn data(vm: &Vm, exp: Value) -> VMResult<Value> {
+    pub fn data(vm: &SloshVm, exp: Value) -> VMResult<Value> {
         get_data!(vm, exp)
     }
 }
 
-fn quote(vm: &mut Vm, exp: Value) -> Value {
+fn quote(vm: &mut SloshVm, exp: Value) -> Value {
     let cdr = vm.alloc_pair_ro(exp, Value::Nil);
     let q_i = vm.intern_static("quote");
     vm.alloc_pair_ro(Value::Symbol(q_i), cdr)
 }
 
-fn list(vm: &mut Vm, exp: Value) -> Value {
+fn list(vm: &mut SloshVm, exp: Value) -> Value {
     let cdr = vm.alloc_pair_ro(exp, Value::Nil);
     let q_i = vm.intern_static("list");
     vm.alloc_pair_ro(Value::Symbol(q_i), cdr)
 }
 
-fn vec(vm: &mut Vm, v: &[Value]) -> Value {
+fn vec(vm: &mut SloshVm, v: &[Value]) -> Value {
     let mut last_pair = Value::Nil;
     if !v.is_empty() {
         let mut i = v.len();
@@ -131,19 +130,19 @@ fn vec(vm: &mut Vm, v: &[Value]) -> Value {
     vm.alloc_pair_ro(Value::Symbol(q_i), last_pair)
 }
 
-fn list2(vm: &mut Vm, exp: Value) -> Value {
+fn list2(vm: &mut SloshVm, exp: Value) -> Value {
     let q_i = vm.intern_static("list");
     vm.alloc_pair_ro(Value::Symbol(q_i), exp)
 }
 
-fn append(vm: &mut Vm, exp1: Value, exp2: Value) -> Value {
+fn append(vm: &mut SloshVm, exp1: Value, exp2: Value) -> Value {
     let cdr1 = vm.alloc_pair_ro(exp2, Value::Nil);
     let cdr2 = vm.alloc_pair_ro(exp1, cdr1);
     let q_i = vm.intern_static("list-append");
     vm.alloc_pair_ro(Value::Symbol(q_i), cdr2)
 }
 
-fn rewrap(vm: &mut Vm, exp: Value, sym: &'static str) -> Value {
+fn rewrap(vm: &mut SloshVm, exp: Value, sym: &'static str) -> Value {
     let cdr = vm.alloc_pair_ro(exp, Value::Nil);
     let q_i = vm.intern_static(sym);
     let car = quote(vm, Value::Symbol(q_i));
@@ -151,25 +150,25 @@ fn rewrap(vm: &mut Vm, exp: Value, sym: &'static str) -> Value {
     list2(vm, cdr)
 }
 
-fn unquote(vm: &mut Vm, exp: Value) -> Value {
+fn unquote(vm: &mut SloshVm, exp: Value) -> Value {
     rewrap(vm, exp, "unquote")
 }
 
-fn splice(vm: &mut Vm, exp: Value) -> Value {
+fn splice(vm: &mut SloshVm, exp: Value) -> Value {
     rewrap(vm, exp, "unquote-splice")
 }
 
-fn splice_bang(vm: &mut Vm, exp: Value) -> Value {
+fn splice_bang(vm: &mut SloshVm, exp: Value) -> Value {
     rewrap(vm, exp, "unquote-splice!")
 }
 
-fn back_quote(vm: &mut Vm, exp: Value) -> Value {
+fn back_quote(vm: &mut SloshVm, exp: Value) -> Value {
     rewrap(vm, exp, "back-quote")
 }
 
 // Algorithm initially from
 // https://3e8.org/pub/scheme/doc/Quasiquotation%20in%20Lisp%20(Bawden).pdf
-fn qq_expand(vm: &mut Vm, exp: Value, line: u32, depth: u32) -> VMResult<Value> {
+fn qq_expand(vm: &mut SloshVm, exp: Value, line: u32, depth: u32) -> VMResult<Value> {
     let tag = Tag::new(vm);
     if tag.is_unquote(vm, exp) {
         if depth == 0 {
@@ -226,7 +225,7 @@ fn qq_expand(vm: &mut Vm, exp: Value, line: u32, depth: u32) -> VMResult<Value> 
     }
 }
 
-fn qq_expand_list(vm: &mut Vm, exp: Value, line: u32, depth: u32) -> VMResult<Value> {
+fn qq_expand_list(vm: &mut SloshVm, exp: Value, line: u32, depth: u32) -> VMResult<Value> {
     let tag = Tag::new(vm);
     if tag.is_unquote(vm, exp) {
         if depth == 0 {
@@ -288,18 +287,18 @@ fn qq_expand_list(vm: &mut Vm, exp: Value, line: u32, depth: u32) -> VMResult<Va
 }
 
 pub fn backquote(
-    env: &mut CompileEnvironment,
+    env: &mut SloshVm,
     state: &mut CompileState,
     exp: Value,
     result: usize,
 ) -> VMResult<()> {
-    env.vm_mut().pause_gc();
+    env.pause_gc();
     let line = env.line_num();
-    let result = qq_expand(env.vm_mut(), exp, line, 0).and_then(|expand| {
+    let result = qq_expand(env, exp, line, 0).and_then(|expand| {
         // XXX disable line numbering?
         pass1(env, state, expand).and_then(|_| compile(env, state, expand, result))
     });
-    env.vm_mut().unpause_gc();
+    env.unpause_gc();
     result
 }
 
@@ -310,7 +309,7 @@ mod tests {
     use slvm::RET;
     use std::sync::Arc;
 
-    fn read_test(vm: &mut Vm, text: &'static str) -> Result<Value, ReadError> {
+    fn read_test(vm: &mut SloshVm, text: &'static str) -> Result<Value, ReadError> {
         let reader = Reader::from_string(text.to_string(), vm, "", 1, 0);
         let exps: Vec<Value> = reader.collect::<Result<Vec<Value>, ReadError>>()?;
         // Don't exit early without unpausing....
@@ -324,12 +323,11 @@ mod tests {
         res
     }
 
-    fn exec(vm: &mut Vm, input: &'static str) -> VMResult<Value> {
+    fn exec(vm: &mut SloshVm, input: &'static str) -> VMResult<Value> {
         let exp = read_test(vm, input);
         if let Ok(exp) = exp {
-            let mut env = CompileEnvironment::new(vm);
             let mut state = CompileState::new();
-            compile(&mut env, &mut state, exp, 0)?;
+            compile(vm, &mut state, exp, 0)?;
             state.chunk.encode0(RET, Some(1))?;
             vm.execute(Arc::new(state.chunk))?;
             Ok(vm.stack()[0])
@@ -340,7 +338,7 @@ mod tests {
 
     #[test]
     fn test_quote() -> VMResult<()> {
-        let mut vm = Vm::new();
+        let mut vm = new_slosh_vm();
         let result = exec(&mut vm, "'(1 2 3)")?;
         let expected = read_test(&mut vm, "(1 2 3)").map_err(|e| VMError::new("read", e.reason))?;
         assert!(vm.is_equal_pair(expected, result)?.is_true());
@@ -362,7 +360,7 @@ mod tests {
 
     #[test]
     fn test_backquote() -> VMResult<()> {
-        let mut vm = Vm::new();
+        let mut vm = new_slosh_vm();
         let result = exec(&mut vm, "(do (def x 3) `(1 2 ~x))")?;
         let expected = read_test(&mut vm, "(1 2 3)").map_err(|e| VMError::new("read", e.reason))?;
         assert!(vm.is_equal_pair(expected, result)?.is_true());

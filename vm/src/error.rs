@@ -43,7 +43,7 @@ impl VMError {
         }
     }
 
-    pub fn display(&self, vm: &Vm) -> String {
+    pub fn display<ENV>(&self, vm: &GVm<ENV>) -> String {
         match &self.obj {
             VMErrorObj::Message(msg) => format!("[{}]: {}", self.key, msg),
             VMErrorObj::Object(val) => format!("[{}]: {}", self.key, val.pretty_value(vm)),

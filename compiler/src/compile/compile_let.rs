@@ -8,13 +8,13 @@ use slvm::Interned;
 
 use crate::compile::destructure::{setup_dbg, DestructState, DestructType};
 use crate::compile::util::get_args_iter;
-use crate::state::*;
-use crate::{compile, CompileEnvironment};
+use crate::{compile, SloshVm};
+use compile_state::state::*;
 
 type RightSideExp = (Option<Interned>, Option<usize>, Value, Option<DestructType>);
 
 fn let_inner(
-    env: &mut CompileEnvironment,
+    env: &mut SloshVm,
     state: &mut CompileState,
     cdr: &[Value],
     result: usize,
@@ -124,7 +124,7 @@ fn let_inner(
 }
 
 pub(crate) fn compile_let(
-    env: &mut CompileEnvironment,
+    env: &mut SloshVm,
     state: &mut CompileState,
     cdr: &[Value],
     result: usize,
@@ -151,62 +151,60 @@ mod tests {
     use crate::test_utils::{assert_vals, exec, exec_compile_error, exec_runtime_error, read_test};
     use builtins::collections::make_hash;
     use builtins::print::{dasm, prn};
-    use slvm::Vm;
 
     #[test]
     fn test_let() {
-        let mut vm = Vm::new();
-        let mut env = CompileEnvironment::new(&mut vm);
+        let mut env = new_slosh_vm();
         env.set_global_builtin("prn", prn);
         env.set_global_builtin("dasm", dasm);
 
         let result = exec(&mut env, "(let (a 1, b 2, c 3) `(~a ~b ~c))");
-        let expected = read_test(env.vm_mut(), "(1 2 3)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(1 2 3)");
+        assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
             "(let (a 1, b 2, c 3) (let (b 20, c (+ b 10)) `(~a ~b ~c)))",
         );
-        let expected = read_test(env.vm_mut(), "(1 20 30)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(1 20 30)");
+        assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
             "(let (a 1, b 2, c 3) (let (x (+ b 1), b 20, c (+ b 10)) `(~a ~x ~b ~c)))",
         );
-        let expected = read_test(env.vm_mut(), "(1 3 20 30)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(1 3 20 30)");
+        assert_vals(&env, expected, result);
 
         let result = exec(&mut env, "(do (def x 3) (let (x 10) (set! x 1)) x)");
-        let expected = read_test(env.vm_mut(), "3");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "3");
+        assert_vals(&env, expected, result);
 
         let result = exec(&mut env, "(let (x 10) x)");
-        let expected = read_test(env.vm_mut(), "10");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "10");
+        assert_vals(&env, expected, result);
 
         let result = exec(&mut env, "(let (x 10) (set! x 5) x)");
-        let expected = read_test(env.vm_mut(), "5");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "5");
+        assert_vals(&env, expected, result);
 
         let result = exec(&mut env, "(let (x 10 y (+ x 10)) (set! x 5) `(~x ~y))");
-        let expected = read_test(env.vm_mut(), "(5 20)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(5 20)");
+        assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
             "(do (def x 5) (let (x 10 y (+ x 10)) (set! x 15) `(~x ~y)))",
         );
-        let expected = read_test(env.vm_mut(), "(15 20)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(15 20)");
+        assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
             "(do (def x 5) (let (x 10 y (+ x 10)) (set! x 15) `(~x ~y)))",
         );
-        let expected = read_test(env.vm_mut(), "(15 20)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(15 20)");
+        assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
@@ -214,8 +212,8 @@ mod tests {
                         fny (fn (y) (if (= y 0) #t (fnx (- y 1)))))\
                        (fnx 10))",
         );
-        let expected = read_test(env.vm_mut(), "#t");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "#t");
+        assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
@@ -224,8 +222,8 @@ mod tests {
                              fny (fn (y) (if (= y 0) #t (fnx (- y 1)))))\
                        (fny 10)))",
         );
-        let expected = read_test(env.vm_mut(), "8");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "8");
+        assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
@@ -234,8 +232,8 @@ mod tests {
                             fny (fn (y) (if (= y 0) #t (fnx (- y 1)))))\
                         (fny 10))))) (dasm fnx) (fnx))",
         );
-        let expected = read_test(env.vm_mut(), "8");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "8");
+        assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
@@ -254,8 +252,8 @@ mod tests {
                                     (set! z zl)\
                                     (list x y z)))",
         );
-        let expected = read_test(env.vm_mut(), "(10 20 30)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(10 20 30)");
+        assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
@@ -274,12 +272,12 @@ mod tests {
                                     (set! z zl))\
                                   (list x y z))",
         );
-        let expected = read_test(env.vm_mut(), "(5 6 7)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(5 6 7)");
+        assert_vals(&env, expected, result);
 
         let result = exec(&mut env, "(let (x y) x)");
-        let expected = read_test(env.vm_mut(), "6");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "6");
+        assert_vals(&env, expected, result);
 
         exec_compile_error(&mut env, "(let (x) (set! x 5) x)");
         exec_compile_error(&mut env, "(let (x y_undef) (set! x 5) x)");
@@ -292,8 +290,7 @@ mod tests {
 
     #[test]
     fn test_let_destructure() {
-        let mut vm = Vm::new();
-        let mut env = CompileEnvironment::new(&mut vm);
+        let mut env = new_slosh_vm();
         env.set_global_builtin("prn", prn);
 
         let result = exec(
@@ -302,96 +299,96 @@ mod tests {
         (def x '(1 2 3))\
         (let ([a b c] x) `(~a ~b ~c))",
         );
-        let expected = read_test(env.vm_mut(), "(1 2 3)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(1 2 3)");
+        assert_vals(&env, expected, result);
 
         let result = exec(&mut env, "(let ([a b % c d] '(1 2)) (list a b c d))");
-        let expected = read_test(env.vm_mut(), "(1 2 nil nil)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(1 2 nil nil)");
+        assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
             "(let ([a b c] '(1 2 3), [x y z] [4 5 6]) (list a b c x y z))",
         );
-        let expected = read_test(env.vm_mut(), "(1 2 3 4 5 6)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(1 2 3 4 5 6)");
+        assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
             "(let ([a b % c] '(1 2), [x % y := 10 z := 11] [4 5]) (list a b c x y z))",
         );
-        let expected = read_test(env.vm_mut(), "(1 2 nil 4 5 11)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(1 2 nil 4 5 11)");
+        assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
             "(let ([a b % c := :none d] '(1 2)) (list a b c d))",
         );
-        let expected = read_test(env.vm_mut(), "(1 2 :none nil)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(1 2 :none nil)");
+        assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
             "(let ([a [b % c := :none] % d] '(1 [2])) (list a b c d))",
         );
-        let expected = read_test(env.vm_mut(), "(1 2 :none nil)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(1 2 :none nil)");
+        assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
             "(let ([a [b % c := :none] % d & rest] '(1 [2])) (list a b c d rest))",
         );
-        let expected = read_test(env.vm_mut(), "(1 2 :none nil nil)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(1 2 :none nil nil)");
+        assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
             "(let ([a [b % c := :none] % d & rest] '(1 [2] 3)) (list a b c d rest))",
         );
-        let expected = read_test(env.vm_mut(), "(1 2 :none 3 nil)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(1 2 :none 3 nil)");
+        assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
             "(let ([a [b % c := :none] % d & rest] '(1 [2] 3 4)) (list a b c d rest))",
         );
-        let expected = read_test(env.vm_mut(), "(1 2 :none 3 (4))");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(1 2 :none 3 (4))");
+        assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
             "(let ([a [b % c := :none] % d := \"d\" & rest] '(1 [2 3])) (list a b c d rest))",
         );
-        let expected = read_test(env.vm_mut(), "(1 2 3 \"d\" nil)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(1 2 3 \"d\" nil)");
+        assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
             "(let ([a [b % c := :none] % d := \"d\" &] '(1 [2 3] 4 5 6 7)) (list a b c d))",
         );
-        let expected = read_test(env.vm_mut(), "(1 2 3 4)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(1 2 3 4)");
+        assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
             "(let ({a :one, b 'two, c \"three\"} {:one 1, two 2, \"three\" 3}) (list a b c))",
         );
-        let expected = read_test(env.vm_mut(), "(1 2 3)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(1 2 3)");
+        assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
             "(let ({a :one, b 'two, c \"three\" [d e] :vec} {:one 1, two 2, \"three\" 3, :vec (4 5)}) (list a b c d e))",
         );
-        let expected = read_test(env.vm_mut(), "(1 2 3 4 5)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(1 2 3 4 5)");
+        assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
             "(let ([x y {a :one, b 'two, c \"three\"} z] [10 11 {:one 1, two 2, \"three\" 3} 12]) (list a b c x y z))",
         );
-        let expected = read_test(env.vm_mut(), "(1 2 3 10 11 12)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(1 2 3 10 11 12)");
+        assert_vals(&env, expected, result);
 
         exec_runtime_error(&mut env, "(let ([a b c] '()) nil)");
         exec_runtime_error(&mut env, "(let ([a b c] []) nil)");
@@ -416,46 +413,45 @@ mod tests {
         );
 
         let result = exec(&mut env, "(let ({a 1, b 0, c 2} [1 2 3]) (list a b c))");
-        let expected = read_test(env.vm_mut(), "(2 1 3)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(2 1 3)");
+        assert_vals(&env, expected, result);
 
         let result = exec(&mut env, "(let ({a 1, b 0, c 2} '(1 2 3)) (list a b c))");
-        let expected = read_test(env.vm_mut(), "(2 1 3)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(2 1 3)");
+        assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
             "(let ({a 1, b 0, c 2} (list 1 2 3)) (list a b c))",
         );
-        let expected = read_test(env.vm_mut(), "(2 1 3)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(2 1 3)");
+        assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
             "(let ({a :a, b :b, c :c} [:a 1, :b 2, :c 3]) `(~a ~b ~c))",
         );
-        let expected = read_test(env.vm_mut(), "(1 2 3)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(1 2 3)");
+        assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
             "(let ({a :a, b :b, c :c} '(:a 1, :b 2, :c 3)) `(~a ~b ~c))",
         );
-        let expected = read_test(env.vm_mut(), "(1 2 3)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(1 2 3)");
+        assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
             "(let ({a :a, b :b, c :c} (list :a 1, :b 2, :c 3)) `(~a ~b ~c))",
         );
-        let expected = read_test(env.vm_mut(), "(1 2 3)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(1 2 3)");
+        assert_vals(&env, expected, result);
     }
 
     #[test]
     fn test_let_shadow() {
-        let mut vm = Vm::new();
-        let mut env = CompileEnvironment::new(&mut vm);
+        let mut env = new_slosh_vm();
         env.set_global_builtin("prn", prn);
         env.set_global_builtin("dasm", dasm);
         env.set_global_builtin("make-hash", make_hash);
@@ -464,63 +460,63 @@ mod tests {
             &mut env,
             "(let (a1 10, b1 20, c1 30, a (- a1 9), b (- b1 18), c (- c1 27)) `(~a ~b ~c))",
         );
-        let expected = read_test(env.vm_mut(), "(1 2 3)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(1 2 3)");
+        assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
             "(let (a 10, b 20, c 30, a (- a 9), b (- b 18), c (- c 27)) `(~a ~b ~c))",
         );
-        let expected = read_test(env.vm_mut(), "(1 2 3)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(1 2 3)");
+        assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
             "(let (a 1, b 2, c 3, {a :a, b :b, c :c} (list :a a, :b b, :c c)) `(~a ~b ~c))",
         );
-        let expected = read_test(env.vm_mut(), "(1 2 3)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(1 2 3)");
+        assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
             "(let (a1 10, b1 11, c1 12)(let (a 1, b 2, c 3, {a :a, b :b, c :c} (list :a a, :b b, :c c)) `(~a ~b ~c)))",
         );
-        let expected = read_test(env.vm_mut(), "(1 2 3)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(1 2 3)");
+        assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
             "(let (a 10, b 2, c 0)(let (a (- a 9), b b, c (+ c 3)) `(~a ~b ~c)))",
         );
-        let expected = read_test(env.vm_mut(), "(1 2 3)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(1 2 3)");
+        assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
             "(let (a 10, b 11, c 12)(let (a 1, b 2, c 3, [a b c] (list a, b, c)) `(~a ~b ~c)))",
         );
-        let expected = read_test(env.vm_mut(), "(1 2 3)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(1 2 3)");
+        assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
             "(let (a 10, b1 11, c1 12)(let (a 1, b 2, c 3, {a :a, b :b, c :c} (list :a a, :b b, :c c)) `(~a ~b ~c)))",
         );
-        let expected = read_test(env.vm_mut(), "(1 2 3)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(1 2 3)");
+        assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
             "(let (a 10, b 11, c 12)(let (a 1, b 2, c 3, {a :a, b :b, c :c} (make-hash :a a, :b b, :c c)) `(~a ~b ~c)))",
         );
-        let expected = read_test(env.vm_mut(), "(1 2 3)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(1 2 3)");
+        assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
             "(do (def fnx (fn () (let (a 10, b 11, c 12)(let (a 1, b 2, c 3, {a :a, b :b, c :c} (make-hash :a a, :b b, :c c)) `(~a ~b ~c)))))(fnx))",
         );
-        let expected = read_test(env.vm_mut(), "(1 2 3)");
-        assert_vals(env.vm(), expected, result);
+        let expected = read_test(&mut env, "(1 2 3)");
+        assert_vals(&env, expected, result);
     }
 }

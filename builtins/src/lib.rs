@@ -1,10 +1,11 @@
-use slvm::{VMError, VMResult, Value, Vm};
+use compile_state::state::SloshVm;
+use slvm::{VMError, VMResult, Value};
 
 pub mod collections;
 pub mod print;
 pub mod string;
 
-pub fn get_prop(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+pub fn get_prop(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if registers.len() != 2 {
         return Err(VMError::new_vm(
             "get-prop: Invalid arguments (object symbol)".to_string(),
@@ -28,7 +29,7 @@ pub fn get_prop(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-pub fn set_prop(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+pub fn set_prop(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if registers.len() != 3 {
         return Err(VMError::new_vm(
             "set-prop: Invalid arguments (object symbol value)".to_string(),
@@ -51,16 +52,16 @@ pub fn set_prop(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-pub fn sizeof_heap_object(_vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+pub fn sizeof_heap_object(_vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if !registers.is_empty() {
         return Err(VMError::new_vm(
             "sizeof-heap-object: takes no arguments".to_string(),
         ));
     }
-    Ok(Value::UInt(Vm::sizeof_heap_object() as u64))
+    Ok(Value::UInt(SloshVm::sizeof_heap_object() as u64))
 }
 
-pub fn sizeof_value(_vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+pub fn sizeof_value(_vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if !registers.is_empty() {
         return Err(VMError::new_vm(
             "sizeof-value: takes no arguments".to_string(),

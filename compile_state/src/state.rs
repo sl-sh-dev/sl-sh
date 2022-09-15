@@ -123,7 +123,7 @@ impl Symbols {
         data.syms.insert(key, register);
     }
 
-    pub fn insert_capture(&self, vm: &mut Vm, key: Interned) -> Option<usize> {
+    pub fn insert_capture(&self, vm: &mut SloshVm, key: Interned) -> Option<usize> {
         let data_d = self.data.borrow();
         if let Some(idx) = data_d.syms.get(&key) {
             Some(*idx)
@@ -208,7 +208,7 @@ pub struct Specials {
 }
 
 impl Specials {
-    pub fn new(vm: &mut Vm) -> Self {
+    pub fn new(vm: &mut SloshVm) -> Self {
         Self {
             def: vm.intern_static("def"),
             set: vm.intern_static("set!"),
@@ -334,121 +334,146 @@ impl CompileState {
     }
 }
 
-pub struct CompileEnvironment<'vm> {
-    vm: &'vm mut Vm,
+pub struct CompileEnvironment {
     use_line: bool,
     line: u32,
-    specials: Specials,
+    specials: Option<Specials>,
     global_map: HashMap<Interned, usize>,
 }
 
-impl<'vm> CompileEnvironment<'vm> {
-    pub fn new(vm: &'vm mut Vm) -> Self {
-        let specials = Specials::new(vm);
+impl Default for CompileEnvironment {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl CompileEnvironment {
+    pub fn new() -> Self {
         Self {
-            vm,
             use_line: true,
             line: 1,
-            specials,
+            specials: None,
             global_map: HashMap::new(),
         }
     }
+}
 
-    pub fn vm(&self) -> &Vm {
-        self.vm
-    }
+pub type SloshVm = GVm<CompileEnvironment>;
 
-    pub fn vm_mut(&mut self) -> &mut Vm {
-        self.vm
-    }
+pub trait SloshVmTrait {
+    fn set_line(&mut self, state: &mut CompileState, handle: Handle);
+    fn set_line_val(&mut self, state: &mut CompileState, val: Value);
+    fn get_reserve_global(&mut self, symbol: Interned) -> u32;
+    fn set_named_global(&mut self, string: &str, value: Value) -> Value;
+    fn set_global_builtin(&mut self, string: &str, func: CallFuncSig<CompileEnvironment>) -> Value;
+    fn dump_globals(&self);
+    fn own_line(&self) -> Option<u32>;
+    fn line_num(&self) -> u32;
+    fn specials(&self) -> &Specials;
+    fn global_intern_slot(&self, symbol: Interned) -> Option<u32>;
+}
 
-    pub fn set_line(&mut self, state: &mut CompileState, handle: Handle) {
+pub fn new_slosh_vm() -> SloshVm {
+    let temp_env = CompileEnvironment::new();
+    let mut vm = GVm::new_with_env(temp_env);
+    let specials = Specials::new(&mut vm);
+    vm.env_mut().specials = Some(specials);
+    vm
+}
+
+impl SloshVmTrait for SloshVm {
+    fn set_line(&mut self, state: &mut CompileState, handle: Handle) {
         if let (Some(Value::UInt(dline)), Some(Value::StringConst(file_intern))) = (
-            self.vm.get_heap_property(handle, "dbg-line"),
-            self.vm.get_heap_property(handle, "dbg-file"),
+            self.get_heap_property(handle, "dbg-line"),
+            self.get_heap_property(handle, "dbg-file"),
         ) {
-            let file_name = self.vm.get_interned(file_intern);
-            if file_name == state.chunk.file_name && dline as u32 > self.line {
-                self.line = dline as u32;
+            let file_name = self.get_interned(file_intern);
+            if file_name == state.chunk.file_name && dline as u32 > self.env().line {
+                self.env_mut().line = dline as u32;
             }
         }
     }
 
-    pub fn set_line_val(&mut self, state: &mut CompileState, val: Value) {
+    fn set_line_val(&mut self, state: &mut CompileState, val: Value) {
         if let Some(handle) = val.get_handle() {
             if let (Some(Value::UInt(dline)), Some(Value::StringConst(file_intern))) = (
-                self.vm.get_heap_property(handle, "dbg-line"),
-                self.vm.get_heap_property(handle, "dbg-file"),
+                self.get_heap_property(handle, "dbg-line"),
+                self.get_heap_property(handle, "dbg-file"),
             ) {
-                let file_name = self.vm.get_interned(file_intern);
-                if file_name == state.chunk.file_name && dline as u32 > self.line {
-                    self.line = dline as u32;
+                let file_name = self.get_interned(file_intern);
+                if file_name == state.chunk.file_name && dline as u32 > self.env().line {
+                    self.env_mut().line = dline as u32;
                 }
             }
         }
     }
 
-    pub fn own_line(&self) -> Option<u32> {
-        if self.use_line {
-            Some(self.line)
-        } else {
-            None
-        }
-    }
-
-    pub fn line_num(&self) -> u32 {
-        if self.use_line {
-            self.line
-        } else {
-            0
-        }
-    }
-
-    pub fn specials(&self) -> &Specials {
-        &self.specials
-    }
-
-    pub fn global_intern_slot(&self, symbol: Interned) -> Option<u32> {
-        self.global_map.get(&symbol).copied().map(|i| i as u32)
-    }
-
-    pub fn reserve_global(&mut self, symbol: Interned) -> u32 {
-        if let Some(idx) = self.global_map.get(&symbol) {
+    fn get_reserve_global(&mut self, symbol: Interned) -> u32 {
+        if let Some(idx) = self.env_mut().global_map.get(&symbol) {
             *idx as u32
         } else {
-            let idx = self.vm.reserve_global();
-            self.global_map.insert(symbol, idx as usize);
+            let idx = self.reserve_global();
+            self.env_mut().global_map.insert(symbol, idx as usize);
             idx
         }
     }
 
-    pub fn set_global(&mut self, string: &str, value: Value) -> Value {
-        let sym = self.vm.intern(string);
-        let slot = self.reserve_global(sym);
-        self.vm.set_global(slot, value);
+    fn set_named_global(&mut self, string: &str, value: Value) -> Value {
+        let sym = self.intern(string);
+        let slot = self.get_reserve_global(sym);
+        self.set_global(slot, value);
         Value::Global(slot)
     }
 
-    pub fn set_global_builtin(&mut self, string: &str, func: CallFuncSig<()>) -> Value {
-        let f_val = self.vm.add_builtin(func);
-        self.set_global(string, f_val)
+    fn set_global_builtin(&mut self, string: &str, func: CallFuncSig<CompileEnvironment>) -> Value {
+        let f_val = self.add_builtin(func);
+        self.set_named_global(string, f_val)
     }
 
-    pub fn dump_globals(&self) {
+    fn dump_globals(&self) {
         println!("GLOBALS:");
-        let mut ordered_keys = Vec::with_capacity(self.global_map.len());
-        ordered_keys.resize(self.global_map.len(), "");
-        for (k, v) in self.global_map.iter() {
-            ordered_keys[*v] = self.vm.get_interned(*k);
+        let mut ordered_keys = Vec::with_capacity(self.env().global_map.len());
+        ordered_keys.resize(self.env().global_map.len(), "");
+        for (k, v) in self.env().global_map.iter() {
+            ordered_keys[*v] = self.get_interned(*k);
         }
         for (i, k) in ordered_keys.iter().enumerate() {
             println!(
                 "({:#010x})/{}: {}",
                 i,
                 *k,
-                self.vm.get_global(i as u32).display_value(self.vm)
+                self.get_global(i as u32).display_value(self)
             );
         }
         println!();
+    }
+
+    fn own_line(&self) -> Option<u32> {
+        if self.env().use_line {
+            Some(self.env().line)
+        } else {
+            None
+        }
+    }
+
+    fn line_num(&self) -> u32 {
+        if self.env().use_line {
+            self.env().line
+        } else {
+            0
+        }
+    }
+
+    fn specials(&self) -> &Specials {
+        if self.env().specials.is_none() {}
+        self.env().specials.as_ref().unwrap()
+    }
+
+    fn global_intern_slot(&self, symbol: Interned) -> Option<u32> {
+        self.env()
+            .global_map
+            .get(&symbol)
+            .copied()
+            .map(|i| i as u32)
     }
 }

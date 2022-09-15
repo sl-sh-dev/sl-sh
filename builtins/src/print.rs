@@ -1,6 +1,7 @@
-use slvm::{Interned, VMError, VMResult, Value, Vm};
+use crate::SloshVm;
+use slvm::{Interned, VMError, VMResult, Value};
 
-fn is_sym(vm: &Vm, name: &str, intern: Interned) -> bool {
+fn is_sym(vm: &SloshVm, name: &str, intern: Interned) -> bool {
     if let Some(i) = vm.get_if_interned(name) {
         if intern == i {
             return true;
@@ -9,7 +10,7 @@ fn is_sym(vm: &Vm, name: &str, intern: Interned) -> bool {
     false
 }
 
-fn quotey(vm: &Vm, car: Value, buf: &mut String) -> bool {
+fn quotey(vm: &SloshVm, car: Value, buf: &mut String) -> bool {
     if let Value::Symbol(i) = car {
         if is_sym(vm, "quote", i) {
             buf.push('\'');
@@ -34,7 +35,7 @@ fn quotey(vm: &Vm, car: Value, buf: &mut String) -> bool {
     }
 }
 
-fn list_out_iter(vm: &Vm, res: &mut String, itr: &mut dyn Iterator<Item = Value>) {
+fn list_out_iter(vm: &SloshVm, res: &mut String, itr: &mut dyn Iterator<Item = Value>) {
     let mut first = true;
     for p in itr {
         if !first {
@@ -46,7 +47,7 @@ fn list_out_iter(vm: &Vm, res: &mut String, itr: &mut dyn Iterator<Item = Value>
     }
 }
 
-fn list_out(vm: &Vm, res: &mut String, lst: Value) {
+fn list_out(vm: &SloshVm, res: &mut String, lst: Value) {
     let mut first = true;
     let mut cdr = lst;
     loop {
@@ -73,7 +74,7 @@ fn list_out(vm: &Vm, res: &mut String, lst: Value) {
     }
 }
 
-pub fn display_value(vm: &Vm, val: Value) -> String {
+pub fn display_value(vm: &SloshVm, val: Value) -> String {
     match &val {
         Value::True => "true".to_string(),
         Value::False => "false".to_string(),
@@ -140,7 +141,7 @@ pub fn display_value(vm: &Vm, val: Value) -> String {
     }
 }
 
-pub fn pretty_value(vm: &Vm, val: Value) -> String {
+pub fn pretty_value(vm: &SloshVm, val: Value) -> String {
     match &val {
         Value::StringConst(i) => vm.get_interned(*i).to_string(),
         Value::CodePoint(ch) => format!("{}", ch),
@@ -153,14 +154,14 @@ pub fn pretty_value(vm: &Vm, val: Value) -> String {
     }
 }
 
-pub fn pr(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+pub fn pr(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     for v in registers {
         print!("{}", pretty_value(vm, *v));
     }
     Ok(Value::Nil)
 }
 
-pub fn prn(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+pub fn prn(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     for v in registers {
         print!("{}", pretty_value(vm, *v));
     }
@@ -168,7 +169,7 @@ pub fn prn(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
     Ok(Value::Nil)
 }
 
-pub fn dasm(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+pub fn dasm(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if registers.len() != 1 {
         return Err(VMError::new_compile(
             "dasm: wrong number of args, expected one",

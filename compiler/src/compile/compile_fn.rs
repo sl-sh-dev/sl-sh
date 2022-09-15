@@ -1,12 +1,13 @@
 use crate::compile::destructure::{DestructState, DestructType};
 use crate::compile::util::get_args_iter;
 use crate::pass1::pass1;
-use crate::{compile, CompileEnvironment, CompileState};
+use crate::{compile, CompileState, SloshVm};
+use compile_state::state::SloshVmTrait;
 use slvm::{VMError, VMResult, Value, CLOSE, CONST, JMPNU, MOV, SRET};
 use std::sync::Arc;
 
 pub fn mk_state(
-    env: &mut CompileEnvironment,
+    env: &mut SloshVm,
     state: &mut CompileState,
     args: Value,
 ) -> VMResult<(CompileState, Vec<Value>, Vec<DestructType>)> {
@@ -96,7 +97,7 @@ pub fn mk_state(
 }
 
 pub(crate) fn compile_fn(
-    env: &mut CompileEnvironment,
+    env: &mut SloshVm,
     state: &mut CompileState,
     args: Value,
     cdr: &[Value],
@@ -153,13 +154,12 @@ pub(crate) fn compile_fn(
     }
     new_state.chunk.input_regs = reserved;
     new_state.chunk.extra_regs = new_state.max_regs - reserved;
-    env.vm_mut().pause_gc();
-    let lambda = env.vm_mut().alloc_lambda(Arc::new(new_state.chunk));
-    env.vm_mut().unpause_gc();
+    env.pause_gc();
+    let lambda = env.alloc_lambda(Arc::new(new_state.chunk));
+    env.unpause_gc();
     if is_macro {
         // Unwrap safe since we just allocated lambda on the heap.
-        env.vm_mut()
-            .set_heap_property(lambda.get_handle().unwrap(), ":macro", Value::True);
+        env.set_heap_property(lambda.get_handle().unwrap(), ":macro", Value::True);
     }
     let const_i = state.add_constant(lambda);
     state

@@ -1,8 +1,9 @@
-use crate::{compile, CompileEnvironment, CompileState};
+use crate::{compile, CompileState, SloshVm};
+use compile_state::state::SloshVmTrait;
 use slvm::*;
 
 pub(crate) fn compile_cons(
-    env: &mut CompileEnvironment,
+    env: &mut SloshVm,
     state: &mut CompileState,
     car: Value,
     cdr: &[Value],
@@ -122,7 +123,7 @@ pub(crate) fn compile_cons(
 }
 
 pub(crate) fn compile_vec(
-    env: &mut CompileEnvironment,
+    env: &mut SloshVm,
     state: &mut CompileState,
     car: Value,
     cdr: &[Value],

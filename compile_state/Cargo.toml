@@ -1,5 +1,5 @@
 [package]
-name = "builtins"
+name = "compile_state"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,4 +7,3 @@ edition = "2021"
 
 [dependencies]
 slvm = { path = "../vm" }
-compile_state = { path = "../compile_state" }

@@ -14,7 +14,7 @@ use crate::compile::compile_math::compile_math;
 use crate::compile::compile_seq::{compile_cons, compile_vec};
 use crate::compile::compile_store::{compile_def, compile_set};
 use crate::pass1::pass1;
-use crate::state::*;
+use compile_state::state::*;
 
 mod compile_call;
 mod compile_cond;
@@ -26,16 +26,16 @@ mod compile_store;
 mod destructure;
 mod util;
 
-fn is_macro(env: &CompileEnvironment, val: Value) -> bool {
+fn is_macro(env: &SloshVm, val: Value) -> bool {
     match val {
-        Value::Lambda(h) => matches!(env.vm().get_heap_property(h, ":macro"), Some(Value::True)),
-        Value::Closure(h) => matches!(env.vm().get_heap_property(h, ":macro"), Some(Value::True)),
+        Value::Lambda(h) => matches!(env.get_heap_property(h, ":macro"), Some(Value::True)),
+        Value::Closure(h) => matches!(env.get_heap_property(h, ":macro"), Some(Value::True)),
         _ => false,
     }
 }
 
 fn compile_list(
-    env: &mut CompileEnvironment,
+    env: &mut SloshVm,
     state: &mut CompileState,
     car: Value,
     cdr: &[Value],
@@ -192,7 +192,7 @@ fn compile_list(
                         compile(env, state, cdr[0], result)?;
                         compile(env, state, cdr[1], result + 1)?;
                     } else {
-                        let error = env.vm_mut().intern("error");
+                        let error = env.intern("error");
                         compile(env, state, Value::Keyword(error), result)?;
                         compile(env, state, cdr[0], result + 1)?;
                     }
@@ -256,15 +256,15 @@ fn compile_list(
                     compile_call_reg(env, state, idx as u16, cdr, result)?
                 } else if let Some(slot) = env.global_intern_slot(i) {
                     // Have to at least pre-declare a global.
-                    let global = env.vm().get_global(slot);
+                    let global = env.get_global(slot);
                     if let Value::Undefined = global {
-                        eprintln!("Warning: {} not defined.", env.vm().get_interned(i));
+                        eprintln!("Warning: {} not defined.", env.get_interned(i));
                     }
                     if is_macro(env, global) {
                         let (mac, caps) = match global {
-                            Value::Lambda(h) => (env.vm().get_lambda(h), None),
+                            Value::Lambda(h) => (env.get_lambda(h), None),
                             Value::Closure(h) => {
-                                let (mac, caps) = env.vm().get_closure(h);
+                                let (mac, caps) = env.get_closure(h);
                                 // Closures are read only so lets just break the lifetime away vs
                                 // allocate the same thing again...
                                 let caps = unsafe { (caps as *const [Handle]).as_ref().unwrap() };
@@ -272,16 +272,16 @@ fn compile_list(
                             }
                             _ => panic!("Invalid macro!"),
                         };
-                        env.vm_mut().pause_gc();
-                        let exp = env.vm_mut().do_call(mac, cdr, caps)?;
-                        env.vm_mut().unpause_gc();
+                        env.pause_gc();
+                        let exp = env.do_call(mac, cdr, caps)?;
+                        env.unpause_gc();
                         pass1(env, state, exp)?;
                         compile(env, state, exp, result)?
                     } else {
                         compile_callg(env, state, slot as u32, cdr, result)?
                     }
                 } else {
-                    let sym = env.vm().get_interned(i);
+                    let sym = env.get_interned(i);
                     return Err(VMError::new_compile(format!("Symbol {sym} not defined (maybe you need to use 'def {sym}' to pre-declare it).")));
                 }
             }
@@ -290,28 +290,26 @@ fn compile_list(
             }
             Value::Lambda(h) => compile_call(env, state, Value::Lambda(h), cdr, result)?,
             Value::Pair(h) | Value::List(h, _) => {
-                let (ncar, ncdr) = car
-                    .get_pair(env.vm())
-                    .expect("Pair/List not a Pair or List?");
+                let (ncar, ncdr) = car.get_pair(env).expect("Pair/List not a Pair or List?");
                 env.set_line(state, h);
                 if let Value::List(h, idx) = ncdr {
                     // This unsafe should be fine (it breaks the lifetime away from env) since the
                     // vector that backs a list is read only.
                     // Do this to avoid a useless allocation in the common case (see the code below).
                     let ncdr = unsafe {
-                        (&env.vm().get_vector(h)[idx as usize..] as *const [Value])
+                        (&env.get_vector(h)[idx as usize..] as *const [Value])
                             .as_ref()
                             .unwrap()
                     };
                     compile_list(env, state, ncar, ncdr, result)?;
                 } else {
-                    let ncdr: Vec<Value> = ncdr.iter(env.vm()).collect();
+                    let ncdr: Vec<Value> = ncdr.iter(env).collect();
                     compile_list(env, state, ncar, &ncdr[..], result)?;
                 }
                 compile_call_reg(env, state, result as u16, cdr, result)?
             }
             _ => {
-                println!("Boo, {}", car.display_value(env.vm()));
+                println!("Boo, {}", car.display_value(env));
             }
         }
     }
@@ -320,7 +318,7 @@ fn compile_list(
 }
 
 pub fn mkconst(
-    env: &mut CompileEnvironment,
+    env: &mut SloshVm,
     state: &mut CompileState,
     exp: Value,
     result: usize,
@@ -354,7 +352,7 @@ pub fn mkconst(
 }
 
 pub fn compile(
-    env: &mut CompileEnvironment,
+    env: &mut SloshVm,
     state: &mut CompileState,
     exp: Value,
     result: usize,
@@ -364,22 +362,20 @@ pub fn compile(
     }
     match exp {
         Value::Pair(handle) | Value::List(handle, _) => {
-            let (car, cdr) = exp
-                .get_pair(env.vm())
-                .expect("Pair/List not a Pair or List?");
+            let (car, cdr) = exp.get_pair(env).expect("Pair/List not a Pair or List?");
             env.set_line(state, handle);
             if let Value::List(h, idx) = cdr {
                 // This unsafe should be fine (it breaks the lifetime away from env) since the
                 // vector that backs a list is read only.
                 // Do this to avoid a useless allocation in the common case (see the code below).
                 let cdr = unsafe {
-                    (&env.vm().get_vector(h)[idx as usize..] as *const [Value])
+                    (&env.get_vector(h)[idx as usize..] as *const [Value])
                         .as_ref()
                         .unwrap()
                 };
                 compile_list(env, state, car, cdr, result)?;
             } else {
-                let cdr: Vec<Value> = cdr.iter(env.vm()).collect();
+                let cdr: Vec<Value> = cdr.iter(env).collect();
                 compile_list(env, state, car, &cdr[..], result)?;
             }
         }
@@ -395,7 +391,7 @@ pub fn compile(
                     .chunk
                     .encode_refi(result as u16, slot, env.own_line())?;
             } else {
-                let sym = env.vm().get_interned(i);
+                let sym = env.get_interned(i);
                 return Err(VMError::new_compile(format!("Symbol {sym} not defined (maybe you need to use 'def {sym}' to pre-declare it).")));
             }
         }

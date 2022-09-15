@@ -1,10 +1,11 @@
 use crate::pass1::pass1;
-use crate::{compile, CompileEnvironment, CompileState, ReadError, Reader};
+use crate::{compile, CompileState, ReadError, Reader};
+use compile_state::state::SloshVm;
 use slvm::*;
 use std::sync::Arc;
 
 /// Read text for a test.  Will convert multiple forms into a vector of Values.
-pub fn read_test(vm: &mut Vm, text: &'static str) -> Value {
+pub fn read_test(vm: &mut SloshVm, text: &'static str) -> Value {
     let reader = Reader::from_string(text.to_string(), vm, "", 1, 0);
     let exps: Vec<Value> = reader.collect::<Result<Vec<Value>, ReadError>>().unwrap();
     // Don't exit early without unpausing....
@@ -23,58 +24,55 @@ pub fn read_test(vm: &mut Vm, text: &'static str) -> Value {
 }
 
 /// Read input, compile and execute the result and return the Value this produces.
-pub fn exec(env: &mut CompileEnvironment, input: &'static str) -> Value {
-    let exp = read_test(env.vm_mut(), input);
+pub fn exec(env: &mut SloshVm, input: &'static str) -> Value {
+    let exp = read_test(env, input);
     let mut state = CompileState::new();
     if let Value::Vector(_) = exp {
-        for e in exp.iter(env.vm()).collect::<Vec<Value>>() {
+        for e in exp.iter(env).collect::<Vec<Value>>() {
             pass1(env, &mut state, e).unwrap();
             compile(env, &mut state, e, 0).unwrap();
         }
         state.chunk.encode0(RET, Some(1)).unwrap();
-        env.vm_mut().execute(Arc::new(state.chunk)).unwrap();
+        env.execute(Arc::new(state.chunk)).unwrap();
     } else {
         if let Some(handle) = exp.get_handle() {
-            env.vm_mut().heap_sticky(handle);
+            env.heap_sticky(handle);
         }
         pass1(env, &mut state, exp).unwrap();
         compile(env, &mut state, exp, 0).unwrap();
         state.chunk.encode0(RET, Some(1)).unwrap();
         let chunk = Arc::new(state.chunk);
-        env.vm_mut().execute(chunk).unwrap();
+        env.execute(chunk).unwrap();
     }
-    env.vm().stack()[0]
+    env.stack()[0]
 }
 
 /// Same as exec() but dump the registers and disassembled bytecode after executing.
 /// Only use this when debugging a test, otherwise use exec().
-pub fn exec_with_dump(env: &mut CompileEnvironment, input: &'static str) -> Value {
-    let exp = read_test(env.vm_mut(), input);
+pub fn exec_with_dump(env: &mut SloshVm, input: &'static str) -> Value {
+    let exp = read_test(env, input);
     let mut state = CompileState::new();
     if let Value::Vector(_) = exp {
-        for e in exp.iter(env.vm()).collect::<Vec<Value>>() {
+        for e in exp.iter(env).collect::<Vec<Value>>() {
             pass1(env, &mut state, e).unwrap();
             compile(env, &mut state, e, 0).unwrap();
         }
         state.chunk.encode0(RET, Some(1)).unwrap();
-        env.vm_mut().execute(Arc::new(state.chunk.clone())).unwrap();
+        env.execute(Arc::new(state.chunk.clone())).unwrap();
     } else {
         pass1(env, &mut state, exp).unwrap();
         compile(env, &mut state, exp, 0).unwrap();
         state.chunk.encode0(RET, Some(1)).unwrap();
-        env.vm_mut().execute(Arc::new(state.chunk.clone())).unwrap();
+        env.execute(Arc::new(state.chunk.clone())).unwrap();
     }
 
     let mut reg_names = state.chunk.dbg_args.as_ref().map(|iargs| iargs.iter());
-    for (i, r) in env.vm().stack()[0..=state.chunk.extra_regs]
-        .iter()
-        .enumerate()
-    {
+    for (i, r) in env.stack()[0..=state.chunk.extra_regs].iter().enumerate() {
         let aname = if i == 0 {
             "params/result"
         } else if let Some(reg_names) = reg_names.as_mut() {
             if let Some(n) = reg_names.next() {
-                env.vm().get_interned(*n)
+                env.get_interned(*n)
             } else {
                 "[SCRATCH]"
             }
@@ -86,50 +84,50 @@ pub fn exec_with_dump(env: &mut CompileEnvironment, input: &'static str) -> Valu
                 "{:#03} ^{:#20}: {:#12} {}",
                 i,
                 aname,
-                r.display_type(env.vm()),
-                r.pretty_value(env.vm())
+                r.display_type(env),
+                r.pretty_value(env)
             );
         } else {
             println!(
                 "{:#03}  {:#20}: {:#12} {}",
                 i,
                 aname,
-                r.display_type(env.vm()),
-                r.pretty_value(env.vm())
+                r.display_type(env),
+                r.pretty_value(env)
             );
         }
     }
-    let _ = state.chunk.disassemble_chunk(env.vm(), 0);
+    let _ = state.chunk.disassemble_chunk(env, 0);
 
-    env.vm().stack()[0]
+    env.stack()[0]
 }
 
 /// Read and compile input and fail if compiling does not result in an error.
-pub fn exec_compile_error(env: &mut CompileEnvironment, input: &'static str) {
-    let exp = read_test(env.vm_mut(), input);
+pub fn exec_compile_error(env: &mut SloshVm, input: &'static str) {
+    let exp = read_test(env, input);
     let mut state = CompileState::new();
     assert!(
         compile(env, &mut state, exp, 0).is_err(),
         "expected compile error"
     );
-    env.vm_mut().reset();
+    env.reset();
 }
 
 /// Read, compile and execute input and fail if execution does not result in an error.
-pub fn exec_runtime_error(env: &mut CompileEnvironment, input: &'static str) {
-    let exp = read_test(env.vm_mut(), input);
+pub fn exec_runtime_error(env: &mut SloshVm, input: &'static str) {
+    let exp = read_test(env, input);
     let mut state = CompileState::new();
     compile(env, &mut state, exp, 0).unwrap();
     state.chunk.encode0(RET, Some(1)).unwrap();
     assert!(
-        env.vm_mut().execute(Arc::new(state.chunk)).is_err(),
+        env.execute(Arc::new(state.chunk)).is_err(),
         "expected runtime error"
     );
-    env.vm_mut().reset();
+    env.reset();
 }
 
 /// Assert that val1 and val2 are the same.
-pub fn assert_vals(vm: &Vm, val1: Value, val2: Value) {
+pub fn assert_vals(vm: &SloshVm, val1: Value, val2: Value) {
     let res = vm
         .is_equal_pair(val1, val2)
         .unwrap_or(Value::False)
