@@ -745,34 +745,17 @@ fn parse_argval_varargs_type(
     ty: &TypePath,
     fn_name_attr: &Ident,
     arg_name: &Ident,
-    passing_style: ArgPassingStyle,
     inner: TokenStream,
 ) -> TokenStream {
-    //TODO assertion: it is *not* possible to do anything other than to treat
-    //  values inside of a Vec<Expression> as ArgPassingStyle::Move
-    //  1. is this true
-    //      if so, is it enforces at compile time (just throw an error here
-    //      or do it on the first pass.
-    //  2. if not, good.
-    //  regardless inner must just return the parsed Expression. which is why
-    //  the value of inner that is passed in is quote! { #arg_name }
-    //  if the rust_native type is Vec<&mut HashMap> the borrow checker
-    //  could get in the way BUT, lifetimes might help...
-    //  ***NEED to test
-    let an_element_arg_value_type_parsing_code = parse_argval_value_type(
-        ty,
-        fn_name_attr,
-        arg_name,
-        passing_style,
-        quote! { Ok(#arg_name) },
-    );
     // TODO
-    //  if the above is true, we should only accept Vec<T: TryIntoExpression>
+    //  we should only accept Vec<T: TryIntoExpression> should
+    //  be in conversions_assertions_code
     quote! {{
+        use sl_sh::builtins_util::TryIntoExpression;
         let #arg_name = #arg_name
             .iter()
             .map(|#arg_name| {
-                #an_element_arg_value_type_parsing_code
+                #arg_name.clone().try_into_for(#fn_name_attr)
             })
             .collect::<crate::LispResult<#ty>>()?;
         #inner
@@ -882,7 +865,7 @@ fn parse_type(
         ArgVal::Optional => {
             parse_argval_optional_type(ty, fn_name_attr, arg_name, passing_style, inner)
         }
-        ArgVal::Vec => parse_argval_varargs_type(ty, fn_name_attr, arg_name, passing_style, inner),
+        ArgVal::Vec => parse_argval_varargs_type(ty, fn_name_attr, arg_name, inner),
     };
     Ok(outer_parse(arg_name, tokens))
 }
