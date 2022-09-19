@@ -16,6 +16,16 @@ use nix::{
 extern crate static_assertions;
 
 fn check_int_functions() {
+    fn map_is_empty(exp: Expression) {
+        match &exp.get().data {
+            ExpEnum::HashMap(map) => {
+                assert!(map.is_empty(), "Expected empty hashmap.")
+            }
+            _ => {
+                panic!("Expected empty hashmap");
+            }
+        }
+    }
     let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
     let arg_1 = vec![
         Expression::alloc_data(ExpEnum::Int(2)),
@@ -98,9 +108,7 @@ fn check_int_functions() {
 
     let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
     let exp: Expression =
-        builtin_opt_int_to_float(sl_sh::ArgType::Exp(arg_0), sl_sh::ArgType::Opt(None))
-            .unwrap()
-            .into();
+        builtin_opt_int_to_float(sl_sh::ArgType::Exp(arg_0), sl_sh::ArgType::Opt(None)).unwrap();
     let exp_d = exp.get();
     match exp_d.data {
         ExpEnum::Float(f) => {
@@ -115,9 +123,7 @@ fn check_int_functions() {
     let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
     let arg_1 = Expression::alloc_data(ExpEnum::Int(8));
     let exp: Expression =
-        builtin_int_to_float(sl_sh::ArgType::Exp(arg_0), sl_sh::ArgType::Exp(arg_1))
-            .unwrap()
-            .into();
+        builtin_int_to_float(sl_sh::ArgType::Exp(arg_0), sl_sh::ArgType::Exp(arg_1)).unwrap();
     let exp_d = exp.get();
     match exp_d.data {
         ExpEnum::Float(f) => {
@@ -130,9 +136,7 @@ fn check_int_functions() {
     }
 
     let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
-    let exp: Expression = builtin_one_int_to_float(sl_sh::ArgType::Exp(arg_0))
-        .unwrap()
-        .into();
+    let exp: Expression = builtin_one_int_to_float(sl_sh::ArgType::Exp(arg_0)).unwrap();
     let exp_d = exp.get();
     match exp_d.data {
         ExpEnum::Float(f) => {
@@ -156,43 +160,31 @@ fn check_int_functions() {
     my_map.insert("meow1", Expression::make_nil());
     my_map.insert("meow2", Expression::make_nil());
     let exp = Expression::alloc_data(ExpEnum::HashMap(my_map));
-    //let exp_clone = exp.clone();
 
     let arg_type = sl_sh::builtins_util::ArgType::Exp(exp.clone());
     builtin_my_fallible_hash_clear(arg_type).unwrap();
-    let exp_enum = &exp.get().data;
-    match exp_enum {
-        ExpEnum::HashMap(map) => {
-            assert!(map.is_empty());
-            println!("map is empty!");
-        }
-        _ => {
-            panic!("map is empty!");
-        }
-    }
+    map_is_empty(exp);
 
     let mut my_map = HashMap::new();
     my_map.insert("meow", Expression::make_nil());
     my_map.insert("meow1", Expression::make_nil());
     my_map.insert("meow2", Expression::make_nil());
     let exp = Expression::alloc_data(ExpEnum::HashMap(my_map));
-    //let exp_clone = exp.clone();
-
     let arg_type = sl_sh::builtins_util::ArgType::Exp(exp.clone());
     builtin_my_hash_print(arg_type).unwrap();
 
     let arg_type = sl_sh::builtins_util::ArgType::Exp(exp.clone());
     builtin_my_hash_clear(arg_type).unwrap();
-    let exp_enum = &exp.get().data;
-    match exp_enum {
-        ExpEnum::HashMap(map) => {
-            assert!(map.is_empty());
-            println!("map is empty!");
-        }
-        _ => {
-            panic!("map is empty!");
-        }
-    }
+    map_is_empty(exp);
+
+    let mut my_map = HashMap::new();
+    my_map.insert("meow", Expression::make_nil());
+    my_map.insert("meow1", Expression::make_nil());
+    my_map.insert("meow2", Expression::make_nil());
+    let exp = Expression::alloc_data(ExpEnum::HashMap(my_map));
+    let arg_type = sl_sh::builtins_util::ArgType::Exp(exp.clone());
+    builtin_my_bhash_clear(arg_type).unwrap();
+    map_is_empty(exp);
 }
 
 fn main() -> Result<(), LispError> {
