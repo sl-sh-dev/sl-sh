@@ -7,7 +7,8 @@ use crate::environment::*;
 use crate::eval::*;
 use crate::interner::*;
 use crate::types::*;
-use crate::{try_inner_exp_enum, ErrorStrings, LispResult};
+use crate::ErrorStrings;
+use crate::{ret_err_exp_enum, LispResult};
 
 #[allow(clippy::ptr_arg)]
 pub(crate) fn cow_to_ref(environment: &mut Environment, input: &Cow<'static, str>) -> &'static str {
@@ -79,25 +80,23 @@ fn builtin_hash_set(
                     let val = eval(environment, val)?;
                     let mut exp_map_d = exp_map.get_mut();
                     if let ExpEnum::HashMap(map) = &mut exp_map_d.data {
-                        match &key.get().data {
+                        return match &key.get().data {
                             ExpEnum::Symbol(sym, _) => {
                                 map.insert(*sym, val);
-                                return Ok(exp_map.clone());
+                                Ok(exp_map.clone())
                             }
                             ExpEnum::String(s, _) => {
                                 map.insert(cow_to_ref(environment, s), val);
-                                return Ok(exp_map.clone());
+                                Ok(exp_map.clone())
                             }
                             ExpEnum::Char(ch) => {
                                 map.insert(cow_to_ref(environment, ch), val);
-                                return Ok(exp_map.clone());
+                                Ok(exp_map.clone())
                             }
-                            _ => {
-                                return Err(LispError::new(
-                                    "hash-set! key can only be a symbol or string",
-                                ));
-                            }
-                        }
+                            _ => Err(LispError::new(
+                                "hash-set! key can only be a symbol or string",
+                            )),
+                        };
                     }
                 }
             }
@@ -194,22 +193,14 @@ fn builtin_hash_get(
                 let key = eval(environment, key)?;
                 let map_d = map.get();
                 if let ExpEnum::HashMap(map) = &map_d.data {
-                    match &key.get().data {
-                        ExpEnum::Symbol(sym, _) => {
-                            return do_get(environment, map, sym, default);
-                        }
-                        ExpEnum::String(s, _) => {
-                            return do_get(environment, map, s, default);
-                        }
-                        ExpEnum::Char(ch) => {
-                            return do_get(environment, map, ch, default);
-                        }
-                        _ => {
-                            return Err(LispError::new(
-                                "hash-get: key can only be a symbol or string",
-                            ));
-                        }
-                    }
+                    return match &key.get().data {
+                        ExpEnum::Symbol(sym, _) => do_get(environment, map, sym, default),
+                        ExpEnum::String(s, _) => do_get(environment, map, s, default),
+                        ExpEnum::Char(ch) => do_get(environment, map, ch, default),
+                        _ => Err(LispError::new(
+                            "hash-get: key can only be a symbol or string",
+                        )),
+                    };
                 }
             }
         }
@@ -344,7 +335,7 @@ fn my_hash_clear(inner_map: &mut HashMap<&str, Expression>) -> LispResult<()> {
 #[allow(clippy::needless_return)] //TODO remove me on new implementation
 fn hash_clear(exp: Expression) -> LispResult<Expression> {
     let mut map_d = exp.get_mut();
-    try_inner_exp_enum!(
+    ret_err_exp_enum!(
         map_d.data,
         ExpEnum::HashMap(ref mut inner_map),
         {
@@ -365,13 +356,6 @@ fn hash_clear(exp: Expression) -> LispResult<Expression> {
         )
     );
 }
-
-//fn my_hash_clear<'a>(
-//    inner_map: &'a mut HashMap<&'static str, Expression>,
-//) -> &'a mut HashMap<&'static str, Expression> {
-//    inner_map.clear();
-//    inner_map
-//}
 
 pub fn add_hash_builtins<S: BuildHasher>(
     interner: &mut Interner,

@@ -459,42 +459,47 @@ macro_rules! try_exp_enum {
 
 #[macro_export]
 macro_rules! try_inner_int {
-    ($expression:expr, $name:ident, $eval:expr, $err:expr) => {
+    ($fn_name:ident, $expression:expr, $name:ident, $eval:expr) => {{
+        use crate::ErrorStrings;
         match &mut $expression.get_mut().data {
             ExpEnum::Int(ref mut $name)=> $eval,
-            _ => return Err(LispError::new($err))
+            _ => return Err( LispError::new(ErrorStrings::mismatched_type(
+                $fn_name,
+                &ExpEnum::Int(Default::default()).to_string(), 
+                &$expression.to_string(),
+            )))
         }
-    };
+    }};
 }
 
 #[macro_export]
 macro_rules! try_inner_float {
-    ($expression:expr, $name:ident, $eval:expr, $err:expr) => {
+    ($fn_name:ident, $expression:expr, $name:ident, $eval:expr) => {{
+        use crate::ErrorStrings;
         match &mut $expression.get_mut().data {
             ExpEnum::Float(ref mut $name)=> $eval,
-            _ => return Err(LispError::new($err))
+            _ => return Err( LispError::new(ErrorStrings::mismatched_type(
+                $fn_name,
+                &ExpEnum::Float(Default::default()).to_string(), 
+                &$expression.to_string(),
+            )))
         }
-    };
+    }};
 }
 
 #[macro_export]
 macro_rules! try_inner_hash_map {
-    ($expression:expr, $name:ident, $eval:expr, $err:expr) => {
+    ($fn_name:ident, $expression:expr, $name:ident, $eval:expr) => {{
+        use crate::ErrorStrings;
         match &mut $expression.get_mut().data {
             ExpEnum::HashMap(ref mut $name)=> $eval,
-            _ => return Err(LispError::new($err))
+            _ => return Err( LispError::new(ErrorStrings::mismatched_type(
+                $fn_name,
+                &ExpEnum::HashMap(Default::default()).to_string(), 
+                &$expression.to_string(),
+            )))
         }
-    };
-}
-
-#[macro_export]
-macro_rules! try_inner_exp_enum {
-    ($expression:expr, $(|)? $( $pattern:pat_param )|+ $( if $guard: expr )? $(,)?, $eval:expr, $err:expr) => {
-        match $expression {
-            $( $pattern )|+ $( if $guard )? => $eval,
-            _ => return Err(LispError::new($err))
-        }
-    };
+    }};
 }
 
 #[derive(Debug, Clone)]
@@ -761,7 +766,7 @@ mod test {
         // a function? then we could steal that functions internals?
         // fn does_hash_map_things() {
         //  //here is code we'd grab and steal;
-        //  try_inner_exp_enum!
+        //  ret_err_exp_enum!
         // }
         // maybe traits could be used to make sure a given type always has
         // the correct function supplier? the trait would HAVE to be
@@ -772,7 +777,7 @@ mod test {
         // it relies on whether or not it's impossible to at compile time look
         // at the internals of the functions these functions provide and so
         // something with them. alternatively, what if the trait could return
-        // a reference to try_inner_exp_enum!
+        // a reference to ret_err_exp_enum!
         //
         // complicate macrO_rules like this: https://stackoverflow.com/questions/50008535/calling-functions-with-different-numbers-of-arguments-in-rust-macros
         // make me wonder if it's possible to write a macro that could just do this but?
@@ -898,11 +903,11 @@ mod test {
 
     fn arg_unwrap_int_2_float(exp_0: Expression, exp_1: Expression) -> crate::LispResult<f64> {
         Ok({
-            let float = try_inner_exp_enum!(
+            let float = ret_err_exp_enum!(
                 exp_0.get().data,
                 ExpEnum::Int(int_0),
                 {
-                    let float = try_inner_exp_enum!(
+                    let float = ret_err_exp_enum!(
                         exp_1.get().data,
                         ExpEnum::Int(int_1),
                         { int_2_float(int_0, int_1)? },
@@ -953,8 +958,8 @@ mod test {
         arg_0: ArgType,
         arg_1: ArgType,
     ) -> crate::LispResult<Expression> {
-        let exp_0 = try_inner_exp_enum!(arg_0, ArgType::Exp(exp), exp, "err");
-        let exp_1 = try_inner_exp_enum!(arg_1, ArgType::Opt(exp), exp, "err");
+        let exp_0 = ret_err_exp_enum!(arg_0, ArgType::Exp(exp), exp, "err");
+        let exp_1 = ret_err_exp_enum!(arg_1, ArgType::Opt(exp), exp, "err");
         arg_unwrap_optional_int_2_float(exp_0, exp_1).map(Into::into)
     }
 
@@ -963,7 +968,7 @@ mod test {
         exp_1: Option<Expression>,
     ) -> crate::LispResult<f64> {
         Ok({
-            let float = try_inner_exp_enum!(
+            let float = ret_err_exp_enum!(
                 exp_0.get().data,
                 ExpEnum::Int(int_0),
                 {
@@ -973,7 +978,7 @@ mod test {
                             optional_int_2_float(int_0, int_1)
                         },
                         Some(exp_1) => {
-                            let float = try_inner_exp_enum!(
+                            let float = ret_err_exp_enum!(
                                 exp_1.get().data,
                                 ExpEnum::Int(int_1),
                                 { optional_int_2_float(int_0, Some(int_1)) },
@@ -1017,8 +1022,8 @@ mod test {
     }
 
     fn arg_translate_ints_2_float(arg_0: ArgType, arg_1: ArgType) -> crate::LispResult<Expression> {
-        let exp_0 = try_inner_exp_enum!(arg_0, ArgType::Exp(exp), exp, "err");
-        let exp_1 = try_inner_exp_enum!(arg_1, ArgType::VarArgs(exp), exp, "err");
+        let exp_0 = ret_err_exp_enum!(arg_0, ArgType::Exp(exp), exp, "err");
+        let exp_1 = ret_err_exp_enum!(arg_1, ArgType::VarArgs(exp), exp, "err");
         arg_unwrap_ints_2_float(exp_0, exp_1).map(Into::into)
     }
 
@@ -1027,14 +1032,14 @@ mod test {
         exp_1: Vec<Expression>,
     ) -> crate::LispResult<f64> {
         Ok({
-            let float = try_inner_exp_enum!(
+            let float = ret_err_exp_enum!(
                 exp_0.get().data,
                 ExpEnum::Int(int_0),
                 {
                     let iter = exp_1
                         .iter()
                         .map(|exp_1| {
-                            let int = try_inner_exp_enum!(
+                            let int = ret_err_exp_enum!(
                                 exp_1.get().data,
                                 ExpEnum::Int(int_1),
                                 { int_1 },
@@ -1408,7 +1413,7 @@ mod test {
                                 let iter = exp_1
                                     .iter()
                                     .map(|exp_1| {
-                                        let int = try_inner_exp_enum!(
+                                        let int = ret_err_exp_enum!(
                                             exp_1.get().data,
                                             ExpEnum::Int(int_1),
                                             { int_1 },
