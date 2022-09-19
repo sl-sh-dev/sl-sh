@@ -1,7 +1,7 @@
 use regex::Regex;
 use std::borrow::Cow;
 use std::cell::{Ref, RefCell, RefMut};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::error::Error;
 use std::fmt;
 use std::fs::File;
@@ -16,7 +16,9 @@ use crate::eval::call_lambda;
 use crate::process::*;
 use crate::symbols::*;
 use crate::unix::fd_to_file;
-use crate::{try_exp_enum, ErrorStrings, LispResult};
+use crate::{
+    try_exp_enum, try_inner_float, try_inner_hash_map, try_inner_int, ErrorStrings, LispResult,
+};
 
 #[derive(Clone, Debug)]
 pub struct LispError {
@@ -50,13 +52,13 @@ impl LispError {
     }
 }
 
-pub trait PeekableIterator: std::iter::Iterator {
+pub trait PeekableIterator: Iterator {
     fn peek(&mut self) -> Option<&Self::Item>;
 }
 
-impl<I: std::iter::Iterator> PeekableIterator for std::iter::Peekable<I> {
+impl<I: Iterator> PeekableIterator for std::iter::Peekable<I> {
     fn peek(&mut self) -> Option<&Self::Item> {
-        std::iter::Peekable::peek(self)
+        iter::Peekable::peek(self)
     }
 }
 
@@ -1112,62 +1114,38 @@ impl<T> TypedExpression<T> {
     }
 }
 
-//pub trait DRustProcedure<T, F>
-//where
-//    Self: Sized,
-//    F: FnOnce(T) -> crate::LispResult<T>,
-//{
-//    fn dapply(self, fn_name: &str, fun: &F) -> crate::LispResult<T>;
-//}
-//
-//impl<F> DRustProcedure<HashMap<&str, Expression>, F> for TypedExpression<HashMap<&str, Expression>>
-//where
-//    F: FnOnce(HashMap<&str, Expression>) -> crate::LispResult<&HashMap<&str, Expression>>,
-//{
-//    fn dapply<'a, 'b>(
-//        self,
-//        fn_name: &'b str,
-//        fun: &'a F,
-//    ) -> LispResult<&'a HashMap<&'a str, Expression>> {
-//        let mut borrow = self.0.data.borrow_mut();
-//        let display_name = borrow.data.to_string();
-//        match &mut borrow.data {
-//            ExpEnum::HashMap(map) => fun(map.clone()),
-//            _ => Err(LispError::new(ErrorStrings::mismatched_type(
-//                fn_name,
-//                "HashMap<&str, Expression",
-//                &display_name,
-//            ))),
-//        }
-//    }
-//}
-
 pub trait RustProcedureRef<T, F>
 where
     Self: Sized,
-    F: FnOnce(&mut T) -> crate::LispResult<Expression>,
+    F: FnOnce(&mut T) -> LispResult<Expression> + ?Sized,
 {
-    fn apply_ref_mut(&self, fn_name: &str, fun: F) -> crate::LispResult<Expression>;
+    fn apply_ref_mut(&self, fn_name: &str, fun: F) -> LispResult<Expression>;
 }
 
 pub trait RustProcedure<T, F>
 where
     Self: Sized,
-    F: FnOnce(T) -> crate::LispResult<Expression>,
+    F: FnOnce(T) -> crate::LispResult<Expression> + ?Sized,
 {
     fn apply(&self, fn_name: &str, fun: F) -> crate::LispResult<Expression>;
 }
 
-impl<F> RustProcedureRef<HashMap<&str, Expression>, F>
-    for TypedExpression<HashMap<&str, Expression>>
+impl<F> RustProcedureRef<BTreeMap<&str, Expression>, F>
+    for TypedExpression<BTreeMap<&str, Expression>>
 where
-    F: FnOnce(&mut HashMap<&str, Expression>) -> crate::LispResult<Expression>,
+    F: FnOnce(&mut BTreeMap<&str, Expression>) -> crate::LispResult<Expression>,
 {
     fn apply_ref_mut(&self, fn_name: &str, fun: F) -> crate::LispResult<Expression> {
         let mut borrow = self.0.data.borrow_mut();
         let display_name = borrow.data.to_string();
         match &mut borrow.data {
-            ExpEnum::HashMap(map) => fun(map),
+            ExpEnum::HashMap(ref mut map) => {
+                let mut map = map.into_iter().fold(BTreeMap::new(), |mut accum, (k, v)| {
+                    accum.insert(*k, v.clone());
+                    accum
+                });
+                fun(&mut map)
+            }
             _ => Err(LispError::new(ErrorStrings::mismatched_type(
                 fn_name,
                 "HashMap<&str, Expression",
@@ -1177,118 +1155,85 @@ where
     }
 }
 
+impl<F> RustProcedureRef<HashMap<&str, Expression>, F>
+    for TypedExpression<HashMap<&str, Expression>>
+where
+    F: FnOnce(&mut HashMap<&str, Expression>) -> LispResult<Expression>,
+{
+    fn apply_ref_mut(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
+        try_inner_hash_map!(fn_name, self.0, arg, fun(arg))
+    }
+}
+
 impl<F> RustProcedure<HashMap<&str, Expression>, F> for TypedExpression<HashMap<&str, Expression>>
 where
-    F: FnOnce(HashMap<&str, Expression>) -> crate::LispResult<Expression>,
+    F: FnOnce(HashMap<&str, Expression>) -> LispResult<Expression>,
 {
     fn apply(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
-        let mut borrow = self.0.data.borrow_mut();
-        let display_name = borrow.data.to_string();
-        try_exp_enum!(
-            borrow.data,
-            ExpEnum::HashMap(ref mut arg),
-            fun(arg.clone())?,
-            ErrorStrings::mismatched_type(fn_name, "HashMap<&str, Expression", &display_name,)
-        )
+        try_inner_hash_map!(fn_name, self.0, arg, fun(arg.clone()))
     }
 }
 
 impl<F> RustProcedureRef<Expression, F> for TypedExpression<Expression>
 where
-    F: FnOnce(&mut Expression) -> crate::LispResult<Expression>,
+    F: FnOnce(&mut Expression) -> LispResult<Expression>,
 {
-    fn apply_ref_mut(&self, _fn_name: &str, fun: F) -> crate::LispResult<Expression> {
+    fn apply_ref_mut(&self, _fn_name: &str, fun: F) -> LispResult<Expression> {
         fun(&mut self.0.clone())
     }
 }
 
 impl<F> RustProcedure<&Expression, F> for TypedExpression<&Expression>
 where
-    F: FnOnce(&Expression) -> crate::LispResult<Expression>,
+    F: FnOnce(&Expression) -> LispResult<Expression>,
 {
-    fn apply(&self, _fn_name: &str, fun: F) -> crate::LispResult<Expression> {
+    fn apply(&self, _fn_name: &str, fun: F) -> LispResult<Expression> {
         fun(&self.0.clone())
     }
 }
 
 impl<F> RustProcedure<Expression, F> for TypedExpression<Expression>
 where
-    F: FnOnce(Expression) -> crate::LispResult<Expression>,
+    F: FnOnce(Expression) -> LispResult<Expression>,
 {
-    fn apply(&self, _fn_name: &str, fun: F) -> crate::LispResult<Expression> {
+    fn apply(&self, _fn_name: &str, fun: F) -> LispResult<Expression> {
         fun(self.0.clone())
     }
 }
 
 impl<F> RustProcedureRef<i64, F> for TypedExpression<i64>
 where
-    F: FnOnce(&mut i64) -> crate::LispResult<Expression>,
+    F: FnOnce(&mut i64) -> LispResult<Expression>,
 {
-    fn apply_ref_mut(&self, fn_name: &str, fun: F) -> crate::LispResult<Expression> {
-        let mut borrow = self.0.data.borrow_mut();
-        let display_name = borrow.data.to_string();
-        match &mut borrow.data {
-            ExpEnum::Int(num) => fun(num),
-            _ => Err(LispError::new(ErrorStrings::mismatched_type(
-                fn_name,
-                "Int",
-                &display_name,
-            ))),
-        }
+    fn apply_ref_mut(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
+        try_inner_int!(fn_name, self.0, num, fun(num))
     }
 }
 
 impl<F> RustProcedure<i64, F> for TypedExpression<i64>
 where
-    F: FnOnce(i64) -> crate::LispResult<Expression>,
+    F: FnOnce(i64) -> LispResult<Expression>,
 {
-    fn apply(&self, fn_name: &str, fun: F) -> crate::LispResult<Expression> {
-        let mut borrow = self.0.data.borrow_mut();
-        let display_name = borrow.data.to_string();
-        match &mut borrow.data {
-            ExpEnum::Int(num) => fun(*num),
-            _ => Err(LispError::new(ErrorStrings::mismatched_type(
-                fn_name,
-                "Int",
-                &display_name,
-            ))),
-        }
+    fn apply(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
+        try_inner_int!(fn_name, self.0, num, fun(*num))
     }
 }
 
 impl<F> RustProcedureRef<f64, F> for TypedExpression<f64>
 where
-    F: FnOnce(&mut f64) -> crate::LispResult<Expression>,
+    F: FnOnce(&mut f64) -> LispResult<Expression>,
 {
-    fn apply_ref_mut(&self, fn_name: &str, fun: F) -> crate::LispResult<Expression> {
-        let mut borrow = self.0.data.borrow_mut();
-        let display_name = borrow.data.to_string();
-        match &mut borrow.data {
-            ExpEnum::Float(num) => fun(num),
-            _ => Err(LispError::new(ErrorStrings::mismatched_type(
-                fn_name,
-                "Float",
-                &display_name,
-            ))),
-        }
+    fn apply_ref_mut(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
+        try_inner_float!(fn_name, self.0, num, fun(num))
     }
 }
 
 impl<F> RustProcedure<f64, F> for TypedExpression<f64>
 where
-    F: FnOnce(f64) -> crate::LispResult<Expression>,
+    F: FnOnce(f64) -> LispResult<Expression>,
 {
-    fn apply(&self, fn_name: &str, fun: F) -> crate::LispResult<Expression> {
-        let mut borrow = self.0.data.borrow_mut();
-        let display_name = borrow.data.to_string();
-        match &mut borrow.data {
-            ExpEnum::Float(num) => fun(*num),
-            _ => Err(LispError::new(ErrorStrings::mismatched_type(
-                fn_name,
-                "Float",
-                &display_name,
-            ))),
-        }
+    fn apply(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
+        try_inner_float!(fn_name, self.0, num, fun(*num))
     }
 }
 

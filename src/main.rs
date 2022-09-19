@@ -179,6 +179,9 @@ fn check_int_functions() {
     //let exp_clone = exp.clone();
 
     let arg_type = sl_sh::builtins_util::ArgType::Exp(exp.clone());
+    builtin_my_hash_print(arg_type).unwrap();
+
+    let arg_type = sl_sh::builtins_util::ArgType::Exp(exp.clone());
     builtin_my_hash_clear(arg_type).unwrap();
     let exp_enum = &exp.get().data;
     match exp_enum {
@@ -319,8 +322,16 @@ fn my_hash_clear(inner_map: &mut HashMap<&str, Expression>) {
     inner_map.clear();
 }
 
-///// my docs
-//#[sl_sh_proc_macros::sl_sh_fn2(fn_name = "btreemap-my_hash_clear")]
-//fn my_bhash_clear(inner_map: &mut BTreeMap<&str, Expression>) {
-//    inner_map.clear();
-//}
+/// my docs
+#[sl_sh_proc_macros::sl_sh_fn2(fn_name = "my_hash_clear")]
+fn my_hash_print(inner_map: HashMap<&str, Expression>) {
+    for (k, v) in inner_map {
+        println!("k: {:?}, v: {:?}", k, v);
+    }
+}
+
+/// my docs
+#[sl_sh_proc_macros::sl_sh_fn2(fn_name = "btreemap-my_hash_clear")]
+fn my_bhash_clear(inner_map: &mut BTreeMap<&str, Expression>) {
+    inner_map.clear();
+}
