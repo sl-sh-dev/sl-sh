@@ -836,16 +836,19 @@ fn parse_argval_value_type(
 ) -> TokenStream {
     let ty = get_type_or_wrapped_type2(ty);
     let fn_ref = tokens_for_matching_references(passing_style, ty);
+    let inner = quote! {
+        let mut typed_data: sl_sh::types::TypedExpression<#ty> =
+            sl_sh::types::TypedExpression::new(#arg_name);
+        let callback = |#arg_name: #fn_ref| -> sl_sh::LispResult<sl_sh::types::Expression> {
+            #inner
+        };
+    };
 
     match passing_style {
         ArgPassingStyle::Move => {
             quote! {{
                 use sl_sh::types::RustProcedure;
-                let typed_data: sl_sh::types::TypedExpression<#ty> =
-                    sl_sh::types::TypedExpression::new(#arg_name);
-                let callback = |#arg_name: #fn_ref| -> sl_sh::LispResult<sl_sh::types::Expression> {
-                    #inner
-                };
+                #inner
                 typed_data.apply(#fn_name_attr, callback)
             }}
         }
@@ -853,11 +856,7 @@ fn parse_argval_value_type(
             // some reference
             quote! {{
                 use sl_sh::types::RustProcedureRef;
-                let typed_data: sl_sh::types::TypedExpression<#ty> =
-                    sl_sh::types::TypedExpression::new(#arg_name);
-                let callback = |#arg_name: #fn_ref| -> sl_sh::LispResult<sl_sh::types::Expression> {
-                    #inner
-                };
+                #inner
                 typed_data.apply_ref_mut(#fn_name_attr, callback)
             }}
         }
@@ -1415,6 +1414,6 @@ mod test {
 // - macro needs to know if a function turns a LispResult<()> so it can know to return Ok(())
 //  or all functions are required to return LispResult<()> and those should really return Nil,
 //  in lisp world.
-// - should all macros just use the try_inner_exp_enum pattern?
+// - should all macros just use the ret_err_exp_enum pattern?
 // - what about a ToString coercion for ExpEnum::Char/String/Symbol for rust functions that require them
 //  to turn into Strings.
