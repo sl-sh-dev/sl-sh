@@ -16,9 +16,7 @@ use crate::eval::call_lambda;
 use crate::process::*;
 use crate::symbols::*;
 use crate::unix::fd_to_file;
-use crate::{
-    try_exp_enum, try_inner_float, try_inner_hash_map, try_inner_int, ErrorStrings, LispResult,
-};
+use crate::{try_inner_float, try_inner_hash_map, try_inner_int, LispResult};
 
 #[derive(Clone, Debug)]
 pub struct LispError {
@@ -1119,39 +1117,50 @@ where
     Self: Sized,
     F: FnOnce(&mut T) -> LispResult<Expression> + ?Sized,
 {
-    fn apply_ref_mut(&self, fn_name: &str, fun: F) -> LispResult<Expression>;
+    fn apply_ref_mut(&mut self, fn_name: &str, fun: F) -> LispResult<Expression>;
 }
 
 pub trait RustProcedure<T, F>
 where
     Self: Sized,
-    F: FnOnce(T) -> crate::LispResult<Expression> + ?Sized,
+    F: FnOnce(T) -> LispResult<Expression> + ?Sized,
 {
-    fn apply(&self, fn_name: &str, fun: F) -> crate::LispResult<Expression>;
+    fn apply(&self, fn_name: &str, fun: F) -> LispResult<Expression>;
 }
 
 impl<F> RustProcedureRef<BTreeMap<&str, Expression>, F>
     for TypedExpression<BTreeMap<&str, Expression>>
 where
-    F: FnOnce(&mut BTreeMap<&str, Expression>) -> crate::LispResult<Expression>,
+    F: FnOnce(&mut BTreeMap<&str, Expression>) -> LispResult<Expression>,
 {
-    fn apply_ref_mut(&self, fn_name: &str, fun: F) -> crate::LispResult<Expression> {
-        let mut borrow = self.0.data.borrow_mut();
-        let display_name = borrow.data.to_string();
-        match &mut borrow.data {
-            ExpEnum::HashMap(ref mut map) => {
-                let mut map = map.into_iter().fold(BTreeMap::new(), |mut accum, (k, v)| {
+    fn apply_ref_mut(&mut self, fn_name: &str, fun: F) -> LispResult<Expression> {
+        use crate::ErrorStrings;
+        let got = self.0.display_type();
+        let mut btreemap = BTreeMap::new();
+        let x = match &self.0.get().data {
+            ExpEnum::HashMap(map) => {
+                map.iter().fold(&mut btreemap, |accum, (k, v)| {
                     accum.insert(*k, v.clone());
                     accum
                 });
-                fun(&mut map)
+                fun(&mut btreemap)
             }
-            _ => Err(LispError::new(ErrorStrings::mismatched_type(
-                fn_name,
-                "HashMap<&str, Expression",
-                &display_name,
-            ))),
-        }
+            _ => {
+                return Err(LispError::new(ErrorStrings::mismatched_type(
+                    fn_name,
+                    &ExpEnum::HashMap(Default::default()).to_string(),
+                    &got,
+                )))
+            }
+        };
+        let map = btreemap
+            .into_iter()
+            .fold(HashMap::new(), |mut accum, (k, v)| {
+                accum.insert(k, v);
+                accum
+            });
+        self.0.data.borrow_mut().data.replace(ExpEnum::HashMap(map));
+        x
     }
 }
 
@@ -1160,7 +1169,7 @@ impl<F> RustProcedureRef<HashMap<&str, Expression>, F>
 where
     F: FnOnce(&mut HashMap<&str, Expression>) -> LispResult<Expression>,
 {
-    fn apply_ref_mut(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
+    fn apply_ref_mut(&mut self, fn_name: &str, fun: F) -> LispResult<Expression> {
         try_inner_hash_map!(fn_name, self.0, arg, fun(arg))
     }
 }
@@ -1178,7 +1187,7 @@ impl<F> RustProcedureRef<Expression, F> for TypedExpression<Expression>
 where
     F: FnOnce(&mut Expression) -> LispResult<Expression>,
 {
-    fn apply_ref_mut(&self, _fn_name: &str, fun: F) -> LispResult<Expression> {
+    fn apply_ref_mut(&mut self, _fn_name: &str, fun: F) -> LispResult<Expression> {
         fun(&mut self.0.clone())
     }
 }
@@ -1205,7 +1214,7 @@ impl<F> RustProcedureRef<i64, F> for TypedExpression<i64>
 where
     F: FnOnce(&mut i64) -> LispResult<Expression>,
 {
-    fn apply_ref_mut(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
+    fn apply_ref_mut(&mut self, fn_name: &str, fun: F) -> LispResult<Expression> {
         try_inner_int!(fn_name, self.0, num, fun(num))
     }
 }
@@ -1223,7 +1232,7 @@ impl<F> RustProcedureRef<f64, F> for TypedExpression<f64>
 where
     F: FnOnce(&mut f64) -> LispResult<Expression>,
 {
-    fn apply_ref_mut(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
+    fn apply_ref_mut(&mut self, fn_name: &str, fun: F) -> LispResult<Expression> {
         try_inner_float!(fn_name, self.0, num, fun(num))
     }
 }

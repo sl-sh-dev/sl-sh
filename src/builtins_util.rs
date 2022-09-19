@@ -460,7 +460,7 @@ macro_rules! try_exp_enum {
 #[macro_export]
 macro_rules! try_inner_int {
     ($fn_name:ident, $expression:expr, $name:ident, $eval:expr) => {{
-        use crate::ErrorStrings;
+        use $crate::ErrorStrings;
         match &mut $expression.get_mut().data {
             ExpEnum::Int(ref mut $name)=> $eval,
             _ => return Err( LispError::new(ErrorStrings::mismatched_type(
@@ -475,7 +475,7 @@ macro_rules! try_inner_int {
 #[macro_export]
 macro_rules! try_inner_float {
     ($fn_name:ident, $expression:expr, $name:ident, $eval:expr) => {{
-        use crate::ErrorStrings;
+        use $crate::ErrorStrings;
         match &mut $expression.get_mut().data {
             ExpEnum::Float(ref mut $name)=> $eval,
             _ => return Err( LispError::new(ErrorStrings::mismatched_type(
@@ -490,7 +490,7 @@ macro_rules! try_inner_float {
 #[macro_export]
 macro_rules! try_inner_hash_map {
     ($fn_name:ident, $expression:expr, $name:ident, $eval:expr) => {{
-        use crate::ErrorStrings;
+        use $crate::ErrorStrings;
         match &mut $expression.get_mut().data {
             ExpEnum::HashMap(ref mut $name)=> $eval,
             _ => return Err( LispError::new(ErrorStrings::mismatched_type(
@@ -598,7 +598,7 @@ fn get_args_optional_aware(
                     // enforced at compile time.
                     ArgVal::Vec => {
                         let mut exps = vec![exp];
-                        while let Some(exp) = args_iter.next() {
+                        for exp  in args_iter.by_ref() {
                             exps.push(exp);
                         }
                         parsed_args.push(ArgType::VarArgs(exps));
