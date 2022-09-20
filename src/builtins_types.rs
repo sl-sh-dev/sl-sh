@@ -1,4 +1,4 @@
-use sl_sh_proc_macros::sl_sh_fn2;
+use sl_sh_proc_macros::sl_sh_fn;
 use std::collections::HashMap;
 use std::hash::BuildHasher;
 use std::num::{ParseFloatError, ParseIntError};
@@ -59,7 +59,7 @@ use crate::LispResult;
 /// (test::assert-equal "Nil" (type '()))
 /// (test::assert-equal "HashMap" (type (make-hash)))
 /// (test::assert-equal "File" (type (open :stdin)))
-#[sl_sh_fn2(fn_name = "type")]
+#[sl_sh_fn(fn_name = "type")]
 fn to_type(exp: Expression) -> String {
     exp.display_type()
 }
@@ -84,7 +84,7 @@ fn to_type(exp: Expression) -> String {
 /// (test::assert-true (int? test-is-values))
 /// (test::assert-false (string? test-is-values))
 /// (test::assert-false (float? test-is-values))
-#[sl_sh_fn2(fn_name = "values?", eval_values = true)]
+#[sl_sh_fn(fn_name = "values?", eval_values = true)]
 fn is_values(exp: Expression) -> bool {
     matches!(exp.get().data, ExpEnum::Values(_))
 }
@@ -98,7 +98,7 @@ fn is_values(exp: Expression) -> bool {
 /// Example:
 /// (test::assert-true (nil? nil))
 /// (test::assert-false (nil? #t))
-#[sl_sh_fn2(fn_name = "nil?")]
+#[sl_sh_fn(fn_name = "nil?")]
 fn is_nil(exp: Expression) -> bool {
     exp.is_nil()
 }
@@ -114,7 +114,7 @@ fn is_nil(exp: Expression) -> bool {
 /// (test::assert-true (none? '()))
 /// (test::assert-false (none? #t))
 /// (test::assert-false (none? '(1)))
-#[sl_sh_fn2(fn_name = "none?")]
+#[sl_sh_fn(fn_name = "none?")]
 fn is_none(exp: Expression) -> bool {
     exp.is_nil()
 }
@@ -131,7 +131,7 @@ fn is_none(exp: Expression) -> bool {
 /// (test::assert-false (some? '()))
 /// (test::assert-true (some? #t))
 /// (test::assert-true (some? '(1)))
-#[sl_sh_fn2(fn_name = "some?")]
+#[sl_sh_fn(fn_name = "some?")]
 fn is_some(exp: Expression) -> bool {
     !exp.is_nil()
 }
@@ -148,7 +148,7 @@ fn is_some(exp: Expression) -> bool {
 /// (test::assert-false (true? nil))
 /// (test::assert-false (true? 1))
 /// (test::assert-false (true? "str"))
-#[sl_sh_fn2(fn_name = "true?")]
+#[sl_sh_fn(fn_name = "true?")]
 fn is_true(exp: Expression) -> bool {
     matches!(exp.get().data, ExpEnum::True)
 }
@@ -165,7 +165,7 @@ fn is_true(exp: Expression) -> bool {
 /// (test::assert-false (false? nil))
 /// (test::assert-false (false? 1))
 /// (test::assert-false (false? "str"))
-#[sl_sh_fn2(fn_name = "false?")]
+#[sl_sh_fn(fn_name = "false?")]
 fn is_false(exp: Expression) -> bool {
     matches!(exp.get().data, ExpEnum::False)
 }
@@ -183,7 +183,7 @@ fn is_false(exp: Expression) -> bool {
 /// (test::assert-false (boolean? nil))
 /// (test::assert-false (boolean? 1))
 /// (test::assert-false (boolean? "str"))
-#[sl_sh_fn2(fn_name = "boolean?")]
+#[sl_sh_fn(fn_name = "boolean?")]
 fn is_boolean(exp: Expression) -> bool {
     matches!(exp.get().data, ExpEnum::True | ExpEnum::False)
 }
@@ -197,7 +197,7 @@ fn is_boolean(exp: Expression) -> bool {
 /// Example:
 /// (test::assert-true (float? 1.5))
 /// (test::assert-false (float? 1))
-#[sl_sh_fn2(fn_name = "float?")]
+#[sl_sh_fn(fn_name = "float?")]
 fn is_float(exp: Expression) -> bool {
     matches!(exp.get().data, ExpEnum::Float(_))
 }
@@ -212,7 +212,7 @@ fn is_float(exp: Expression) -> bool {
 /// (test::assert-true (regex? (make-regex "\d{2}-\d{2}-\d{4}")))
 /// (test::assert-true (regex? #/[a-z]+/))
 /// (test::assert-false (regex? 1.5))
-#[sl_sh_fn2(fn_name = "regex?")]
+#[sl_sh_fn(fn_name = "regex?")]
 fn is_regex(exp: Expression) -> bool {
     matches!(exp.get().data, ExpEnum::Regex(_))
 }
@@ -226,7 +226,7 @@ fn is_regex(exp: Expression) -> bool {
 /// Example:
 /// (test::assert-true (int? 1))
 /// (test::assert-false (int? 1.5))
-#[sl_sh_fn2(fn_name = "int?")]
+#[sl_sh_fn(fn_name = "int?")]
 fn is_int(exp: Expression) -> bool {
     matches!(exp.get().data, ExpEnum::Int(_))
 }
@@ -240,7 +240,7 @@ fn is_int(exp: Expression) -> bool {
 /// Example:
 /// (test::assert-true (symbol? 'symbol))
 /// (test::assert-false (symbol? 1))
-#[sl_sh_fn2(fn_name = "symbol?")]
+#[sl_sh_fn(fn_name = "symbol?")]
 fn is_symbol(exp: Expression) -> bool {
     matches!(exp.get().data, ExpEnum::Symbol(_, _))
 }
@@ -254,7 +254,7 @@ fn is_symbol(exp: Expression) -> bool {
 /// Example:
 /// (test::assert-true (string? "string"))
 /// (test::assert-false (string? 1))
-#[sl_sh_fn2(fn_name = "string?")]
+#[sl_sh_fn(fn_name = "string?")]
 fn is_string(exp: Expression) -> bool {
     matches!(exp.get().data, ExpEnum::String(_, _))
 }
@@ -269,7 +269,7 @@ fn is_string(exp: Expression) -> bool {
 /// (test::assert-true (char? #\a))
 /// (test::assert-false (char? 1))
 /// (test::assert-false (char? "a"))
-#[sl_sh_fn2(fn_name = "char?")]
+#[sl_sh_fn(fn_name = "char?")]
 fn is_char(exp: Expression) -> bool {
     matches!(exp.get().data, ExpEnum::Char(_))
 }
@@ -285,7 +285,7 @@ fn is_char(exp: Expression) -> bool {
 /// (test::assert-true (lambda? caar))
 /// (test::assert-false (lambda? 1))
 /// (test::assert-false (lambda? if))
-#[sl_sh_fn2(fn_name = "lambda?")]
+#[sl_sh_fn(fn_name = "lambda?")]
 fn is_lambda(exp: Expression) -> bool {
     matches!(exp.get().data, ExpEnum::Lambda(_))
 }
@@ -301,7 +301,7 @@ fn is_lambda(exp: Expression) -> bool {
 /// (test::assert-true (macro? defn))
 /// (test::assert-false (macro? 1))
 /// (test::assert-false (macro? if))
-#[sl_sh_fn2(fn_name = "macro?")]
+#[sl_sh_fn(fn_name = "macro?")]
 fn is_macro(exp: Expression) -> bool {
     matches!(exp.get().data, ExpEnum::Macro(_))
 }
@@ -319,7 +319,7 @@ fn is_macro(exp: Expression) -> bool {
 /// (test::assert-false (vec? 1))
 /// (test::assert-false (vec? '(1 2 3)))
 /// (test::assert-false (vec? (list)))
-#[sl_sh_fn2(fn_name = "vec?")]
+#[sl_sh_fn(fn_name = "vec?")]
 fn is_vec(exp: Expression) -> bool {
     matches!(exp.get().data, ExpEnum::Vector(_))
 }
@@ -337,7 +337,7 @@ fn is_vec(exp: Expression) -> bool {
 /// (test::assert-false (pair? 1))
 /// (test::assert-false (pair? '#(1 2 3)))
 /// (test::assert-false (pair? (vec)))
-#[sl_sh_fn2(fn_name = "pair?")]
+#[sl_sh_fn(fn_name = "pair?")]
 fn is_pair(exp: Expression) -> bool {
     matches!(exp.get().data, ExpEnum::Pair(_, _))
 }
@@ -354,7 +354,7 @@ fn is_pair(exp: Expression) -> bool {
 /// (test::assert-false (builtin? (fn () ())))
 /// (test::assert-false (builtin? caar))
 /// (test::assert-false (builtin? 1))
-#[sl_sh_fn2(fn_name = "builtin?")]
+#[sl_sh_fn(fn_name = "builtin?")]
 fn is_builtin(exp: Expression) -> bool {
     matches!(
         exp.get().data,
@@ -380,7 +380,7 @@ fn is_builtin(exp: Expression) -> bool {
 /// (test::assert-false (process? (fn () ())))
 /// (test::assert-false (process? caar))
 /// (test::assert-false (process? 1))
-#[sl_sh_fn2(fn_name = "process?")]
+#[sl_sh_fn(fn_name = "process?")]
 fn is_process(exp: Expression) -> bool {
     matches!(exp.get().data, ExpEnum::Process(_))
 }
@@ -396,7 +396,7 @@ fn is_process(exp: Expression) -> bool {
 /// (test::assert-false (file? (fn () ())))
 /// (test::assert-false (file? caar))
 /// (test::assert-false (file? 1))
-#[sl_sh_fn2(fn_name = "file?")]
+#[sl_sh_fn(fn_name = "file?")]
 fn is_file(exp: Expression) -> bool {
     matches!(exp.get().data, ExpEnum::File(_))
 }
@@ -413,7 +413,7 @@ fn is_file(exp: Expression) -> bool {
 /// (test::assert-false (hash? '(1 2 3)))
 /// (test::assert-false (hash? (list)))
 /// (test::assert-false (hash? (vec)))
-#[sl_sh_fn2(fn_name = "hash?")]
+#[sl_sh_fn(fn_name = "hash?")]
 fn is_hash(exp: Expression) -> bool {
     matches!(exp.get().data, ExpEnum::HashMap(_))
 }
@@ -431,7 +431,7 @@ fn is_hash(exp: Expression) -> bool {
 /// (test::assert-false (list? '#(1 2 3)))
 /// (test::assert-false (list? (vec)))
 /// (test::assert-false (list? '(1 . 2)))
-#[sl_sh_fn2(fn_name = "list?")]
+#[sl_sh_fn(fn_name = "list?")]
 fn is_list(exp: Expression) -> bool {
     exp.is_nil() || is_proper_list(&exp)
 }
@@ -449,7 +449,7 @@ fn is_list(exp: Expression) -> bool {
 /// (test::assert-error (str->int "not int"))
 /// (test::assert-error (str->int "10.0"))
 /// (test::assert-error (str->int "--10"))
-#[sl_sh_fn2(fn_name = "str->int")]
+#[sl_sh_fn(fn_name = "str->int")]
 fn str_to_int(istr: String) -> LispResult<i64> {
     let potential_int: Result<i64, ParseIntError> = istr.parse();
     match potential_int {
@@ -472,7 +472,7 @@ fn str_to_int(istr: String) -> LispResult<i64> {
 /// (test::assert-equal -101.95 (str->float "-101.95"))
 /// (test::assert-error (str->float "not int"))
 /// (test::assert-error (str->float "--10"))
-#[sl_sh_fn2(fn_name = "str->float")]
+#[sl_sh_fn(fn_name = "str->float")]
 fn str_to_float(istr: String) -> LispResult<f64> {
     let potential_float: Result<f64, ParseFloatError> = istr.parse();
     match potential_float {
@@ -492,7 +492,7 @@ fn str_to_float(istr: String) -> LispResult<f64> {
 /// (int->float 10))
 /// (test::assert-equal -101 (int->float -101))
 /// (test::assert-error (int->float "not int"))
-#[sl_sh_fn2(fn_name = "int->float")]
+#[sl_sh_fn(fn_name = "int->float")]
 fn int_to_float(int: i64) -> f64 {
     int as f64
 }
@@ -512,7 +512,7 @@ fn int_to_float(int: i64) -> f64 {
 /// (test::assert-equal 10 (float->int 10.9))
 /// (test::assert-equal -101 (float->int -101.99))
 /// (test::assert-error (float->int "not int"))
-#[sl_sh_fn2(fn_name = "float->int")]
+#[sl_sh_fn(fn_name = "float->int")]
 fn float_to_int(float: f64) -> i64 {
     match float {
         float if float.is_nan() => 0,
@@ -548,7 +548,7 @@ fn builtin_to_symbol(
 /// (def test-sym->str-sym nil)
 /// (test::assert-true (string? (sym->str 'test-sym->str-sym)))
 /// (test::assert-equal "test-sym->str-sym" (sym->str 'test-sym->str-sym))
-#[sl_sh_fn2(fn_name = "sym->str")]
+#[sl_sh_fn(fn_name = "sym->str")]
 fn symbol_to_str(exp: Expression) -> LispResult<String> {
     match exp.get().data {
         ExpEnum::Symbol(s, _) => Ok(s.to_string()),
@@ -569,7 +569,7 @@ fn symbol_to_str(exp: Expression) -> LispResult<String> {
 /// (test::assert-true (falsey? #f))
 /// (test::assert-false (falsey? #t))
 /// (test::assert-false (falsey? "false"))
-#[sl_sh_fn2(fn_name = "falsey?")]
+#[sl_sh_fn(fn_name = "falsey?")]
 fn is_falsey(exp: Expression) -> bool {
     exp.is_falsey()
 }

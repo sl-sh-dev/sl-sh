@@ -1,4 +1,4 @@
-use sl_sh_proc_macros::sl_sh_fn2;
+use sl_sh_proc_macros::sl_sh_fn;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::hash::BuildHasher;
@@ -131,7 +131,7 @@ fn builtin_hash_set(
 /// (test::assert-equal \"val S\" (hash-get tst-hash #\\S))
 /// (hash-remove! tst-hash #\\S)
 /// (test::assert-equal 0 (length (hash-keys tst-hash)))
-#[sl_sh_fn2(fn_name = "hash-remove!")]
+#[sl_sh_fn(fn_name = "hash-remove!")]
 fn hash_remove(map: &mut HashMap<&str, Expression>, to_val: Expression) -> LispResult<Expression> {
     fn do_rem(map: &mut HashMap<&str, Expression>, sym: &str) -> Expression {
         let old = map.remove(sym);
@@ -223,7 +223,7 @@ fn builtin_hash_get(
 /// (test::assert-false (hash-haskey tst-hash :key1))
 /// (hash-set! tst-hash :key1 \"val one b\")
 /// (test::assert-true (hash-haskey tst-hash :key1))
-#[sl_sh_fn2(fn_name = "hash-haskey")]
+#[sl_sh_fn(fn_name = "hash-haskey")]
 fn hash_haskey(map: &mut HashMap<&str, Expression>, to_val: Expression) -> LispResult<Expression> {
     fn do_has(map: &HashMap<&str, Expression>, sym: &str) -> Expression {
         if map.contains_key(sym) {
@@ -297,7 +297,7 @@ fn builtin_hash_keys(
 /// (test::assert-false (hash-haskey tst-hash 'key2))
 /// (test::assert-false (hash-haskey tst-hash \"key3\"))
 /// (test::assert-false (hash-haskey tst-hash #\\S))
-#[sl_sh_fn2(fn_name = "hash-clear!")]
+#[sl_sh_fn(fn_name = "hash-clear!")]
 #[allow(clippy::needless_return)] //TODO remove me on new implementation
 fn hash_clear(map: &mut HashMap<&str, Expression>) {
     map.clear();
