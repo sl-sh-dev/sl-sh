@@ -3,11 +3,9 @@
 use quote::quote;
 use quote::ToTokens;
 use quote::__private::TokenStream;
-use std::ops::Deref;
 use syn::__private::{Span, TokenStream2};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
-use syn::token::Comma;
 use syn::{
     parse, parse_macro_input, AngleBracketedGenericArguments, AttributeArgs, Error, FnArg,
     GenericArgument, Ident, Item, ItemFn, Lit, Meta, NestedMeta, Path, PathArguments, PathSegment,
@@ -19,22 +17,6 @@ type MacroResult<T> = Result<T, Error>;
 
 const POSSIBLE_RESULT_TYPES: [&str; 1] = ["LispResult"];
 const POSSIBLE_ARG_TYPES: [&str; 2] = ["Option", "Vec"];
-
-/// parse and return the rust types of the function parameters
-fn get_input_types(inputs: &Punctuated<FnArg, Comma>) -> Vec<Type> {
-    let mut types = vec![];
-    for input in inputs {
-        match input {
-            FnArg::Receiver(_) => {
-                unimplemented!("FnArg::Receiver is not yet implemented.")
-            }
-            FnArg::Typed(ty) => {
-                types.push(ty.ty.deref().clone());
-            }
-        }
-    }
-    types
-}
 
 /// return a fully qualified crate::Expression Type this is the struct that
 /// all sl_sh types are wrapped in, because it's a lisp.
@@ -72,64 +54,6 @@ fn get_fn_names(original_item_fn: &ItemFn) -> (Ident, Ident, Ident, Ident) {
     let intern_name = "intern_".to_string() + &name;
     let intern_name = Ident::new(&intern_name, Span::call_site());
     (original_fn_name, builtin_name, parse_name, intern_name)
-}
-
-/// given the length of the rust native args list, create two lists of argument names
-/// and crate::Expression types for generating the builtin function signature.
-/// This always amounts to something like:
-/// builtin_<fn-name>(arg_0: crate::Expression, arg_1: crate::Expression, ...)
-/// The point is, this generated builtin function should have the exact same
-/// number of arguments as the function we're wrapping. In the future if var args
-/// or optionals are supported that can be portrayed on the Rust side as Optional<T>'s
-/// for any optional arguments, and Vec<T>'s for any var args.
-fn generate_builtin_arg_list(len: usize) -> (Vec<Ident>, Vec<Type>) {
-    let mut fn_args = vec![];
-    let mut fn_types = vec![];
-    for i in 0..len {
-        let arg_name = "arg_".to_string() + &i.to_string();
-        let arg = Ident::new(&arg_name, Span::call_site());
-        fn_args.push(arg);
-        let ty = build_sl_sh_expression_type();
-        fn_types.push(ty);
-    }
-    (fn_args, fn_types)
-}
-
-/// given a type and the string value of a trait in std::convert::<convert_trait>
-/// returned the given type wrapped with the std::convert::<convert_trait>
-fn wrap_with_try_into_expression(ty: Type) -> Type {
-    let crate_path_segment = PathSegment {
-        ident: Ident::new("crate", Span::call_site()),
-        arguments: PathArguments::None,
-    };
-    let builtins_util_path_segment = PathSegment {
-        ident: Ident::new("builtins_util", Span::call_site()),
-        arguments: PathArguments::None,
-    };
-    let generic_argument = GenericArgument::Type(ty);
-    let mut generic_pun_seq = Punctuated::new();
-    generic_pun_seq.push(generic_argument);
-    let generic_argument = AngleBracketedGenericArguments {
-        colon2_token: None,
-        lt_token: Default::default(),
-        args: generic_pun_seq,
-        gt_token: Default::default(),
-    };
-    let try_into_expression_path_segment = PathSegment {
-        ident: Ident::new("TryIntoExpression", Span::call_site()),
-        arguments: PathArguments::AngleBracketed(generic_argument),
-    };
-    let mut pun_seq = Punctuated::new();
-    pun_seq.push(crate_path_segment);
-    pun_seq.push(builtins_util_path_segment);
-    pun_seq.push(try_into_expression_path_segment);
-    Type::Path(TypePath {
-        qself: None,
-        path: Path {
-            leading_colon: None,
-            segments: pun_seq,
-        },
-    })
 }
 
 /// given a type and the string value of a trait in std::convert::<convert_trait>
@@ -198,34 +122,6 @@ fn get_return_type2(
         }
     } else {
         Ok((Some(return_type), None))
-    }
-}
-
-/// parse the return type of the rust function
-fn get_return_type(original_item_fn: &ItemFn) -> MacroResult<(Type, Option<&'static str>)> {
-    let return_type = match &original_item_fn.sig.output {
-        ReturnType::Default => {
-            unimplemented!("Functions with attribute must return a value.");
-        }
-        ReturnType::Type(_ra_arrow, ty) => *ty.clone(),
-    };
-
-    if let Some((inner_type, type_path)) = get_generic_argument_from_type(&return_type) {
-        let wrapper = is_valid_generic_type(type_path, POSSIBLE_RESULT_TYPES.as_slice())?;
-        match inner_type {
-            GenericArgument::Type(ty) => Ok((ty.clone(), Some(wrapper))),
-            _ => {
-                return Err(Error::new(
-                    original_item_fn.span(),
-                    format!(
-                        "Functions of with generic arguments of type {:?} must contain Types, see GenericArgument.",
-                        &POSSIBLE_RESULT_TYPES
-                    ),
-                ))
-            }
-        }
-    } else {
-        Ok((return_type, None))
     }
 }
 
@@ -323,28 +219,6 @@ fn generate_assertions_code_for_return_type_conversions(return_type: &Type) -> T
     }
 }
 
-fn generate_assertions_code_for_type_conversions(
-    original_item_fn: &ItemFn,
-    return_type: &Type,
-) -> MacroResult<Vec<TokenStream2>> {
-    let inputs = &original_item_fn.sig.inputs;
-    let input_types = get_input_types(inputs);
-    let mut conversion_assertions_code = vec![];
-    for input_type in input_types {
-        let try_into = wrap_with_std_convert(input_type.clone(), "TryInto");
-        let try_into_expression = wrap_with_try_into_expression(input_type);
-        let expression = build_sl_sh_expression_type();
-        conversion_assertions_code.push(quote! {
-          static_assertions::assert_impl_all!(#expression: #try_into);
-          static_assertions::assert_impl_all!(#expression: #try_into_expression);
-        });
-    }
-    conversion_assertions_code.push(generate_assertions_code_for_return_type_conversions(
-        return_type,
-    ));
-    Ok(conversion_assertions_code)
-}
-
 fn get_attribute_value_with_key(
     original_item_fn: &ItemFn,
     key: &str,
@@ -396,46 +270,6 @@ fn get_attribute_name_value(nested_meta: &NestedMeta) -> MacroResult<(String, St
     }
 }
 
-fn generate_builtin_fn(
-    args_len: usize,
-    original_item_fn: &ItemFn,
-    fn_name: String,
-    fn_name_attr: Ident,
-    builtin_name: Ident,
-    original_fn_name: Ident,
-) -> MacroResult<TokenStream> {
-    let (return_type, wrapper) = get_return_type(original_item_fn)?;
-    let conversions_assertions_code =
-        generate_assertions_code_for_type_conversions(original_item_fn, &return_type)?;
-    let (fn_args, fn_types) = generate_builtin_arg_list(args_len);
-    let tokens = if let Some(_wrapper) = wrapper {
-        quote! {
-            fn #builtin_name(#(#fn_args: #fn_types),*) -> crate::LispResult<crate::types::Expression> {
-                use std::convert::TryInto;
-                use std::convert::Into;
-                use crate::builtins_util::TryIntoExpression;
-                let #fn_name_attr = #fn_name;
-                #(#conversions_assertions_code)*
-                let result = #original_fn_name(#(#fn_args.try_into_for(#fn_name_attr)?),*)?;
-                Ok(result.into())
-            }
-        }
-    } else {
-        quote! {
-            fn #builtin_name(#(#fn_args: #fn_types),*) -> crate::LispResult<crate::types::Expression> {
-                use std::convert::TryInto;
-                use std::convert::Into;
-                use crate::builtins_util::TryIntoExpression;
-                let #fn_name_attr = #fn_name;
-                #(#conversions_assertions_code)*
-                let result = #original_fn_name(#(#fn_args.try_into_for(#fn_name_attr)?),*);
-                Ok(result.into())
-            }
-        }
-    };
-    Ok(tokens)
-}
-
 fn parse_attributes(
     original_item_fn: &ItemFn,
     attr_args: AttributeArgs,
@@ -462,77 +296,6 @@ fn parse_attributes(
         false
     };
     Ok((fn_name, fn_name_attr, eval_values))
-}
-
-fn generate_sl_sh_fns(
-    original_item_fn: &ItemFn,
-    attr_args: AttributeArgs,
-) -> MacroResult<TokenStream2> {
-    let (fn_name, fn_name_attr, eval_values) = parse_attributes(original_item_fn, attr_args)?;
-    let doc_comments = get_documentation_for_fn(original_item_fn)?;
-
-    let args_len = original_item_fn.sig.inputs.len();
-    let (original_fn_name, builtin_name, parse_name, intern_name) = get_fn_names(original_item_fn);
-    let builtins_fn_code = generate_builtin_fn(
-        args_len,
-        original_item_fn,
-        fn_name.clone(),
-        fn_name_attr.clone(),
-        builtin_name.clone(),
-        original_fn_name,
-    )?;
-
-    let make_args = if eval_values {
-        quote! {
-            let args = crate::builtins_util::make_args(environment, args)?;
-        }
-    } else {
-        quote! {
-            let args = crate::builtins_util::make_args_eval_no_values(environment, args)?;
-        }
-    };
-
-    let tokens = quote! {
-        #builtins_fn_code
-
-        fn #parse_name(
-            environment: &mut crate::environment::Environment,
-            args: &mut dyn Iterator<Item = crate::types::Expression>,
-        ) -> crate::LispResult<crate::types::Expression> {
-            use std::convert::TryInto;
-            use crate::builtins_util::ExpandVecToArgs;
-            #make_args
-            let #fn_name_attr = #fn_name;
-            const args_len: usize = #args_len;
-            if args.len() == args_len {
-                match args.try_into() {
-                    Ok(params) => {
-                        let params: [crate::types::Expression; args_len] = params;
-                        #builtin_name.call_expand_args(params)
-                    },
-                    Err(e) => {
-                        Err(crate::types::LispError::new(format!("{} is broken and can't parse its arguments..", #fn_name_attr, )))
-                    }
-                }
-            } else if args.len() > args_len {
-                Err(crate::types::LispError::new(format!("{} given too many arguments, expected {}, got {}.", #fn_name_attr, args_len, args.len())))
-            } else {
-                Err(crate::types::LispError::new(format!("{} not given enough arguments, expected {}, got {}.", #fn_name_attr, args_len, args.len())))
-            }
-        }
-
-        fn #intern_name<S: std::hash::BuildHasher>(
-            interner: &mut Interner,
-            data: &mut std::collections::HashMap<&'static str, (crate::types::Expression, String), S>,
-        ) {
-            let #fn_name_attr = #fn_name;
-            data.insert(
-                interner.intern(#fn_name_attr),
-                crate::types::Expression::make_function(#parse_name, #doc_comments),
-            );
-        }
-    };
-    Ok(tokens)
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -1149,37 +912,6 @@ pub fn sl_sh_fn2(
                     #generated_code
 
                     #original_fn_code
-                }
-            }
-            _ => Error::new(item.span(), "This attribute only supports functions.")
-                .to_compile_error(),
-        },
-        Err(e) => Error::new(e.span(), "Failed to parse proc_macro_attribute.").to_compile_error(),
-    };
-
-    proc_macro::TokenStream::from(tokens)
-}
-
-#[proc_macro_attribute]
-pub fn sl_sh_fn(
-    attr: proc_macro::TokenStream,
-    input: proc_macro::TokenStream,
-) -> proc_macro::TokenStream {
-    let attr_args = parse_macro_input!(attr as AttributeArgs);
-
-    let tokens = match parse::<Item>(input) {
-        Ok(item) => match &item {
-            Item::Fn(original_item_fn) => {
-                let generated_sl_sh_fns: TokenStream2 =
-                    match generate_sl_sh_fns(original_item_fn, attr_args) {
-                        Ok(generated_code) => generated_code,
-                        Err(e) => e.to_compile_error(),
-                    };
-                let original_fn_code = item.into_token_stream();
-                quote! {
-                    #original_fn_code
-
-                    #generated_sl_sh_fns
                 }
             }
             _ => Error::new(item.span(), "This attribute only supports functions.")
