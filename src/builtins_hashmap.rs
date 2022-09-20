@@ -1,4 +1,4 @@
-use sl_sh_proc_macros::sl_sh_fn;
+use sl_sh_proc_macros::sl_sh_fn2;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::hash::BuildHasher;
@@ -7,8 +7,7 @@ use crate::environment::*;
 use crate::eval::*;
 use crate::interner::*;
 use crate::types::*;
-use crate::ErrorStrings;
-use crate::{ret_err_exp_enum, LispResult};
+use crate::LispResult;
 
 #[allow(clippy::ptr_arg)]
 pub(crate) fn cow_to_ref(environment: &mut Environment, input: &Cow<'static, str>) -> &'static str {
@@ -132,9 +131,9 @@ fn builtin_hash_set(
 /// (test::assert-equal \"val S\" (hash-get tst-hash #\\S))
 /// (hash-remove! tst-hash #\\S)
 /// (test::assert-equal 0 (length (hash-keys tst-hash)))
-#[sl_sh_fn(fn_name = "hash-remove!")]
-fn hash_remove(to_map: Expression, to_val: Expression) -> LispResult<Expression> {
-    fn do_rem(map: &mut HashMap<&'static str, Expression>, sym: &str) -> Expression {
+#[sl_sh_fn2(fn_name = "hash-remove!")]
+fn hash_remove(map: &mut HashMap<&str, Expression>, to_val: Expression) -> LispResult<Expression> {
+    fn do_rem(map: &mut HashMap<&str, Expression>, sym: &str) -> Expression {
         let old = map.remove(sym);
         if let Some(old) = old {
             old
@@ -142,28 +141,22 @@ fn hash_remove(to_map: Expression, to_val: Expression) -> LispResult<Expression>
             Expression::make_nil()
         }
     }
-    let mut map_d = to_map.get_mut();
-    if let ExpEnum::HashMap(map) = &mut map_d.data {
-        match &to_val.get().data {
-            ExpEnum::Symbol(sym, _) => {
-                return Ok(do_rem(map, sym));
-            }
-            ExpEnum::String(s, _) => {
-                return Ok(do_rem(map, s));
-            }
-            ExpEnum::Char(ch) => {
-                return Ok(do_rem(map, ch));
-            }
-            _ => {
-                return Err(LispError::new(
-                    "hash-remove! key can only be a symbol or string",
-                ));
-            }
+    match &to_val.get().data {
+        ExpEnum::Symbol(sym, _) => {
+            return Ok(do_rem(map, sym));
+        }
+        ExpEnum::String(s, _) => {
+            return Ok(do_rem(map, s));
+        }
+        ExpEnum::Char(ch) => {
+            return Ok(do_rem(map, ch));
+        }
+        _ => {
+            return Err(LispError::new(
+                "hash-remove! key can only be a symbol or string",
+            ));
         }
     }
-    Err(LispError::new(
-        "hash-remove! takes a hashmap and key to remove",
-    ))
 }
 
 fn builtin_hash_get(
@@ -230,40 +223,34 @@ fn builtin_hash_get(
 /// (test::assert-false (hash-haskey tst-hash :key1))
 /// (hash-set! tst-hash :key1 \"val one b\")
 /// (test::assert-true (hash-haskey tst-hash :key1))
-#[sl_sh_fn(fn_name = "hash-haskey")]
-fn hash_haskey(to_map: Expression, to_val: Expression) -> LispResult<Expression> {
-    fn do_has(map: &HashMap<&'static str, Expression>, sym: &str) -> Expression {
+#[sl_sh_fn2(fn_name = "hash-haskey")]
+fn hash_haskey(map: &mut HashMap<&str, Expression>, to_val: Expression) -> LispResult<Expression> {
+    fn do_has(map: &HashMap<&str, Expression>, sym: &str) -> Expression {
         if map.contains_key(sym) {
             Expression::make_true()
         } else {
             Expression::make_false()
         }
     }
-    let map_d = to_map.get();
-    if let ExpEnum::HashMap(map) = &map_d.data {
-        let key = to_val.display_type();
-        match &to_val.get().data {
-            ExpEnum::Symbol(sym, _) => {
-                return Ok(do_has(map, sym));
-            }
-            ExpEnum::String(s, _) => {
-                return Ok(do_has(map, s));
-            }
-            ExpEnum::Char(ch) => {
-                return Ok(do_has(map, ch));
-            }
-            _ => {
-                let msg = format!(
-                    "hash-haskey key can only be a symbol, string, or char, received {:?}",
-                    key
-                );
-                return Err(LispError::new(msg));
-            }
+    let key = to_val.display_type();
+    match &to_val.get().data {
+        ExpEnum::Symbol(sym, _) => {
+            return Ok(do_has(map, sym));
+        }
+        ExpEnum::String(s, _) => {
+            return Ok(do_has(map, s));
+        }
+        ExpEnum::Char(ch) => {
+            return Ok(do_has(map, ch));
+        }
+        _ => {
+            let msg = format!(
+                "hash-haskey key can only be a symbol, string, or char, received {:?}",
+                key
+            );
+            return Err(LispError::new(msg));
         }
     }
-    Err(LispError::new(
-        "hash-haskey takes a hashmap and key to test for existence of",
-    ))
 }
 
 fn builtin_hash_keys(
@@ -291,27 +278,6 @@ fn builtin_hash_keys(
     ))
 }
 
-// current best idea is to put a try_from IN the generated function
-// so you'd inject the code hash_clear into the desired match statement:
-//impl TryFrom<Expression> for Expression {
-//    type Error = LispError;
-
-//    fn try_from(exp: Expression) -> Result<Self, Self::Error> {
-//        match exp.copy() {
-//            ExpEnum::HashMap(ref mut inner_map) => {
-//                hash_clear(inner_map.clear())?;
-//                Ok(exp.clone())
-//            }
-//            _ => Err(LispError::new("meow")),
-//        }
-//    }
-//}
-// what if you just made a custom tryfrom since it's going in the function anyway?
-fn my_hash_clear(inner_map: &mut HashMap<&str, Expression>) -> LispResult<()> {
-    inner_map.clear();
-    Ok(())
-}
-
 /// Usage: (hash-clear! hashmap)
 ///
 /// Clears a hashmap.  This is a destructive form!
@@ -331,30 +297,10 @@ fn my_hash_clear(inner_map: &mut HashMap<&str, Expression>) -> LispResult<()> {
 /// (test::assert-false (hash-haskey tst-hash 'key2))
 /// (test::assert-false (hash-haskey tst-hash \"key3\"))
 /// (test::assert-false (hash-haskey tst-hash #\\S))
-#[sl_sh_fn(fn_name = "hash-clear!")]
+#[sl_sh_fn2(fn_name = "hash-clear!")]
 #[allow(clippy::needless_return)] //TODO remove me on new implementation
-fn hash_clear(exp: Expression) -> LispResult<Expression> {
-    let mut map_d = exp.get_mut();
-    ret_err_exp_enum!(
-        map_d.data,
-        ExpEnum::HashMap(ref mut inner_map),
-        {
-            // programmatically inserting the target function here is workable.
-            // for multi-arg functions we'd have to programmatically nest these
-            // enums, and that could probably be further simplified by helper
-            // functions, this could also change the way all of this works,
-            // gets sticky if you say, DO return something, so maybe
-            // we'll have to distinguish between when we accept an arg
-            // and mutate it, or simply read it, and return another value.
-            my_hash_clear(inner_map)?;
-            return Ok(exp.clone());
-        },
-        ErrorStrings::mismatched_type(
-            "hash-clear",
-            &ExpEnum::HashMap(Default::default()).to_string(),
-            &exp.display_type()
-        )
-    );
+fn hash_clear(map: &mut HashMap<&str, Expression>) {
+    map.clear();
 }
 
 pub fn add_hash_builtins<S: BuildHasher>(
