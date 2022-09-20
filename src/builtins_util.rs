@@ -478,10 +478,10 @@ macro_rules! try_inner_float {
         use $crate::ErrorStrings;
         match &mut $expression.get_mut().data {
             ExpEnum::Float(ref mut $name)=> $eval,
-            _ => return Err( LispError::new(ErrorStrings::mismatched_type(
+            data => return Err( LispError::new(ErrorStrings::mismatched_type(
                 $fn_name,
                 &ExpEnum::Float(Default::default()).to_string(), 
-                &$expression.to_string(),
+                &data.to_string(),
             )))
         }
     }};
@@ -496,6 +496,21 @@ macro_rules! try_inner_hash_map {
             _ => return Err( LispError::new(ErrorStrings::mismatched_type(
                 $fn_name,
                 &ExpEnum::HashMap(Default::default()).to_string(), 
+                &$expression.to_string(),
+            )))
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! try_inner_string {
+    ($fn_name:ident, $expression:expr, $name:ident, $eval:expr) => {{
+        use $crate::ErrorStrings;
+        match &mut $expression.get_mut().data {
+            ExpEnum::String($name, _)=> $eval,
+            _ => return Err( LispError::new(ErrorStrings::mismatched_type(
+                $fn_name,
+                &ExpEnum::String(Default::default(), Default::default()).to_string(), 
                 &$expression.to_string(),
             )))
         }
