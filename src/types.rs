@@ -16,7 +16,9 @@ use crate::eval::call_lambda;
 use crate::process::*;
 use crate::symbols::*;
 use crate::unix::fd_to_file;
-use crate::{try_inner_float, try_inner_hash_map, try_inner_int, LispResult};
+use crate::{
+    try_inner_float, try_inner_hash_map, try_inner_int, try_inner_string, ErrorStrings, LispResult,
+};
 
 #[derive(Clone, Debug)]
 pub struct LispError {
@@ -1104,9 +1106,9 @@ impl From<&mut ExpEnum> for Expression {
     }
 }
 
-pub struct TypedExpression<T>(Expression, PhantomData<T>);
+pub struct TypedExpression<T: ?Sized>(Expression, PhantomData<T>);
 
-impl<T> TypedExpression<T> {
+impl<T: ?Sized> TypedExpression<T> {
     pub fn new(exp_obj: Expression) -> TypedExpression<T> {
         TypedExpression(exp_obj, PhantomData::default())
     }
@@ -1134,7 +1136,6 @@ where
     F: FnOnce(&mut BTreeMap<&str, Expression>) -> LispResult<Expression>,
 {
     fn apply_ref_mut(&mut self, fn_name: &str, fun: F) -> LispResult<Expression> {
-        use crate::ErrorStrings;
         let got = self.0.display_type();
         let mut btreemap = BTreeMap::new();
         let x = match &self.0.get().data {
@@ -1180,6 +1181,30 @@ where
 {
     fn apply(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
         try_inner_hash_map!(fn_name, self.0, arg, fun(arg.clone()))
+    }
+}
+
+impl<F> RustProcedure<String, F> for TypedExpression<String>
+where
+    F: FnOnce(String) -> LispResult<Expression>,
+{
+    fn apply(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
+        try_inner_string!(fn_name, &self.0, arg, {
+            let arg = arg.to_string();
+            fun(arg)
+        })
+    }
+}
+
+impl<F> RustProcedureRef<String, F> for TypedExpression<String>
+where
+    F: FnOnce(&mut String) -> LispResult<Expression>,
+{
+    fn apply_ref_mut(&mut self, fn_name: &str, fun: F) -> LispResult<Expression> {
+        try_inner_string!(fn_name, &self.0, arg, {
+            let arg = &mut arg.to_string();
+            fun(arg)
+        })
     }
 }
 
