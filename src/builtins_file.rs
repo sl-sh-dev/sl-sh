@@ -1,4 +1,4 @@
-use sl_sh_proc_macros::sl_sh_fn2;
+use sl_sh_proc_macros::sl_sh_fn;
 use std::collections::HashMap;
 use std::hash::BuildHasher;
 use std::path::{Path, PathBuf};
@@ -770,7 +770,7 @@ fn builtin_with_temp_file(
 ///
 /// Example:
 /// (test::assert-true (fs-dir? (temp-dir)))
-#[sl_sh_fn2(fn_name = "temp-dir")]
+#[sl_sh_fn(fn_name = "temp-dir")]
 fn builtin_temp_dir() -> LispResult<Expression> {
     if let Some(path) = temp_dir().to_str() {
         let path = Expression::alloc_data(ExpEnum::String(path.to_string().into(), None));

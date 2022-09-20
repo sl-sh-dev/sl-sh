@@ -1,4 +1,4 @@
-use sl_sh_proc_macros::sl_sh_fn2;
+use sl_sh_proc_macros::sl_sh_fn;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -343,7 +343,7 @@ fn builtin_load(
 /// (test::assert-error (length 100))
 /// (test::assert-error (length 100.0))
 /// (test::assert-error (length #\\x))
-#[sl_sh_fn2(fn_name = "length")]
+#[sl_sh_fn(fn_name = "length")]
 fn length(exp: Expression) -> LispResult<Expression> {
     return match &exp.get().data {
         ExpEnum::String(s, _) => {
@@ -887,7 +887,7 @@ fn builtin_gensym(
 ///
 /// Example:
 /// (test::assert-true (string? (version)))
-#[sl_sh_fn2(fn_name = "version")]
+#[sl_sh_fn(fn_name = "version")]
 fn version() -> LispResult<Expression> {
     Ok(Expression::alloc_data(ExpEnum::String(
         VERSION_STRING.into(),
