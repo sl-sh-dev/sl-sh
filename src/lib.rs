@@ -575,9 +575,9 @@ fn get_arg_val(type_path: &TypePath) -> MacroResult<ArgVal> {
 
 fn parse_value(arg_name: &Ident, inner: TokenStream) -> TokenStream {
     quote! {
-        sl_sh::ret_err_exp_enum!(
+        crate::ret_err_exp_enum!(
                 #arg_name,
-                sl_sh::ArgType::Exp(#arg_name),
+                crate::ArgType::Exp(#arg_name),
                 #inner,
                 "sl_sh_fn macro is broken. ArgType::Exp can't be parsed as ArgType::Exp"
             )
@@ -586,9 +586,9 @@ fn parse_value(arg_name: &Ident, inner: TokenStream) -> TokenStream {
 
 fn parse_optional(arg_name: &Ident, inner: TokenStream) -> TokenStream {
     quote! {
-        sl_sh::ret_err_exp_enum!(
+        crate::ret_err_exp_enum!(
                 #arg_name,
-                sl_sh::ArgType::Opt(#arg_name),
+                crate::ArgType::Opt(#arg_name),
                 #inner,
                 "sl_sh_fn macro is broken. ArgType::Opt can't be parsed as ArgType::Opt"
             )
@@ -597,9 +597,9 @@ fn parse_optional(arg_name: &Ident, inner: TokenStream) -> TokenStream {
 
 fn parse_varargs(arg_name: &Ident, inner: TokenStream) -> TokenStream {
     quote! {
-        sl_sh::ret_err_exp_enum!(
+        crate::ret_err_exp_enum!(
                 #arg_name,
-                sl_sh::ArgType::VarArgs(#arg_name),
+                crate::ArgType::VarArgs(#arg_name),
                 #inner,
                 "sl_sh_fn macro is broken. ArgType::Vargs can't be parsed as ArgType::Vargs"
             )
@@ -629,7 +629,7 @@ fn make_orig_fn_call(
         // coerce to a LispResult<Expression>
         (Some(_), Some(_), true) => quote! {
             #original_fn_name(#(#arg_names),*)?;
-            Ok(sl_sh::types::Expression::make_nil())
+            Ok(crate::types::Expression::make_nil())
         },
         (Some(_), Some(_), false) => quote! {
             #original_fn_name(#(#arg_names),*).map(Into::into)
@@ -644,7 +644,7 @@ fn make_orig_fn_call(
         // no return
         (None, None, _) => quote! {
             #original_fn_name(#(#arg_names),*);
-            Ok(sl_sh::types::Expression::make_nil())
+            Ok(crate::types::Expression::make_nil())
         },
     };
     Ok(quote! {
@@ -660,7 +660,7 @@ fn make_arg_types(original_item_fn: &ItemFn) -> MacroResult<(Vec<Ident>, Vec<Tok
         let parse_name = "arg_".to_string() + &i.to_string();
         let parse_name = Ident::new(&parse_name, Span::call_site());
         arg_names.push(parse_name);
-        arg_types.push(quote! { sl_sh::ArgType })
+        arg_types.push(quote! { crate::ArgType })
     }
     Ok((arg_names, arg_types))
 }
@@ -728,7 +728,7 @@ fn generate_builtin_fn2(
         ));
     }
     let tokens = quote! {
-        fn #builtin_name(#(#arg_names: #arg_types),*) -> sl_sh::LispResult<sl_sh::types::Expression> {
+        fn #builtin_name(#(#arg_names: #arg_types),*) -> crate::LispResult<crate::types::Expression> {
             #(#conversions_assertions_code)*
             let #fn_name_attr = #fn_name;
             #prev_token_stream
@@ -758,8 +758,8 @@ fn parse_argval_varargs_type(
     //  be in conversions_assertions_code
     let wrapped_ty = get_type_or_wrapped_type2(ty);
     quote! {{
-        use sl_sh::builtins_util::TryIntoExpression;
-        static_assertions::assert_impl_all!(sl_sh::types::Expression: sl_sh::builtins_util::TryIntoExpression<#wrapped_ty>);
+        use crate::builtins_util::TryIntoExpression;
+        static_assertions::assert_impl_all!(crate::types::Expression: crate::builtins_util::TryIntoExpression<#wrapped_ty>);
         let #arg_name = #arg_name
             .iter()
             .map(|#arg_name| {
@@ -837,9 +837,9 @@ fn parse_argval_value_type(
     let ty = get_type_or_wrapped_type2(ty);
     let fn_ref = tokens_for_matching_references(passing_style, ty);
     let inner = quote! {
-        let mut typed_data: sl_sh::types::TypedExpression<#ty> =
-            sl_sh::types::TypedExpression::new(#arg_name);
-        let callback = |#arg_name: #fn_ref| -> sl_sh::LispResult<sl_sh::types::Expression> {
+        let mut typed_data: crate::types::TypedExpression<#ty> =
+            crate::types::TypedExpression::new(#arg_name);
+        let callback = |#arg_name: #fn_ref| -> crate::LispResult<crate::types::Expression> {
             #inner
         };
     };
@@ -847,7 +847,7 @@ fn parse_argval_value_type(
     match passing_style {
         ArgPassingStyle::Move => {
             quote! {{
-                use sl_sh::types::RustProcedure;
+                use crate::types::RustProcedure;
                 #inner
                 typed_data.apply(#fn_name_attr, callback)
             }}
@@ -855,7 +855,7 @@ fn parse_argval_value_type(
         _ => {
             // some reference
             quote! {{
-                use sl_sh::types::RustProcedureRef;
+                use crate::types::RustProcedureRef;
                 #inner
                 typed_data.apply_ref_mut(#fn_name_attr, callback)
             }}
@@ -994,11 +994,11 @@ fn generate_sl_sh_fn2(
 
     let make_args = if eval_values {
         quote! {
-            let args = sl_sh::builtins_util::make_args(environment, args)?;
+            let args = crate::builtins_util::make_args(environment, args)?;
         }
     } else {
         quote! {
-            let args = sl_sh::builtins_util::make_args_eval_no_values(environment, args)?;
+            let args = crate::builtins_util::make_args_eval_no_values(environment, args)?;
         }
     };
 
@@ -1021,41 +1021,41 @@ fn generate_sl_sh_fn2(
         #builtin_fn
 
         fn #parse_name(
-            environment: &mut sl_sh::environment::Environment,
-            args: &mut dyn Iterator<Item = sl_sh::types::Expression>,
-        ) -> sl_sh::LispResult<sl_sh::types::Expression> {
+            environment: &mut crate::environment::Environment,
+            args: &mut dyn Iterator<Item = crate::types::Expression>,
+        ) -> crate::LispResult<crate::types::Expression> {
             use std::convert::TryInto;
-            use sl_sh::builtins_util::ExpandVecToArgs;
+            use crate::builtins_util::ExpandVecToArgs;
             #make_args
             let #fn_name_attr = #fn_name;
             const args_len: usize = #args_len;
             #arg_types
-            let args = sl_sh::get_arg_types(fn_name, arg_types, args)?;
+            let args = crate::get_arg_types(fn_name, arg_types, args)?;
             if args.len() == args_len {
                 match args.try_into() {
                     Ok(params) => {
-                        let params: [sl_sh::ArgType; args_len] = params;
+                        let params: [crate::ArgType; args_len] = params;
                         #builtin_name.call_expand_args(params)
                     },
                     Err(e) => {
-                        Err(sl_sh::types::LispError::new(format!("{} is broken and can't parse its arguments..", #fn_name_attr, )))
+                        Err(crate::types::LispError::new(format!("{} is broken and can't parse its arguments..", #fn_name_attr, )))
                     }
                 }
             } else if args.len() > args_len {
-                Err(sl_sh::types::LispError::new(format!("{} given too many arguments, expected {}, got {}.", #fn_name_attr, args_len, args.len())))
+                Err(crate::types::LispError::new(format!("{} given too many arguments, expected {}, got {}.", #fn_name_attr, args_len, args.len())))
             } else {
-                Err(sl_sh::types::LispError::new(format!("{} not given enough arguments, expected {}, got {}.", #fn_name_attr, args_len, args.len())))
+                Err(crate::types::LispError::new(format!("{} not given enough arguments, expected {}, got {}.", #fn_name_attr, args_len, args.len())))
             }
         }
 
         fn #intern_name<S: std::hash::BuildHasher>(
-            interner: &mut sl_sh::Interner,
-            data: &mut std::collections::HashMap<&'static str, (sl_sh::types::Expression, String), S>,
+            interner: &mut crate::Interner,
+            data: &mut std::collections::HashMap<&'static str, (crate::types::Expression, String), S>,
         ) {
             let #fn_name_attr = #fn_name;
             data.insert(
                 interner.intern(#fn_name_attr),
-                sl_sh::types::Expression::make_function(#parse_name, #doc_comments),
+                crate::types::Expression::make_function(#parse_name, #doc_comments),
             );
         }
     };
@@ -1067,57 +1067,57 @@ fn to_arg_types(args: &[Arg]) -> TokenStream {
     for arg in args {
         tokens.push(match (arg.val, arg.passing_style) {
             (ArgVal::Value, ArgPassingStyle::MutReference) => {
-                quote! { sl_sh::builtins_util::Arg {
-                    val: sl_sh::builtins_util::ArgVal::Value,
-                    passing_style: sl_sh::builtins_util::ArgPassingStyle::MutReference
+                quote! { crate::builtins_util::Arg {
+                    val: crate::builtins_util::ArgVal::Value,
+                    passing_style: crate::builtins_util::ArgPassingStyle::MutReference
                 }}
             }
             (ArgVal::Optional, ArgPassingStyle::MutReference) => {
-                quote! { sl_sh::builtins_util::Arg {
-                    val: sl_sh::builtins_util::ArgVal::Optional,
-                    passing_style: sl_sh::builtins_util::ArgPassingStyle::MutReference
+                quote! { crate::builtins_util::Arg {
+                    val: crate::builtins_util::ArgVal::Optional,
+                    passing_style: crate::builtins_util::ArgPassingStyle::MutReference
                 }}
             }
             (ArgVal::Vec, ArgPassingStyle::MutReference) => {
-                quote! { sl_sh::builtins_util::Arg {
-                    val: sl_sh::builtins_util::ArgVal::Vec,
-                    passing_style: sl_sh::builtins_util::ArgPassingStyle::MutReference
+                quote! { crate::builtins_util::Arg {
+                    val: crate::builtins_util::ArgVal::Vec,
+                    passing_style: crate::builtins_util::ArgPassingStyle::MutReference
                 }}
             }
             (ArgVal::Value, ArgPassingStyle::Reference) => {
-                quote! {sl_sh::builtins_util::Arg {
-                    val: sl_sh::builtins_util::ArgVal::Value,
-                    passing_style: sl_sh::builtins_util::ArgPassingStyle::Reference
+                quote! {crate::builtins_util::Arg {
+                    val: crate::builtins_util::ArgVal::Value,
+                    passing_style: crate::builtins_util::ArgPassingStyle::Reference
                 }}
             }
             (ArgVal::Optional, ArgPassingStyle::Reference) => {
-                quote! { sl_sh::builtins_util::Arg {
-                    val: sl_sh::builtins_util::ArgVal::Optional,
-                    passing_style: sl_sh::builtins_util::ArgPassingStyle::Reference
+                quote! { crate::builtins_util::Arg {
+                    val: crate::builtins_util::ArgVal::Optional,
+                    passing_style: crate::builtins_util::ArgPassingStyle::Reference
                 }}
             }
             (ArgVal::Vec, ArgPassingStyle::Reference) => {
-                quote! { sl_sh::builtins_util::Arg {
-                    val: sl_sh::builtins_util::ArgVal::Vec,
-                    passing_style: sl_sh::builtins_util::ArgPassingStyle::Reference
+                quote! { crate::builtins_util::Arg {
+                    val: crate::builtins_util::ArgVal::Vec,
+                    passing_style: crate::builtins_util::ArgPassingStyle::Reference
                 }}
             }
             (ArgVal::Value, ArgPassingStyle::Move) => {
-                quote! { sl_sh::builtins_util::Arg {
-                    val: sl_sh::builtins_util::ArgVal::Value,
-                    passing_style: sl_sh::builtins_util::ArgPassingStyle::Move
+                quote! { crate::builtins_util::Arg {
+                    val: crate::builtins_util::ArgVal::Value,
+                    passing_style: crate::builtins_util::ArgPassingStyle::Move
                 }}
             }
             (ArgVal::Optional, ArgPassingStyle::Move) => {
-                quote! { sl_sh::builtins_util::Arg {
-                    val: sl_sh::builtins_util::ArgVal::Optional,
-                    passing_style: sl_sh::builtins_util::ArgPassingStyle::Move
+                quote! { crate::builtins_util::Arg {
+                    val: crate::builtins_util::ArgVal::Optional,
+                    passing_style: crate::builtins_util::ArgPassingStyle::Move
                 }}
             }
             (ArgVal::Vec, ArgPassingStyle::Move) => {
-                quote! { sl_sh::builtins_util::Arg {
-                    val: sl_sh::builtins_util::ArgVal::Vec,
-                    passing_style: sl_sh::builtins_util::ArgPassingStyle::Move
+                quote! { crate::builtins_util::Arg {
+                    val: crate::builtins_util::ArgVal::Vec,
+                    passing_style: crate::builtins_util::ArgPassingStyle::Move
                 }}
             }
         });
