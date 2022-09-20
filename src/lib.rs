@@ -97,9 +97,7 @@ fn wrap_with_std_convert(ty: Type, convert_trait: &str) -> Type {
 /// not generic. If there is no return type None, None is returned. Throws
 /// an error if the generic return type is not in the list of predefined
 /// constants POSSIBLE_RESULT_TYPES.
-fn get_return_type2(
-    original_item_fn: &ItemFn,
-) -> MacroResult<(Option<Type>, Option<&'static str>)> {
+fn get_return_type(original_item_fn: &ItemFn) -> MacroResult<(Option<Type>, Option<&'static str>)> {
     let return_type = match &original_item_fn.sig.output {
         ReturnType::Default => return Ok((None, None)),
         ReturnType::Type(_ra_arrow, ty) => *ty.clone(),
@@ -386,7 +384,7 @@ fn make_orig_fn_call(
     // this means all returned rust native types must implement TryIntoExpression
     // this is nested inside the builtin expression which must always
     // return a LispResult.
-    let (return_type, lisp_result) = get_return_type2(original_item_fn)?;
+    let (return_type, lisp_result) = get_return_type(original_item_fn)?;
     let returns_none = "()" == return_type.to_token_stream().to_string();
     let original_fn_call = match (return_type, lisp_result, returns_none) {
         // coerce to a LispResult<Expression>
@@ -428,7 +426,7 @@ fn make_arg_types(original_item_fn: &ItemFn) -> MacroResult<(Vec<Ident>, Vec<Tok
     Ok((arg_names, arg_types))
 }
 
-fn generate_builtin_fn2(
+fn generate_builtin_fn(
     original_item_fn: &ItemFn,
     original_fn_name: &Ident,
     builtin_name: &Ident,
@@ -481,7 +479,7 @@ fn generate_builtin_fn2(
             }
         }
     }
-    let (return_type, _) = get_return_type2(original_item_fn)?;
+    let (return_type, _) = get_return_type(original_item_fn)?;
     // TODO conversion for return type and arguments that enforce the TypeExpression and/or
     //  RustProcedureRef implementations.
     let mut conversions_assertions_code = vec![];
@@ -519,7 +517,7 @@ fn parse_argval_varargs_type(
     // TODO
     //  we should only accept Vec<T: TryIntoExpression> should
     //  be in conversions_assertions_code
-    let wrapped_ty = get_type_or_wrapped_type2(ty);
+    let wrapped_ty = get_type_or_wrapped_type(ty);
     quote! {{
         use crate::builtins_util::TryIntoExpression;
         static_assertions::assert_impl_all!(crate::types::Expression: crate::builtins_util::TryIntoExpression<#wrapped_ty>);
@@ -572,7 +570,7 @@ fn parse_argval_optional_type(
 /// confusing wrapper types can be made, i.e. SlshVarArgs,
 /// so normal rust Vec could be used without being turned into
 /// a SlshVarArgs
-fn get_type_or_wrapped_type2(ty: &TypePath) -> &TypePath {
+fn get_type_or_wrapped_type(ty: &TypePath) -> &TypePath {
     let orig_ty = ty;
     if let Some((ty, type_path)) = get_generic_argument_from_type_path(ty) {
         let wrapper = opt_is_valid_generic_type(type_path, POSSIBLE_ARG_TYPES.as_slice());
@@ -597,7 +595,7 @@ fn parse_argval_value_type(
     passing_style: ArgPassingStyle,
     inner: TokenStream,
 ) -> TokenStream {
-    let ty = get_type_or_wrapped_type2(ty);
+    let ty = get_type_or_wrapped_type(ty);
     let fn_ref = tokens_for_matching_references(passing_style, ty);
     let inner = quote! {
         let mut typed_data: crate::types::TypedExpression<#ty> =
@@ -746,7 +744,7 @@ fn are_args_valid(original_item_fn: &ItemFn, args: &[Arg]) -> MacroResult<()> {
     }
 }
 
-fn generate_sl_sh_fn2(
+fn generate_sl_sh_fn(
     original_item_fn: &ItemFn,
     attr_args: AttributeArgs,
 ) -> MacroResult<TokenStream> {
@@ -766,7 +764,7 @@ fn generate_sl_sh_fn2(
     };
 
     let args = parse_src_function_arguments(original_item_fn)?;
-    let builtin_fn = generate_builtin_fn2(
+    let builtin_fn = generate_builtin_fn(
         original_item_fn,
         &original_fn_name,
         &builtin_name,
@@ -894,7 +892,7 @@ fn to_arg_types(args: &[Arg]) -> TokenStream {
 }
 
 #[proc_macro_attribute]
-pub fn sl_sh_fn2(
+pub fn sl_sh_fn(
     attr: proc_macro::TokenStream,
     input: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
@@ -903,7 +901,7 @@ pub fn sl_sh_fn2(
     let tokens = match parse::<Item>(input) {
         Ok(item) => match &item {
             Item::Fn(original_item_fn) => {
-                let generated_code = match generate_sl_sh_fn2(original_item_fn, attr_args) {
+                let generated_code = match generate_sl_sh_fn(original_item_fn, attr_args) {
                     Ok(generated_code) => generated_code,
                     Err(e) => e.to_compile_error(),
                 };
