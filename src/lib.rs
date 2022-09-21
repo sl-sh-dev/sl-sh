@@ -596,7 +596,20 @@ fn parse_argval_value_type(
     inner: TokenStream,
 ) -> TokenStream {
     let ty = get_type_or_wrapped_type(ty);
-    let fn_ref = tokens_for_matching_references(passing_style, ty);
+    let str = ty.to_token_stream().to_string();
+    // handle &str differently, want impl RustProcedure<F> for TypedExpression<&str>
+    // w/o this special case it generate RustProcedureRef on an unsized TypedExpression<str>
+    let (fn_ref, passing_style, ty) = if str == "str" && passing_style == ArgPassingStyle::Reference
+    {
+        let passing_style = ArgPassingStyle::Move;
+        (quote! { &#ty }, passing_style, quote! { &#ty })
+    } else {
+        (
+            tokens_for_matching_references(passing_style, ty),
+            passing_style,
+            quote! { #ty },
+        )
+    };
     let inner = quote! {
         let mut typed_data: crate::types::TypedExpression<#ty> =
             crate::types::TypedExpression::new(#arg_name);
@@ -1118,32 +1131,27 @@ mod test {
 }
 
 //TODO
+//  - support functions that need further manipulation with Environment... make a version
+//  of TryIntoExpression that takes environment?
+//      - builtins_hashmap.rs
+//          + builtin_make_hash
+//          + builtin_hash_set
+// - what about a ToString coercion for ExpEnum::Char/String/Symbol for rust functions that require them
+//  to turn into Strings. somehow need a way to represent a type that can be multiple enums, or a pair,
+//  that's also needed for some functions in builtins_hashmap
+// - would it be possible to embed environment in TypedExpression so it's available at runtime? hash_set
+// - attribute to somehow delay evaluation of parameter, e.g. builtin_hash_get
 //  - functions that return optional.
-//  - functions that return values.
-//  - functions that return... nothing.
-// - sl_sh_fn2 macro should check if the rust function is just receiving an
-//      Expression type that doesn't need any of the type parsing code,
-//      the arg is fine after the outer parse function
-//  - support Option-al arguments... enhance get_input_types
+//  - functions that return Values.
+//  - use Option-al arguments
 //      - builtins_file.rs
 //          + builtin_get_temp_file
 //          + builtin_with_temp_dir
 //      - builtins_hashmap.rs
 //          + builtin_hash_get
-//  - variadic functions
+//  - use variadic functions
 //      - builtins.rs
 //          + builtin_apply
 //          + builtin_unwind_protect
 //      - builtins_types.rs
 //          + builtin_to_symbol
-//  - support functions that need futher manipulation with Environment... make make a version
-//  of TryIntoExpression that takes environment?
-//      - builtins_hashmap.rs
-//          + builtin_make_hash
-//          + builtin_hash_set
-// - macro needs to know if a function turns a LispResult<()> so it can know to return Ok(())
-//  or all functions are required to return LispResult<()> and those should really return Nil,
-//  in lisp world.
-// - should all macros just use the ret_err_exp_enum pattern?
-// - what about a ToString coercion for ExpEnum::Char/String/Symbol for rust functions that require them
-//  to turn into Strings.
