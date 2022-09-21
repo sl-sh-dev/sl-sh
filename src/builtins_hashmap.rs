@@ -132,30 +132,12 @@ fn builtin_hash_set(
 /// (hash-remove! tst-hash #\\S)
 /// (test::assert-equal 0 (length (hash-keys tst-hash)))
 #[sl_sh_fn(fn_name = "hash-remove!")]
-fn hash_remove(map: &mut HashMap<&str, Expression>, to_val: Expression) -> LispResult<Expression> {
-    fn do_rem(map: &mut HashMap<&str, Expression>, sym: &str) -> Expression {
-        let old = map.remove(sym);
-        if let Some(old) = old {
-            old
-        } else {
-            Expression::make_nil()
-        }
-    }
-    match &to_val.get().data {
-        ExpEnum::Symbol(sym, _) => {
-            return Ok(do_rem(map, sym));
-        }
-        ExpEnum::String(s, _) => {
-            return Ok(do_rem(map, s));
-        }
-        ExpEnum::Char(ch) => {
-            return Ok(do_rem(map, ch));
-        }
-        _ => {
-            return Err(LispError::new(
-                "hash-remove! key can only be a symbol or string",
-            ));
-        }
+fn hash_remove(map: &mut HashMap<&str, Expression>, to_val: &str) -> LispResult<Expression> {
+    let old = map.remove(to_val);
+    if let Some(old) = old {
+        Ok(old)
+    } else {
+        Ok(Expression::make_nil())
     }
 }
 
@@ -224,32 +206,11 @@ fn builtin_hash_get(
 /// (hash-set! tst-hash :key1 \"val one b\")
 /// (test::assert-true (hash-haskey tst-hash :key1))
 #[sl_sh_fn(fn_name = "hash-haskey")]
-fn hash_haskey(map: &mut HashMap<&str, Expression>, to_val: Expression) -> LispResult<Expression> {
-    fn do_has(map: &HashMap<&str, Expression>, sym: &str) -> Expression {
-        if map.contains_key(sym) {
-            Expression::make_true()
-        } else {
-            Expression::make_false()
-        }
-    }
-    let key = to_val.display_type();
-    match &to_val.get().data {
-        ExpEnum::Symbol(sym, _) => {
-            return Ok(do_has(map, sym));
-        }
-        ExpEnum::String(s, _) => {
-            return Ok(do_has(map, s));
-        }
-        ExpEnum::Char(ch) => {
-            return Ok(do_has(map, ch));
-        }
-        _ => {
-            let msg = format!(
-                "hash-haskey key can only be a symbol, string, or char, received {:?}",
-                key
-            );
-            return Err(LispError::new(msg));
-        }
+fn hash_haskey(map: &mut HashMap<&str, Expression>, to_val: &str) -> LispResult<Expression> {
+    if map.contains_key(to_val) {
+        Ok(Expression::make_true())
+    } else {
+        Ok(Expression::make_false())
     }
 }
 

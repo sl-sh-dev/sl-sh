@@ -508,9 +508,14 @@ macro_rules! try_inner_string {
         use $crate::ErrorStrings;
         match &mut $expression.get_mut().data {
             ExpEnum::String($name, _)=> $eval,
+            ExpEnum::Symbol($name, _)=> $eval,
+            ExpEnum::Char($name)=> $eval,
             _ => return Err( LispError::new(ErrorStrings::mismatched_type(
                 $fn_name,
-                &ExpEnum::String(Default::default(), Default::default()).to_string(), 
+                &format!("{}, {}, or {}, ",
+                    ExpEnum::String(Default::default(), Default::default()).to_string(),
+                    ExpEnum::Symbol(Default::default(), Default::default()).to_string(),
+                    ExpEnum::Char(Default::default()).to_string()),
                 &$expression.to_string(),
             )))
         }
