@@ -117,6 +117,12 @@ fn builtin_cd(
     }
 }
 
+pub fn my_get_file(p: String) -> Option<PathBuf> {
+    let p = expand_tilde(p.as_str()).unwrap_or(p);
+    let p = Path::new(&p);
+    Some((*p.to_path_buf()).to_owned())
+}
+
 pub fn get_file(environment: &mut Environment, p: Expression) -> Option<PathBuf> {
     let p = match &eval(environment, p).ok()?.get().data {
         ExpEnum::String(p, _) => {
@@ -131,55 +137,94 @@ pub fn get_file(environment: &mut Environment, p: Expression) -> Option<PathBuf>
     Some((*p.to_path_buf()).to_owned())
 }
 
-fn file_test(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-    test: fn(path: &Path) -> bool,
-    fn_name: &str,
-) -> Result<Expression, LispError> {
-    if let Some(p) = args.next() {
-        if args.next().is_none() {
-            if let Some(path) = get_file(environment, p) {
-                if test(path.as_path()) {
-                    return Ok(Expression::make_true());
-                } else {
-                    return Ok(Expression::make_nil());
-                }
-            } else {
-                let msg = format!("{} takes a string (a path)", fn_name);
-                return Err(LispError::new(msg));
-            }
+fn file_test(path: String, test: fn(path: &Path) -> bool, fn_name: &str) -> LispResult<Expression> {
+    if let Some(path) = my_get_file(path) {
+        if test(path.as_path()) {
+            return Ok(Expression::make_true());
+        } else {
+            return Ok(Expression::make_nil());
         }
+    } else {
+        let msg = format!("{} takes a string (a path)", fn_name);
+        return Err(LispError::new(msg));
     }
-    let msg = format!("{} takes a string (a path)", fn_name);
-    Err(LispError::new(msg))
 }
 
-fn builtin_path_exists(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    file_test(environment, args, |path| path.exists(), "fs-exists?")
+/// Usage: (fs-exists? path-to-test)
+///
+/// Does the given path exist?
+///
+/// Section: file
+///
+/// Example:
+/// $(mkdir /tmp/tst-fs-exists)
+/// $(touch /tmp/tst-fs-exists/fs-exists)
+/// (test::assert-true (fs-exists? "/tmp/tst-fs-exists/fs-exists"))
+/// (test::assert-true (fs-exists? "/tmp/tst-fs-exists"))
+/// (test::assert-false (fs-exists? "/tmp/tst-fs-exists/fs-exists-nope"))
+/// $(rm /tmp/tst-fs-exists/fs-exists)
+/// $(rmdir /tmp/tst-fs-exists)
+#[sl_sh_fn(fn_name = "fs-exists?")]
+fn path_exists(path: String) -> LispResult<Expression> {
+    file_test(path, |path| path.exists(), "fs-exists?")
 }
 
-fn builtin_is_file(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    file_test(environment, args, |path| path.is_file(), "fs-file?")
+/// Usage: (fs-file? path-to-test)
+///
+/// Is the given path a file?
+///
+/// Section: file
+///
+/// Example:
+/// $(mkdir /tmp/tst-fs-file)
+/// $(touch "/tmp/tst-fs-file/fs-file")
+/// (test::assert-true (fs-file? "/tmp/tst-fs-file/fs-file"))
+/// (test::assert-false (fs-file? "/tmp/tst-fs-file"))
+/// (test::assert-false (fs-file? "/tmp/tst-fs-file/fs-file-nope"))
+/// $(rm "/tmp/tst-fs-file/fs-file")
+/// $(rmdir /tmp/tst-fs-file)
+#[sl_sh_fn(fn_name = "fs-file?")]
+fn is_file(path: String) -> LispResult<Expression> {
+    file_test(path, |path| path.is_file(), "fs-file?")
 }
 
-fn builtin_is_dir(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    file_test(environment, args, |path| path.is_dir(), "fs-dir?")
+/// Usage: (fs-dir? path-to-test)
+///
+/// Is the given path a directory?
+///
+/// Section: file
+///
+/// Example:
+/// $(mkdir /tmp/tst-fs-dir)
+/// $(touch /tmp/tst-fs-dir/fs-dir-file)
+/// (test::assert-false (fs-dir? "/tmp/tst-fs-dir/fs-dir-file"))
+/// (test::assert-true (fs-dir? "/tmp/tst-fs-dir"))
+/// (test::assert-false (fs-dir? "/tmp/tst-fs-dir/fs-dir-nope"))
+/// $(rm /tmp/tst-fs-dir/fs-dir-file)
+/// $(rmdir /tmp/tst-fs-dir)
+#[sl_sh_fn(fn_name = "fs-dir?")]
+fn is_dir(path: String) -> LispResult<Expression> {
+    file_test(path, |path| path.is_dir(), "fs-dir?")
 }
 
-fn builtin_glob(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
+/// Usage: (glob /path/with/*)
+///
+/// Takes a list/varargs of globs and return the list of them expanded.
+///
+/// Section: file
+///
+/// Example:
+/// (syscall 'mkdir "/tmp/tst-fs-glob")
+/// (syscall 'touch "/tmp/tst-fs-glob/g1")
+/// (syscall 'touch "/tmp/tst-fs-glob/g2")
+/// (syscall 'touch "/tmp/tst-fs-glob/g3")
+/// (test::assert-equal '("/tmp/tst-fs-glob/g1" "/tmp/tst-fs-glob/g2" "/tmp/tst-fs-glob/g3") (glob "/tmp/tst-fs-glob/*"))
+/// (syscall 'rm "/tmp/tst-fs-glob/g1")
+/// (syscall 'rm "/tmp/tst-fs-glob/g2")
+/// (syscall 'rm "/tmp/tst-fs-glob/g3")
+/// (syscall 'rmdir "/tmp/tst-fs-glob")
+#[sl_sh_fn(fn_name = "glob")]
+fn do_glob(args: Vec<String>) -> LispResult<Expression> {
     fn remove_escapes(pat: &str) -> String {
         let mut ret = String::new();
         let mut last_esc = false;
@@ -218,10 +263,6 @@ fn builtin_glob(
     }
     let mut files = Vec::new();
     for pat in args {
-        let pat = match &eval(environment, pat)?.get().data {
-            ExpEnum::String(s, _) => s.to_string(),
-            _ => return Err(LispError::new("globs need to be strings")),
-        };
         let pat = match expand_tilde(&pat) {
             Some(p) => p,
             None => pat,
@@ -266,49 +307,54 @@ fn builtin_glob(
     Ok(Expression::with_list(files))
 }
 
-fn builtin_fs_parent(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
+/// Usage: (fs-parent /path/to/file/or/dir)
+///
+/// Returns base name of file or directory passed to function.
+///
+/// Section: file
+/// Example:
+/// (with-temp (fn (tmp)
+/// (let ((tmp-file (get-temp-file tmp)))
+/// (test::assert-true (fs-same? (fs-parent tmp-file) tmp)))))
+#[sl_sh_fn(fn_name = "fs-parent")]
+fn fs_parent(path: String) -> LispResult<String> {
     let fn_name = "fs-parent";
-    let arg = param_eval(environment, args, fn_name)?;
-    params_done(args, fn_name)?;
-    match get_file(environment, arg) {
-        Some(path) => {
-            let mut path = path.canonicalize().map_err(|_| {
-                let msg = format!("{} failed to get full filepath of parent", fn_name);
-                LispError::new(msg)
-            })?;
-            let _ = path.pop();
-            let path = path.as_path().to_str().ok_or_else(|| {
-                let msg = format!("{} failed to get parent path", fn_name);
-                LispError::new(msg)
-            })?;
-            let path = Expression::alloc_data(ExpEnum::String(path.to_string().into(), None));
-            Ok(path)
-        }
-        None => {
-            let msg = format!("{} first arg is not a valid path", fn_name);
-            Err(LispError::new(msg))
-        }
+    if let Some(path) = my_get_file(path) {
+        let mut path = path.canonicalize().map_err(|_| {
+            let msg = format!("{} failed to get full filepath of parent", fn_name);
+            LispError::new(msg)
+        })?;
+        let _ = path.pop();
+        let path = path.as_path().to_str().ok_or_else(|| {
+            let msg = format!("{} failed to get parent path", fn_name);
+            LispError::new(msg)
+        })?;
+        Ok(path.to_string())
+    } else {
+        let msg = format!("{} first arg is not a valid path", fn_name);
+        Err(LispError::new(msg))
     }
 }
 
-fn builtin_fs_base(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
+/// Usage: (fs-base /path/to/file/or/dir)
+///
+/// Returns base name of file or directory passed to function.
+///
+/// Section: file
+/// Example:
+/// (with-temp (fn (tmp)
+/// (let ((tmp-file (temp-file tmp)))
+/// (test::assert-equal (length \".tmp01234\") (length (fs-base tmp-file))))))
+#[sl_sh_fn(fn_name = "fs-base")]
+fn fs_base(path: String) -> LispResult<String> {
     let fn_name = "fs-base";
-    let arg = param_eval(environment, args, fn_name)?;
-    params_done(args, fn_name)?;
-    match get_file(environment, arg) {
+    match my_get_file(path) {
         Some(path) => {
             let path = path.file_name().and_then(|s| s.to_str()).ok_or_else(|| {
                 let msg = format!("{} failed to extract name of file", fn_name);
                 LispError::new(msg)
             })?;
-            let path = Expression::alloc_data(ExpEnum::String(path.to_string().into(), None));
-            Ok(path)
+            Ok(path.to_string())
         }
         None => {
             let msg = format!("{} first arg is not a valid path", fn_name);
@@ -317,43 +363,38 @@ fn builtin_fs_base(
     }
 }
 
-fn builtin_same_file(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
+/// Usage: (fs-same? /path/to/file/or/dir /path/to/file/or/dir)
+///
+/// Returns true if the two provided file paths refer to the same file or directory.
+///
+/// Section: file
+///
+/// Example:
+/// (with-temp-file (fn (tmp-file)
+/// (test::assert-true (fs-same? tmp-file tmp-file)))
+#[sl_sh_fn(fn_name = "fs-same?")]
+fn is_same_file(path_0: String, path_1: String) -> LispResult<Expression> {
     let fn_name = "fs-same?";
-    let arg0 = param_eval(environment, args, fn_name)?;
-    let arg1 = param_eval(environment, args, fn_name)?;
-    params_done(args, fn_name)?;
-    let path_0 = match get_file(environment, arg0) {
-        Some(path) => path,
-        None => {
-            let msg = format!("{} first arg is not a valid path", fn_name);
-            return Err(LispError::new(msg));
+    match (my_get_file(path_0), my_get_file(path_1)) {
+        (Some(path_0), Some(path_1)) => {
+            if let Ok(b) = same_file::is_same_file(path_0.as_path(), path_1.as_path()) {
+                if b {
+                    Ok(Expression::make_true())
+                } else {
+                    Ok(Expression::make_false())
+                }
+            } else {
+                let msg = format!(
+                    "{} there were insufficient permissions to access one or both of the provided files.",
+                    fn_name
+                );
+                Err(LispError::new(msg))
+            }
         }
-    };
-
-    let path_1 = match get_file(environment, arg1) {
-        Some(path) => path,
-        None => {
-            let msg = format!("{} second arg is not a valid path", fn_name);
-            return Err(LispError::new(msg));
+        (_, _) => {
+            let msg = format!("{} one or more paths does not exist.", fn_name);
+            Err(LispError::new(msg))
         }
-    };
-
-    if let Ok(b) = same_file::is_same_file(path_0.as_path(), path_1.as_path()) {
-        if b {
-            Ok(Expression::make_true())
-        } else {
-            Ok(Expression::make_false())
-        }
-    } else {
-        let msg = format!(
-            "{} one or more paths does not exist, or there were not enough \
-                permissions.",
-            fn_name
-        );
-        Err(LispError::new(msg))
     }
 }
 
@@ -810,92 +851,10 @@ Example:
 "#,
         ),
     );
-    data.insert(
-        interner.intern("fs-exists?"),
-        Expression::make_function(
-            builtin_path_exists,
-            r#"Usage: (fs-exists? path-to-test)
-
-Does the given path exist?
-
-Section: file
-
-Example:
-$(mkdir /tmp/tst-fs-exists)
-$(touch /tmp/tst-fs-exists/fs-exists)
-(test::assert-true (fs-exists? "/tmp/tst-fs-exists/fs-exists"))
-(test::assert-true (fs-exists? "/tmp/tst-fs-exists"))
-(test::assert-false (fs-exists? "/tmp/tst-fs-exists/fs-exists-nope"))
-$(rm /tmp/tst-fs-exists/fs-exists)
-$(rmdir /tmp/tst-fs-exists)
-"#,
-        ),
-    );
-    data.insert(
-        interner.intern("fs-file?"),
-        Expression::make_function(
-            builtin_is_file,
-            r#"Usage: (fs-file? path-to-test)
-
-Is the given path a file?
-
-Section: file
-
-Example:
-$(mkdir /tmp/tst-fs-file)
-$(touch "/tmp/tst-fs-file/fs-file")
-(test::assert-true (fs-file? "/tmp/tst-fs-file/fs-file"))
-(test::assert-false (fs-file? "/tmp/tst-fs-file"))
-(test::assert-false (fs-file? "/tmp/tst-fs-file/fs-file-nope"))
-$(rm "/tmp/tst-fs-file/fs-file")
-$(rmdir /tmp/tst-fs-file)
-"#,
-        ),
-    );
-    data.insert(
-        interner.intern("fs-dir?"),
-        Expression::make_function(
-            builtin_is_dir,
-            r#"Usage: (fs-dir? path-to-test)
-
-Is the given path a directory?
-
-Section: file
-
-Example:
-$(mkdir /tmp/tst-fs-dir)
-$(touch /tmp/tst-fs-dir/fs-dir-file)
-(test::assert-false (fs-dir? "/tmp/tst-fs-dir/fs-dir-file"))
-(test::assert-true (fs-dir? "/tmp/tst-fs-dir"))
-(test::assert-false (fs-dir? "/tmp/tst-fs-dir/fs-dir-nope"))
-$(rm /tmp/tst-fs-dir/fs-dir-file)
-$(rmdir /tmp/tst-fs-dir)
-"#,
-        ),
-    );
-    data.insert(
-        interner.intern("glob"),
-        Expression::make_function(
-            builtin_glob,
-            r#"Usage: (glob /path/with/*)
-
-Takes a list/varargs of globs and return the list of them expanded.
-
-Section: file
-
-Example:
-(syscall 'mkdir "/tmp/tst-fs-glob")
-(syscall 'touch "/tmp/tst-fs-glob/g1")
-(syscall 'touch "/tmp/tst-fs-glob/g2")
-(syscall 'touch "/tmp/tst-fs-glob/g3")
-(test::assert-equal '("/tmp/tst-fs-glob/g1" "/tmp/tst-fs-glob/g2" "/tmp/tst-fs-glob/g3") (glob "/tmp/tst-fs-glob/*"))
-(syscall 'rm "/tmp/tst-fs-glob/g1")
-(syscall 'rm "/tmp/tst-fs-glob/g2")
-(syscall 'rm "/tmp/tst-fs-glob/g3")
-(syscall 'rmdir "/tmp/tst-fs-glob")
-"#,
-        ),
-    );
+    intern_path_exists(interner, data);
+    intern_is_file(interner, data);
+    intern_is_dir(interner, data);
+    intern_do_glob(interner, data);
     data.insert(
         interner.intern("fs-crawl"),
         Expression::make_function(
@@ -992,54 +951,9 @@ Example:
 "#,
         ),
     );
-    data.insert(
-        interner.intern("fs-same?"),
-        Expression::make_function(
-            builtin_same_file,
-            r#"Usage: (fs-same? /path/to/file/or/dir /path/to/file/or/dir)
-
-Returns true if the two provided file paths refer to the same file or directory.
-
-Section: file
-
-Example:
-(with-temp-file (fn (tmp-file)
-    (test::assert-true (fs-same? tmp-file tmp-file)))
-"#,
-        ),
-    );
-    data.insert(
-        interner.intern("fs-base"),
-        Expression::make_function(
-            builtin_fs_base,
-            r#"Usage: (fs-base /path/to/file/or/dir)
-
-Returns base name of file or directory passed to function.
-
-Section: file
-Example:
-(with-temp (fn (tmp)
-        (let ((tmp-file (temp-file tmp)))
-            (test::assert-equal (length \".tmp01234\") (length (fs-base tmp-file))))))
-"#,
-        ),
-    );
-    data.insert(
-        interner.intern("fs-parent"),
-        Expression::make_function(
-            builtin_fs_parent,
-            r#"Usage: (fs-parent /path/to/file/or/dir)
-
-Returns base name of file or directory passed to function.
-
-Section: file
-Example:
-(with-temp (fn (tmp)
-        (let ((tmp-file (get-temp-file tmp)))
-            (test::assert-true (fs-same? (fs-parent tmp-file) tmp)))))
-"#,
-        ),
-    );
+    intern_is_same_file(interner, data);
+    intern_fs_base(interner, data);
+    intern_fs_parent(interner, data);
     data.insert(
         interner.intern("fs-len"),
         Expression::make_function(
