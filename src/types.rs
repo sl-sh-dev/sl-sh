@@ -237,6 +237,12 @@ pub enum SymLoc {
     Stack(usize),
 }
 
+impl Default for SymLoc {
+    fn default() -> Self {
+        SymLoc::None
+    }
+}
+
 impl SymLoc {
     pub fn replace(&mut self, new_data: SymLoc) {
         *self = new_data;
@@ -1181,6 +1187,15 @@ where
 {
     fn apply(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
         try_inner_hash_map!(fn_name, self.0, arg, fun(arg.clone()))
+    }
+}
+
+impl<F> RustProcedure<&str, F> for TypedExpression<&str>
+where
+    F: FnOnce(&str) -> LispResult<Expression>,
+{
+    fn apply(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
+        try_inner_string!(fn_name, &self.0, arg, fun(arg))
     }
 }
 

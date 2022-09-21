@@ -450,7 +450,7 @@ fn is_list(exp: Expression) -> bool {
 /// (test::assert-error (str->int "10.0"))
 /// (test::assert-error (str->int "--10"))
 #[sl_sh_fn(fn_name = "str->int")]
-fn str_to_int(istr: String) -> LispResult<i64> {
+fn str_to_int(istr: &str) -> LispResult<i64> {
     let potential_int: Result<i64, ParseIntError> = istr.parse();
     match potential_int {
         Ok(v) => Ok(v),
@@ -473,7 +473,7 @@ fn str_to_int(istr: String) -> LispResult<i64> {
 /// (test::assert-error (str->float "not int"))
 /// (test::assert-error (str->float "--10"))
 #[sl_sh_fn(fn_name = "str->float")]
-fn str_to_float(istr: String) -> LispResult<f64> {
+fn str_to_float(istr: &str) -> LispResult<f64> {
     let potential_float: Result<f64, ParseFloatError> = istr.parse();
     match potential_float {
         Ok(v) => Ok(v),
