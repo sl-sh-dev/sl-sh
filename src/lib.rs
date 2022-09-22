@@ -41,21 +41,6 @@ fn build_sl_sh_expression_type() -> Type {
     })
 }
 
-/// return the function names the macro will create. Given a base name, "base"
-/// return (base, builtin_base, arg_parse_base) tuple of Idents
-fn get_fn_names(original_item_fn: &ItemFn) -> (Ident, Ident, Ident, Ident) {
-    let sig_ident = &original_item_fn.sig.ident;
-    let name = sig_ident.to_string();
-    let original_fn_name = Ident::new(&name, Span::call_site());
-    let builtin_name = "builtin_".to_string() + &name;
-    let builtin_name = Ident::new(&builtin_name, Span::call_site());
-    let parse_name = "parse_".to_string() + &name;
-    let parse_name = Ident::new(&parse_name, Span::call_site());
-    let intern_name = "intern_".to_string() + &name;
-    let intern_name = Ident::new(&intern_name, Span::call_site());
-    (original_fn_name, builtin_name, parse_name, intern_name)
-}
-
 /// given a type and the string value of a trait in std::convert::<convert_trait>
 /// returned the given type wrapped with the std::convert::<convert_trait>
 fn wrap_with_std_convert(ty: Type, convert_trait: &str) -> Type {
@@ -112,7 +97,7 @@ fn get_return_type(original_item_fn: &ItemFn) -> MacroResult<(Option<Type>, Opti
                 return Err(Error::new(
                     original_item_fn.span(),
                     format!(
-                        "Functions of with generic arguments of type {:?} must contain Types, see GenericArgument.",
+                        "Functions must return generic arguments of type {:?}.",
                         &POSSIBLE_RESULT_TYPES
                     ),
                 ));
@@ -120,32 +105,6 @@ fn get_return_type(original_item_fn: &ItemFn) -> MacroResult<(Option<Type>, Opti
         }
     } else {
         Ok((Some(return_type), None))
-    }
-}
-
-/// Pull out every #doc attribute on the target fn for the proc macro attribute.
-/// Ignore any other attributes and only Err if there are no #doc attributes.
-fn get_documentation_for_fn(original_item_fn: &ItemFn) -> MacroResult<String> {
-    let mut docs = "".to_string();
-    for attr in &original_item_fn.attrs {
-        for path_segment in attr.path.segments.iter() {
-            if &path_segment.ident.to_string() == "doc" {
-                if let Ok(Meta::NameValue(pair)) = attr.parse_meta() {
-                    if let Lit::Str(partial_name) = &pair.lit {
-                        docs += &*partial_name.value();
-                        docs += "\n";
-                    }
-                }
-            }
-        }
-    }
-    if docs.is_empty() {
-        Err(Error::new(
-            original_item_fn.span(),
-            "Functions with this attribute included must have documentation.",
-        ))
-    } else {
-        Ok(docs)
     }
 }
 
@@ -266,34 +225,6 @@ fn get_attribute_name_value(nested_meta: &NestedMeta) -> MacroResult<(String, St
             "sl_sh_fn only supports one name-value pair attribute argument, 'fn_name'.",
         )),
     }
-}
-
-fn parse_attributes(
-    original_item_fn: &ItemFn,
-    attr_args: AttributeArgs,
-) -> MacroResult<(String, Ident, bool)> {
-    let vals = attr_args
-        .iter()
-        .map(get_attribute_name_value)
-        .collect::<MacroResult<Vec<(String, String)>>>()?;
-    let fn_name_attr = "fn_name".to_string();
-    let fn_name = get_attribute_value_with_key(original_item_fn, &fn_name_attr, vals.as_slice())?
-        .ok_or_else(|| {
-        Error::new(
-            original_item_fn.span(),
-            "sl_sh_fn requires name-value pair, 'fn_name'",
-        )
-    })?;
-    let fn_name_attr = Ident::new(&fn_name_attr, Span::call_site());
-
-    let eval_values = if let Some(value) =
-        get_attribute_value_with_key(original_item_fn, "eval_values", vals.as_slice())?
-    {
-        value == "true"
-    } else {
-        false
-    };
-    Ok((fn_name, fn_name_attr, eval_values))
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -424,78 +355,6 @@ fn make_arg_types(original_item_fn: &ItemFn) -> MacroResult<(Vec<Ident>, Vec<Tok
         arg_types.push(quote! { crate::ArgType })
     }
     Ok((arg_names, arg_types))
-}
-
-fn generate_builtin_fn(
-    original_item_fn: &ItemFn,
-    original_fn_name: &Ident,
-    builtin_name: &Ident,
-    fn_name: &str,
-    fn_name_attr: &Ident,
-) -> MacroResult<TokenStream> {
-    let (arg_names, arg_types) = make_arg_types(original_item_fn)?;
-    let orig_fn_call = make_orig_fn_call(original_item_fn, original_fn_name, arg_names.clone())?;
-
-    let mut prev_token_stream = orig_fn_call;
-    let fn_args = original_item_fn.sig.inputs.iter().zip(arg_names.iter());
-    for (fn_arg, ident) in fn_args {
-        if let FnArg::Typed(ty) = fn_arg {
-            match &*ty.ty {
-                Type::Path(ty) => {
-                    let val = get_arg_val(ty)?;
-                    let parse_layer_1 = get_parser_for_arg_val(val);
-                    let passing_style = ArgPassingStyle::Move;
-                    prev_token_stream = parse_type(
-                        ty,
-                        fn_name_attr,
-                        prev_token_stream.clone(),
-                        val,
-                        ident,
-                        passing_style,
-                        parse_layer_1,
-                    )?;
-                }
-                Type::Reference(ty_ref) => {
-                    if let Type::Path(ty) = &*ty_ref.elem {
-                        let val = get_arg_val(ty)?;
-                        let parse_layer_1 = get_parser_for_arg_val(val);
-                        let passing_style = if ty_ref.mutability.is_some() {
-                            ArgPassingStyle::MutReference
-                        } else {
-                            ArgPassingStyle::Reference
-                        };
-                        prev_token_stream = parse_type(
-                            ty,
-                            fn_name_attr,
-                            prev_token_stream.clone(),
-                            val,
-                            ident,
-                            passing_style,
-                            parse_layer_1,
-                        )?;
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-    let (return_type, _) = get_return_type(original_item_fn)?;
-    // TODO conversion for return type and arguments that enforce the TypeExpression and/or
-    //  RustProcedureRef implementations.
-    let mut conversions_assertions_code = vec![];
-    if let Some(return_type) = return_type {
-        conversions_assertions_code.push(generate_assertions_code_for_return_type_conversions(
-            &return_type,
-        ));
-    }
-    let tokens = quote! {
-        fn #builtin_name(#(#arg_names: #arg_types),*) -> crate::LispResult<crate::types::Expression> {
-            #(#conversions_assertions_code)*
-            let #fn_name_attr = #fn_name;
-            #prev_token_stream
-        }
-    };
-    Ok(tokens)
 }
 
 /// return a code for how to refer to the inner exp enum referent type in
@@ -661,6 +520,197 @@ fn parse_type(
     Ok(outer_parse(arg_name, tokens))
 }
 
+fn to_arg_types(args: &[Arg]) -> TokenStream {
+    let mut tokens = vec![];
+    for arg in args {
+        tokens.push(match (arg.val, arg.passing_style) {
+            (ArgVal::Value, ArgPassingStyle::MutReference) => {
+                quote! { crate::builtins_util::Arg {
+                    val: crate::builtins_util::ArgVal::Value,
+                    passing_style: crate::builtins_util::ArgPassingStyle::MutReference
+                }}
+            }
+            (ArgVal::Optional, ArgPassingStyle::MutReference) => {
+                quote! { crate::builtins_util::Arg {
+                    val: crate::builtins_util::ArgVal::Optional,
+                    passing_style: crate::builtins_util::ArgPassingStyle::MutReference
+                }}
+            }
+            (ArgVal::Vec, ArgPassingStyle::MutReference) => {
+                quote! { crate::builtins_util::Arg {
+                    val: crate::builtins_util::ArgVal::Vec,
+                    passing_style: crate::builtins_util::ArgPassingStyle::MutReference
+                }}
+            }
+            (ArgVal::Value, ArgPassingStyle::Reference) => {
+                quote! {crate::builtins_util::Arg {
+                    val: crate::builtins_util::ArgVal::Value,
+                    passing_style: crate::builtins_util::ArgPassingStyle::Reference
+                }}
+            }
+            (ArgVal::Optional, ArgPassingStyle::Reference) => {
+                quote! { crate::builtins_util::Arg {
+                    val: crate::builtins_util::ArgVal::Optional,
+                    passing_style: crate::builtins_util::ArgPassingStyle::Reference
+                }}
+            }
+            (ArgVal::Vec, ArgPassingStyle::Reference) => {
+                quote! { crate::builtins_util::Arg {
+                    val: crate::builtins_util::ArgVal::Vec,
+                    passing_style: crate::builtins_util::ArgPassingStyle::Reference
+                }}
+            }
+            (ArgVal::Value, ArgPassingStyle::Move) => {
+                quote! { crate::builtins_util::Arg {
+                    val: crate::builtins_util::ArgVal::Value,
+                    passing_style: crate::builtins_util::ArgPassingStyle::Move
+                }}
+            }
+            (ArgVal::Optional, ArgPassingStyle::Move) => {
+                quote! { crate::builtins_util::Arg {
+                    val: crate::builtins_util::ArgVal::Optional,
+                    passing_style: crate::builtins_util::ArgPassingStyle::Move
+                }}
+            }
+            (ArgVal::Vec, ArgPassingStyle::Move) => {
+                quote! { crate::builtins_util::Arg {
+                    val: crate::builtins_util::ArgVal::Vec,
+                    passing_style: crate::builtins_util::ArgPassingStyle::Move
+                }}
+            }
+        });
+    }
+    quote! {
+        let arg_types = vec![ #(#tokens),* ];
+    }
+}
+
+/// write the builtin_ version of the provided function. The function it generates takes some
+/// number of ArgType structs which is the wrapper enum that enables passing optional and varargs.
+/// the body of the function handles unwrapping the ArgType variables and then unwrapping the Expressions
+/// those contain into the proper rust native function. The process is done in a for loop but
+/// it recursively builds the body of builtin_ by passing around a token stream. The token stream is
+/// initialized with code to call to the original rust native function with pre-generated names for each
+/// of the arguments, e.g. `my_rust_native_function(arg_0, arg_1);`. Each subsequent iteration
+/// of the loop takes the previous token stream returned by the loop and uses that as it's innermost
+/// scope. Thus the original function call is at the core of a series of scopes that create all
+/// the necessary arguments with the proper types that were specified on initialization. For
+/// a function of one argument that means the code would look something like:
+///
+fn generate_builtin_fn(
+    original_item_fn: &ItemFn,
+    original_fn_name: &Ident,
+    builtin_name: &Ident,
+    fn_name: &str,
+    fn_name_attr: &Ident,
+) -> MacroResult<TokenStream> {
+    let (arg_names, arg_types) = make_arg_types(original_item_fn)?;
+    let orig_fn_call = make_orig_fn_call(original_item_fn, original_fn_name, arg_names.clone())?;
+
+    let mut prev_token_stream = orig_fn_call;
+    let fn_args = original_item_fn.sig.inputs.iter().zip(arg_names.iter());
+    for (fn_arg, ident) in fn_args {
+        if let FnArg::Typed(ty) = fn_arg {
+            match &*ty.ty {
+                Type::Path(ty) => {
+                    let val = get_arg_val(ty)?;
+                    let parse_layer_1 = get_parser_for_arg_val(val);
+                    let passing_style = ArgPassingStyle::Move;
+                    prev_token_stream = parse_type(
+                        ty,
+                        fn_name_attr,
+                        prev_token_stream.clone(),
+                        val,
+                        ident,
+                        passing_style,
+                        parse_layer_1,
+                    )?;
+                }
+                Type::Reference(ty_ref) => {
+                    if let Type::Path(ty) = &*ty_ref.elem {
+                        let val = get_arg_val(ty)?;
+                        let parse_layer_1 = get_parser_for_arg_val(val);
+                        let passing_style = if ty_ref.mutability.is_some() {
+                            ArgPassingStyle::MutReference
+                        } else {
+                            ArgPassingStyle::Reference
+                        };
+                        prev_token_stream = parse_type(
+                            ty,
+                            fn_name_attr,
+                            prev_token_stream.clone(),
+                            val,
+                            ident,
+                            passing_style,
+                            parse_layer_1,
+                        )?;
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    let (return_type, _) = get_return_type(original_item_fn)?;
+    // TODO conversion for return type and arguments that enforce the TypeExpression and/or
+    //  RustProcedureRef implementations.
+    let mut conversions_assertions_code = vec![];
+    if let Some(return_type) = return_type {
+        conversions_assertions_code.push(generate_assertions_code_for_return_type_conversions(
+            &return_type,
+        ));
+    }
+    let tokens = quote! {
+        fn #builtin_name(#(#arg_names: #arg_types),*) -> crate::LispResult<crate::types::Expression> {
+            #(#conversions_assertions_code)*
+            let #fn_name_attr = #fn_name;
+            #prev_token_stream
+        }
+    };
+    Ok(tokens)
+}
+
+/// Optional and Vec types are supported to create the idea of items that might be provided or
+/// for providing a list of zero or more items that can be passed in, a varargs type, or both.
+/// Because the nature of optional and varargs are context dependent, e.g. variable numbers of
+/// arguments would have to be at the end of the function signature, otherwise, it's much harder
+/// to specify which arguments are required.
+fn are_args_valid(original_item_fn: &ItemFn, args: &[Arg]) -> MacroResult<()> {
+    if args.is_empty() || args.len() == 1 {
+        Ok(())
+    } else {
+        let mut found_opt = false;
+        let mut found_value = false;
+        for (i, arg) in args.iter().rev().enumerate() {
+            match (i, arg.val, found_opt, found_value) {
+                (i, ArgVal::Vec, _, _) if i > 0 => {
+                    return Err(Error::new(
+                        original_item_fn.span(),
+                        "Only one Vec argument is supported and it must be the last argument.",
+                    ));
+                }
+                (_, ArgVal::Optional, _, true) => {
+                    return Err(Error::new(
+                        original_item_fn.span(),
+                        "Optional argument(s) must be placed last.",
+                    ));
+                }
+                (_, ArgVal::Optional, _, _) => {
+                    found_opt = true;
+                }
+                (_, ArgVal::Value, _, _) => {
+                    found_value = true;
+                }
+                (_, _, _, _) => {}
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Create a Vec<Arg> from the original fn's signature. Information is needed at compile and
+/// run time to translate the list of sl_sh expressions to rust native types. This Arg types
+/// stores the type information of the rust native type as well as whether it's moved, passed
+/// by reference, or passed by mutable reference.
 fn parse_src_function_arguments(original_item_fn: &ItemFn) -> MacroResult<Vec<Arg>> {
     let mut parsed_args = vec![];
     let len = original_item_fn.sig.inputs.len();
@@ -724,37 +774,73 @@ fn parse_src_function_arguments(original_item_fn: &ItemFn) -> MacroResult<Vec<Ar
     Ok(parsed_args)
 }
 
-fn are_args_valid(original_item_fn: &ItemFn, args: &[Arg]) -> MacroResult<()> {
-    if args.is_empty() || args.len() == 1 {
-        Ok(())
-    } else {
-        let mut found_opt = false;
-        let mut found_value = false;
-        for (i, arg) in args.iter().rev().enumerate() {
-            match (i, arg.val, found_opt, found_value) {
-                (i, ArgVal::Vec, _, _) if i > 0 => {
-                    return Err(Error::new(
-                        original_item_fn.span(),
-                        "Only one Vec argument is supported and it must be the last argument.",
-                    ));
+/// return the function names the macro will create. Given a base name, "base"
+/// return (base, builtin_base, arg_parse_base) tuple of Idents
+fn get_fn_names(original_item_fn: &ItemFn) -> (Ident, Ident, Ident, Ident) {
+    let sig_ident = &original_item_fn.sig.ident;
+    let name = sig_ident.to_string();
+    let original_fn_name = Ident::new(&name, Span::call_site());
+    let builtin_name = "builtin_".to_string() + &name;
+    let builtin_name = Ident::new(&builtin_name, Span::call_site());
+    let parse_name = "parse_".to_string() + &name;
+    let parse_name = Ident::new(&parse_name, Span::call_site());
+    let intern_name = "intern_".to_string() + &name;
+    let intern_name = Ident::new(&intern_name, Span::call_site());
+    (original_fn_name, builtin_name, parse_name, intern_name)
+}
+
+/// Pull out every #doc attribute on the target fn for the proc macro attribute.
+/// Ignore any other attributes and only Err if there are no #doc attributes.
+fn get_documentation_for_fn(original_item_fn: &ItemFn) -> MacroResult<String> {
+    let mut docs = "".to_string();
+    for attr in &original_item_fn.attrs {
+        for path_segment in attr.path.segments.iter() {
+            if &path_segment.ident.to_string() == "doc" {
+                if let Ok(Meta::NameValue(pair)) = attr.parse_meta() {
+                    if let Lit::Str(partial_name) = &pair.lit {
+                        docs += &*partial_name.value();
+                        docs += "\n";
+                    }
                 }
-                (_, ArgVal::Optional, _, true) => {
-                    return Err(Error::new(
-                        original_item_fn.span(),
-                        "Optional argument(s) must be placed last.",
-                    ));
-                }
-                (_, ArgVal::Optional, _, _) => {
-                    found_opt = true;
-                }
-                (_, ArgVal::Value, _, _) => {
-                    found_value = true;
-                }
-                (_, _, _, _) => {}
             }
         }
-        Ok(())
     }
+    if docs.is_empty() {
+        Err(Error::new(
+            original_item_fn.span(),
+            "Functions with this attribute included must have documentation.",
+        ))
+    } else {
+        Ok(docs)
+    }
+}
+
+fn parse_attributes(
+    original_item_fn: &ItemFn,
+    attr_args: AttributeArgs,
+) -> MacroResult<(String, Ident, bool)> {
+    let vals = attr_args
+        .iter()
+        .map(get_attribute_name_value)
+        .collect::<MacroResult<Vec<(String, String)>>>()?;
+    let fn_name_attr = "fn_name".to_string();
+    let fn_name = get_attribute_value_with_key(original_item_fn, &fn_name_attr, vals.as_slice())?
+        .ok_or_else(|| {
+        Error::new(
+            original_item_fn.span(),
+            "sl_sh_fn requires name-value pair, 'fn_name'",
+        )
+    })?;
+    let fn_name_attr = Ident::new(&fn_name_attr, Span::call_site());
+
+    let eval_values = if let Some(value) =
+        get_attribute_value_with_key(original_item_fn, "eval_values", vals.as_slice())?
+    {
+        value == "true"
+    } else {
+        false
+    };
+    Ok((fn_name, fn_name_attr, eval_values))
 }
 
 fn generate_sl_sh_fn(
@@ -777,6 +863,7 @@ fn generate_sl_sh_fn(
     };
 
     let args = parse_src_function_arguments(original_item_fn)?;
+    are_args_valid(original_item_fn, args.as_slice())?;
     let builtin_fn = generate_builtin_fn(
         original_item_fn,
         &original_fn_name,
@@ -784,7 +871,6 @@ fn generate_sl_sh_fn(
         &fn_name,
         &fn_name_attr,
     )?;
-    are_args_valid(original_item_fn, args.as_slice())?;
     let arg_types = to_arg_types(args.as_slice());
 
     // directly in this TokenStream enumerate the functions parse_ and intern_
@@ -834,74 +920,6 @@ fn generate_sl_sh_fn(
         }
     };
     Ok(tokens)
-}
-
-fn to_arg_types(args: &[Arg]) -> TokenStream {
-    let mut tokens = vec![];
-    for arg in args {
-        tokens.push(match (arg.val, arg.passing_style) {
-            (ArgVal::Value, ArgPassingStyle::MutReference) => {
-                quote! { crate::builtins_util::Arg {
-                    val: crate::builtins_util::ArgVal::Value,
-                    passing_style: crate::builtins_util::ArgPassingStyle::MutReference
-                }}
-            }
-            (ArgVal::Optional, ArgPassingStyle::MutReference) => {
-                quote! { crate::builtins_util::Arg {
-                    val: crate::builtins_util::ArgVal::Optional,
-                    passing_style: crate::builtins_util::ArgPassingStyle::MutReference
-                }}
-            }
-            (ArgVal::Vec, ArgPassingStyle::MutReference) => {
-                quote! { crate::builtins_util::Arg {
-                    val: crate::builtins_util::ArgVal::Vec,
-                    passing_style: crate::builtins_util::ArgPassingStyle::MutReference
-                }}
-            }
-            (ArgVal::Value, ArgPassingStyle::Reference) => {
-                quote! {crate::builtins_util::Arg {
-                    val: crate::builtins_util::ArgVal::Value,
-                    passing_style: crate::builtins_util::ArgPassingStyle::Reference
-                }}
-            }
-            (ArgVal::Optional, ArgPassingStyle::Reference) => {
-                quote! { crate::builtins_util::Arg {
-                    val: crate::builtins_util::ArgVal::Optional,
-                    passing_style: crate::builtins_util::ArgPassingStyle::Reference
-                }}
-            }
-            (ArgVal::Vec, ArgPassingStyle::Reference) => {
-                quote! { crate::builtins_util::Arg {
-                    val: crate::builtins_util::ArgVal::Vec,
-                    passing_style: crate::builtins_util::ArgPassingStyle::Reference
-                }}
-            }
-            (ArgVal::Value, ArgPassingStyle::Move) => {
-                quote! { crate::builtins_util::Arg {
-                    val: crate::builtins_util::ArgVal::Value,
-                    passing_style: crate::builtins_util::ArgPassingStyle::Move
-                }}
-            }
-            (ArgVal::Optional, ArgPassingStyle::Move) => {
-                quote! { crate::builtins_util::Arg {
-                    val: crate::builtins_util::ArgVal::Optional,
-                    passing_style: crate::builtins_util::ArgPassingStyle::Move
-                }}
-            }
-            (ArgVal::Vec, ArgPassingStyle::Move) => {
-                quote! { crate::builtins_util::Arg {
-                    val: crate::builtins_util::ArgVal::Vec,
-                    passing_style: crate::builtins_util::ArgPassingStyle::Move
-                }}
-            }
-        });
-    }
-    //for arg_type in &arg_types {
-    //    println!("{:?}", arg_type);
-    //}
-    quote! {
-        let arg_types = vec![ #(#tokens),* ];
-    }
 }
 
 #[proc_macro_attribute]
