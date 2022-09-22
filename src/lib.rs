@@ -249,8 +249,6 @@ struct Arg {
 
 fn get_arg_val(type_path: &TypePath) -> MacroResult<ArgVal> {
     if let Some((_generic, type_path)) = get_generic_argument_from_type_path(type_path) {
-        //TODO any way around relying on match TypePaths on Option and Vec, would be better if they
-        // supported something like a marker trait.?
         let wrapper = opt_is_valid_generic_type(type_path, POSSIBLE_ARG_TYPES.as_slice());
         match wrapper {
             Some(wrapper) if wrapper == "Option" => {
@@ -386,9 +384,6 @@ fn parse_argval_varargs_type(
     arg_name: &Ident,
     inner: TokenStream,
 ) -> TokenStream {
-    // TODO
-    //  we should only accept Vec<T: TryIntoExpression> should
-    //  be in conversions_assertions_code
     let wrapped_ty = get_type_or_wrapped_type(ty);
     quote! {{
         use crate::builtins_util::TryIntoExpression;
@@ -858,8 +853,6 @@ fn generate_builtin_fn(
         }
     }
     let (return_type, _) = get_return_type(original_item_fn)?;
-    // TODO conversion for return type and arguments that enforce the TypeExpression and/or
-    //  RustProcedureRef implementations.
     let mut conversions_assertions_code = vec![];
     if let Some(return_type) = return_type {
         conversions_assertions_code.push(generate_assertions_code_for_return_type_conversions(
