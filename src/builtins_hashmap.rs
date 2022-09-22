@@ -7,7 +7,7 @@ use crate::environment::*;
 use crate::eval::*;
 use crate::interner::*;
 use crate::types::*;
-use crate::LispResult;
+use crate::{try_inner_hash_map, LispResult};
 
 #[allow(clippy::ptr_arg)]
 pub(crate) fn cow_to_ref(environment: &mut Environment, input: &Cow<'static, str>) -> &'static str {
@@ -66,42 +66,50 @@ fn builtin_make_hash(
     }
 }
 
-fn builtin_hash_set(
+/// Usage: (hash-set! hashmap key value)
+///
+/// Add or update a hashmap key's value.  This is a destructive form!
+///
+/// Section: hashmap
+///
+/// Example:
+/// (def tst-hash (make-hash))
+/// (test::assert-equal 0 (length (hash-keys tst-hash)))
+/// (hash-set! tst-hash :new-key '(1 2 3))
+/// (test::assert-equal 1 (length (hash-keys tst-hash)))
+/// (test::assert-equal '(1 2 3) (hash-get tst-hash :new-key))
+/// (def tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\"))))
+/// (test::assert-equal 3 (length (hash-keys tst-hash)))
+/// (test::assert-equal \"val one\" (hash-get tst-hash :key1))
+/// (test::assert-equal \"val two\" (hash-get tst-hash 'key2))
+/// (test::assert-equal \"val three\" (hash-get tst-hash \"key3\"))
+/// (hash-set! tst-hash :new-key '(1 2 3))
+/// (test::assert-equal 4 (length (hash-keys tst-hash)))
+/// (test::assert-equal \"val one\" (hash-get tst-hash :key1))
+/// (test::assert-equal \"val two\" (hash-get tst-hash 'key2))
+/// (test::assert-equal \"val three\" (hash-get tst-hash \"key3\"))
+/// (test::assert-equal '(1 2 3) (hash-get tst-hash :new-key))
+/// (hash-set! tst-hash 'key2 \"val two b\")
+/// (hash-set! tst-hash :key1 \"val one b\")
+/// (hash-set! tst-hash \"key3\" \"val three b\")
+/// (test::assert-equal 4 (length (hash-keys tst-hash)))
+/// (test::assert-equal \"val one b\" (hash-get tst-hash :key1))
+/// (test::assert-equal \"val two b\" (hash-get tst-hash 'key2))
+/// (test::assert-equal \"val three b\" (hash-get tst-hash \"key3\"))
+/// (test::assert-equal '(1 2 3) (hash-get tst-hash :new-key))
+#[sl_sh_fn(fn_name = "hash-set!", takes_env = true)]
+fn hash_set(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(map) = args.next() {
-        if let Some(key) = args.next() {
-            if let Some(val) = args.next() {
-                if args.next().is_none() {
-                    let exp_map = eval(environment, map)?;
-                    let key = eval(environment, key)?;
-                    let val = eval(environment, val)?;
-                    let mut exp_map_d = exp_map.get_mut();
-                    if let ExpEnum::HashMap(map) = &mut exp_map_d.data {
-                        return match &key.get().data {
-                            ExpEnum::Symbol(sym, _) => {
-                                map.insert(*sym, val);
-                                Ok(exp_map.clone())
-                            }
-                            ExpEnum::String(s, _) => {
-                                map.insert(cow_to_ref(environment, s), val);
-                                Ok(exp_map.clone())
-                            }
-                            ExpEnum::Char(ch) => {
-                                map.insert(cow_to_ref(environment, ch), val);
-                                Ok(exp_map.clone())
-                            }
-                            _ => Err(LispError::new(
-                                "hash-set! key can only be a symbol or string",
-                            )),
-                        };
-                    }
-                }
-            }
-        }
-    }
-    Err(LispError::new("hash-set! takes a hashmap, key and value"))
+    map: Expression,
+    key: &str,
+    val: Expression,
+) -> LispResult<Expression> {
+    let s = environment.interner.intern(key);
+    let fn_name = "hash-set!";
+    try_inner_hash_map!(fn_name, map, map, {
+        map.insert(s, val);
+    });
+    Ok(map.clone())
 }
 
 /// Usage: (hash-remove! hashmap key)
@@ -314,44 +322,7 @@ Example:
 "
         ),
     );
-    data.insert(
-        interner.intern("hash-set!"),
-        Expression::make_function(
-            builtin_hash_set,
-            "Usage: (hash-set! hashmap key value)
-
-Add or update a hashmap key's value.  This is a destructive form!
-
-Section: hashmap
-
-Example:
-(def tst-hash (make-hash))
-(test::assert-equal 0 (length (hash-keys tst-hash)))
-(hash-set! tst-hash :new-key '(1 2 3))
-(test::assert-equal 1 (length (hash-keys tst-hash)))
-(test::assert-equal '(1 2 3) (hash-get tst-hash :new-key))
-(def tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\"))))
-(test::assert-equal 3 (length (hash-keys tst-hash)))
-(test::assert-equal \"val one\" (hash-get tst-hash :key1))
-(test::assert-equal \"val two\" (hash-get tst-hash 'key2))
-(test::assert-equal \"val three\" (hash-get tst-hash \"key3\"))
-(hash-set! tst-hash :new-key '(1 2 3))
-(test::assert-equal 4 (length (hash-keys tst-hash)))
-(test::assert-equal \"val one\" (hash-get tst-hash :key1))
-(test::assert-equal \"val two\" (hash-get tst-hash 'key2))
-(test::assert-equal \"val three\" (hash-get tst-hash \"key3\"))
-(test::assert-equal '(1 2 3) (hash-get tst-hash :new-key))
-(hash-set! tst-hash 'key2 \"val two b\")
-(hash-set! tst-hash :key1 \"val one b\")
-(hash-set! tst-hash \"key3\" \"val three b\")
-(test::assert-equal 4 (length (hash-keys tst-hash)))
-(test::assert-equal \"val one b\" (hash-get tst-hash :key1))
-(test::assert-equal \"val two b\" (hash-get tst-hash 'key2))
-(test::assert-equal \"val three b\" (hash-get tst-hash \"key3\"))
-(test::assert-equal '(1 2 3) (hash-get tst-hash :new-key))
-",
-        ),
-    );
+    intern_hash_set(interner, data);
     intern_hash_remove(interner, data);
     data.insert(
         interner.intern("hash-get"),
