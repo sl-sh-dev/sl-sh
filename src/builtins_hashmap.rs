@@ -214,29 +214,34 @@ fn hash_haskey(map: &mut HashMap<&str, Expression>, to_val: &str) -> LispResult<
     }
 }
 
-fn builtin_hash_keys(
+/// Usage: (hash-keys hashmap)
+///
+/// Returns a vector of all the hashmaps keys.  The keys will be unordered.
+///
+/// Section: hashmap
+///
+/// Example:
+/// (def tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\")(#\\S . \"val S\"))))
+/// (test::assert-equal 4 (length (hash-keys tst-hash)))
+/// (test::assert-true (in? (hash-keys tst-hash) :key1) \" Test :key1\")
+/// (test::assert-true (in? (hash-keys tst-hash) 'key2) \" Test key2\")
+/// ; Note string or char used as a key will be a symbol in the hash-keys list...
+/// (test::assert-true (in? (hash-keys tst-hash) 'S) \" Test S\")
+/// (test::assert-true (in? (hash-keys tst-hash) 'key3) \" Test key3\")
+/// (test::assert-false (in? (hash-keys tst-hash) :key4))
+#[sl_sh_fn(fn_name = "hash-keys", takes_env = true)]
+fn hash_keys(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(map) = args.next() {
-        if args.next().is_none() {
-            let map = eval(environment, map)?;
-            let map_d = map.get();
-            if let ExpEnum::HashMap(map) = &map_d.data {
-                let mut key_list = Vec::with_capacity(map.len());
-                for key in map.keys() {
-                    key_list.push(Expression::alloc_data(ExpEnum::Symbol(
-                        environment.interner.intern(key),
-                        SymLoc::None,
-                    )));
-                }
-                return Ok(Expression::with_list(key_list));
-            }
-        }
+    map: &mut HashMap<&str, Expression>,
+) -> LispResult<Expression> {
+    let mut key_list = Vec::with_capacity(map.len());
+    for key in map.keys() {
+        key_list.push(Expression::alloc_data(ExpEnum::Symbol(
+            environment.interner.intern(key),
+            SymLoc::None,
+        )));
     }
-    Err(LispError::new(
-        "hash-keys takes a hashmap and returns it's keys",
-    ))
+    return Ok(Expression::with_list(key_list));
 }
 
 /// Usage: (hash-clear! hashmap)
@@ -373,27 +378,6 @@ Example:
         ),
     );
     intern_hash_haskey(interner, data);
-    data.insert(
-        interner.intern("hash-keys"),
-        Expression::make_function(
-            builtin_hash_keys,
-            "Usage: (hash-keys hashmap)
-
-Returns a vector of all the hashmaps keys.  The keys will be unordered.
-
-Section: hashmap
-
-Example:
-(def tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\")(#\\S . \"val S\"))))
-(test::assert-equal 4 (length (hash-keys tst-hash)))
-(test::assert-true (in? (hash-keys tst-hash) :key1) \" Test :key1\")
-(test::assert-true (in? (hash-keys tst-hash) 'key2) \" Test key2\")
-; Note string or char used as a key will be a symbol in the hash-keys list...
-(test::assert-true (in? (hash-keys tst-hash) 'S) \" Test S\")
-(test::assert-true (in? (hash-keys tst-hash) 'key3) \" Test key3\")
-(test::assert-false (in? (hash-keys tst-hash) :key4))
-",
-        ),
-    );
+    intern_hash_keys(interner, data);
     intern_hash_clear(interner, data);
 }
