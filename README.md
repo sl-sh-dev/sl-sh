@@ -62,6 +62,19 @@ as equal to (values-nth 0 exp). In sl-sh objects of type values evaluate to thei
 first element unless the caller is the values?, values-nth, or values-length functions.
 These three methods are examples of methods where `..., eval_values = true)` is required.
 
+- macro supports optional name value attribute (takes_env = "<true|false>"), e.g.
+
+``` rust
+#[sl_sh_fn(fn_name = "int->float", takes_env = true)]
+fn float_to_int(&mut Environment, val: i64) -> f64 {
+    ...
+}
+```
+
+the default value is false, which means the macro will not expect the first argument
+of your function is `&mut Environment`.
+
+
 Limitations
 -----------
 1. If a Result return type is needed for simplicity only LispResult is supported.

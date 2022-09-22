@@ -307,6 +307,7 @@ fn get_parser_for_arg_val(val: ArgVal) -> fn(&Ident, TokenStream) -> TokenStream
 }
 
 fn make_orig_fn_call(
+    takes_env: bool,
     original_item_fn: &ItemFn,
     original_fn_name: &Ident,
     arg_names: Vec<Ident>,
@@ -315,27 +316,32 @@ fn make_orig_fn_call(
     // this means all returned rust native types must implement TryIntoExpression
     // this is nested inside the builtin expression which must always
     // return a LispResult.
+    let takes_env = if takes_env {
+        quote! {env, } // env is the name that is passed in to this function
+    } else {
+        quote! {}
+    };
     let (return_type, lisp_result) = get_return_type(original_item_fn)?;
     let returns_none = "()" == return_type.to_token_stream().to_string();
     let original_fn_call = match (return_type, lisp_result, returns_none) {
         // coerce to a LispResult<Expression>
         (Some(_), Some(_), true) => quote! {
-            #original_fn_name(#(#arg_names),*)?;
+            #original_fn_name(#takes_env #(#arg_names),*)?;
             Ok(crate::types::Expression::make_nil())
         },
         (Some(_), Some(_), false) => quote! {
-            #original_fn_name(#(#arg_names),*).map(Into::into)
+            #original_fn_name(#takes_env #(#arg_names),*).map(Into::into)
         },
         // coerce to Expression
         (Some(_), None, _) => quote! {
-            Ok(#original_fn_name(#(#arg_names),*).into())
+            Ok(#original_fn_name(#takes_env #(#arg_names),*).into())
         },
         (None, Some(_), _) => {
             unreachable!("If this functions returns a LispResult it must also return a value.");
         }
         // no return
         (None, None, _) => quote! {
-            #original_fn_name(#(#arg_names),*);
+            #original_fn_name(#takes_env #(#arg_names),*);
             Ok(crate::types::Expression::make_nil())
         },
     };
@@ -344,8 +350,15 @@ fn make_orig_fn_call(
     })
 }
 
-fn make_arg_types(original_item_fn: &ItemFn) -> MacroResult<(Vec<Ident>, Vec<TokenStream>)> {
-    let len = original_item_fn.sig.inputs.len();
+fn make_arg_types(
+    original_item_fn: &ItemFn,
+    takes_env: bool,
+) -> MacroResult<(Vec<Ident>, Vec<TokenStream>)> {
+    let len = if takes_env {
+        original_item_fn.sig.inputs.len() - 1
+    } else {
+        original_item_fn.sig.inputs.len()
+    };
     let mut arg_names = vec![];
     let mut arg_types = vec![];
     for i in 0..len {
@@ -718,7 +731,7 @@ fn generate_parse_fn(
                 match args.try_into() {
                     Ok(params) => {
                         let params: [crate::ArgType; args_len] = params;
-                        #builtin_name.call_expand_args(params)
+                        #builtin_name.call_expand_args(environment, params)
                     },
                     Err(e) => {
                         Err(crate::types::LispError::new(format!("{} is broken and can't parse its arguments.", #fn_name_attr, )))
@@ -782,14 +795,27 @@ fn generate_builtin_fn(
     original_fn_name_str: &str,
     fn_name: &str,
     fn_name_attr: &Ident,
+    takes_env: bool,
 ) -> MacroResult<TokenStream> {
     let original_fn_name = Ident::new(original_fn_name_str, Span::call_site());
     let builtin_name = get_builtin_fn_name(original_fn_name_str);
-    let (arg_names, arg_types) = make_arg_types(original_item_fn)?;
-    let orig_fn_call = make_orig_fn_call(original_item_fn, &original_fn_name, arg_names.clone())?;
+    let (arg_names, arg_types) = make_arg_types(original_item_fn, takes_env)?;
 
+    let orig_fn_call = make_orig_fn_call(
+        takes_env,
+        original_item_fn,
+        &original_fn_name,
+        arg_names.clone(),
+    )?;
+    // initialize the innermost token stream to the code of the original_fn_call
     let mut prev_token_stream = orig_fn_call;
-    let fn_args = original_item_fn.sig.inputs.iter().zip(arg_names.iter());
+    let skip = if takes_env { 1 } else { 0 };
+    let fn_args = original_item_fn
+        .sig
+        .inputs
+        .iter()
+        .skip(skip)
+        .zip(arg_names.iter());
     for (fn_arg, ident) in fn_args {
         if let FnArg::Typed(ty) = fn_arg {
             match &*ty.ty {
@@ -841,7 +867,7 @@ fn generate_builtin_fn(
         ));
     }
     let tokens = quote! {
-        fn #builtin_name(#(#arg_names: #arg_types),*) -> crate::LispResult<crate::types::Expression> {
+        fn #builtin_name(env: &mut crate::environment::Environment, #(#arg_names: #arg_types),*) -> crate::LispResult<crate::types::Expression> {
             #(#conversions_assertions_code)*
             let #fn_name_attr = #fn_name;
             #prev_token_stream
@@ -855,8 +881,8 @@ fn generate_builtin_fn(
 /// Because the nature of optional and varargs are context dependent, e.g. variable numbers of
 /// arguments would have to be at the end of the function signature, otherwise, it's much harder
 /// to specify which arguments are required.
-fn are_args_valid(original_item_fn: &ItemFn, args: &[Arg]) -> MacroResult<()> {
-    if args.is_empty() || args.len() == 1 {
+fn are_args_valid(original_item_fn: &ItemFn, args: &[Arg], takes_env: bool) -> MacroResult<()> {
+    if args.is_empty() || (!takes_env && args.len() == 1 || takes_env && args.len() == 2) {
         Ok(())
     } else {
         let mut found_opt = false;
@@ -892,9 +918,16 @@ fn are_args_valid(original_item_fn: &ItemFn, args: &[Arg]) -> MacroResult<()> {
 /// run time to translate the list of sl_sh expressions to rust native types. This Arg types
 /// stores the type information of the rust native type as well as whether it's moved, passed
 /// by reference, or passed by mutable reference.
-fn parse_src_function_arguments(original_item_fn: &ItemFn) -> MacroResult<Vec<Arg>> {
+fn parse_src_function_arguments(
+    original_item_fn: &ItemFn,
+    takes_env: bool,
+) -> MacroResult<Vec<Arg>> {
     let mut parsed_args = vec![];
-    let len = original_item_fn.sig.inputs.len();
+    let len = if takes_env {
+        original_item_fn.sig.inputs.len() - 1
+    } else {
+        original_item_fn.sig.inputs.len()
+    };
     let mut arg_names = vec![];
     for i in 0..len {
         let parse_name = "arg_".to_string() + &i.to_string();
@@ -902,7 +935,9 @@ fn parse_src_function_arguments(original_item_fn: &ItemFn) -> MacroResult<Vec<Ar
         arg_names.push(parse_name);
     }
 
-    for fn_arg in original_item_fn.sig.inputs.iter() {
+    let skip = if takes_env { 1 } else { 0 };
+
+    for fn_arg in original_item_fn.sig.inputs.iter().skip(skip) {
         match fn_arg {
             FnArg::Receiver(_) => {
                 return Err(Error::new(
@@ -1005,7 +1040,7 @@ fn get_documentation_for_fn(original_item_fn: &ItemFn) -> MacroResult<String> {
 fn parse_attributes(
     original_item_fn: &ItemFn,
     attr_args: AttributeArgs,
-) -> MacroResult<(String, Ident, bool)> {
+) -> MacroResult<(String, Ident, bool, bool)> {
     let vals = attr_args
         .iter()
         .map(get_attribute_name_value)
@@ -1027,7 +1062,14 @@ fn parse_attributes(
     } else {
         false
     };
-    Ok((fn_name, fn_name_attr, eval_values))
+    let takes_env = if let Some(value) =
+        get_attribute_value_with_key(original_item_fn, "takes_env", vals.as_slice())?
+    {
+        value == "true"
+    } else {
+        false
+    };
+    Ok((fn_name, fn_name_attr, eval_values, takes_env))
 }
 
 /// this function outputs all of the generated code, it is composed into three different functions:
@@ -1045,20 +1087,26 @@ fn generate_sl_sh_fn(
     original_item_fn: &ItemFn,
     attr_args: AttributeArgs,
 ) -> MacroResult<TokenStream> {
-    let (fn_name, fn_name_attr, eval_values) = parse_attributes(original_item_fn, attr_args)?;
+    let (fn_name, fn_name_attr, eval_values, takes_env) =
+        parse_attributes(original_item_fn, attr_args)?;
     let original_fn_name_str = original_item_fn.sig.ident.to_string();
     let original_fn_name_str = original_fn_name_str.as_str();
 
-    let args = parse_src_function_arguments(original_item_fn)?;
-    are_args_valid(original_item_fn, args.as_slice())?;
+    let args = parse_src_function_arguments(original_item_fn, takes_env)?;
+    are_args_valid(original_item_fn, args.as_slice(), takes_env)?;
     let builtin_fn = generate_builtin_fn(
         original_item_fn,
         original_fn_name_str,
         fn_name.as_str(),
         &fn_name_attr,
+        takes_env,
     )?;
 
-    let args_len = original_item_fn.sig.inputs.len();
+    let args_len = if takes_env {
+        original_item_fn.sig.inputs.len() - 1
+    } else {
+        original_item_fn.sig.inputs.len()
+    };
     let parse_fn = generate_parse_fn(
         original_fn_name_str,
         eval_values,
