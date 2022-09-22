@@ -1,3 +1,4 @@
+use sl_sh_proc_macros::sl_sh_fn;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -19,7 +20,7 @@ use crate::eval::*;
 use crate::interner::*;
 use crate::reader::*;
 use crate::types::*;
-use crate::{get_file, param_eval, params_done};
+use crate::{get_file, param_eval, params_done, LispResult};
 
 fn builtin_open(
     environment: &mut Environment,
@@ -169,31 +170,33 @@ fn builtin_close(
     Err(LispError::new("close takes one form (file to close)"))
 }
 
-fn builtin_flush(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(exp) = args.next() {
-        if args.next().is_none() {
-            let exp = eval(environment, exp)?;
-            return if let ExpEnum::File(file) = &exp.get().data {
-                match &mut *file.borrow_mut() {
-                    FileState::Write(f) => {
-                        f.flush()?;
-                        Ok(Expression::make_true())
-                    }
-                    FileState::Stdout => {
-                        io::stdout().flush()?;
-                        Ok(Expression::make_true())
-                    }
-                    _ => Err(LispError::new("flush requires a writeable file")),
-                }
-            } else {
-                Err(LispError::new("flush requires a file"))
-            };
+/// Usage: (flush file)
+///
+/// Flush a file.
+///
+/// Section: file
+///
+/// Example:
+/// (def tmp (get-temp))
+/// (def tst-file (open (str tmp \"/slsh-tst-open.txt\") :create :truncate))
+/// (write-line tst-file \"Test Line Three\")
+/// (flush tst-file)
+/// (def tst-file (open (str tmp \"/slsh-tst-open.txt\") :read))
+/// (test::assert-equal \"Test Line Three\n\" (read-line tst-file))
+/// (close tst-file)
+#[sl_sh_fn(fn_name = "flush")]
+fn flush(file: Rc<RefCell<FileState>>) -> LispResult<Expression> {
+    match &mut *file.borrow_mut() {
+        FileState::Write(f) => {
+            f.flush()?;
+            Ok(Expression::make_true())
         }
+        FileState::Stdout => {
+            io::stdout().flush()?;
+            Ok(Expression::make_true())
+        }
+        _ => Err(LispError::new("flush requires a writeable file")),
     }
-    Err(LispError::new("flush takes one form (file to flush)"))
 }
 
 fn builtin_read_line(
@@ -592,27 +595,7 @@ Example:
 ",
         ),
     );
-    data.insert(
-        interner.intern("flush"),
-        Expression::make_function(
-            builtin_flush,
-            "Usage: (flush file)
-
-Flush a file.
-
-Section: file
-
-Example:
-(def tmp (get-temp))
-(def tst-file (open (str tmp \"/slsh-tst-open.txt\") :create :truncate))
-(write-line tst-file \"Test Line Three\")
-(flush tst-file)
-(def tst-file (open (str tmp \"/slsh-tst-open.txt\") :read))
-(test::assert-equal \"Test Line Three\n\" (read-line tst-file))
-(close tst-file)
-",
-        ),
-    );
+    intern_flush(interner, data);
     data.insert(
         interner.intern("read-line"),
         Expression::make_function(

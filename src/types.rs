@@ -17,7 +17,8 @@ use crate::process::*;
 use crate::symbols::*;
 use crate::unix::fd_to_file;
 use crate::{
-    try_inner_float, try_inner_hash_map, try_inner_int, try_inner_string, ErrorStrings, LispResult,
+    try_inner_file, try_inner_float, try_inner_hash_map, try_inner_int, try_inner_string,
+    ErrorStrings, LispResult,
 };
 
 #[derive(Clone, Debug)]
@@ -1283,6 +1284,15 @@ where
 {
     fn apply(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
         try_inner_float!(fn_name, self.0, num, fun(*num))
+    }
+}
+
+impl<F> RustProcedure<Rc<RefCell<FileState>>, F> for TypedExpression<Rc<RefCell<FileState>>>
+where
+    F: FnOnce(Rc<RefCell<FileState>>) -> LispResult<Expression>,
+{
+    fn apply(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
+        try_inner_file!(fn_name, self.0, file, fun(file))
     }
 }
 
