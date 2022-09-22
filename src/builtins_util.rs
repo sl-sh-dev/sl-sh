@@ -473,6 +473,25 @@ macro_rules! try_inner_int {
 }
 
 #[macro_export]
+macro_rules! try_inner_file {
+    ($fn_name:ident, $expression:expr, $name:ident, $eval:expr) => {{
+        use $crate::ErrorStrings;
+        match &$expression.get().data {
+            ExpEnum::File($name)=> {
+                let $name = $name.clone();
+                $eval
+            },
+            data => return Err( LispError::new(ErrorStrings::mismatched_type(
+                $fn_name,
+                &ExpEnum::File(std::rc::Rc::new(std::cell::RefCell::new(crate::types::FileState::Closed))).to_string(), 
+                &data.to_string(),
+            )))
+        }
+    }};
+}
+
+
+#[macro_export]
 macro_rules! try_inner_float {
     ($fn_name:ident, $expression:expr, $name:ident, $eval:expr) => {{
         use $crate::ErrorStrings;
