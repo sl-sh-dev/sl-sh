@@ -1,3 +1,4 @@
+use sl_sh_proc_macros::sl_sh_fn;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -20,6 +21,7 @@ use crate::pretty_print::*;
 use crate::reader::*;
 use crate::symbols::*;
 use crate::types::*;
+use crate::LispResult;
 
 const CORE_LISP: &[u8] = include_bytes!("../lisp/core.lisp");
 const STRUCT_LISP: &[u8] = include_bytes!("../lisp/struct.lisp");
@@ -323,57 +325,65 @@ fn builtin_load(
     Err(LispError::new("load needs one argument"))
 }
 
-fn builtin_length(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(arg) = args.next() {
-        if args.next().is_none() {
-            let arg = eval_no_values(environment, arg)?;
-            return match &arg.get().data {
-                ExpEnum::String(s, _) => {
-                    let mut i = 0;
-                    // Need to walk the chars to get the length in utf8 chars not bytes.
-                    for _ in UnicodeSegmentation::graphemes(s.as_ref(), true) {
-                        i += 1;
-                    }
-                    Ok(Expression::alloc_data(ExpEnum::Int(i64::from(i))))
-                }
-                ExpEnum::Vector(list) => {
-                    Ok(Expression::alloc_data(ExpEnum::Int(list.len() as i64)))
-                }
-                ExpEnum::Pair(_, e2) => {
-                    let mut len = 0;
-                    let mut e_next = e2.clone();
-                    loop {
-                        let e2 = if let ExpEnum::Pair(_, e2) = &e_next.get().data {
-                            Some(e2.clone())
-                        } else {
-                            None
-                        };
-                        match e2 {
-                            Some(e2) => {
-                                len += 1;
-                                e_next = e2.clone();
-                            }
-                            None => {
-                                len += 1;
-                                break;
-                            }
-                        }
-                    }
-                    Ok(Expression::alloc_data(ExpEnum::Int(len)))
-                }
-                ExpEnum::Nil => Ok(Expression::alloc_data(ExpEnum::Int(0))),
-                ExpEnum::HashMap(map) => Ok(Expression::alloc_data(ExpEnum::Int(map.len() as i64))),
-                _ => Err(LispError::new(format!(
-                    "expression of type {} has no length",
-                    arg.display_type()
-                ))),
-            };
+/// Usage: (length expression) -> int
+///
+/// Return length of supplied expression.
+///
+/// Section: core
+///
+/// Example:
+/// (test::assert-equal 0 (length nil))
+/// (test::assert-equal 5 (length \"12345\"))
+/// ; Note the unicode symbol is only one char even though it is more then one byte.
+/// (test::assert-equal 6 (length \"12345Σ\"))
+/// (test::assert-equal 3 (length '(1 2 3)))
+/// (test::assert-equal 3 (length '#(1 2 3)))
+/// (test::assert-equal 3 (length (list 1 2 3)))
+/// (test::assert-equal 3 (length (vec 1 2 3)))
+/// (test::assert-error (length 100))
+/// (test::assert-error (length 100.0))
+/// (test::assert-error (length #\\x))
+#[sl_sh_fn(fn_name = "length")]
+fn length(exp: Expression) -> LispResult<Expression> {
+    return match &exp.get().data {
+        ExpEnum::String(s, _) => {
+            let mut i = 0;
+            // Need to walk the chars to get the length in utf8 chars not bytes.
+            for _ in UnicodeSegmentation::graphemes(s.as_ref(), true) {
+                i += 1;
+            }
+            Ok(Expression::alloc_data(ExpEnum::Int(i64::from(i))))
         }
-    }
-    Err(LispError::new("length takes one form"))
+        ExpEnum::Vector(list) => Ok(Expression::alloc_data(ExpEnum::Int(list.len() as i64))),
+        ExpEnum::Pair(_, e2) => {
+            let mut len = 0;
+            let mut e_next = e2.clone();
+            loop {
+                let e2 = if let ExpEnum::Pair(_, e2) = &e_next.get().data {
+                    Some(e2.clone())
+                } else {
+                    None
+                };
+                match e2 {
+                    Some(e2) => {
+                        len += 1;
+                        e_next = e2.clone();
+                    }
+                    None => {
+                        len += 1;
+                        break;
+                    }
+                }
+            }
+            Ok(Expression::alloc_data(ExpEnum::Int(len)))
+        }
+        ExpEnum::Nil => Ok(Expression::alloc_data(ExpEnum::Int(0))),
+        ExpEnum::HashMap(map) => Ok(Expression::alloc_data(ExpEnum::Int(map.len() as i64))),
+        _ => Err(LispError::new(format!(
+            "length: expression of type {} can not be used with this function.",
+            exp.display_type()
+        ))),
+    };
 }
 
 fn builtin_if(
@@ -869,18 +879,20 @@ fn builtin_gensym(
     }
 }
 
-fn builtin_version(
-    _environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if args.next().is_some() {
-        Err(LispError::new("version takes no arguments"))
-    } else {
-        Ok(Expression::alloc_data(ExpEnum::String(
-            VERSION_STRING.into(),
-            None,
-        )))
-    }
+/// Usage: (version)
+///
+/// Produce executable version as string.
+///
+/// Section: shell
+///
+/// Example:
+/// (test::assert-true (string? (version)))
+#[sl_sh_fn(fn_name = "version")]
+fn version() -> LispResult<Expression> {
+    Ok(Expression::alloc_data(ExpEnum::String(
+        VERSION_STRING.into(),
+        None,
+    )))
 }
 
 // Suppress this lint because we have to return a Result here since it is a builtin...
@@ -1558,31 +1570,7 @@ Example:
 ",
         ),
     );
-    data.insert(
-        interner.intern("length"),
-        Expression::make_function(
-            builtin_length,
-            "Usage: (length expression) -> int
-
-Return length of supplied expression.
-
-Section: core
-
-Example:
-(test::assert-equal 0 (length nil))
-(test::assert-equal 5 (length \"12345\"))
-; Note the unicode symbol is only one char even though it is more then one byte.
-(test::assert-equal 6 (length \"12345Σ\"))
-(test::assert-equal 3 (length '(1 2 3)))
-(test::assert-equal 3 (length '#(1 2 3)))
-(test::assert-equal 3 (length (list 1 2 3)))
-(test::assert-equal 3 (length (vec 1 2 3)))
-(test::assert-error (length 100))
-(test::assert-error (length 100.0))
-(test::assert-error (length #\\x))
-",
-        ),
-    );
+    intern_length(interner, data);
     data.insert(
         interner.intern("if"),
         Expression::make_special(
@@ -2124,21 +2112,7 @@ Example:
 ",
         ),
     );
-    data.insert(
-        interner.intern("version"),
-        Expression::make_function(
-            builtin_version,
-            "Usage: (version)
-
-Produce executable version as string.
-
-Section: shell
-
-Example:
-(test::assert-true (string? (version)))
-",
-        ),
-    );
+    intern_version(interner, data);
     data.insert(
         interner.intern("get-error"),
         Expression::make_function(
