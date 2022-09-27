@@ -7,3 +7,11 @@ members = [
     "builtins",
     "compile_state",
 ]
+
+[profile.release]
+lto = true
+#codegen-units = 1
+#opt-level = 'z'
+debug = true
+#panic = "abort"
+

@@ -111,14 +111,14 @@ fn let_inner(
             .chunk
             .encode2(MOV, result as u16, free_reg as u16, env.own_line())?;
     }
+    for _ in start_defers..state.defers {
+        state.chunk.encode0(DFRPOP, env.own_line())?;
+    }
     for i in first_reg..symbols.borrow().regs_count() {
         if i != result {
             // TODO- should probably add a bulk opcode for this sort of clearing.
             state.chunk.encode1(CLRREG, i as u16, env.own_line())?;
         }
-    }
-    for _ in start_defers..state.defers {
-        state.chunk.encode0(DFRPOP, env.own_line())?;
     }
     Ok(())
 }

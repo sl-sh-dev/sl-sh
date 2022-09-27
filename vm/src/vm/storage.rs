@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use crate::chunk::*;
 use crate::error::*;
-use crate::get_reg;
 use crate::heap::*;
 use crate::interner::*;
 use crate::value::*;
@@ -336,23 +335,6 @@ impl<ENV> GVm<ENV> {
 
     pub fn new_upval(&mut self, val: Value) -> Value {
         self.alloc_value(val)
-    }
-
-    #[inline]
-    pub(super) fn set_register(&mut self, registers: &mut [Value], idx: usize, val: Value) {
-        match &get_reg!(registers, idx) {
-            Value::Value(handle) => {
-                *(self.get_value_mut(*handle)) = val;
-            }
-            // Can not set globals since they could be temporarily in any reg...
-            //Value::Global(idx) => self.globals.set(*idx, val),
-            _ => registers[idx] = val,
-        }
-    }
-
-    #[inline]
-    pub(super) fn mov_register(registers: &mut [Value], idx: usize, val: Value) {
-        registers[idx] = val;
     }
 
     pub(super) fn _call_frame(&self) -> Option<&CallFrame> {

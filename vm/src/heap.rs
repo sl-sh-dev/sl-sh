@@ -68,6 +68,7 @@ pub struct Continuation {
 enum Object {
     String(Arc<String>),
     Vector(Arc<Vec<Value>>),
+    //Vector(Vec<Value>),
     Map(Arc<HashMap<Value, Value>>),
     Bytes(Arc<Vec<u8>>),
     Pair(Arc<(Value, Value)>),
@@ -279,6 +280,7 @@ impl Heap {
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
         Value::Vector(self.alloc(Object::Vector(Arc::new(v)), mutable.flag(), mark_roots))
+        //Value::Vector(self.alloc(Object::Vector(v), mutable.flag(), mark_roots))
     }
 
     pub fn alloc_map<MarkFunc>(
@@ -491,6 +493,7 @@ impl Heap {
 
     pub fn get_value(&self, handle: Handle) -> Value {
         if let Some(Object::Value(value)) = self.objects.get(handle.idx) {
+            //if let Object::Value(value) = self.objects[handle.idx] {
             *value
         } else {
             panic!("Handle {} is not a value!", handle.idx);
@@ -530,7 +533,7 @@ impl Heap {
         }
     }
 
-    pub fn is_mutable(&self, handle: Handle) -> bool {
+    fn is_mutable(&self, handle: Handle) -> bool {
         if let Some(flag) = self.flags.get(handle.idx) {
             is_mutable(*flag)
         } else {

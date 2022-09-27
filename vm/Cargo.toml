@@ -8,5 +8,6 @@ edition = "2021"
 
 [features]
 gc = []
+nohelmet = []
 
 [dependencies]

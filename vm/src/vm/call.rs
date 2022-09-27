@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::chunk::*;
 use crate::heap::*;
-use crate::{GVm, VMError, VMResult, Value};
+use crate::{GVm, VMError, VMResult, Value, mov_register};
 
 /// Vm functions to handle runtime calling of anything callable.
 
@@ -117,10 +117,11 @@ impl<ENV> GVm<ENV> {
                 let res = (f.func)(self, &registers[(first_reg + 1) as usize..last_reg]).map_err(
                     |e| {
                         if self.err_frame().is_some() {
-                            Self::mov_register(
+                            let call_frame = self.alloc_callframe(frame);
+                            mov_register!(
                                 registers,
-                                first_reg.into(),
-                                self.alloc_callframe(frame),
+                                first_reg as usize,
+                                call_frame
                             );
                             self.stack_top += first_reg as usize;
                         }
@@ -159,7 +160,7 @@ impl<ENV> GVm<ENV> {
                 check_num_args(&l, num_args).map_err(|e| (e, chunk.clone()))?;
                 if !tail_call {
                     let frame = self.make_call_frame(chunk, lambda, true);
-                    Self::mov_register(registers, first_reg.into(), self.alloc_callframe(frame));
+                    mov_register!(registers, first_reg as usize, self.alloc_callframe(frame));
                     self.stack_top += first_reg as usize;
                 }
                 self.stack_max = self.stack_top + l.input_regs + l.extra_regs;
@@ -167,7 +168,7 @@ impl<ENV> GVm<ENV> {
                 self.ip = 0;
                 if l.rest {
                     let (rest_reg, h) = self.setup_rest(&l, registers, first_reg, num_args);
-                    Self::mov_register(registers, rest_reg, h);
+                    mov_register!(registers, rest_reg, h);
                 }
                 // XXX TODO- maybe test for stack overflow vs waiting for a panic.
                 clear_opts::<ENV>(&l, registers, first_reg, num_args);
@@ -195,16 +196,16 @@ impl<ENV> GVm<ENV> {
                 if l.rest {
                     let (rest_reg, h) = unsafe_vm.setup_rest(&l, registers, first_reg, num_args);
                     for (i, c) in caps.iter().enumerate() {
-                        Self::mov_register(registers, cap_first + i, Value::Value(*c));
+                        mov_register!(registers, cap_first + i, Value::Value(*c));
                     }
-                    Self::mov_register(registers, rest_reg, h);
+                    mov_register!(registers, rest_reg, h);
                 } else {
                     for (i, c) in caps.iter().enumerate() {
-                        Self::mov_register(registers, cap_first + i, Value::Value(*c));
+                        mov_register!(registers, cap_first + i, Value::Value(*c));
                     }
                 }
                 if let Some(frame) = frame {
-                    Self::mov_register(registers, first_reg.into(), self.alloc_callframe(frame));
+                    mov_register!(registers, first_reg as usize, self.alloc_callframe(frame));
                 }
                 clear_opts::<ENV>(&l, registers, first_reg, num_args);
                 Ok(l)
@@ -305,17 +306,17 @@ fn clear_opts<ENV>(l: &Chunk, registers: &mut [Value], first_reg: u16, num_args:
     };
     if num_args < end_arg {
         for r in num_args..end_arg {
-            GVm::<ENV>::mov_register(
+            mov_register!(
                 registers,
                 first_reg as usize + (r + 1) as usize,
-                Value::Undefined,
+                Value::Undefined
             );
         }
     }
     // Clear extra regs so things like closures or globals don't get changed by mistake.
     if l.extra_regs > 0 {
         for r in l.input_regs + 1..=l.input_regs + l.extra_regs {
-            GVm::<ENV>::mov_register(registers, first_reg as usize + r, Value::Undefined);
+            mov_register!(registers, first_reg as usize + r, Value::Undefined);
         }
     }
 }

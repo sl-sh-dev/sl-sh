@@ -53,7 +53,7 @@ impl<ENV> GVm<ENV> {
     pub fn new_with_env(env: ENV) -> Self {
         let globals = Globals::new();
         let mut stack = Vec::with_capacity(STACK_CAP);
-        stack.resize(1024, Value::Undefined);
+        stack.resize(STACK_CAP, Value::Undefined);
         Self {
             interner: Interner::with_capacity(8192),
             heap: Heap::new(),
@@ -109,10 +109,6 @@ impl<ENV> GVm<ENV> {
                 //let val2 = get_reg!(registers, reg + 1);
                 let val2 = get_reg_unref!(registers, reg + 1, self);
                 if val1 == val2 {
-                    /*if unsafe {
-                        std::mem::transmute::<Value, u128>(val1)
-                            == std::mem::transmute::<Value, u128>(val2)
-                    } {*/
                     val = Value::True;
                 } else {
                     val = Value::False;
@@ -264,15 +260,15 @@ impl<ENV> GVm<ENV> {
             if let Some(caps) = caps {
                 let cap_first = (chunk.args + chunk.opt_args + 1) as usize;
                 for (i, c) in caps.iter().enumerate() {
-                    Self::mov_register(registers, cap_first + i, Value::Value(*c));
+                    mov_register!(registers, cap_first + i, Value::Value(*c));
                 }
             }
-            Self::mov_register(registers, rest_reg, h);
+            mov_register!(registers, rest_reg, h);
         } else if let Some(caps) = caps {
             let registers = self.make_registers();
             let cap_first = (chunk.args + chunk.opt_args + 1) as usize;
             for (i, c) in caps.iter().enumerate() {
-                Self::mov_register(registers, cap_first + i, Value::Value(*c));
+                mov_register!(registers, cap_first + i, Value::Value(*c));
             }
         }
         let res = if let Err(e) = self.execute2(chunk) {
