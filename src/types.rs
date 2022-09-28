@@ -1113,11 +1113,11 @@ impl From<&mut ExpEnum> for Expression {
     }
 }
 
-pub struct TypedExpression<T: ?Sized, U>(U, PhantomData<T>);
+pub struct TypedWrapper<T: ?Sized, U>(U, PhantomData<T>);
 
-impl<T: ?Sized, U> TypedExpression<T, U> {
-    pub fn new(src: U) -> TypedExpression<T, U> {
-        TypedExpression(src, PhantomData::default())
+impl<T: ?Sized, U> TypedWrapper<T, U> {
+    pub fn new(src: U) -> TypedWrapper<T, U> {
+        TypedWrapper(src, PhantomData::default())
     }
 }
 
@@ -1138,7 +1138,7 @@ where
 }
 
 impl<F> RustProcedureRef<BTreeMap<&str, Expression>, F>
-    for TypedExpression<BTreeMap<&str, Expression>, Expression>
+    for TypedWrapper<BTreeMap<&str, Expression>, Expression>
 where
     F: FnOnce(&mut BTreeMap<&str, Expression>) -> LispResult<Expression>,
 {
@@ -1173,7 +1173,7 @@ where
 }
 
 impl<F> RustProcedureRef<HashMap<&str, Expression>, F>
-    for TypedExpression<HashMap<&str, Expression>, Expression>
+    for TypedWrapper<HashMap<&str, Expression>, Expression>
 where
     F: FnOnce(&mut HashMap<&str, Expression>) -> LispResult<Expression>,
 {
@@ -1183,7 +1183,7 @@ where
 }
 
 impl<F> RustProcedure<HashMap<&str, Expression>, F>
-    for TypedExpression<HashMap<&str, Expression>, Expression>
+    for TypedWrapper<HashMap<&str, Expression>, Expression>
 where
     F: FnOnce(HashMap<&str, Expression>) -> LispResult<Expression>,
 {
@@ -1192,7 +1192,7 @@ where
     }
 }
 
-impl<F> RustProcedure<&str, F> for TypedExpression<&str, Expression>
+impl<F> RustProcedure<&str, F> for TypedWrapper<&str, Expression>
 where
     F: FnOnce(&str) -> LispResult<Expression>,
 {
@@ -1201,7 +1201,7 @@ where
     }
 }
 
-impl<F> RustProcedure<String, F> for TypedExpression<String, Expression>
+impl<F> RustProcedure<String, F> for TypedWrapper<String, Expression>
 where
     F: FnOnce(String) -> LispResult<Expression>,
 {
@@ -1213,7 +1213,7 @@ where
     }
 }
 
-impl<F> RustProcedureRef<String, F> for TypedExpression<String, Expression>
+impl<F> RustProcedureRef<String, F> for TypedWrapper<String, Expression>
 where
     F: FnOnce(&mut String) -> LispResult<Expression>,
 {
@@ -1225,7 +1225,7 @@ where
     }
 }
 
-impl<F> RustProcedureRef<Expression, F> for TypedExpression<Expression, Expression>
+impl<F> RustProcedureRef<Expression, F> for TypedWrapper<Expression, Expression>
 where
     F: FnOnce(&mut Expression) -> LispResult<Expression>,
 {
@@ -1234,7 +1234,7 @@ where
     }
 }
 
-impl<F> RustProcedure<&Expression, F> for TypedExpression<&Expression, Expression>
+impl<F> RustProcedure<&Expression, F> for TypedWrapper<&Expression, Expression>
 where
     F: FnOnce(&Expression) -> LispResult<Expression>,
 {
@@ -1243,7 +1243,7 @@ where
     }
 }
 
-impl<F> RustProcedure<Expression, F> for TypedExpression<Expression, Expression>
+impl<F> RustProcedure<Expression, F> for TypedWrapper<Expression, Expression>
 where
     F: FnOnce(Expression) -> LispResult<Expression>,
 {
@@ -1252,7 +1252,7 @@ where
     }
 }
 
-impl<F> RustProcedureRef<i64, F> for TypedExpression<i64, Expression>
+impl<F> RustProcedureRef<i64, F> for TypedWrapper<i64, Expression>
 where
     F: FnOnce(&mut i64) -> LispResult<Expression>,
 {
@@ -1261,7 +1261,7 @@ where
     }
 }
 
-impl<F> RustProcedure<i64, F> for TypedExpression<i64, Expression>
+impl<F> RustProcedure<i64, F> for TypedWrapper<i64, Expression>
 where
     F: FnOnce(i64) -> LispResult<Expression>,
 {
@@ -1270,7 +1270,7 @@ where
     }
 }
 
-impl<F> RustProcedureRef<f64, F> for TypedExpression<f64, Expression>
+impl<F> RustProcedureRef<f64, F> for TypedWrapper<f64, Expression>
 where
     F: FnOnce(&mut f64) -> LispResult<Expression>,
 {
@@ -1279,7 +1279,7 @@ where
     }
 }
 
-impl<F> RustProcedure<f64, F> for TypedExpression<f64, Expression>
+impl<F> RustProcedure<f64, F> for TypedWrapper<f64, Expression>
 where
     F: FnOnce(f64) -> LispResult<Expression>,
 {
@@ -1289,7 +1289,7 @@ where
 }
 
 impl<F> RustProcedure<Rc<RefCell<FileState>>, F>
-    for TypedExpression<Rc<RefCell<FileState>>, Expression>
+    for TypedWrapper<Rc<RefCell<FileState>>, Expression>
 where
     F: FnOnce(Rc<RefCell<FileState>>) -> LispResult<Expression>,
 {
