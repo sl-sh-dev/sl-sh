@@ -478,7 +478,7 @@ fn parse_argval_value_type(
         )
     };
     let inner = quote! {
-        let mut typed_data: crate::types::TypedExpression<#ty> =
+        let mut typed_data: crate::types::TypedExpression<#ty, crate::types::Expression> =
             crate::types::TypedExpression::new(#arg_name);
         let callback = |#arg_name: #fn_ref| -> crate::LispResult<crate::types::Expression> {
             #inner
