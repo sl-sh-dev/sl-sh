@@ -464,8 +464,8 @@ fn parse_argval_value_type(
 ) -> TokenStream {
     let ty = get_type_or_wrapped_type(ty);
     let str = ty.to_token_stream().to_string();
-    // handle &str differently, want impl RustProcedure<F> for TypedExpression<&str>
-    // w/o this special case it generate RustProcedureRef on an unsized TypedExpression<str>
+    // handle &str differently, want impl RustProcedure<F> for TypedWrapper<&str>
+    // w/o this special case it generate RustProcedureRef on an unsized TypedWrapper<str>
     let (fn_ref, passing_style, ty) = if str == "str" && passing_style == ArgPassingStyle::Reference
     {
         let passing_style = ArgPassingStyle::Move;
@@ -478,8 +478,8 @@ fn parse_argval_value_type(
         )
     };
     let inner = quote! {
-        let mut typed_data: crate::types::TypedExpression<#ty, crate::types::Expression> =
-            crate::types::TypedExpression::new(#arg_name);
+        let mut typed_data: crate::types::TypedWrapper<#ty, crate::types::Expression> =
+            crate::types::TypedWrapper::new(#arg_name);
         let callback = |#arg_name: #fn_ref| -> crate::LispResult<crate::types::Expression> {
             #inner
         };
@@ -757,18 +757,18 @@ fn generate_parse_fn(
 /// initialization. For a function of one argument that means the code would look something like:
 /// ```
 /// use sl_sh_proc_macros::sl_sh_fn;
-/// fn builtin_one_int_to_float(arg_0: sl_sh::ArgType) -> sl_sh::LispResult<sl_sh::types::Expression> {
+/// fn builtin_one_int_to_float(arg_0: crate::ArgType) -> crate::LispResult<crate::types::Expression> {
 ///    const _: fn() = || {
 ///        fn assert_impl_all<T: ?Sized + std::convert::Into<crate::Expression>>() {}
 ///        assert_impl_all::<f64>();
 ///    };
 ///    let fn_name = "one-int-to-float";
 ///    match arg_0 {
-///        sl_sh::ArgType::Exp(arg_0) => {
-///            use sl_sh::types::RustProcedure;
-///            let mut typed_data: sl_sh::types::TypedExpression<i64> =
-///                sl_sh::types::TypedExpression::new(arg_0);
-///            let callback = |arg_0: i64| -> sl_sh::LispResult<sl_sh::types::Expression> {
+///        crate::ArgType::Exp(arg_0) => {
+///            use crate::types::RustProcedure;
+///            let mut typed_data: crate::types::TypedWrapper<i64, crate::types::Expression> =
+///                crate::types::TypedWrapper::new(arg_0);
+///            let callback = |arg_0: i64| -> crate::LispResult<crate::types::Expression> {
 ///                one_int_to_float(arg_0).map(Into::into)
 ///            };
 ///            typed_data.apply(fn_name, callback)
@@ -1364,7 +1364,7 @@ mod test {
 // - what about a ToString coercion for ExpEnum::Char/String/Symbol for rust functions that require them
 //  to turn into Strings. somehow need a way to represent a type that can be multiple enums, or a pair,
 //  that's also needed for some functions in builtins_hashmap
-// - would it be possible to embed environment in TypedExpression so it's available at runtime? hash_set
+// - would it be possible to embed environment in TypedWrapper so it's available at runtime? hash_set
 // - attribute to somehow delay evaluation of parameter, e.g. builtin_hash_get
 //  - functions that return optional.
 //  - functions that return Values.
