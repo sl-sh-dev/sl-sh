@@ -191,22 +191,20 @@ impl Chunk {
             }
             DEF => {
                 print!("DEF({:#04x})    \t", DEF);
-                print!("G[");
                 disassemble_operand!(code, true, wide);
-                print!("]");
                 print!("\t");
-                disassemble_operand!(code, true, wide);
-                println!();
+                print!("G[");
+                disassemble_immediate_global!(code, wide, _vm);
+                println!("]");
                 Ok(false)
             }
             DEFV => {
                 print!("DEFV({:#04x})   \t", DEFV);
-                print!("G[");
                 disassemble_operand!(code, true, wide);
-                print!("]");
                 print!("\t");
-                disassemble_operand!(code, true, wide);
-                println!();
+                print!("G[");
+                disassemble_immediate_global!(code, wide, _vm);
+                println!("]");
                 Ok(false)
             }
             REFI => {
@@ -215,8 +213,7 @@ impl Chunk {
                 print!("\t");
                 print!("G[");
                 disassemble_immediate_global!(code, wide, _vm);
-                print!("]");
-                println!();
+                println!("]");
                 Ok(false)
             }
             CLRREG => {

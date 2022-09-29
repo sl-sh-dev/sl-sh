@@ -409,7 +409,7 @@ impl<'vm> Reader<'vm> {
             let nib = char_to_hex_num(&ch)?;
             char_u32 = (char_u32 << 4) | nib as u32;
             if let Some(pch) = self.chars().peek() {
-                if !has_bracket && is_whitespace(&*pch) {
+                if !has_bracket && is_whitespace(pch) {
                     return finish(char_u32);
                 }
             }
@@ -446,26 +446,14 @@ impl<'vm> Reader<'vm> {
                         "t" => symbol.push('\t'),
                         "\"" => symbol.push('"'),
                         "x" => {
-                            let res = self.escape_to_char();
-                            // ? seems to confuse the borrow checker here.
-                            let res = if let Err(e) = res {
-                                return Err(e);
-                            } else {
-                                res.unwrap()
-                            };
+                            let res = self.escape_to_char()?;
                             symbol.push(res);
                         }
                         "\\" => {
                             symbol.push('\\');
                         }
                         "u" => {
-                            let res = self.read_utf_scalar();
-                            // ? seems to confuse the borrow checker here.
-                            let res = if let Err(e) = res {
-                                return Err(e);
-                            } else {
-                                res.unwrap()
-                            };
+                            let res = self.read_utf_scalar()?;
                             symbol.push(res);
                         }
                         _ => {

@@ -234,7 +234,10 @@ impl Heap {
                     *flag = flags | FLAG_MARK;
                     self.objects.push(obj);
                     self.objects.swap_remove(idx);
-                    return Handle { idx };
+                    let handle = Handle { idx };
+                    // Remove any old properties.
+                    self.props.remove(&handle);
+                    return handle;
                 }
             }
             panic!("Failed to allocate to heap- no free objects and no capacity!");
@@ -354,7 +357,7 @@ impl Heap {
 
     pub fn get_string(&self, handle: Handle) -> &str {
         if let Some(Object::String(ptr)) = self.objects.get(handle.idx) {
-            &*ptr
+            ptr
         } else {
             panic!("Handle {} is not a string!", handle.idx);
         }

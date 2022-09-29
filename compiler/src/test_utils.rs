@@ -44,7 +44,7 @@ pub fn exec(env: &mut SloshVm, input: &'static str) -> Value {
         let chunk = Arc::new(state.chunk);
         env.execute(chunk).unwrap();
     }
-    env.stack()[0]
+    env.stack()[0].unref(env)
 }
 
 /// Same as exec() but dump the registers and disassembled bytecode after executing.

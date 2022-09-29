@@ -225,6 +225,39 @@ impl Chunk {
         self.reencode_jump_offset(ip, offset)
     }
 
+    pub fn encode_def(
+        &mut self,
+        reg: u16,
+        global: u32,
+        line_number: Option<u32>,
+        is_defv: bool,
+    ) -> VMResult<()> {
+        let mut bytes: u8 = 4;
+        let mut wide = false;
+        if reg > u8::MAX as u16 || global > u16::MAX as u32 {
+            wide = true;
+            bytes = 7;
+            self.encode_line_number(1, line_number)?;
+            self.code.push(WIDE);
+        }
+
+        self.encode_line_number(bytes, line_number)?;
+        if is_defv {
+            self.code.push(DEFV);
+        } else {
+            self.code.push(DEF);
+        }
+        self.encode_operand(reg, wide);
+        if wide {
+            self.code.push(((global & 0xFF00_0000) >> 24) as u8);
+            self.code.push(((global & 0x00FF_0000) >> 16) as u8);
+        }
+        self.code.push(((global & 0x0000_FF00) >> 8) as u8);
+        self.code.push((global & 0x0000_00FF) as u8);
+
+        Ok(())
+    }
+
     pub fn encode_refi(&mut self, reg: u16, global: u32, line_number: Option<u32>) -> VMResult<()> {
         let mut bytes: u8 = 4;
         let mut wide = false;

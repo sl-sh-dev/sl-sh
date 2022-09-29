@@ -24,13 +24,10 @@ pub(crate) fn compile_def(
                 let key = env.intern("doc-string");
                 env.set_global_property(si_const, key, doc_string);
             }
-            compile(env, state, cdr[1], result + 1)?;
+            compile(env, state, cdr[1], result)?; // + 1)?;
             state
                 .chunk
-                .encode_refi(result as u16, si_const, env.own_line())?;
-            state
-                .chunk
-                .encode2(DEF, result as u16, (result + 1) as u16, env.own_line())?;
+                .encode_def(result as u16, si_const, env.own_line(), false)?;
         }
         _ => return Err(VMError::new_compile("def: malformed")),
     }
@@ -51,13 +48,10 @@ pub(crate) fn compile_set(
                     .chunk
                     .encode2(SET, idx as u16, result as u16, env.own_line())?;
             } else if let Some(si_const) = env.global_intern_slot(si) {
-                compile(env, state, cdr[1], result + 1)?;
+                compile(env, state, cdr[1], result)?;
                 state
                     .chunk
-                    .encode_refi(result as u16, si_const, env.own_line())?;
-                state
-                    .chunk
-                    .encode2(DEF, result as u16, (result + 1) as u16, env.own_line())?;
+                    .encode_def(result as u16, si_const, env.own_line(), false)?;
             } else {
                 let sym = env.get_interned(si);
                 return Err(VMError::new_compile(format!("Symbol {sym} not defined (maybe you need to use 'def {sym}' to pre-declare it).")));

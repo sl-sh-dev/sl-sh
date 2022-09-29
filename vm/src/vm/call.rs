@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::chunk::*;
 use crate::heap::*;
-use crate::{GVm, VMError, VMResult, Value, mov_register};
+use crate::{mov_register, GVm, VMError, VMResult, Value};
 
 /// Vm functions to handle runtime calling of anything callable.
 
@@ -118,11 +118,7 @@ impl<ENV> GVm<ENV> {
                     |e| {
                         if self.err_frame().is_some() {
                             let call_frame = self.alloc_callframe(frame);
-                            mov_register!(
-                                registers,
-                                first_reg as usize,
-                                call_frame
-                            );
+                            mov_register!(registers, first_reg as usize, call_frame);
                             self.stack_top += first_reg as usize;
                         }
                         (e, chunk.clone())
@@ -256,6 +252,17 @@ impl<ENV> GVm<ENV> {
                 self.call_list(lambda, registers, first_reg, num_args)
                     .map_err(|e| (e, chunk.clone()))?;
                 Ok(chunk)
+            }
+            Value::Value(handle) => {
+                // Need to deref.
+                self.make_call(
+                    self.get_value(handle),
+                    chunk,
+                    registers,
+                    first_reg,
+                    num_args,
+                    tail_call,
+                )
             }
             _ => Err((
                 VMError::new_vm(format!("CALL: Not a callable {:?}.", lambda)),

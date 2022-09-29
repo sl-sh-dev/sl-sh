@@ -161,7 +161,7 @@ pub fn debug(env: &mut SloshVm) {
             Some(Ok(Value::Keyword(k))) if k == dasm => {
                 if let Some(Ok(parm)) = exps.next() {
                     if let Ok(stk_idx) = parm.get_int() {
-                        let stk_idx = stk_idx.abs() as usize;
+                        let stk_idx = stk_idx.unsigned_abs() as usize;
                         for (i, frame) in env.get_call_stack().enumerate() {
                             if i + 1 == stk_idx {
                                 if let Err(e) = frame.chunk.disassemble_chunk(env, 0) {
@@ -184,7 +184,7 @@ pub fn debug(env: &mut SloshVm) {
             Some(Ok(Value::Keyword(k))) if k == regs => {
                 if let Some(Ok(parm)) = exps.next() {
                     if let Ok(stk_idx) = parm.get_int() {
-                        let stk_idx = stk_idx.abs() as usize;
+                        let stk_idx = stk_idx.unsigned_abs() as usize;
                         for (i, frame) in env.get_call_stack().enumerate() {
                             if i + 1 == stk_idx {
                                 dump_regs(env, frame);

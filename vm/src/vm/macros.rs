@@ -2,7 +2,6 @@
 #[macro_export]
 macro_rules! get_code {
     ($chunk:expr) => {{
-        println!("XXXX SLOW");
         &$chunk.code[..]
     }};
 }
@@ -11,7 +10,6 @@ macro_rules! get_code {
 #[macro_export]
 macro_rules! get_code {
     ($chunk:expr) => {{
-        println!("XXXX FAST");
         $chunk.code.as_ptr()
     }};
 }
@@ -82,10 +80,10 @@ macro_rules! decode_u32 {
         unsafe {
             let idx1 = *$code.add(*$ip);
             let idx2 = *$code.add(*$ip + 1);
-        let idx3 = *$code.add(*$ip + 2);
-        let idx4 = *$code.add(*$ip + 3);
-        *$ip += 4;
-        ((idx1 as u32) << 24) | ((idx2 as u32) << 16) | ((idx3 as u32) << 8) | (idx4 as u32)
+            let idx3 = *$code.add(*$ip + 2);
+            let idx4 = *$code.add(*$ip + 3);
+            *$ip += 4;
+            ((idx1 as u32) << 24) | ((idx2 as u32) << 16) | ((idx3 as u32) << 8) | (idx4 as u32)
         }
     }};
 }
@@ -176,10 +174,7 @@ macro_rules! decode2 {
 macro_rules! decode2 {
     ($code:expr, $ip:expr, $wide:expr) => {{
         if $wide {
-            (
-                decode_u16!($code, $ip),
-                decode_u16!($code, $ip),
-            )
+            (decode_u16!($code, $ip), decode_u16!($code, $ip))
         } else {
             let oip = *$ip;
             *$ip += 2;
@@ -237,36 +232,21 @@ macro_rules! decode3 {
 #[macro_export]
 macro_rules! get_reg_unref {
     ($regs:expr, $idx:expr, $vm:expr) => {{
-        //$regs[$idx as usize]
-        //$regs[$idx as usize].unref($vm)
         let reg = $regs[$idx as usize];
-        //let reg = unsafe { *$regs.as_ptr().add($idx as usize) };
-        //let reg = unsafe { *$regs.get_unchecked($idx as usize) };
-        //if !reg.is_indirect() {
-        /*if !matches!(reg, Value::Value(_) | Value::Global(_)) {
-            reg
-        } else {*/
-            match &reg {
-                Value::Value(handle) => $vm.heap.get_value(*handle),
-                // $vm.get_value(*handle),
-                //Value::True => reg,
-                Value::Global(idx) => $vm.get_global(*idx),
-                _ => reg,
-            }
-        //}
+        match &reg {
+            Value::Value(handle) => $vm.heap.get_value(*handle),
+            Value::Global(idx) => $vm.get_global(*idx),
+            _ => reg,
+        }
     }};
 }
 
 #[macro_export]
 macro_rules! get_reg_unref_int {
     ($regs:expr, $idx:expr, $vm:expr) => {{
-        //$regs[$idx as usize].unref($vm)
         let reg = $regs[$idx as usize];
-        //let reg = unsafe { *$regs.as_ptr().add($idx as usize) };
-        //let reg = unsafe { *$regs.get_unchecked($idx as usize) };
         match match &reg {
             Value::Value(handle) => $vm.heap.get_value(*handle),
-            // $vm.get_value(*handle),
             Value::Global(idx) => $vm.get_global(*idx),
             _ => reg,
         } {
@@ -279,10 +259,22 @@ macro_rules! get_reg_unref_int {
 }
 
 #[macro_export]
+macro_rules! get_reg_int {
+    ($regs:expr, $idx:expr) => {{
+        let reg = $regs[$idx as usize];
+        match reg {
+            Value::Byte(b) => Ok(b as i64),
+            Value::Int(i) => Ok(i),
+            Value::UInt(i) => Ok(i as i64),
+            _ => Err(VMError::new_value(format!("Not an integer: {:?}", reg))),
+        }
+    }};
+}
+
+#[macro_export]
 macro_rules! get_reg {
     ($regs:expr, $idx:expr) => {{
         $regs[$idx as usize]
-        //unsafe { *$regs.as_ptr().add($idx as usize) }
     }};
 }
 
@@ -294,17 +286,17 @@ macro_rules! compare_int {
         for reg in reg1..reg2 {
             let op1 = get_reg_unref!($registers, reg, $vm);
             let op2 = get_reg_unref!($registers, reg + 1, $vm);
-        val = if matches!(op1, Value::Float(_)) || matches!(op2, Value::Float(_)) {
-            $comp_fn(
-                get_float!(op1).map_err(|e| (e, $chunk.clone()))?,
-                get_float!(op2).map_err(|e| (e, $chunk.clone()))?,
-            )
-        } else {
-            $comp_fn(
-                get_int!(op1).map_err(|e| (e, $chunk.clone()))?,
-                get_int!(op2).map_err(|e| (e, $chunk.clone()))?,
-            )
-        };
+            val = if matches!(op1, Value::Float(_)) || matches!(op2, Value::Float(_)) {
+                $comp_fn(
+                    get_float!(op1).map_err(|e| (e, $chunk.clone()))?,
+                    get_float!(op2).map_err(|e| (e, $chunk.clone()))?,
+                )
+            } else {
+                $comp_fn(
+                    get_int!(op1).map_err(|e| (e, $chunk.clone()))?,
+                    get_int!(op2).map_err(|e| (e, $chunk.clone()))?,
+                )
+            };
             if !val {
                 break;
             }
@@ -353,8 +345,8 @@ macro_rules! get_float {
 macro_rules! binary_math {
     ($vm:expr, $chunk:expr, $code:expr, $ip:expr, $registers:expr, $bin_fn:expr, $wide:expr, $move:expr) => {{
         let (dest, op2, op3) = decode3!($code, $ip, $wide);
-        let op2 = get_reg_unref!($registers, op2, $vm);
-        let op3 = get_reg_unref!($registers, op3, $vm);
+        let op2 = get_reg!($registers, op2);
+        let op3 = get_reg!($registers, op3);
         let val = if matches!(op2, Value::Float(_)) || matches!(op3, Value::Float(_)) {
             Value::Float(F64Wrap($bin_fn(
                 get_float!(op2).map_err(|e| (e, $chunk.clone()))?,
@@ -367,19 +359,9 @@ macro_rules! binary_math {
             ))
         };
         if $move {
-            //GVm::<ENV>::mov_register($registers, dest as usize, val);
-            $registers[dest as usize] = val;
+            mov_register!($registers, dest as usize, val);
         } else {
-            //$vm.set_register($registers, dest as usize, val);
-            match &get_reg!($registers, dest) {
-                Value::Value(handle) => {
-                    *$vm.heap.get_value_mut(*handle) = val;
-                    //*(self.get_value_mut(*handle)) = val;
-                }
-                // Can not set globals since they could be temporarily in any reg...
-                //Value::Global(idx) => self.globals.set(*idx, val),
-                _ => $registers[dest as usize] = val,
-            }
+            set_register!($vm, $registers, dest as usize, val);
         }
     }};
 }
@@ -387,8 +369,8 @@ macro_rules! binary_math {
 macro_rules! div_math {
     ($vm:expr, $chunk:expr, $code:expr, $ip:expr, $registers:expr, $wide:expr, $move:expr) => {{
         let (dest, op2, op3) = decode3!($code, $ip, $wide);
-        let op2 = get_reg_unref!($registers, op2, $vm);
-        let op3 = get_reg_unref!($registers, op3, $vm);
+        let op2 = get_reg!($registers, op2);
+        let op3 = get_reg!($registers, op3);
         let val = if matches!(op2, Value::Float(_)) || matches!(op3, Value::Float(_)) {
             let op3 = get_float!(op3).map_err(|e| (e, $chunk.clone()))?;
             if op3 == 0.0 {
@@ -404,33 +386,13 @@ macro_rules! div_math {
             }
             Value::Int(get_int!(op2).map_err(|e| (e, $chunk.clone()))? / op3)
         };
-        /*if $move {
-            GVm::<ENV>::mov_register($registers, dest as usize, val);
-        } else {
-            $vm.set_register($registers, dest as usize, val);
-        }*/
         if $move {
-            $registers[dest as usize] = val;
+            mov_register!($registers, dest as usize, val);
         } else {
-            match &get_reg!($registers, dest) {
-                Value::Value(handle) => {
-                    *$vm.heap.get_value_mut(*handle) = val;
-                }
-                _ => $registers[dest as usize] = val,
-            }
+            set_register!($vm, $registers, dest as usize, val);
         }
     }};
 }
-
-/*macro_rules! set_register {
-    ($registers:expr, $idx:expr, $val:expr) => {{
-        $registers[$idx as usize] = $val;
-        /*unsafe {
-            let r = $registers.get_unchecked_mut($idx as usize);
-            *r = $val;
-        }*/
-    }};
-}*/
 
 #[macro_export]
 macro_rules! set_register {
@@ -449,6 +411,6 @@ macro_rules! set_register {
 #[macro_export]
 macro_rules! mov_register {
     ($registers:expr, $idx:expr, $val:expr) => {{
-            $registers[$idx] = $val;
+        $registers[$idx] = $val;
     }};
 }

@@ -271,11 +271,7 @@ impl<ENV> GVm<ENV> {
                 mov_register!(registers, cap_first + i, Value::Value(*c));
             }
         }
-        let res = if let Err(e) = self.execute2(chunk) {
-            Err(e)
-        } else {
-            Ok(self.stack[self.stack_top])
-        };
+        let res = self.execute2(chunk).map(|_| self.stack[self.stack_top]);
         self.stack_top = stack_top;
         self.stack_max = stack_max;
         self.ip = ip;
@@ -641,7 +637,7 @@ mod tests {
         chunk.code.clear();
         chunk.encode2(CONST, 0, const3, Some(line))?;
         chunk.encode2(CONST, 1, const2, Some(line))?;
-        chunk.encode2(DEF, 0, 1, Some(line))?;
+        chunk.encode_def(1, slot2, Some(line), false)?;
         chunk.encode_refi(2, slot2, Some(line))?;
         chunk.encode0(RET, Some(line))?;
         let chunk = Arc::new(chunk);
@@ -657,8 +653,8 @@ mod tests {
         chunk.encode2(CONST, 0, const1, Some(line))?;
         chunk.encode2(CONST, 1, const2, Some(line))?;
         chunk.encode2(CONST, 3, const3, Some(line))?;
-        chunk.encode2(DEF, 0, 1, Some(line))?;
-        chunk.encode2(DEFV, 0, 3, Some(line))?;
+        chunk.encode_def(1, slot2, Some(line), false)?;
+        chunk.encode_def(3, slot2, Some(line), true)?;
         chunk.encode_refi(2, slot2, Some(line))?;
         chunk.encode0(RET, Some(line))?;
         let chunk = Arc::new(chunk);
@@ -675,17 +671,17 @@ mod tests {
         chunk.encode2(CONST, 0, const1, Some(line))?;
         chunk.encode2(CONST, 1, const2, Some(line))?;
         chunk.encode2(CONST, 3, const3, Some(line))?;
-        chunk.encode2(DEF, 0, 1, Some(line))?;
-        chunk.encode2(DEFV, 0, 3, Some(line))?;
+        chunk.encode_def(1, slot, Some(line), false)?;
+        chunk.encode_def(3, slot, Some(line), true)?;
         chunk.encode_refi(2, slot, Some(line))?;
         chunk.encode_refi(5, slot, Some(line))?;
         chunk.encode2(SET, 5, 3, Some(line))?;
         chunk.encode0(RET, Some(line))?;
         let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
-        assert!(vm.stack[2].unref(&vm).get_int()? == 53);
+        assert!(vm.stack[2].unref(&vm).get_int()? == 43);
         assert!(vm.stack[5].unref(&vm).get_int()? == 53);
-        assert_eq!(vm.globals.get(slot).get_int()?, 53);
+        assert_eq!(vm.globals.get(slot).get_int()?, 43);
 
         let mut vm = Vm::new();
         let mut chunk = Arc::try_unwrap(chunk).unwrap();
@@ -697,8 +693,8 @@ mod tests {
         chunk.encode2(CONST, 1, const1, Some(line))?;
         chunk.encode2(CONST, 2, const2, Some(line))?;
         chunk.encode2(CONST, 3, const3, Some(line))?;
-        chunk.encode2(DEFV, 1, 2, Some(line))?;
-        chunk.encode2(DEFV, 1, 3, Some(line))?;
+        chunk.encode_def(2, slot, Some(line), true)?;
+        chunk.encode_def(3, slot, Some(line), true)?;
         chunk.encode_refi(0, slot, Some(line))?;
         chunk.encode0(RET, Some(line))?;
         let chunk = Arc::new(chunk);
@@ -715,8 +711,8 @@ mod tests {
         chunk.encode2(CONST, 1, const1, Some(line))?;
         chunk.encode2(CONST, 2, const2, Some(line))?;
         chunk.encode2(CONST, 3, const3, Some(line))?;
-        chunk.encode2(DEFV, 1, 2, Some(line))?;
-        chunk.encode2(DEF, 1, 3, Some(line))?;
+        chunk.encode_def(2, slot, Some(line), true)?;
+        chunk.encode_def(3, slot, Some(line), false)?;
         chunk.encode_refi(0, slot, Some(line))?;
         chunk.encode0(RET, Some(line))?;
         let chunk = Arc::new(chunk);
@@ -733,8 +729,8 @@ mod tests {
         chunk.encode2(CONST, 1, const1, Some(line))?;
         chunk.encode2(CONST, 2, const2, Some(line))?;
         chunk.encode2(CONST, 3, const3, Some(line))?;
-        chunk.encode2(DEFV, 1, 2, Some(line))?;
-        chunk.encode2(DEF, 1, 3, Some(line))?;
+        chunk.encode_def(2, slot, Some(line), true)?;
+        chunk.encode_def(3, slot, Some(line), false)?;
         chunk.encode_refi(0, slot, Some(line))?;
         chunk.encode2(MOV, 5, 0, Some(line))?;
         chunk.encode2(SET, 5, 3, Some(line))?;
@@ -743,6 +739,9 @@ mod tests {
         chunk.encode0(RET, Some(line))?;
         let chunk = Arc::new(chunk);
         vm.execute(chunk)?;
+        assert!(vm.stack[0].unref(&vm).get_int()? == 1);
+        assert!(vm.stack[0].unref(&vm).get_int()? == 1);
+        assert!(vm.stack[0].unref(&vm).get_int()? == 1);
         assert!(vm.stack[0].unref(&vm).get_int()? == 1);
         assert!(vm.stack[5].unref(&vm).get_int()? == 3);
         assert!(vm.globals.get(slot).get_int()? == 1);

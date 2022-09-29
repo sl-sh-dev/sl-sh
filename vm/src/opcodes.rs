@@ -10,8 +10,8 @@ const STACK_BASE: OpCode = 0x04;
 pub const MOV: OpCode = STACK_BASE + 1; // MOV A B - R(A) = R(B) does not respect closed over values
 pub const SET: OpCode = STACK_BASE + 2; // SET A B - R(A) = R(B) respecting local closed over values
 pub const CONST: OpCode = STACK_BASE + 3; // CONST A B - R(A) = K(B)
-pub const DEF: OpCode = STACK_BASE + 4; // DEF A B - G[R(A)] = R(B)
-pub const DEFV: OpCode = STACK_BASE + 5; // DEFV A B - G[R(A)] = R(B) if G[R(A)] is undefined
+pub const DEF: OpCode = STACK_BASE + 4; // DEF A B - G(B) = R(A)
+pub const DEFV: OpCode = STACK_BASE + 5; // DEFV A B - G(B) = R(A) if G(B) is undefined
 pub const REFI: OpCode = STACK_BASE + 6; // REFI A B - R(A) = G[B]
 pub const CLRREG: OpCode = STACK_BASE + 7; // CLRREG A - R(A) = UNDEFINED (ignores a closed over value)
 pub const REGT: OpCode = STACK_BASE + 8; // REGT A - R(A) = TRUE

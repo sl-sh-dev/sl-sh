@@ -1,9 +1,12 @@
-use crate::{decode2, decode3, decode_u16, get_reg_unref, get_reg, set_register, GVm, VMError, VMResult, Value};
+use crate::{
+    decode2, decode3, decode_u16, get_reg, get_reg_unref, set_register, GVm, VMError, VMResult,
+    Value,
+};
 
 #[cfg(not(feature = "nohelmet"))]
 type CodeType<'a> = &'a [u8];
 #[cfg(feature = "nohelmet")]
-type CodeType = * const u8;
+type CodeType = *const u8;
 
 impl<ENV> GVm<ENV> {
     pub(super) fn list(
@@ -131,7 +134,12 @@ impl<ENV> GVm<ENV> {
         Ok(())
     }
 
-    pub(super) fn xar(&mut self, code: CodeType, registers: &mut [Value], wide: bool) -> VMResult<()> {
+    pub(super) fn xar(
+        &mut self,
+        code: CodeType,
+        registers: &mut [Value],
+        wide: bool,
+    ) -> VMResult<()> {
         let (pair_reg, val) = decode2!(code, &mut self.ip, wide);
         let pair = get_reg_unref!(registers, pair_reg, self);
         let val = get_reg_unref!(registers, val, self);
@@ -146,7 +154,12 @@ impl<ENV> GVm<ENV> {
         Ok(())
     }
 
-    pub(super) fn xdr(&mut self, code: CodeType, registers: &mut [Value], wide: bool) -> VMResult<()> {
+    pub(super) fn xdr(
+        &mut self,
+        code: CodeType,
+        registers: &mut [Value],
+        wide: bool,
+    ) -> VMResult<()> {
         let (pair_reg, val) = decode2!(code, &mut self.ip, wide);
         let pair = get_reg_unref!(registers, pair_reg, self);
         let val = get_reg_unref!(registers, val, self);
