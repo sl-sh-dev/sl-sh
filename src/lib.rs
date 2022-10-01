@@ -7,11 +7,7 @@ use quote::__private::TokenStream;
 use syn::__private::{Span, TokenStream2};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
-use syn::{
-    parse, parse_macro_input, AngleBracketedGenericArguments, AttributeArgs, Error, FnArg,
-    GenericArgument, Ident, Item, ItemFn, Lit, Meta, NestedMeta, Path, PathArguments, PathSegment,
-    ReturnType, Type, TypePath, TypeTuple,
-};
+use syn::{parse, parse_macro_input, AngleBracketedGenericArguments, AttributeArgs, Error, FnArg, GenericArgument, Ident, Item, ItemFn, Lit, Meta, NestedMeta, Path, PathArguments, PathSegment, ReturnType, Type, TypePath, TypeTuple, PatType};
 extern crate static_assertions;
 
 type MacroResult<T> = Result<T, Error>;
@@ -829,81 +825,10 @@ fn generate_builtin_fn(
         .iter()
         .skip(skip)
         .zip(arg_names.iter());
-    for (fn_arg, ident) in fn_args {
+    for (fn_arg, arg_name) in fn_args {
         if let FnArg::Typed(ty) = fn_arg {
-            match &*ty.ty {
-                //TODO how to support vec/option of type_tuple?
-                Type::Path(ty) => {
-                    let val = get_arg_val(ty)?;
-                    let parse_layer_1 = get_parser_for_arg_val(val);
-                    let passing_style = ArgPassingStyle::Move;
-                    prev_token_stream = parse_type(
-                        ty,
-                        fn_name_attr,
-                        prev_token_stream.clone(),
-                        val,
-                        ident,
-                        passing_style,
-                        parse_layer_1,
-                    )?;
-                }
-                Type::Reference(ty_ref) => match &*ty_ref.elem {
-                    Type::Path(ty) => {
-                        let val = get_arg_val(ty)?;
-                        let parse_layer_1 = get_parser_for_arg_val(val);
-                        let passing_style = if ty_ref.mutability.is_some() {
-                            ArgPassingStyle::MutReference
-                        } else {
-                            ArgPassingStyle::Reference
-                        };
-                        prev_token_stream = parse_type(
-                            ty,
-                            fn_name_attr,
-                            prev_token_stream.clone(),
-                            val,
-                            ident,
-                            passing_style,
-                            parse_layer_1,
-                        )?;
-                    }
-                    Type::Tuple(type_tuple) => {
-                        let val = ArgVal::Value;
-                        let parse_layer_1 = get_parser_for_arg_val(val);
-                        let passing_style = if ty_ref.mutability.is_some() {
-                            ArgPassingStyle::MutReference
-                        } else {
-                            ArgPassingStyle::Reference
-                        };
-                        parse_type_tuple(
-                            type_tuple,
-                            fn_name_attr,
-                            prev_token_stream.clone(),
-                            val,
-                            ident,
-                            passing_style,
-                            parse_layer_1,
-                        );
-                    }
-                    _ => {}
-                },
-                Type::Tuple(type_tuple) => {
-                    let val = ArgVal::Value;
-                    let parse_layer_1 = get_parser_for_arg_val(val);
-                    let passing_style = ArgPassingStyle::Move;
-                    parse_type_tuple(
-                        type_tuple,
-                        fn_name_attr,
-                        prev_token_stream.clone(),
-                        val,
-                        ident,
-                        passing_style,
-                        parse_layer_1,
-                    );
-                }
-                _ => {
-                    panic!("Found unsupported parameter type, allowed Type, a reference of a Type, a Tuple, or a reference to a Tuple.")
-                }
-            }
+            let ty = &*ty.ty;
+            prev_token_stream = parse_fn_arg_type(ty, fn_name_attr, prev_token_stream, arg_name)?;
         }
     }
     let (return_type, _) = get_return_type(original_item_fn)?;
@@ -923,6 +848,84 @@ fn generate_builtin_fn(
     Ok(tokens)
 }
 
+fn parse_fn_arg_type(ty: &Type, fn_name_attr: &Ident, mut prev_token_stream: TokenStream, arg_name: &Ident) -> MacroResult<TokenStream> {
+    match ty {
+        //TODO how to support vec/option of type_tuple?
+        Type::Path(ty) => {
+            let val = get_arg_val(ty)?;
+            let parse_layer_1 = get_parser_for_arg_val(val);
+            let passing_style = ArgPassingStyle::Move;
+            parse_type(
+                ty,
+                fn_name_attr,
+                prev_token_stream,
+                val,
+                arg_name,
+                passing_style,
+                parse_layer_1,
+            )
+        }
+        Type::Tuple(type_tuple) => {
+            let val = ArgVal::Value;
+            let parse_layer_1 = get_parser_for_arg_val(val);
+            let passing_style = ArgPassingStyle::Move;
+            parse_type_tuple(
+                type_tuple,
+                fn_name_attr,
+                prev_token_stream.clone(),
+                val,
+                arg_name,
+                passing_style,
+                parse_layer_1,
+            )
+        }
+        Type::Reference(ty_ref) => match &*ty_ref.elem {
+            Type::Path(ty) => {
+                let val = get_arg_val(ty)?;
+                let parse_layer_1 = get_parser_for_arg_val(val);
+                let passing_style = if ty_ref.mutability.is_some() {
+                    ArgPassingStyle::MutReference
+                } else {
+                    ArgPassingStyle::Reference
+                };
+                parse_type(
+                    ty,
+                    fn_name_attr,
+                    prev_token_stream.clone(),
+                    val,
+                    arg_name,
+                    passing_style,
+                    parse_layer_1,
+                )
+            }
+            Type::Tuple(type_tuple) => {
+                let val = ArgVal::Value;
+                let parse_layer_1 = get_parser_for_arg_val(val);
+                let passing_style = if ty_ref.mutability.is_some() {
+                    ArgPassingStyle::MutReference
+                } else {
+                    ArgPassingStyle::Reference
+                };
+                parse_type_tuple(
+                    type_tuple,
+                    fn_name_attr,
+                    prev_token_stream.clone(),
+                    val,
+                    arg_name,
+                    passing_style,
+                    parse_layer_1,
+                )
+            }
+            _ => {
+                Err(Error::new(ty.span(), "Support Vec<T>, Option<T>, and T where T is a Type::Path or Type::Tuple and can be moved, passed by reference, or passed by mutable reference (|&|&mut )(Type Path | (Type Path,*))"))
+            }
+        },
+        _ => {
+            Err(Error::new(ty.span(), "Support Vec<T>, Option<T>, and T where T is a Type::Path or Type::Tuple and can be moved, passed by reference, or passed by mutable reference (|&|&mut )(Type Path | (Type Path,*))"))
+        }
+    }
+}
+
 fn parse_type_tuple(
     type_tuple: &TypeTuple,
     fn_name_attr: &Ident,
@@ -931,7 +934,7 @@ fn parse_type_tuple(
     arg_name: &Ident,
     passing_style: ArgPassingStyle,
     outer_parse: fn(&Ident, TokenStream) -> TokenStream,
-) -> TokenStream {
+) -> MacroResult<TokenStream> {
     // TODO once builtins_function inner loop is it's own function,
     // harness it's power to efficiently loop over the types in
     // type_typle.elems.
@@ -955,9 +958,10 @@ fn parse_type_tuple(
     //    }
     //} else {
     //    panic!("Only typles with two elements are supported.");
+    //    Err(Error::new(type_tuple.span(), "Support Vec<T>, Option<T>, and T where T is a Type::Path or Type::Tuple and can be moved, passed by reference, or passed by mutable reference (|&|&mut )(Type Path | (Type Path,*))"))
     //}
     //Ok(outer_parse(arg_name, tokens))
-    quote!{}
+    Ok(quote!{})
 }
 
 /// Optional and Vec types are supported to create the idea of items that might be provided or
