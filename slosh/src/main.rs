@@ -124,19 +124,17 @@ pub fn add_builtin(
     func: CallFuncSig<CompileEnvironment>,
     doc_string: &str,
 ) {
-    if let Value::Global(si) = env.set_global_builtin(name, func) {
-        let key = env.intern("doc-string");
-        let s = env.alloc_string(doc_string.to_string());
-        env.set_global_property(si, key, s);
-    }
+    let si = env.set_global_builtin(name, func);
+    let key = env.intern("doc-string");
+    let s = env.alloc_string(doc_string.to_string());
+    env.set_global_property(si, key, s);
 }
 
 pub fn add_docstring(env: &mut SloshVm, name: &str, doc_string: &str) {
-    if let Value::Global(si) = env.set_named_global(name, Value::Undefined) {
-        let key = env.intern("doc-string");
-        let s = env.alloc_string(doc_string.to_string());
-        env.set_global_property(si, key, s);
-    }
+    let si = env.set_named_global(name, Value::Undefined);
+    let key = env.intern("doc-string");
+    let s = env.alloc_string(doc_string.to_string());
+    env.set_global_property(si, key, s);
 }
 
 pub fn setup_vecs(env: &mut SloshVm) {

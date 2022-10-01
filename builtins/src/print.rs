@@ -91,7 +91,6 @@ pub fn display_value(vm: &SloshVm, val: Value) -> String {
         }
         Value::CharClusterLong(_) => "Char".to_string(), // XXX TODO- move this to Object?
         Value::Builtin(_) => "#<Function>".to_string(),
-        Value::Global(_) => display_value(vm, val.unref(vm)),
         Value::Nil => "nil".to_string(),
         Value::Undefined => "#<Undefined>".to_string(), //panic!("Tried to get type for undefined!"),
         Value::Lambda(_) => "#<Lambda>".to_string(),

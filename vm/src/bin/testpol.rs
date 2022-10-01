@@ -56,37 +56,38 @@ fn main() -> Result<(), VMError> {
     chunk.encode2(CONST, 7, zero, None)?; // j
                                           // loop j .. 100
                                           // (set! mu (/ (+ mu 2.0) 2.0))
-    chunk.encode3(ADD, 4, 4, 8, None)?;
-    chunk.encode3(DIV, 4, 4, 8, None)?;
+    chunk.encode2(ADD, 4, 8, None)?;
+    chunk.encode2(DIV, 4, 8, None)?;
     // (vec-set! pol j mu)))
     chunk.encode3(VECSTH, 10, 4, 7, None)?;
 
     chunk.encode2(INC, 7, 1, None)?;
     chunk.encode2(JMPLT, 7, 100, None)?;
-    chunk.encode_jump_offset(-21)?;
+    chunk.encode_jump_offset(-19)?;
 
     chunk.encode2(CONST, 7, zero, None)?; // j
                                           // (dotimes-i j 100 (j2)
                                           //   (set! su (+ (vec-nth pol j) (* su x))))
-    chunk.encode3(MUL, 50, 3, 2, None)?;
+    chunk.encode2(MUL, 3, 2, None)?;
     chunk.encode3(VECNTH, 10, 51, 7, None)?;
-    chunk.encode3(ADD, 3, 50, 51, None)?;
+    chunk.encode2(ADD, 3, 51, None)?;
 
     chunk.encode2(INC, 7, 1, None)?;
     chunk.encode2(JMPLT, 7, 100, None)?;
-    chunk.encode_jump_offset(-21)?;
+    chunk.encode_jump_offset(-19)?;
     // (set! pu (+ pu su))))
-    chunk.encode3(ADD, 5, 5, 3, None)?;
+    chunk.encode2(ADD, 5, 3, None)?;
 
     chunk.encode2(INC, 6, 1, None)?;
     chunk.encode2(JMPLT, 6, 1, None)?;
-    chunk.encode_jump_offset(-64)?;
+    chunk.encode_jump_offset(-59)?;
 
     chunk.encode0(RET, None)?;
 
     //chunk.disassemble_chunk(&vm, 1)?;
     //assert!(false);
 
+    //chunk.disassemble_chunk(&vm, 0);
     let chunk = Arc::new(chunk);
     vm.execute(chunk)?;
     let result = vm.get_stack(5).get_float()?;

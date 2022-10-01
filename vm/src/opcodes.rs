@@ -92,47 +92,39 @@ pub const JMPRNU: OpCode = FLOW_BASE + 23;
 
 // Basic math
 const MATH_BASE: OpCode = FLOW_BASE + 24;
-// ADD A B C - set R(A) = R(B) + R(C)
+// ADD A B - set R(A) = R(A) + R(B)
 pub const ADD: OpCode = MATH_BASE;
-// SUB A B C - set R(A) = R(B) - R(C)
+// SUB A B - set R(A) = R(A) - R(B)
 pub const SUB: OpCode = MATH_BASE + 1;
-// MUL A B C - set R(A) = R(B) * R(C)
+// MUL A B - set R(A) = R(A) * R(B)
 pub const MUL: OpCode = MATH_BASE + 2;
-// DIV A B C - set R(A) = R(B) / R(C)
+// DIV A B - set R(A) = R(A) / R(B)
 pub const DIV: OpCode = MATH_BASE + 3;
 // INC A B - Increment the integer in R(A) by B
 pub const INC: OpCode = MATH_BASE + 4;
 // DEC A B - Decrement the integer in R(A) by B
 pub const DEC: OpCode = MATH_BASE + 5;
-// ADDM A B C - mov R(A) = R(B) + R(C)
-pub const ADDM: OpCode = MATH_BASE + 6;
-// SUBM A B C - mov R(A) = R(B) - R(C)
-pub const SUBM: OpCode = MATH_BASE + 7;
-// MULM A B C - mov R(A) = R(B) * R(C)
-pub const MULM: OpCode = MATH_BASE + 8;
-// DIVM A B C - mov R(A) = R(B) / R(C)
-pub const DIVM: OpCode = MATH_BASE + 9;
 // NUMEQ A B C - compare (=) in register B (inclusive) to C (inclusive) and set R[A] to the
 // result.
-pub const NUMEQ: OpCode = MATH_BASE + 10;
+pub const NUMEQ: OpCode = MATH_BASE + 6;
 // NUMNEQ A B C - compare (!=) in register B (inclusive) to C (inclusive) and set R[A] to the
 // result.
-pub const NUMNEQ: OpCode = MATH_BASE + 11;
+pub const NUMNEQ: OpCode = MATH_BASE + 7;
 // NUMLT A B C - compare (<) in register B (inclusive) to C (inclusive) and set R[A] to the
 // result.
-pub const NUMLT: OpCode = MATH_BASE + 12;
+pub const NUMLT: OpCode = MATH_BASE + 8;
 // NUMGT A B C - compare (>) in register B (inclusive) to C (inclusive) and set R[A] to the
 // result.
-pub const NUMGT: OpCode = MATH_BASE + 13;
+pub const NUMGT: OpCode = MATH_BASE + 9;
 // NUMLTE A B C - compare (<=) in register B (inclusive) to C (inclusive) and set R[A] to the
 // result.
-pub const NUMLTE: OpCode = MATH_BASE + 14;
+pub const NUMLTE: OpCode = MATH_BASE + 10;
 // NUMGTE A B C - compare (>=) in register B (inclusive) to C (inclusive) and set R[A] to the
 // result.
-pub const NUMGTE: OpCode = MATH_BASE + 15;
+pub const NUMGTE: OpCode = MATH_BASE + 11;
 
 // Cons cells
-const CONS_BASE: OpCode = MATH_BASE + 16;
+const CONS_BASE: OpCode = MATH_BASE + 12;
 pub const CONS: OpCode = CONS_BASE; // CONS A B C - R(A) = conscell(R(B), R(C))
 pub const CAR: OpCode = CONS_BASE + 1; // CAR A B - R(A) = car(R(B))
 pub const CDR: OpCode = CONS_BASE + 2; // CDR A B - R(A) = cdr(R(B))

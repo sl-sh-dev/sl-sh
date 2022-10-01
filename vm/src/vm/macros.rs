@@ -235,7 +235,6 @@ macro_rules! get_reg_unref {
         let reg = $regs[$idx as usize];
         match &reg {
             Value::Value(handle) => $vm.heap.get_value(*handle),
-            Value::Global(idx) => $vm.get_global(*idx),
             _ => reg,
         }
     }};
@@ -247,7 +246,6 @@ macro_rules! get_reg_unref_int {
         let reg = $regs[$idx as usize];
         match match &reg {
             Value::Value(handle) => $vm.heap.get_value(*handle),
-            Value::Global(idx) => $vm.get_global(*idx),
             _ => reg,
         } {
             Value::Byte(b) => Ok(b as i64),
@@ -343,54 +341,46 @@ macro_rules! get_float {
 }
 
 macro_rules! binary_math {
-    ($vm:expr, $chunk:expr, $code:expr, $ip:expr, $registers:expr, $bin_fn:expr, $wide:expr, $move:expr) => {{
-        let (dest, op2, op3) = decode3!($code, $ip, $wide);
+    ($chunk:expr, $code:expr, $ip:expr, $registers:expr, $bin_fn:expr, $wide:expr) => {{
+        let (dest, op2) = decode2!($code, $ip, $wide);
+        let op1 = get_reg!($registers, dest);
         let op2 = get_reg!($registers, op2);
-        let op3 = get_reg!($registers, op3);
-        let val = if matches!(op2, Value::Float(_)) || matches!(op3, Value::Float(_)) {
+        let val = if matches!(op1, Value::Float(_)) || matches!(op2, Value::Float(_)) {
             Value::Float(F64Wrap($bin_fn(
+                get_float!(op1).map_err(|e| (e, $chunk.clone()))?,
                 get_float!(op2).map_err(|e| (e, $chunk.clone()))?,
-                get_float!(op3).map_err(|e| (e, $chunk.clone()))?,
             )))
         } else {
             Value::Int($bin_fn(
+                get_int!(op1).map_err(|e| (e, $chunk.clone()))?,
                 get_int!(op2).map_err(|e| (e, $chunk.clone()))?,
-                get_int!(op3).map_err(|e| (e, $chunk.clone()))?,
             ))
         };
-        if $move {
-            mov_register!($registers, dest as usize, val);
-        } else {
-            set_register!($vm, $registers, dest as usize, val);
-        }
+        mov_register!($registers, dest as usize, val);
     }};
 }
 
 macro_rules! div_math {
-    ($vm:expr, $chunk:expr, $code:expr, $ip:expr, $registers:expr, $wide:expr, $move:expr) => {{
-        let (dest, op2, op3) = decode3!($code, $ip, $wide);
+    ($chunk:expr, $code:expr, $ip:expr, $registers:expr, $wide:expr) => {{
+        let (dest, op2) = decode2!($code, $ip, $wide);
+        let op1 = get_reg!($registers, dest);
         let op2 = get_reg!($registers, op2);
-        let op3 = get_reg!($registers, op3);
-        let val = if matches!(op2, Value::Float(_)) || matches!(op3, Value::Float(_)) {
-            let op3 = get_float!(op3).map_err(|e| (e, $chunk.clone()))?;
-            if op3 == 0.0 {
+        let val = if matches!(op1, Value::Float(_)) || matches!(op2, Value::Float(_)) {
+            let op2 = get_float!(op2).map_err(|e| (e, $chunk.clone()))?;
+            if op2 == 0.0 {
                 return Err((VMError::new_vm("Divide by zero error."), $chunk));
             }
             Value::Float(F64Wrap(
-                get_float!(op2).map_err(|e| (e, $chunk.clone()))? / op3,
+                get_float!(op1).map_err(|e| (e, $chunk.clone()))? / op2,
             ))
         } else {
-            let op3 = get_int!(op3).map_err(|e| (e, $chunk.clone()))?;
-            if op3 == 0 {
+            let op2 = get_int!(op2).map_err(|e| (e, $chunk.clone()))?;
+            if op2 == 0 {
                 return Err((VMError::new_vm("Divide by zero error."), $chunk));
             }
-            Value::Int(get_int!(op2).map_err(|e| (e, $chunk.clone()))? / op3)
+            Value::Int(get_int!(op1).map_err(|e| (e, $chunk.clone()))? / op2)
         };
-        if $move {
-            mov_register!($registers, dest as usize, val);
-        } else {
-            set_register!($vm, $registers, dest as usize, val);
-        }
+        mov_register!($registers, dest as usize, val);
     }};
 }
 
@@ -401,8 +391,6 @@ macro_rules! set_register {
             Value::Value(handle) => {
                 *($vm.heap.get_value_mut(*handle)) = $val;
             }
-            // Can not set globals since they could be temporarily in any reg...
-            //Value::Global(idx) => self.globals.set(*idx, val),
             _ => $registers[$idx] = $val,
         }
     }};

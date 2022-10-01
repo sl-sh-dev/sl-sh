@@ -364,8 +364,8 @@ pub trait SloshVmTrait {
     fn set_line(&mut self, state: &mut CompileState, handle: Handle);
     fn set_line_val(&mut self, state: &mut CompileState, val: Value);
     fn get_reserve_global(&mut self, symbol: Interned) -> u32;
-    fn set_named_global(&mut self, string: &str, value: Value) -> Value;
-    fn set_global_builtin(&mut self, string: &str, func: CallFuncSig<CompileEnvironment>) -> Value;
+    fn set_named_global(&mut self, string: &str, value: Value) -> u32;
+    fn set_global_builtin(&mut self, string: &str, func: CallFuncSig<CompileEnvironment>) -> u32;
     fn dump_globals(&self);
     fn own_line(&self) -> Option<u32>;
     fn line_num(&self) -> u32;
@@ -409,7 +409,7 @@ impl SloshVmTrait for SloshVm {
     }
 
     fn get_reserve_global(&mut self, symbol: Interned) -> u32 {
-        if let Some(idx) = self.env_mut().global_map.get(&symbol) {
+        if let Some(idx) = self.env().global_map.get(&symbol) {
             *idx as u32
         } else {
             let idx = self.reserve_global();
@@ -418,14 +418,14 @@ impl SloshVmTrait for SloshVm {
         }
     }
 
-    fn set_named_global(&mut self, string: &str, value: Value) -> Value {
+    fn set_named_global(&mut self, string: &str, value: Value) -> u32 {
         let sym = self.intern(string);
         let slot = self.get_reserve_global(sym);
         self.set_global(slot, value);
-        Value::Global(slot)
+        slot
     }
 
-    fn set_global_builtin(&mut self, string: &str, func: CallFuncSig<CompileEnvironment>) -> Value {
+    fn set_global_builtin(&mut self, string: &str, func: CallFuncSig<CompileEnvironment>) -> u32 {
         let f_val = self.add_builtin(func);
         self.set_named_global(string, f_val)
     }

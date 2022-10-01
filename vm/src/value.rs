@@ -114,7 +114,6 @@ pub enum Value {
     Symbol(Interned),
     Keyword(Interned),
     StringConst(Interned),
-    Global(u32),
     Builtin(u32),
     True,
     False,
@@ -149,17 +148,10 @@ impl Value {
         Value::Float(F64Wrap(f))
     }
 
-    // This is used a LOT in a tight loop and this inline seems to help.
     #[inline(always)]
     pub fn unref<ENV>(self, vm: &GVm<ENV>) -> Value {
-        // This is pointless from a logic standpoint but it makes the vm loop
-        // faster...
-        if !self.is_indirect() {
-            return self;
-        }
         match &self {
             Value::Value(handle) => vm.get_value(*handle),
-            Value::Global(idx) => vm.get_global(*idx),
             _ => self,
         }
     }
@@ -181,7 +173,7 @@ impl Value {
     }
 
     pub fn is_indirect(&self) -> bool {
-        matches!(self, Value::Value(_) | Value::Global(_))
+        matches!(self, Value::Value(_))
     }
 
     pub fn is_nil(&self) -> bool {
@@ -271,7 +263,6 @@ impl Value {
             Value::Symbol(_) => None,
             Value::Keyword(_) => None,
             Value::StringConst(_) => None,
-            Value::Global(_) => None,
             Value::Builtin(_) => None,
             Value::True => None,
             Value::False => None,
@@ -374,7 +365,6 @@ impl Value {
             }
             Value::CharClusterLong(h) => format!("\\{}", vm.get_string(*h)),
             Value::Builtin(_) => "#<Function>".to_string(),
-            Value::Global(_) => self.unref(vm).display_value(vm),
             Value::Nil => "nil".to_string(),
             Value::Undefined => "#<Undefined>".to_string(), //panic!("Tried to get type for undefined!"),
             Value::Lambda(_) => "#<Lambda>".to_string(),
@@ -451,7 +441,6 @@ impl Value {
             Value::CharClusterLong(_) => "Char",
             Value::Builtin(_) => "Builtin",
             Value::Byte(_) => "Byte",
-            Value::Global(_) => self.unref(vm).display_type(vm),
             Value::Nil => "Nil",
             Value::Undefined => "Undefined", //panic!("Tried to get type for undefined!"),
             Value::Lambda(_) => "Lambda",

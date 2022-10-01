@@ -117,9 +117,8 @@ pub(crate) fn compile_math(
                 for (i, v) in cdr.iter().enumerate() {
                     if i > 0 {
                         compile(env, state, *v, result + 1)?;
-                        state.chunk.encode3(
-                            ADDM,
-                            result as u16,
+                        state.chunk.encode2(
+                            ADD,
                             result as u16,
                             (result + 1) as u16,
                             env.own_line(),
@@ -145,9 +144,8 @@ pub(crate) fn compile_math(
                 for (i, v) in cdr.iter().enumerate() {
                     if i > 0 {
                         compile(env, state, *v, result + 1)?;
-                        state.chunk.encode3(
-                            SUBM,
-                            result as u16,
+                        state.chunk.encode2(
+                            SUB,
                             result as u16,
                             (result + 1) as u16,
                             env.own_line(),
@@ -167,9 +165,8 @@ pub(crate) fn compile_math(
                 for (i, v) in cdr.iter().enumerate() {
                     if i > 0 {
                         compile(env, state, *v, result + 1)?;
-                        state.chunk.encode3(
-                            MULM,
-                            result as u16,
+                        state.chunk.encode2(
+                            MUL,
                             result as u16,
                             (result + 1) as u16,
                             env.own_line(),
@@ -189,9 +186,8 @@ pub(crate) fn compile_math(
                 for (i, v) in cdr.iter().enumerate() {
                     if i > 0 {
                         compile(env, state, *v, result + 1)?;
-                        state.chunk.encode3(
-                            DIVM,
-                            result as u16,
+                        state.chunk.encode2(
+                            DIV,
                             result as u16,
                             (result + 1) as u16,
                             env.own_line(),

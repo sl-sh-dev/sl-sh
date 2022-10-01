@@ -85,9 +85,8 @@ impl<ENV> GVm<ENV> {
         self.interner.get_if_interned(string)
     }
 
-    pub fn set_global(&mut self, slot: u32, value: Value) -> Value {
+    pub fn set_global(&mut self, slot: u32, value: Value) {
         self.globals.set(slot, value);
-        Value::Global(slot)
     }
 
     pub fn reserve_global(&mut self) -> u32 {

@@ -297,7 +297,6 @@ impl<ENV> GVm<ENV> {
                         Value::Value(handle) => {
                             *(self.get_value_mut(*handle)) = val;
                         }
-                        Value::Global(dest) => self.globals.set(*dest, val),
                         _ => registers[dest as usize] = val,
                     }
                 }
@@ -713,68 +712,10 @@ impl<ENV> GVm<ENV> {
                         self.on_error = Some(on_error);
                     }
                 }
-                ADD => binary_math!(
-                    self,
-                    chunk,
-                    code,
-                    &mut self.ip,
-                    registers,
-                    |a, b| a + b,
-                    wide,
-                    false
-                ),
-                SUB => binary_math!(
-                    self,
-                    chunk,
-                    code,
-                    &mut self.ip,
-                    registers,
-                    |a, b| a - b,
-                    wide,
-                    false
-                ),
-                MUL => binary_math!(
-                    self,
-                    chunk,
-                    code,
-                    &mut self.ip,
-                    registers,
-                    |a, b| a * b,
-                    wide,
-                    false
-                ),
-                DIV => div_math!(self, chunk, code, &mut self.ip, registers, wide, false),
-                ADDM => binary_math!(
-                    self,
-                    chunk,
-                    code,
-                    &mut self.ip,
-                    registers,
-                    |a, b| a + b,
-                    wide,
-                    true
-                ),
-                SUBM => binary_math!(
-                    self,
-                    chunk,
-                    code,
-                    &mut self.ip,
-                    registers,
-                    |a, b| a - b,
-                    wide,
-                    true
-                ),
-                MULM => binary_math!(
-                    self,
-                    chunk,
-                    code,
-                    &mut self.ip,
-                    registers,
-                    |a, b| a * b,
-                    wide,
-                    true
-                ),
-                DIVM => div_math!(self, chunk, code, &mut self.ip, registers, wide, true),
+                ADD => binary_math!(chunk, code, &mut self.ip, registers, |a, b| a + b, wide),
+                SUB => binary_math!(chunk, code, &mut self.ip, registers, |a, b| a - b, wide),
+                MUL => binary_math!(chunk, code, &mut self.ip, registers, |a, b| a * b, wide),
+                DIV => div_math!(chunk, code, &mut self.ip, registers, wide),
                 NUMEQ => compare_int!(
                     self,
                     chunk,
@@ -855,15 +796,8 @@ impl<ENV> GVm<ENV> {
                             ))
                         }
                     };
-                    match &get_reg!(registers, dest) {
-                        Value::Value(handle) => {
-                            //*(self.get_value_mut(*handle)) = val;
-                            *self.heap.get_value_mut(*handle) = val;
-                        }
-                        // Can not set globals since they could be temporarily in any reg...
-                        //Value::Global(idx) => self.globals.set(*idx, val),
-                        _ => registers[dest as usize] = val,
-                    }
+                    set_register!(self, registers, dest as usize, val);
+                    //mov_register!(registers, dest as usize, val);
                 }
                 DEC => {
                     let (dest, i) = decode2!(code, &mut self.ip, wide);
@@ -1049,9 +983,7 @@ impl<ENV> GVm<ENV> {
                 }
                 VECSTH => {
                     let (vc, src, i) = decode3!(code, &mut self.ip, wide);
-                    let i = get_reg!(registers, i)
-                        .get_int()
-                        .map_err(|e| (e, chunk.clone()))? as usize;
+                    let i = get_reg_int!(registers, i).map_err(|e| (e, chunk.clone()))? as usize;
                     let val = get_reg!(registers, src);
                     if let Value::Vector(h) = get_reg!(registers, vc) {
                         let v = self

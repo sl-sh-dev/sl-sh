@@ -539,15 +539,11 @@ impl Chunk {
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_operand!(code, true, wide);
-                print!("\t");
-                disassemble_operand!(code, true, wide);
                 println!();
                 Ok(false)
             }
             SUB => {
                 print!("SUB    \t");
-                disassemble_operand!(code, true, wide);
-                print!("\t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_operand!(code, true, wide);
@@ -559,55 +555,11 @@ impl Chunk {
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_operand!(code, true, wide);
-                print!("\t");
-                disassemble_operand!(code, true, wide);
                 println!();
                 Ok(false)
             }
             DIV => {
                 print!("DIV    \t");
-                disassemble_operand!(code, true, wide);
-                print!("\t");
-                disassemble_operand!(code, true, wide);
-                print!("\t");
-                disassemble_operand!(code, true, wide);
-                println!();
-                Ok(false)
-            }
-            ADDM => {
-                print!("ADDM   \t");
-                disassemble_operand!(code, true, wide);
-                print!("\t");
-                disassemble_operand!(code, true, wide);
-                print!("\t");
-                disassemble_operand!(code, true, wide);
-                println!();
-                Ok(false)
-            }
-            SUBM => {
-                print!("SUBM   \t");
-                disassemble_operand!(code, true, wide);
-                print!("\t");
-                disassemble_operand!(code, true, wide);
-                print!("\t");
-                disassemble_operand!(code, true, wide);
-                println!();
-                Ok(false)
-            }
-            MULM => {
-                print!("MULM   \t");
-                disassemble_operand!(code, true, wide);
-                print!("\t");
-                disassemble_operand!(code, true, wide);
-                print!("\t");
-                disassemble_operand!(code, true, wide);
-                println!();
-                Ok(false)
-            }
-            DIVM => {
-                print!("DIVM   \t");
-                disassemble_operand!(code, true, wide);
-                print!("\t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_operand!(code, true, wide);
