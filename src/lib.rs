@@ -1,3 +1,4 @@
+use either::Either;
 //TODO why am I using these __private versions, is it
 // just to skip out on some annoying .into()'s on TokenStream2
 use quote::quote;
@@ -9,7 +10,7 @@ use syn::spanned::Spanned;
 use syn::{
     parse, parse_macro_input, AngleBracketedGenericArguments, AttributeArgs, Error, FnArg,
     GenericArgument, Ident, Item, ItemFn, Lit, Meta, NestedMeta, Path, PathArguments, PathSegment,
-    ReturnType, Type, TypePath,
+    ReturnType, Type, TypePath, TypeTuple,
 };
 extern crate static_assertions;
 
@@ -385,17 +386,24 @@ fn parse_argval_varargs_type(
     inner: TokenStream,
 ) -> TokenStream {
     let wrapped_ty = get_type_or_wrapped_type(ty);
-    quote! {{
-        use crate::builtins_util::TryIntoExpression;
-        static_assertions::assert_impl_all!(crate::types::Expression: crate::builtins_util::TryIntoExpression<#wrapped_ty>);
-        let #arg_name = #arg_name
-            .iter()
-            .map(|#arg_name| {
-                #arg_name.clone().try_into_for(#fn_name_attr)
-            })
-            .collect::<crate::LispResult<#ty>>()?;
-        #inner
-    }}
+    match wrapped_ty {
+        Either::Left(wrapped_ty) => {
+            quote! {{
+                use crate::builtins_util::TryIntoExpression;
+                static_assertions::assert_impl_all!(crate::types::Expression: crate::builtins_util::TryIntoExpression<#wrapped_ty>);
+                let #arg_name = #arg_name
+                    .iter()
+                    .map(|#arg_name| {
+                        #arg_name.clone().try_into_for(#fn_name_attr)
+                    })
+                    .collect::<crate::LispResult<#ty>>()?;
+                #inner
+            }}
+        }
+        Either::Right(type_tuple) => {
+            quote! {}
+        }
+    }
 }
 
 /// for Option<Expression> values the ref_exp must first be parsed as an
@@ -437,19 +445,22 @@ fn parse_argval_optional_type(
 /// confusing wrapper types can be made, i.e. SlshVarArgs,
 /// so normal rust Vec could be used without being turned into
 /// a SlshVarArgs
-fn get_type_or_wrapped_type(ty: &TypePath) -> &TypePath {
+/// TODO
+///     we need to allow for TypeTuple here.
+fn get_type_or_wrapped_type(ty: &TypePath) -> Either<&TypePath, &TypeTuple> {
     let orig_ty = ty;
     if let Some((ty, type_path)) = get_generic_argument_from_type_path(ty) {
         let wrapper = opt_is_valid_generic_type(type_path, POSSIBLE_ARG_TYPES.as_slice());
         match (ty, wrapper) {
             (GenericArgument::Type(ty), Some(_)) => match ty {
-                Type::Path(path) => path,
-                _ => orig_ty,
+                Type::Path(path) => Either::Left(path),
+                Type::Tuple(type_tuple) => Either::Right(type_tuple),
+                _ => Either::Left(orig_ty),
             },
-            (_, _) => orig_ty,
+            (_, _) => Either::Left(orig_ty),
         }
     } else {
-        ty
+        Either::Left(ty)
     }
 }
 
@@ -463,43 +474,50 @@ fn parse_argval_value_type(
     inner: TokenStream,
 ) -> TokenStream {
     let ty = get_type_or_wrapped_type(ty);
-    let str = ty.to_token_stream().to_string();
-    // handle &str differently, want impl RustProcedure<F> for TypedWrapper<&str>
-    // w/o this special case it generate RustProcedureRef on an unsized TypedWrapper<str>
-    let (fn_ref, passing_style, ty) = if str == "str" && passing_style == ArgPassingStyle::Reference
-    {
-        let passing_style = ArgPassingStyle::Move;
-        (quote! { &#ty }, passing_style, quote! { &#ty })
-    } else {
-        (
-            tokens_for_matching_references(passing_style, ty),
-            passing_style,
-            quote! { #ty },
-        )
-    };
-    let inner = quote! {
-        let mut typed_data: crate::types::TypedWrapper<#ty, crate::types::Expression> =
-            crate::types::TypedWrapper::new(#arg_name);
-        let callback = |#arg_name: #fn_ref| -> crate::LispResult<crate::types::Expression> {
-            #inner
-        };
-    };
+    match ty {
+        Either::Left(ty) => {
+            let str = ty.to_token_stream().to_string();
+            // handle &str differently, want impl RustProcedure<F> for TypedWrapper<&str>
+            // w/o this special case it generate RustProcedureRef on an unsized TypedWrapper<str>
+            let (fn_ref, passing_style, ty) = if str == "str" && passing_style == ArgPassingStyle::Reference
+            {
+                let passing_style = ArgPassingStyle::Move;
+                (quote! { &#ty }, passing_style, quote! { &#ty })
+            } else {
+                (
+                    tokens_for_matching_references(passing_style, ty),
+                    passing_style,
+                    quote! { #ty },
+                )
+            };
+            let inner = quote! {
+                let mut typed_data: crate::types::TypedWrapper<#ty, crate::types::Expression> =
+                    crate::types::TypedWrapper::new(#arg_name);
+                let callback = |#arg_name: #fn_ref| -> crate::LispResult<crate::types::Expression> {
+                    #inner
+                };
+            };
 
-    match passing_style {
-        ArgPassingStyle::Move => {
-            quote! {{
+            match passing_style {
+                ArgPassingStyle::Move => {
+                    quote! {{
                 use crate::types::RustProcedure;
                 #inner
                 typed_data.apply(#fn_name_attr, callback)
             }}
-        }
-        _ => {
-            // some reference
-            quote! {{
+                }
+                _ => {
+                    // some reference
+                    quote! {{
                 use crate::types::RustProcedureRef;
                 #inner
                 typed_data.apply_ref_mut(#fn_name_attr, callback)
             }}
+                }
+            }
+        }
+        Either::Right(type_tuple) => {
+            quote! {}
         }
     }
 }
@@ -814,6 +832,7 @@ fn generate_builtin_fn(
     for (fn_arg, ident) in fn_args {
         if let FnArg::Typed(ty) = fn_arg {
             match &*ty.ty {
+                //TODO how to support vec/option of type_tuple?
                 Type::Path(ty) => {
                     let val = get_arg_val(ty)?;
                     let parse_layer_1 = get_parser_for_arg_val(val);
@@ -828,8 +847,8 @@ fn generate_builtin_fn(
                         parse_layer_1,
                     )?;
                 }
-                Type::Reference(ty_ref) => {
-                    if let Type::Path(ty) = &*ty_ref.elem {
+                Type::Reference(ty_ref) => match &*ty_ref.elem {
+                    Type::Path(ty) => {
                         let val = get_arg_val(ty)?;
                         let parse_layer_1 = get_parser_for_arg_val(val);
                         let passing_style = if ty_ref.mutability.is_some() {
@@ -847,8 +866,43 @@ fn generate_builtin_fn(
                             parse_layer_1,
                         )?;
                     }
+                    Type::Tuple(type_tuple) => {
+                        let val = ArgVal::Value;
+                        let parse_layer_1 = get_parser_for_arg_val(val);
+                        let passing_style = if ty_ref.mutability.is_some() {
+                            ArgPassingStyle::MutReference
+                        } else {
+                            ArgPassingStyle::Reference
+                        };
+                        parse_type_tuple(
+                            type_tuple,
+                            fn_name_attr,
+                            prev_token_stream.clone(),
+                            val,
+                            ident,
+                            passing_style,
+                            parse_layer_1,
+                        );
+                    }
+                    _ => {}
+                },
+                Type::Tuple(type_tuple) => {
+                    let val = ArgVal::Value;
+                    let parse_layer_1 = get_parser_for_arg_val(val);
+                    let passing_style = ArgPassingStyle::Move;
+                    parse_type_tuple(
+                        type_tuple,
+                        fn_name_attr,
+                        prev_token_stream.clone(),
+                        val,
+                        ident,
+                        passing_style,
+                        parse_layer_1,
+                    );
                 }
-                _ => {}
+                _ => {
+                    panic!("Found unsupported parameter type, allowed Type, a reference of a Type, a Tuple, or a reference to a Tuple.")
+                }
             }
         }
     }
@@ -867,6 +921,43 @@ fn generate_builtin_fn(
         }
     };
     Ok(tokens)
+}
+
+fn parse_type_tuple(
+    type_tuple: &TypeTuple,
+    fn_name_attr: &Ident,
+    inner: TokenStream,
+    val: ArgVal,
+    arg_name: &Ident,
+    passing_style: ArgPassingStyle,
+    outer_parse: fn(&Ident, TokenStream) -> TokenStream,
+) -> TokenStream {
+    // TODO once builtins_function inner loop is it's own function,
+    // harness it's power to efficiently loop over the types in
+    // type_typle.elems.
+    //if &type_tuple.elems.len() != 2 {
+    //    for ty in &type_tuple.elems {
+    //        match ty {
+    //            Type::Path(type_path) => {
+    //                
+    //            }
+    //            Type::Reference(ty_ref) => {
+    //                
+    //            }
+    //        }
+    //        let tokens = match val {
+    //            ArgVal::Value => parse_argval_value_type(ty, fn_name_attr, arg_name, passing_style, inner),
+    //            ArgVal::Optional => {
+    //                parse_argval_optional_type(ty, fn_name_attr, arg_name, passing_style, inner)
+    //            }
+    //            ArgVal::Vec => parse_argval_varargs_type(ty, fn_name_attr, arg_name, inner),
+    //        };
+    //    }
+    //} else {
+    //    panic!("Only typles with two elements are supported.");
+    //}
+    //Ok(outer_parse(arg_name, tokens))
+    quote!{}
 }
 
 /// Optional and Vec types are supported to create the idea of items that might be provided or
@@ -909,7 +1000,7 @@ fn are_args_valid(original_item_fn: &ItemFn, args: &[Arg], takes_env: bool) -> M
 
 /// Create a Vec<Arg> from the original fn's signature. Information is needed at compile and
 /// run time to translate the list of sl_sh expressions to rust native types. This Arg types
-/// stores the type information of the rust native type as well as whether it's moved, passed
+/// stores the information about the rust native type (Value/Option/Var) as well as whether it's moved, passed
 /// by reference, or passed by mutable reference.
 fn parse_src_function_arguments(
     original_item_fn: &ItemFn,
@@ -967,6 +1058,9 @@ fn parse_src_function_arguments(
                             ))
                         }
                     }
+                }
+                Type::Tuple(type_tuple) => {
+                    
                 }
                 _ => {
                     return Err(Error::new(

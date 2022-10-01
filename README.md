@@ -17,6 +17,8 @@ must implement the traits Into, TryInto, and TryIntoExpression traits defined
 in the sl-sh crate.
 
 - All rust functions that use these macros *must* have documentation.
+
+```
 Documentation is structured in the following way:
 /// Usage: (<name-of-sl-sh-fun> <fn_args>)
 ///
@@ -26,6 +28,7 @@ Documentation is structured in the following way:
 ///
 /// Example:
 /// <example sl-sh code>
+```
 
 - currently only functions are supported.
 
