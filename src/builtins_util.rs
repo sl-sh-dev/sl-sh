@@ -437,6 +437,38 @@ impl TryIntoExpression<i64> for Expression {
     }
 }
 
+impl TryFrom<Expression> for (Expression, Expression) {
+    type Error = LispError;
+
+    fn try_from(value: Expression) -> Result<Self, Self::Error> {
+        let data = &value.get().data;
+        let data_type = data.to_string();
+        match data {
+            ExpEnum::Pair(e0, e1) => {
+                Ok((e0.clone(), e1.clone()))
+            }
+            _ => {
+                let reason = format!("Expected Pair got {}.", data_type);
+                return Err(LispError::new(reason))
+            }
+        }
+    }
+}
+
+impl From<(Expression, Expression)> for Expression {
+    fn from((e0, e1): (Expression, Expression)) -> Self {
+        Expression::alloc_data(ExpEnum::Pair(e0, e1))
+    }
+}
+
+impl TryIntoExpression<(Expression, Expression)> for Expression {
+    type Error = LispError;
+
+    fn human_readable_dest_type(&self) -> String {
+        ExpEnum::Pair(Expression::make_nil(), Expression::make_nil()).to_string()
+    }
+}
+
 #[macro_export]
 macro_rules! ret_err_exp_enum {
     ($expression:expr, $(|)? $( $pattern:pat_param )|+ $( if $guard: expr )? $(,)?, $eval:expr, $err:expr) => {

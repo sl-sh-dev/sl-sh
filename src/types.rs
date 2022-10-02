@@ -1121,14 +1121,6 @@ impl<T: ?Sized, U> TypedWrapper<T, U> {
     }
 }
 
-pub trait RustProcedureRef<T, F>
-where
-    Self: Sized,
-    F: FnOnce(&mut T) -> LispResult<Expression> + ?Sized,
-{
-    fn apply_ref_mut(&mut self, fn_name: &str, fun: F) -> LispResult<Expression>;
-}
-
 pub trait RustProcedure<T, F>
 where
     Self: Sized,
@@ -1137,7 +1129,23 @@ where
     fn apply(&self, fn_name: &str, fun: F) -> LispResult<Expression>;
 }
 
-impl<F> RustProcedureRef<BTreeMap<&str, Expression>, F>
+pub trait RustProcedureRef<T, F>
+where
+    Self: Sized,
+    F: FnOnce(&T) -> LispResult<Expression> + ?Sized,
+{
+    fn apply_ref(&self, fn_name: &str, fun: F) -> LispResult<Expression>;
+}
+
+pub trait RustProcedureRefMut<T, F>
+where
+    Self: Sized,
+    F: FnOnce(&mut T) -> LispResult<Expression> + ?Sized,
+{
+    fn apply_ref_mut(&mut self, fn_name: &str, fun: F) -> LispResult<Expression>;
+}
+
+impl<F> RustProcedureRefMut<BTreeMap<&str, Expression>, F>
     for TypedWrapper<BTreeMap<&str, Expression>, Expression>
 where
     F: FnOnce(&mut BTreeMap<&str, Expression>) -> LispResult<Expression>,
@@ -1172,7 +1180,7 @@ where
     }
 }
 
-impl<F> RustProcedureRef<HashMap<&str, Expression>, F>
+impl<F> RustProcedureRefMut<HashMap<&str, Expression>, F>
     for TypedWrapper<HashMap<&str, Expression>, Expression>
 where
     F: FnOnce(&mut HashMap<&str, Expression>) -> LispResult<Expression>,
@@ -1213,7 +1221,7 @@ where
     }
 }
 
-impl<F> RustProcedureRef<String, F> for TypedWrapper<String, Expression>
+impl<F> RustProcedureRefMut<String, F> for TypedWrapper<String, Expression>
 where
     F: FnOnce(&mut String) -> LispResult<Expression>,
 {
@@ -1225,7 +1233,28 @@ where
     }
 }
 
+impl<F> RustProcedureRef<String, F> for TypedWrapper<String, Expression>
+where
+    F: FnOnce(&String) -> LispResult<Expression>,
+{
+    fn apply_ref(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
+        try_inner_string!(fn_name, &self.0, arg, {
+            let arg = &mut arg.to_string();
+            fun(arg)
+        })
+    }
+}
+
 impl<F> RustProcedureRef<Expression, F> for TypedWrapper<Expression, Expression>
+where
+    F: FnOnce(&Expression) -> LispResult<Expression>,
+{
+    fn apply_ref(&self, _fn_name: &str, fun: F) -> LispResult<Expression> {
+        fun(&mut self.0.clone())
+    }
+}
+
+impl<F> RustProcedureRefMut<Expression, F> for TypedWrapper<Expression, Expression>
 where
     F: FnOnce(&mut Expression) -> LispResult<Expression>,
 {
@@ -1254,6 +1283,15 @@ where
 
 impl<F> RustProcedureRef<i64, F> for TypedWrapper<i64, Expression>
 where
+    F: FnOnce(&i64) -> LispResult<Expression>,
+{
+    fn apply_ref(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
+        try_inner_int!(fn_name, self.0, num, fun(num))
+    }
+}
+
+impl<F> RustProcedureRefMut<i64, F> for TypedWrapper<i64, Expression>
+where
     F: FnOnce(&mut i64) -> LispResult<Expression>,
 {
     fn apply_ref_mut(&mut self, fn_name: &str, fun: F) -> LispResult<Expression> {
@@ -1271,6 +1309,15 @@ where
 }
 
 impl<F> RustProcedureRef<f64, F> for TypedWrapper<f64, Expression>
+where
+    F: FnOnce(&f64) -> LispResult<Expression>,
+{
+    fn apply_ref(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
+        try_inner_float!(fn_name, self.0, num, fun(num))
+    }
+}
+
+impl<F> RustProcedureRefMut<f64, F> for TypedWrapper<f64, Expression>
 where
     F: FnOnce(&mut f64) -> LispResult<Expression>,
 {
