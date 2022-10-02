@@ -264,7 +264,7 @@ fn get_arg_val(type_path: &TypePath) -> MacroResult<ArgVal> {
     Ok(ArgVal::Value)
 }
 
-fn no_parse(arg_name: &Ident, inner: TokenStream) -> TokenStream {
+fn no_parse(_arg_name: &Ident, inner: TokenStream) -> TokenStream {
     inner
 }
 
@@ -422,7 +422,6 @@ fn parse_argval_optional_type(
     arg_name: &Ident,
     passing_style: ArgPassingStyle,
     inner: TokenStream,
-    val: ArgVal,
 ) -> MacroResult<TokenStream> {
     let some_inner = quote! {
         let #arg_name = Some(#arg_name);
@@ -434,7 +433,7 @@ fn parse_argval_optional_type(
     // the matched ExpEnum in Some bound to the #arg_name like the
     // rust native function expects.
     let some_arg_value_type_parsing_code =
-        parse_argval_value_type(ty, fn_name_attr, arg_name, passing_style, some_inner, val)?;
+        parse_argval_value_type(ty, fn_name_attr, arg_name, passing_style, some_inner)?;
     Ok(quote! {
         match #arg_name {
             None => {
@@ -479,7 +478,6 @@ fn parse_argval_value_type(
     arg_name: &Ident,
     passing_style: ArgPassingStyle,
     inner: TokenStream,
-    val: ArgVal,
 ) -> MacroResult<TokenStream> {
     let ty = get_type_or_wrapped_type(ty);
     match ty {
@@ -524,15 +522,9 @@ fn parse_argval_value_type(
                 }}),
             }
         }
-        Either::Right(type_tuple) => parse_type_tuple(
-            type_tuple,
-            fn_name_attr,
-            inner,
-            val,
-            arg_name,
-            passing_style,
-            no_parse,
-        ),
+        Either::Right(type_tuple) => {
+            parse_type_tuple(type_tuple, fn_name_attr, inner, arg_name, no_parse)
+        }
     }
 }
 
@@ -551,11 +543,9 @@ fn parse_type(
     outer_parse: fn(&Ident, TokenStream) -> TokenStream,
 ) -> MacroResult<TokenStream> {
     let tokens = match val {
-        ArgVal::Value => {
-            parse_argval_value_type(ty, fn_name_attr, arg_name, passing_style, inner, val)?
-        }
+        ArgVal::Value => parse_argval_value_type(ty, fn_name_attr, arg_name, passing_style, inner)?,
         ArgVal::Optional => {
-            parse_argval_optional_type(ty, fn_name_attr, arg_name, passing_style, inner, val)?
+            parse_argval_optional_type(ty, fn_name_attr, arg_name, passing_style, inner)?
         }
         ArgVal::Vec => parse_argval_varargs_type(ty, fn_name_attr, arg_name, inner),
     };
@@ -872,7 +862,7 @@ fn generate_builtin_fn(
 fn parse_fn_arg_type(
     ty: &Type,
     fn_name_attr: &Ident,
-    mut prev_token_stream: TokenStream,
+    prev_token_stream: TokenStream,
     arg_name: &Ident,
     noop_outer_parse: bool,
 ) -> MacroResult<TokenStream> {
@@ -895,14 +885,11 @@ fn parse_fn_arg_type(
         Type::Tuple(type_tuple) => {
             let val = ArgVal::Value;
             let parse_layer_1 = get_parser_for_arg_val(val, noop_outer_parse);
-            let passing_style = ArgPassingStyle::Move;
             parse_type_tuple(
                 type_tuple,
                 fn_name_attr,
-                prev_token_stream.clone(),
-                val,
+                prev_token_stream,
                 arg_name,
-                passing_style,
                 parse_layer_1,
             )
         }
@@ -918,7 +905,7 @@ fn parse_fn_arg_type(
                 parse_type(
                     ty,
                     fn_name_attr,
-                    prev_token_stream.clone(),
+                    prev_token_stream,
                     val,
                     arg_name,
                     passing_style,
@@ -928,18 +915,11 @@ fn parse_fn_arg_type(
             Type::Tuple(type_tuple) => {
                 let val = ArgVal::Value;
                 let parse_layer_1 = get_parser_for_arg_val(val, noop_outer_parse);
-                let passing_style = if ty_ref.mutability.is_some() {
-                    ArgPassingStyle::MutReference
-                } else {
-                    ArgPassingStyle::Reference
-                };
                 parse_type_tuple(
                     type_tuple,
                     fn_name_attr,
-                    prev_token_stream.clone(),
-                    val,
+                    prev_token_stream,
                     arg_name,
-                    passing_style,
                     parse_layer_1,
                 )
             }
@@ -957,9 +937,7 @@ fn parse_type_tuple(
     type_tuple: &TypeTuple,
     fn_name_attr: &Ident,
     inner: TokenStream,
-    val: ArgVal,
     arg_name: &Ident,
-    passing_style: ArgPassingStyle,
     outer_parse: fn(&Ident, TokenStream) -> TokenStream,
 ) -> MacroResult<TokenStream> {
     // at the end of all the tuple parsing the inner token stream expects
