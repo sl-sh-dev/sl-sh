@@ -486,7 +486,7 @@ fn parse_argval_value_type(
         Either::Left(ty) => {
             let str = ty.to_token_stream().to_string();
             // handle &str differently, want impl RustProcedure<F> for TypedWrapper<&str>
-            // w/o this special case it generate RustProcedureRef on an unsized TypedWrapper<str>
+            // w/o this special case it generate RustProcedureRefMut on an unsized TypedWrapper<str>
             let (fn_ref, passing_style, ty) =
                 if str == "str" && passing_style == ArgPassingStyle::Reference {
                     let passing_style = ArgPassingStyle::Move;
@@ -512,14 +512,16 @@ fn parse_argval_value_type(
                     #inner
                     typed_data.apply(#fn_name_attr, callback)
                 }}),
-                _ => {
-                    // some reference
-                    Ok(quote! {{
-                        use crate::types::RustProcedureRef;
-                        #inner
-                        typed_data.apply_ref_mut(#fn_name_attr, callback)
-                    }})
-                }
+                ArgPassingStyle::Reference => Ok(quote! {{
+                    use crate::types::RustProcedureRef;
+                    #inner
+                    typed_data.apply_ref(#fn_name_attr, callback)
+                }}),
+                ArgPassingStyle::MutReference => Ok(quote! {{
+                    use crate::types::RustProcedureRefMut;
+                    #inner
+                    typed_data.apply_ref_mut(#fn_name_attr, callback)
+                }}),
             }
         }
         Either::Right(type_tuple) => parse_type_tuple(
