@@ -109,7 +109,7 @@ fn hash_set(
     try_inner_hash_map!(fn_name, map, map, {
         map.insert(s, val);
     });
-    Ok(map.clone())
+    Ok(map)
 }
 
 /// Usage: (hash-remove! hashmap key)
@@ -249,7 +249,7 @@ fn hash_keys(
             SymLoc::None,
         )));
     }
-    return Ok(Expression::with_list(key_list));
+    Ok(Expression::with_list(key_list))
 }
 
 /// Usage: (hash-clear! hashmap)
@@ -272,7 +272,6 @@ fn hash_keys(
 /// (test::assert-false (hash-haskey tst-hash \"key3\"))
 /// (test::assert-false (hash-haskey tst-hash #\\S))
 #[sl_sh_fn(fn_name = "hash-clear!")]
-#[allow(clippy::needless_return)] //TODO remove me on new implementation
 fn hash_clear(map: &mut HashMap<&str, Expression>) {
     map.clear();
 }

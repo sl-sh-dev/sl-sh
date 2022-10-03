@@ -140,13 +140,13 @@ pub fn get_file(environment: &mut Environment, p: Expression) -> Option<PathBuf>
 fn file_test(path: String, test: fn(path: &Path) -> bool, fn_name: &str) -> LispResult<Expression> {
     if let Some(path) = my_get_file(path) {
         if test(path.as_path()) {
-            return Ok(Expression::make_true());
+            Ok(Expression::make_true())
         } else {
-            return Ok(Expression::make_nil());
+            Ok(Expression::make_nil())
         }
     } else {
         let msg = format!("{} takes a string (a path)", fn_name);
-        return Err(LispError::new(msg));
+        Err(LispError::new(msg))
     }
 }
 
