@@ -94,15 +94,13 @@ fn get_return_type(original_item_fn: &ItemFn) -> MacroResult<(Option<Type>, Opti
         let wrapper = is_valid_generic_type(type_path, POSSIBLE_RESULT_TYPES.as_slice())?;
         match inner_type {
             GenericArgument::Type(ty) => Ok((Some(ty.clone()), Some(wrapper))),
-            _ => {
-                return Err(Error::new(
-                    original_item_fn.span(),
-                    format!(
-                        "Functions must return generic arguments of type {:?}.",
-                        &POSSIBLE_RESULT_TYPES
-                    ),
-                ));
-            }
+            _ => Err(Error::new(
+                original_item_fn.span(),
+                format!(
+                    "Functions must return generic arguments of type {:?}.",
+                    &POSSIBLE_RESULT_TYPES
+                ),
+            )),
         }
     } else {
         Ok((Some(return_type), None))
@@ -392,11 +390,12 @@ fn parse_argval_varargs_type(
     fn_name_attr: &Ident,
     arg_name: &Ident,
     inner: TokenStream,
-) -> TokenStream {
+) -> MacroResult<TokenStream> {
     let wrapped_ty = get_type_or_wrapped_type(ty);
     match wrapped_ty {
-        Either::Left(wrapped_ty) => quote! {{
+        Either::Left(wrapped_ty) => Ok(quote! {{
             use crate::builtins_util::TryIntoExpression;
+
             static_assertions::assert_impl_all!(crate::types::Expression: crate::builtins_util::TryIntoExpression<#wrapped_ty>);
             let #arg_name = #arg_name
                 .iter()
@@ -405,10 +404,34 @@ fn parse_argval_varargs_type(
                 })
                 .collect::<crate::LispResult<#ty>>()?;
             #inner
-        }},
+        }}),
         Either::Right(type_tuple) => {
-            //TODO support Vec of Tuple?
-            quote! {}
+            if type_tuple.elems.len() == 2 {
+                let types = type_tuple.elems.iter().collect::<Vec<&Type>>();
+                let type_0 = types.get(0).unwrap();
+                let type_1 = types.get(1).unwrap();
+                Ok(quote! {{
+                    use crate::builtins_util::TryIntoExpression;
+                    static_assertions::assert_impl_all!(crate::types::Expression: crate::builtins_util::TryIntoExpression<#type_0>);
+                    static_assertions::assert_impl_all!(crate::types::Expression: crate::builtins_util::TryIntoExpression<#type_1>);
+                    let #arg_name = #arg_name
+                        .iter()
+                        .map(|exp| {
+                            crate::try_inner_pair!(#fn_name_attr, exp, e0, e1, {
+                                let e0 = e0.clone().try_into_for(#fn_name_attr)?;
+                                let e1 = e1.clone().try_into_for(#fn_name_attr)?;
+                                return Ok(( e0, e1 ));
+                            })
+                        })
+                        .collect::<crate::LispResult<Vec<(#(#types),*)>>>()?;
+                    #inner
+                }})
+            } else {
+                Err(Error::new(
+                    type_tuple.span(),
+                    "sl_sh_fn only supports tuple pairs.",
+                ))
+            }
         }
     }
 }
@@ -547,7 +570,7 @@ fn parse_type(
         ArgVal::Optional => {
             parse_argval_optional_type(ty, fn_name_attr, arg_name, passing_style, inner)?
         }
-        ArgVal::Vec => parse_argval_varargs_type(ty, fn_name_attr, arg_name, inner),
+        ArgVal::Vec => parse_argval_varargs_type(ty, fn_name_attr, arg_name, inner)?,
     };
     Ok(outer_parse(arg_name, tokens))
 }
@@ -867,7 +890,6 @@ fn parse_fn_arg_type(
     noop_outer_parse: bool,
 ) -> MacroResult<TokenStream> {
     match ty {
-        //TODO how to support vec/option of type_tuple?
         Type::Path(ty) => {
             let val = get_arg_val(ty)?;
             let parse_layer_1 = get_parser_for_arg_val(val, noop_outer_parse);
@@ -972,7 +994,7 @@ fn parse_type_tuple(
     } else {
         return Err(Error::new(
             type_tuple.span(),
-            "sl_sh_fn_ only supports tuple pairs.",
+            "sl_sh_fn only supports tuple pairs.",
         ));
     };
     //TODO conversions assertions code for try_into_expression
