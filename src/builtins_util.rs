@@ -842,42 +842,6 @@ mod test {
     }
 
     fn arg_unwrap_clear_hash_map(exp_0: Expression) -> crate::LispResult<()> {
-        //TODO if you need to finagle some code in to this macro call, maybe
-        // inlining (with the procedural macro) the function that can receive
-        // the provided hash map would work to establish an interface,
-        // the inlined function could obviously take the correct/provided
-        // ty: Type argument the function had for that argument, and the
-        // art would be getting a reference to an equivalent function
-        // and copying some of it's code, e.g. if we had some way
-        // of supplying a trait that hooked us up with the name of such
-        // a function? then we could steal that functions internals?
-        // fn does_hash_map_things() {
-        //  //here is code we'd grab and steal;
-        //  ret_err_exp_enum!
-        // }
-        // maybe traits could be used to make sure a given type always has
-        // the correct function supplier? the trait would HAVE to be
-        // declared on a type that (at compile time) would be checked to
-        // make sure it has the correct trait, similar to the static assertions
-        // we do now. in theory the trait/subtrait the declare argument has on
-        // it would clue  us in to try_inner_hash_map or try_inner_int etc.
-        // it relies on whether or not it's impossible to at compile time look
-        // at the internals of the functions these functions provide and so
-        // something with them. alternatively, what if the trait could return
-        // a reference to ret_err_exp_enum!
-        //
-        // complicate macrO_rules like this: https://stackoverflow.com/questions/50008535/calling-functions-with-different-numbers-of-arguments-in-rust-macros
-        // make me wonder if it's possible to write a macro that could just do this but?
-        //
-        // Since we have the type at compile time, what if we could turn
-        // an Expression into a type that wraps the Expression but exposes
-        // the inner ExpEnum as a generic type.
-        // so
-        // ```
-        // let my_obj: Wrapper<T> = Expression::into_wrapper();
-        // have wrapper impl AsRef, so it can "downcast" to a HashMap
-        // ```
-        
         try_exp_enum!(
             exp_0.get_mut().data,
             ExpEnum::HashMap(ref mut hash_map),
