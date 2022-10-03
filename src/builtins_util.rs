@@ -449,7 +449,7 @@ impl TryFrom<Expression> for (Expression, Expression) {
             }
             _ => {
                 let reason = format!("Expected Pair got {}.", data_type);
-                return Err(LispError::new(reason))
+                Err(LispError::new(reason))
             }
         }
     }
@@ -515,7 +515,7 @@ macro_rules! try_inner_file {
             },
             data => return Err( LispError::new(ErrorStrings::mismatched_type(
                 $fn_name,
-                &ExpEnum::File(std::rc::Rc::new(std::cell::RefCell::new(crate::types::FileState::Closed))).to_string(), 
+                &ExpEnum::File(std::rc::Rc::new(std::cell::RefCell::new($crate::types::FileState::Closed))).to_string(),
                 &data.to_string(),
             )))
         }
@@ -539,12 +539,28 @@ macro_rules! try_inner_float {
 }
 
 #[macro_export]
+macro_rules! try_inner_pair {
+    ($fn_name:ident, $expression:expr, $name0:ident, $name1:ident, $eval:expr) => {{
+        use $crate::ErrorStrings;
+        match &mut $expression.get_mut().data {
+            ExpEnum::Pair($name0, $name1)=> $eval,
+            _ => return Err( $crate::LispError::new(ErrorStrings::mismatched_type(
+                $fn_name,
+                &ExpEnum::Pair($crate::Expression::make_nil(), $crate::Expression::make_nil()).to_string(),
+                &$expression.to_string(),
+            )))
+        }
+    }};
+}
+
+
+#[macro_export]
 macro_rules! try_inner_hash_map {
     ($fn_name:ident, $expression:expr, $name:ident, $eval:expr) => {{
         use $crate::ErrorStrings;
         match &mut $expression.get_mut().data {
             ExpEnum::HashMap(ref mut $name)=> $eval,
-            _ => return Err( LispError::new(ErrorStrings::mismatched_type(
+            _ => return Err( $crate::LispError::new(ErrorStrings::mismatched_type(
                 $fn_name,
                 &ExpEnum::HashMap(Default::default()).to_string(), 
                 &$expression.to_string(),
@@ -561,7 +577,7 @@ macro_rules! try_inner_string {
             ExpEnum::String($name, _)=> $eval,
             ExpEnum::Symbol($name, _)=> $eval,
             ExpEnum::Char($name)=> $eval,
-            _ => return Err( LispError::new(ErrorStrings::mismatched_type(
+            _ => return Err( $crate::LispError::new(ErrorStrings::mismatched_type(
                 $fn_name,
                 &format!("{}, {}, or {}, ",
                     ExpEnum::String(Default::default(), Default::default()).to_string(),
