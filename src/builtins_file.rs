@@ -419,58 +419,56 @@ fn builtin_fs_crawl(
             }
         };
     }
-    // TODO cb masks fact that call_lambda can fail,
-    // this is bad, an error should be (optionally?) passed up
-    // not swallowed s.t. silent failure occurs.
-    let mut cb = |entry: &DirEntry| {
-        let path = entry.path();
-        if let Some(path) = path.to_str() {
-            let path = Expression::alloc_data(ExpEnum::String(path.to_string().into(), None));
-            let mut args = iter::once(path);
-            let _ = call_lambda(environment, lambda_exp.copy(), &mut args, true);
-        }
-    };
-    let mut iterate = |file_or_dir, depth, sym_links| match (depth, sym_links) {
-        (Some(depth), Some(sym_links)) => {
-            for entry in WalkDir::new(file_or_dir)
-                .max_depth(depth as usize)
-                .follow_links(sym_links)
-                .into_iter()
-                .filter_map(|e| e.ok())
-            {
-                cb(&entry);
-            }
-        }
-        (Some(depth), None) => {
-            for entry in WalkDir::new(file_or_dir)
-                .max_depth(depth as usize)
-                .into_iter()
-                .filter_map(|e| e.ok())
-            {
-                cb(&entry);
-            }
-        }
-        (None, Some(sym_links)) => {
-            for entry in WalkDir::new(file_or_dir)
-                .follow_links(sym_links)
-                .into_iter()
-                .filter_map(|e| e.ok())
-            {
-                cb(&entry);
-            }
-        }
-        (None, None) => {
-            for entry in WalkDir::new(file_or_dir).into_iter().filter_map(|e| e.ok()) {
-                cb(&entry);
-            }
-        }
-    };
     let lambda_exp_d = &lambda_exp.get().data;
     params_done(args, fn_name)?;
     match lambda_exp_d {
         ExpEnum::Lambda(_) => {
             if let Some(file_or_dir) = file_or_dir {
-                iterate(file_or_dir, depth, sym_links);
+                let mut cb = |entry: &DirEntry| -> LispResult<()> {
+                    let path = entry.path();
+                    if let Some(path) = path.to_str() {
+                        let path =
+                            Expression::alloc_data(ExpEnum::String(path.to_string().into(), None));
+                        let mut args = iter::once(path);
+                        call_lambda(environment, lambda_exp.copy(), &mut args, true)?;
+                    }
+                    Ok(())
+                };
+                match (depth, sym_links) {
+                    (Some(depth), Some(sym_links)) => {
+                        for entry in WalkDir::new(file_or_dir)
+                            .max_depth(depth as usize)
+                            .follow_links(sym_links)
+                            .into_iter()
+                            .filter_map(|e| e.ok())
+                        {
+                            cb(&entry)?;
+                        }
+                    }
+                    (Some(depth), None) => {
+                        for entry in WalkDir::new(file_or_dir)
+                            .max_depth(depth as usize)
+                            .into_iter()
+                            .filter_map(|e| e.ok())
+                        {
+                            cb(&entry)?;
+                        }
+                    }
+                    (None, Some(sym_links)) => {
+                        for entry in WalkDir::new(file_or_dir)
+                            .follow_links(sym_links)
+                            .into_iter()
+                            .filter_map(|e| e.ok())
+                        {
+                            cb(&entry)?;
+                        }
+                    }
+                    (None, None) => {
+                        for entry in WalkDir::new(file_or_dir).into_iter().filter_map(|e| e.ok()) {
+                            cb(&entry)?;
+                        }
+                    }
+                }
                 Ok(Expression::make_true())
             } else {
                 let msg = format!("{} provided path does not exist", fn_name);
