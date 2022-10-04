@@ -17,7 +17,8 @@ extern crate static_assertions;
 type MacroResult<T> = Result<T, Error>;
 
 const POSSIBLE_RESULT_TYPES: [&str; 1] = ["LispResult"];
-const POSSIBLE_ARG_TYPES: [&str; 2] = ["Option", "VarArgs"];
+const SPECIAL_ARG_TYPES: [&str; 2] = ["Option", "VarArgs"];
+const POSSIBLE_ARG_TYPES: [&str; 3] = ["Option", "VarArgs", "Vec"];
 
 /// return a fully qualified crate::Expression Type this is the struct that
 /// all sl_sh types are wrapped in, because it's a lisp.
@@ -248,7 +249,7 @@ struct Arg {
 
 fn get_arg_val(type_path: &TypePath) -> ArgVal {
     if let Some((_generic, type_path)) = get_generic_argument_from_type_path(type_path) {
-        let wrapper = opt_is_valid_generic_type(type_path, POSSIBLE_ARG_TYPES.as_slice());
+        let wrapper = opt_is_valid_generic_type(type_path, SPECIAL_ARG_TYPES.as_slice());
         match wrapper {
             Some(wrapper) if wrapper == "Option" => {
                 return ArgVal::Optional;
@@ -390,8 +391,9 @@ fn parse_argval_varargs_type(
     fn_name_attr: &Ident,
     arg_name: &Ident,
     inner: TokenStream,
+    collect_type: TokenStream,
 ) -> MacroResult<TokenStream> {
-    let wrapped_ty = get_type_or_wrapped_type(ty);
+    let wrapped_ty = get_type_or_wrapped_type(ty, POSSIBLE_ARG_TYPES.as_slice());
     match wrapped_ty {
         Either::Left(wrapped_ty) => Ok(quote! {{
             use crate::builtins_util::TryIntoExpression;
@@ -399,6 +401,8 @@ fn parse_argval_varargs_type(
             static_assertions::assert_impl_all!(crate::types::Expression: crate::builtins_util::TryIntoExpression<#wrapped_ty>);
             let #arg_name = #arg_name
                 .iter()
+            // TODO for Vec iter needs an additional cast from Expression to
+            //  pair, vector or nil will need to call macro.
                 .map(|#arg_name| {
                     #arg_name.clone().try_into_for(#fn_name_attr)
                 })
@@ -423,7 +427,7 @@ fn parse_argval_varargs_type(
                                 return Ok(( e0, e1 ));
                             })
                         })
-                        .collect::<crate::LispResult<VarArgs<(#(#types),*)>>>()?;
+                        .collect::<crate::LispResult<#collect_type<(#(#types),*)>>>()?;
                     #inner
                 }})
             } else {
@@ -470,16 +474,33 @@ fn parse_argval_optional_type(
     })
 }
 
+// None if not vec
+fn is_vec(ty: &TypePath) -> Option<Type> {
+    if let Some((ty, type_path)) = get_generic_argument_from_type_path(ty) {
+        let wrapper = opt_is_valid_generic_type(type_path, &["Vec"]);
+        if let (GenericArgument::Type(ty), Some(_)) = (ty, wrapper) {
+            match ty {
+                Type::Path(_) | Type::Tuple(_) => return Some(ty.clone()),
+                _ => {}
+            }
+        }
+    }
+    None
+}
+
 /// at this point the macro is only operating on types it expects
 /// which are any rust types, any rust types wrapped in Option,
 /// and any rust types wrapped in Vec. If in the future this is
 /// confusing wrapper types can be made, i.e. SlshVarArgs,
 /// so normal rust Vec could be used without being turned into
 /// a SlshVarArgs
-fn get_type_or_wrapped_type(ty: &TypePath) -> Either<&TypePath, &TypeTuple> {
+fn get_type_or_wrapped_type<'a>(
+    ty: &'a TypePath,
+    possible_types: &'a [&str],
+) -> Either<&'a TypePath, &'a TypeTuple> {
     let orig_ty = ty;
     if let Some((ty, type_path)) = get_generic_argument_from_type_path(ty) {
-        let wrapper = opt_is_valid_generic_type(type_path, POSSIBLE_ARG_TYPES.as_slice());
+        let wrapper = opt_is_valid_generic_type(type_path, possible_types);
         match (ty, wrapper) {
             (GenericArgument::Type(ty), Some(_)) => match ty {
                 Type::Path(path) => Either::Left(path),
@@ -502,51 +523,55 @@ fn parse_argval_value_type(
     passing_style: ArgPassingStyle,
     inner: TokenStream,
 ) -> MacroResult<TokenStream> {
-    let ty = get_type_or_wrapped_type(ty);
-    match ty {
-        Either::Left(ty) => {
-            let str = ty.to_token_stream().to_string();
-            // handle &str differently, want impl RustProcedure<F> for TypedWrapper<&str>
-            // w/o this special case it generate RustProcedureRefMut on an unsized TypedWrapper<str>
-            let (fn_ref, passing_style, ty) =
-                if str == "str" && passing_style == ArgPassingStyle::Reference {
-                    let passing_style = ArgPassingStyle::Move;
-                    (quote! { &#ty }, passing_style, quote! { &#ty })
-                } else {
-                    (
-                        tokens_for_matching_references(passing_style, ty),
-                        passing_style,
-                        quote! { #ty },
-                    )
+    if is_vec(ty).is_some() {
+        parse_argval_varargs_type(ty, fn_name_attr, arg_name, inner, quote! { Vec })
+    } else {
+        let ty = get_type_or_wrapped_type(ty, SPECIAL_ARG_TYPES.as_slice());
+        match ty {
+            Either::Left(ty) => {
+                let str = ty.to_token_stream().to_string();
+                // handle &str differently, want impl RustProcedure<F> for TypedWrapper<&str>
+                // w/o this special case it generate RustProcedureRefMut on an unsized TypedWrapper<str>
+                let (fn_ref, passing_style, ty) =
+                    if str == "str" && passing_style == ArgPassingStyle::Reference {
+                        let passing_style = ArgPassingStyle::Move;
+                        (quote! { &#ty }, passing_style, quote! { &#ty })
+                    } else {
+                        (
+                            tokens_for_matching_references(passing_style, ty),
+                            passing_style,
+                            quote! { #ty },
+                        )
+                    };
+                let inner = quote! {
+                    let mut typed_data: crate::types::TypedWrapper<#ty, crate::types::Expression> =
+                        crate::types::TypedWrapper::new(#arg_name);
+                    let callback = |#arg_name: #fn_ref| -> crate::LispResult<crate::types::Expression> {
+                        #inner
+                    };
                 };
-            let inner = quote! {
-                let mut typed_data: crate::types::TypedWrapper<#ty, crate::types::Expression> =
-                    crate::types::TypedWrapper::new(#arg_name);
-                let callback = |#arg_name: #fn_ref| -> crate::LispResult<crate::types::Expression> {
-                    #inner
-                };
-            };
 
-            match passing_style {
-                ArgPassingStyle::Move => Ok(quote! {{
-                    use crate::types::RustProcedure;
-                    #inner
-                    typed_data.apply(#fn_name_attr, callback)
-                }}),
-                ArgPassingStyle::Reference => Ok(quote! {{
-                    use crate::types::RustProcedureRef;
-                    #inner
-                    typed_data.apply_ref(#fn_name_attr, callback)
-                }}),
-                ArgPassingStyle::MutReference => Ok(quote! {{
-                    use crate::types::RustProcedureRefMut;
-                    #inner
-                    typed_data.apply_ref_mut(#fn_name_attr, callback)
-                }}),
+                match passing_style {
+                    ArgPassingStyle::Move => Ok(quote! {{
+                        use crate::types::RustProcedure;
+                        #inner
+                        typed_data.apply(#fn_name_attr, callback)
+                    }}),
+                    ArgPassingStyle::Reference => Ok(quote! {{
+                        use crate::types::RustProcedureRef;
+                        #inner
+                        typed_data.apply_ref(#fn_name_attr, callback)
+                    }}),
+                    ArgPassingStyle::MutReference => Ok(quote! {{
+                        use crate::types::RustProcedureRefMut;
+                        #inner
+                        typed_data.apply_ref_mut(#fn_name_attr, callback)
+                    }}),
+                }
             }
-        }
-        Either::Right(type_tuple) => {
-            parse_type_tuple(type_tuple, fn_name_attr, inner, arg_name, no_parse)
+            Either::Right(type_tuple) => {
+                parse_type_tuple(type_tuple, fn_name_attr, inner, arg_name, no_parse)
+            }
         }
     }
 }
@@ -570,7 +595,9 @@ fn parse_type(
         ArgVal::Optional => {
             parse_argval_optional_type(ty, fn_name_attr, arg_name, passing_style, inner)?
         }
-        ArgVal::VarArgs => parse_argval_varargs_type(ty, fn_name_attr, arg_name, inner)?,
+        ArgVal::VarArgs => {
+            parse_argval_varargs_type(ty, fn_name_attr, arg_name, inner, quote! { crate::VarArgs })?
+        }
     };
     Ok(outer_parse(arg_name, tokens))
 }
