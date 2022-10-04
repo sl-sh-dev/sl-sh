@@ -246,20 +246,20 @@ struct Arg {
     passing_style: ArgPassingStyle,
 }
 
-fn get_arg_val(type_path: &TypePath) -> MacroResult<ArgVal> {
+fn get_arg_val(type_path: &TypePath) -> ArgVal {
     if let Some((_generic, type_path)) = get_generic_argument_from_type_path(type_path) {
         let wrapper = opt_is_valid_generic_type(type_path, POSSIBLE_ARG_TYPES.as_slice());
         match wrapper {
             Some(wrapper) if wrapper == "Option" => {
-                return Ok(ArgVal::Optional);
+                return ArgVal::Optional;
             }
             Some(wrapper) if wrapper == "Vec" => {
-                return Ok(ArgVal::Vec);
+                return ArgVal::Vec;
             }
             _ => {}
         }
     }
-    Ok(ArgVal::Value)
+    ArgVal::Value
 }
 
 fn no_parse(_arg_name: &Ident, inner: TokenStream) -> TokenStream {
@@ -891,7 +891,7 @@ fn parse_fn_arg_type(
 ) -> MacroResult<TokenStream> {
     match ty {
         Type::Path(ty) => {
-            let val = get_arg_val(ty)?;
+            let val = get_arg_val(ty);
             let parse_layer_1 = get_parser_for_arg_val(val, noop_outer_parse);
             let passing_style = ArgPassingStyle::Move;
             parse_type(
@@ -917,7 +917,7 @@ fn parse_fn_arg_type(
         }
         Type::Reference(ty_ref) => match &*ty_ref.elem {
             Type::Path(ty) => {
-                let val = get_arg_val(ty)?;
+                let val = get_arg_val(ty);
                 let parse_layer_1 = get_parser_for_arg_val(val, noop_outer_parse);
                 let passing_style = if ty_ref.mutability.is_some() {
                     ArgPassingStyle::MutReference
@@ -1076,7 +1076,7 @@ fn parse_src_function_arguments(
             }
             FnArg::Typed(ty) => match &*ty.ty {
                 Type::Path(ty) => {
-                    let val = get_arg_val(ty)?;
+                    let val = get_arg_val(ty);
                     parsed_args.push(Arg {
                         val,
                         passing_style: ArgPassingStyle::Move,
@@ -1096,7 +1096,7 @@ fn parse_src_function_arguments(
                     };
                     match &*ty_ref.elem {
                         Type::Path(ty) => {
-                            let val = get_arg_val(ty)?;
+                            let val = get_arg_val(ty);
                             parsed_args.push(Arg { val, passing_style });
                         }
                         Type::Tuple(_type_tuple) => {
@@ -1504,12 +1504,6 @@ mod test {
 //  - use takes-env
 //      - builtins_hashmap.rs
 //          + builtin_make_hash
-//          + builtin_hash_set
-// - what about a ToString coercion for ExpEnum::Char/String/Symbol for rust functions that require them
-//  to turn into Strings. somehow need a way to represent a type that can be multiple enums, or a pair,
-//  that's also needed for some functions in builtins_hashmap
-// - would it be possible to embed environment in TypedWrapper so it's available at runtime? hash_set
-// - attribute to somehow delay evaluation of parameter, e.g. builtin_hash_get
 //  - functions that return optional.
 //  - functions that return Values.
 //  - use Option-al arguments
