@@ -17,7 +17,7 @@ extern crate static_assertions;
 type MacroResult<T> = Result<T, Error>;
 
 const POSSIBLE_RESULT_TYPES: [&str; 1] = ["LispResult"];
-const POSSIBLE_ARG_TYPES: [&str; 2] = ["Option", "Vec"];
+const POSSIBLE_ARG_TYPES: [&str; 2] = ["Option", "VarArgs"];
 
 /// return a fully qualified crate::Expression Type this is the struct that
 /// all sl_sh types are wrapped in, because it's a lisp.
@@ -230,7 +230,7 @@ fn get_attribute_name_value(nested_meta: &NestedMeta) -> MacroResult<(String, St
 enum ArgVal {
     Value,
     Optional,
-    Vec,
+    VarArgs,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -253,8 +253,8 @@ fn get_arg_val(type_path: &TypePath) -> ArgVal {
             Some(wrapper) if wrapper == "Option" => {
                 return ArgVal::Optional;
             }
-            Some(wrapper) if wrapper == "Vec" => {
-                return ArgVal::Vec;
+            Some(wrapper) if wrapper == "VarArgs" => {
+                return ArgVal::VarArgs;
             }
             _ => {}
         }
@@ -307,7 +307,7 @@ fn get_parser_for_arg_val(
         (_, true) => no_parse,
         (ArgVal::Value, false) => parse_value,
         (ArgVal::Optional, false) => parse_optional,
-        (ArgVal::Vec, false) => parse_varargs,
+        (ArgVal::VarArgs, false) => parse_varargs,
     }
 }
 
@@ -423,7 +423,7 @@ fn parse_argval_varargs_type(
                                 return Ok(( e0, e1 ));
                             })
                         })
-                        .collect::<crate::LispResult<Vec<(#(#types),*)>>>()?;
+                        .collect::<crate::LispResult<VarArgs<(#(#types),*)>>>()?;
                     #inner
                 }})
             } else {
@@ -570,7 +570,7 @@ fn parse_type(
         ArgVal::Optional => {
             parse_argval_optional_type(ty, fn_name_attr, arg_name, passing_style, inner)?
         }
-        ArgVal::Vec => parse_argval_varargs_type(ty, fn_name_attr, arg_name, inner)?,
+        ArgVal::VarArgs => parse_argval_varargs_type(ty, fn_name_attr, arg_name, inner)?,
     };
     Ok(outer_parse(arg_name, tokens))
 }
@@ -591,9 +591,9 @@ fn to_arg_types(args: &[Arg]) -> TokenStream {
                     passing_style: crate::builtins_util::ArgPassingStyle::MutReference
                 }}
             }
-            (ArgVal::Vec, ArgPassingStyle::MutReference) => {
+            (ArgVal::VarArgs, ArgPassingStyle::MutReference) => {
                 quote! { crate::builtins_util::Arg {
-                    val: crate::builtins_util::ArgVal::Vec,
+                    val: crate::builtins_util::ArgVal::VarArgs,
                     passing_style: crate::builtins_util::ArgPassingStyle::MutReference
                 }}
             }
@@ -609,9 +609,9 @@ fn to_arg_types(args: &[Arg]) -> TokenStream {
                     passing_style: crate::builtins_util::ArgPassingStyle::Reference
                 }}
             }
-            (ArgVal::Vec, ArgPassingStyle::Reference) => {
+            (ArgVal::VarArgs, ArgPassingStyle::Reference) => {
                 quote! { crate::builtins_util::Arg {
-                    val: crate::builtins_util::ArgVal::Vec,
+                    val: crate::builtins_util::ArgVal::VarArgs,
                     passing_style: crate::builtins_util::ArgPassingStyle::Reference
                 }}
             }
@@ -627,9 +627,9 @@ fn to_arg_types(args: &[Arg]) -> TokenStream {
                     passing_style: crate::builtins_util::ArgPassingStyle::Move
                 }}
             }
-            (ArgVal::Vec, ArgPassingStyle::Move) => {
+            (ArgVal::VarArgs, ArgPassingStyle::Move) => {
                 quote! { crate::builtins_util::Arg {
-                    val: crate::builtins_util::ArgVal::Vec,
+                    val: crate::builtins_util::ArgVal::VarArgs,
                     passing_style: crate::builtins_util::ArgPassingStyle::Move
                 }}
             }
@@ -1018,7 +1018,7 @@ fn are_args_valid(original_item_fn: &ItemFn, args: &[Arg], takes_env: bool) -> M
         let mut found_value = false;
         for (i, arg) in args.iter().rev().enumerate() {
             match (i, arg.val, found_opt, found_value) {
-                (i, ArgVal::Vec, _, _) if i > 0 => {
+                (i, ArgVal::VarArgs, _, _) if i > 0 => {
                     return Err(Error::new(
                         original_item_fn.span(),
                         "Only one Vec argument is supported and it must be the last argument.",
@@ -1316,7 +1316,7 @@ mod test {
             let mut found_value = false;
             for (i, arg) in args.iter().rev().enumerate() {
                 match (i, arg.val, found_opt, found_value) {
-                    (i, ArgVal::Vec, _, _) if i > 0 => {
+                    (i, ArgVal::VarArgs, _, _) if i > 0 => {
                         // vec can only be last argument
                         return false;
                     }
@@ -1365,7 +1365,7 @@ mod test {
                 passing_style: ArgPassingStyle::Move,
             },
             Arg {
-                val: ArgVal::Vec,
+                val: ArgVal::VarArgs,
                 passing_style: ArgPassingStyle::Move,
             },
         ];
@@ -1374,7 +1374,7 @@ mod test {
         // vec must be last argument
         let args = vec![
             Arg {
-                val: ArgVal::Vec,
+                val: ArgVal::VarArgs,
                 passing_style: ArgPassingStyle::Move,
             },
             Arg {
@@ -1437,7 +1437,7 @@ mod test {
                 passing_style: ArgPassingStyle::Reference,
             },
             Arg {
-                val: ArgVal::Vec,
+                val: ArgVal::VarArgs,
                 passing_style: ArgPassingStyle::Move,
             },
         ];
@@ -1454,7 +1454,7 @@ mod test {
                 passing_style: ArgPassingStyle::Move,
             },
             Arg {
-                val: ArgVal::Vec,
+                val: ArgVal::VarArgs,
                 passing_style: ArgPassingStyle::Reference,
             },
             Arg {
