@@ -539,6 +539,18 @@ macro_rules! try_inner_float {
 }
 
 #[macro_export]
+macro_rules! is_sequence {
+    ($expression:expr) => {{
+        match &$expression.get().data {
+            ExpEnum::Pair(_, _)=> true,
+            ExpEnum::Vector(_)=> true,
+            ExpEnum::Nil => true,
+            _ => false,
+        }
+    }};
+}
+
+#[macro_export]
 macro_rules! try_inner_pair {
     ($fn_name:ident, $expression:expr, $name0:ident, $name1:ident, $eval:expr) => {{
         use $crate::ErrorStrings;
@@ -552,7 +564,6 @@ macro_rules! try_inner_pair {
         }
     }};
 }
-
 
 #[macro_export]
 macro_rules! try_inner_hash_map {
@@ -600,7 +611,7 @@ pub enum ArgType {
 pub enum ArgVal {
     Value,
     Optional,
-    Vec,
+    VarArgs,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -623,7 +634,7 @@ fn has_optional_params(params: &[Arg]) -> bool {
             ArgVal::Optional => {
                 return true;
             }
-            ArgVal::Vec => {
+            ArgVal::VarArgs => {
                 return true;
             }
         }
@@ -654,7 +665,7 @@ fn get_args_optional_aware(
             match arg.val {
                 ArgVal::Value => parsed_args.push(ArgType::Exp(exp)),
                 ArgVal::Optional => parsed_args.push(ArgType::Opt(Some(exp))),
-                ArgVal::Vec => parsed_args.push(ArgType::VarArgs(vec![exp])),
+                ArgVal::VarArgs => parsed_args.push(ArgType::VarArgs(vec![exp])),
             }
         }
     } else {
@@ -671,7 +682,7 @@ fn get_args_optional_aware(
                             args.len()
                         )));
                     }
-                    ArgVal::Vec => {}
+                    ArgVal::VarArgs => {}
                 }
             }
         }
@@ -681,9 +692,9 @@ fn get_args_optional_aware(
                 match param.val {
                     ArgVal::Value => parsed_args.push(ArgType::Exp(exp)),
                     ArgVal::Optional => parsed_args.push(ArgType::Opt(Some(exp))),
-                    // There can only be one ArgVal::Vec and it's always the last one, this is
+                    // There can only be one ArgVal::VarArgs and it's always the last one, this is
                     // enforced at compile time.
-                    ArgVal::Vec => {
+                    ArgVal::VarArgs => {
                         let mut exps = vec![exp];
                         for exp  in args_iter.by_ref() {
                             exps.push(exp);
@@ -698,7 +709,7 @@ fn get_args_optional_aware(
                         // we already checked for that.
                     }
                     ArgVal::Optional => parsed_args.push(ArgType::Opt(None)),
-                    ArgVal::Vec => parsed_args.push(ArgType::VarArgs(vec![])),
+                    ArgVal::VarArgs => parsed_args.push(ArgType::VarArgs(vec![])),
                 }
             }
         }
@@ -1116,7 +1127,7 @@ mod test {
     #[test]
     fn test_vecs() {
         let one_vec = vec![Arg {
-            val: ArgVal::Vec,
+            val: ArgVal::VarArgs,
             passing_style: ArgPassingStyle::MutReference,
         }];
         let args = vec![];
@@ -1162,7 +1173,7 @@ mod test {
                 passing_style: ArgPassingStyle::Reference,
             },
             Arg {
-                val: ArgVal::Vec,
+                val: ArgVal::VarArgs,
                 passing_style: ArgPassingStyle::MutReference,
             },
         ];
@@ -1195,7 +1206,7 @@ mod test {
                 passing_style: ArgPassingStyle::MutReference,
             },
             Arg {
-                val: ArgVal::Vec,
+                val: ArgVal::VarArgs,
                 passing_style: ArgPassingStyle::Move,
             },
         ];

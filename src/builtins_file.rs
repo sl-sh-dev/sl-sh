@@ -11,7 +11,7 @@ use crate::environment::*;
 use crate::eval::*;
 use crate::interner::*;
 use crate::types::*;
-use crate::{param_eval, params_done, rand_alphanumeric_str, LispResult};
+use crate::{param_eval, params_done, rand_alphanumeric_str, LispResult, VarArgs};
 use core::iter;
 use same_file;
 use std::ffi::OsStr;
@@ -224,7 +224,7 @@ fn is_dir(path: String) -> LispResult<Expression> {
 /// (syscall 'rm "/tmp/tst-fs-glob/g3")
 /// (syscall 'rmdir "/tmp/tst-fs-glob")
 #[sl_sh_fn(fn_name = "glob")]
-fn do_glob(args: Vec<String>) -> LispResult<Expression> {
+fn do_glob(args: VarArgs<String>) -> LispResult<Expression> {
     fn remove_escapes(pat: &str) -> String {
         let mut ret = String::new();
         let mut last_esc = false;
