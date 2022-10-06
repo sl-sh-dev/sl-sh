@@ -80,9 +80,21 @@ of your function is `&mut Environment`.
 
 Limitations
 -----------
-1. If a Result return type is needed for simplicity only LispResult is supported.
-2. TypePath for LispResult must be bare can not be qualified with any type path, i.e. sl_sh::LispResult
-3. VarArgs support requires use of crate::VarArgs which is a type alias for Vec<T>
+1. If a `Result` return type is needed (for simplicity) use `LispResult`, as it's supported instead.
+2. TypePath for LispResult (and other types recognized by this macro, e.g. VarArgs or Vec) must be bare
+    and can not be qualified with any type path, i.e. `sl_sh::LispResult` is invalid as a return type
+    but `LispResult` is fine.
+3. `VarArgs` support requires use of `crate::VarArgs` which is a type alias for Vec<T>,
+    this tells the macro that the function can receive zero to N more arguments.
+4. `VarArgs<T>` must be last argument if used, but using it allows the function to accept N
+   more arguments, if flexibility in types is desired just use VarArgs<Expression>.
+5. `VarArgs<T>` and `Vec<T>` are supported but in both cases `T` must implement `TryIntoExpression`
+    because a clone must occur to pass the inner `ExpEnum` in `Expression` to a Vec.
+6. Using a `Vec<T>` as a parameter corresponds to receiving an `Expression` that evaluates to
+    `ExpEnum::Nil`/`Pair`/`Vector`.
+7. `Option<T>` types are supported but those arguments must be last (but can be before one `VarArgs<T>`).
+8. Tuples are supported but if they are in a `Vec<(U, T)>` or `VarArgs<(U, T)>` both
+    U and T must implement `TryIntoExpression` in order to turn each `Expression` into a `Vec`.
 
 Example
 -------

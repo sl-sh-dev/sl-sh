@@ -386,7 +386,22 @@ fn tokens_for_matching_references(passing_style: ArgPassingStyle, ty: &TypePath)
     }
 }
 
-fn parse_argval_varargs_type(
+fn get_arg_pos(ident: &Ident) -> MacroResult<String> {
+    let arg_string = ident.to_string();
+    arg_string.split('_').nth(1).map(|x| x.to_string()).ok_or_else(|| Error::new(
+        ident.span(),
+        "Arg name should be in form arg_2 which means it should always have two and only two items. Internal error.",
+    ))
+}
+
+/// if expecting a Vec then the actual expression itself should be iterable
+/// (Pair/Vector/Nil), set arg_name_itself_is_iter = true. Otherwise it's
+/// varargs which means the original args vector is passed in and
+/// iterated over. the implication of passing in Vec is that if the Exp
+/// doesn't match one of a few underlying sl-sh types passing it to
+/// this function is an error.
+fn parse_variadic_args_type(
+    arg_name_itself_is_iter: bool,
     ty: &TypePath,
     fn_name_attr: &Ident,
     arg_name: &Ident,
@@ -394,21 +409,35 @@ fn parse_argval_varargs_type(
     collect_type: TokenStream,
 ) -> MacroResult<TokenStream> {
     let wrapped_ty = get_type_or_wrapped_type(ty, POSSIBLE_ARG_TYPES.as_slice());
+    let arg_pos = get_arg_pos(arg_name)?;
+    let fn_name = fn_name_attr.to_string();
     match wrapped_ty {
-        Either::Left(wrapped_ty) => Ok(quote! {{
-            use crate::builtins_util::TryIntoExpression;
+        Either::Left(wrapped_ty) => {
+            let arg_check = if arg_name_itself_is_iter {
+                quote! {
+                    if !crate::is_sequence!(#arg_name)
+                    {
+                        let err_str = format!("{}: Expected a vector or list for argument at position {}.", #fn_name, #arg_pos);
+                        return Err(LispError::new(err_str));
+                    }
+                }
+            } else {
+                quote! {}
+            };
+            Ok(quote! {{
+                #arg_check
+                use crate::builtins_util::TryIntoExpression;
 
-            static_assertions::assert_impl_all!(crate::types::Expression: crate::builtins_util::TryIntoExpression<#wrapped_ty>);
-            let #arg_name = #arg_name
-                .iter()
-            // TODO for Vec iter needs an additional cast from Expression to
-            //  pair, vector or nil will need to call macro.
-                .map(|#arg_name| {
-                    #arg_name.clone().try_into_for(#fn_name_attr)
-                })
-                .collect::<crate::LispResult<#ty>>()?;
-            #inner
-        }}),
+                static_assertions::assert_impl_all!(crate::types::Expression: crate::builtins_util::TryIntoExpression<#wrapped_ty>);
+                let #arg_name = #arg_name
+                    .iter()
+                    .map(|#arg_name| {
+                        #arg_name.clone().try_into_for(#fn_name_attr)
+                    })
+                    .collect::<crate::LispResult<#ty>>()?;
+                #inner
+            }})
+        }
         Either::Right(type_tuple) => {
             if type_tuple.elems.len() == 2 {
                 let types = type_tuple.elems.iter().collect::<Vec<&Type>>();
@@ -431,10 +460,12 @@ fn parse_argval_varargs_type(
                     #inner
                 }})
             } else {
-                Err(Error::new(
-                    type_tuple.span(),
-                    "sl_sh_fn only supports tuple pairs.",
-                ))
+                let arg_pos = get_arg_pos(arg_name)?;
+                let err_str = format!(
+                    "Error with argument at position {}, sl_sh_fn only supports tuple pairs.",
+                    arg_pos
+                );
+                Err(Error::new(type_tuple.span(), err_str))
             }
         }
     }
@@ -524,7 +555,7 @@ fn parse_argval_value_type(
     inner: TokenStream,
 ) -> MacroResult<TokenStream> {
     if is_vec(ty).is_some() {
-        parse_argval_varargs_type(ty, fn_name_attr, arg_name, inner, quote! { Vec })
+        parse_variadic_args_type(true, ty, fn_name_attr, arg_name, inner, quote! { Vec })
     } else {
         let ty = get_type_or_wrapped_type(ty, SPECIAL_ARG_TYPES.as_slice());
         match ty {
@@ -595,9 +626,14 @@ fn parse_type(
         ArgVal::Optional => {
             parse_argval_optional_type(ty, fn_name_attr, arg_name, passing_style, inner)?
         }
-        ArgVal::VarArgs => {
-            parse_argval_varargs_type(ty, fn_name_attr, arg_name, inner, quote! { crate::VarArgs })?
-        }
+        ArgVal::VarArgs => parse_variadic_args_type(
+            false,
+            ty,
+            fn_name_attr,
+            arg_name,
+            inner,
+            quote! { crate::VarArgs },
+        )?,
     };
     Ok(outer_parse(arg_name, tokens))
 }
@@ -973,11 +1009,21 @@ fn parse_fn_arg_type(
                 )
             }
             _ => {
-                Err(Error::new(ty.span(), "Support Vec<T>, Option<T>, and T where T is a Type::Path or Type::Tuple and can be moved, passed by reference, or passed by mutable reference (|&|&mut )(Type Path | (Type Path,*))"))
+                let arg_pos = get_arg_pos(arg_name)?;
+                let err_str = format!(
+                    "Error with argument at position {}, sl_sh_fn only supports Vec<T>, Option<T>, and T where T is a Type::Path or Type::Tuple and can be moved, passed by reference, or passed by mutable reference (|&|&mut )(Type Path | (Type Path,*))",
+                    arg_pos
+                );
+                Err(Error::new(ty.span(), err_str))
             }
         },
         _ => {
-            Err(Error::new(ty.span(), "Support Vec<T>, Option<T>, and T where T is a Type::Path or Type::Tuple and can be moved, passed by reference, or passed by mutable reference (|&|&mut )(Type Path | (Type Path,*))"))
+            let arg_pos = get_arg_pos(arg_name)?;
+            let err_str = format!(
+                "Error with argument at position {}, sl_sh_fn only supports Vec<T>, Option<T>, and T where T is a Type::Path or Type::Tuple and can be moved, passed by reference, or passed by mutable reference (|&|&mut )(Type Path | (Type Path,*))",
+                arg_pos
+            );
+            Err(Error::new(ty.span(), err_str))
         }
     }
 }
@@ -1019,12 +1065,13 @@ fn parse_type_tuple(
         }
         inner
     } else {
-        return Err(Error::new(
-            type_tuple.span(),
-            "sl_sh_fn only supports tuple pairs.",
-        ));
+        let arg_pos = get_arg_pos(arg_name)?;
+        let err_str = format!(
+            "Error with argument at position {}, sl_sh_fn only supports tuple pairs.",
+            arg_pos
+        );
+        return Err(Error::new(type_tuple.span(), err_str));
     };
-    //TODO conversions assertions code for try_into_expression
     let tokens = quote! {{
         let (#(#arg_names),*): (crate::types::Expression, crate::types::Expression) = #arg_name.try_into_for(#fn_name_attr)?;
         #tokens
@@ -1093,7 +1140,7 @@ fn parse_src_function_arguments(
 
     let skip = if takes_env { 1 } else { 0 };
 
-    for fn_arg in original_item_fn.sig.inputs.iter().skip(skip) {
+    for (i, fn_arg) in original_item_fn.sig.inputs.iter().enumerate().skip(skip) {
         match fn_arg {
             FnArg::Receiver(_) => {
                 return Err(Error::new(
@@ -1133,8 +1180,9 @@ fn parse_src_function_arguments(
                             return Err(Error::new(
                                 original_item_fn.span(),
                                 &format!(
-                                    "Only references/arguments of type path and reference are supported.: {:?})), ",
-                                    ty.to_token_stream()
+                                    "Error with argument at position {}, sl_sh_fn only supports passing Type::Path and Type::Tuple by value or ref/ref mut, no either syn::Type's are supported: {:?}.",
+                                    i,
+                                    ty.to_token_stream(),
                                 ),
                             ))
                         }
@@ -1144,8 +1192,9 @@ fn parse_src_function_arguments(
                     return Err(Error::new(
                         original_item_fn.span(),
                         &format!(
-                            "Only references/arguments of type path and reference are supported.: {:?})), ",
-                            ty.to_token_stream()
+                            "Error with argument at position {}, sl_sh_fn only supports passing Type::Path and Type::Tuple by value or ref/ref mut, no either syn::Type's are supported: {:?}.",
+                            i,
+                            ty.to_token_stream(),
                         ),
                     ))
                 }
