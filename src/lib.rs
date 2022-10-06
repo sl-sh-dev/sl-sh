@@ -403,6 +403,7 @@ fn get_arg_pos(ident: &Ident) -> MacroResult<String> {
 fn parse_variadic_args_type(
     arg_name_itself_is_iter: bool,
     ty: &TypePath,
+    fn_name: &str,
     fn_name_attr: &Ident,
     arg_name: &Ident,
     inner: TokenStream,
@@ -410,7 +411,6 @@ fn parse_variadic_args_type(
 ) -> MacroResult<TokenStream> {
     let wrapped_ty = get_type_or_wrapped_type(ty, POSSIBLE_ARG_TYPES.as_slice());
     let arg_pos = get_arg_pos(arg_name)?;
-    let fn_name = fn_name_attr.to_string();
     match wrapped_ty {
         Either::Left(wrapped_ty) => {
             let arg_check = if arg_name_itself_is_iter {
@@ -476,6 +476,7 @@ fn parse_variadic_args_type(
 /// necessary to match against every ExpEnum variant.
 fn parse_argval_optional_type(
     ty: &TypePath,
+    fn_name: &str,
     fn_name_attr: &Ident,
     arg_name: &Ident,
     passing_style: ArgPassingStyle,
@@ -490,8 +491,14 @@ fn parse_argval_optional_type(
     // with the caveat that after the value of inner it is handed first wraps
     // the matched ExpEnum in Some bound to the #arg_name like the
     // rust native function expects.
-    let some_arg_value_type_parsing_code =
-        parse_argval_value_type(ty, fn_name_attr, arg_name, passing_style, some_inner)?;
+    let some_arg_value_type_parsing_code = parse_argval_value_type(
+        ty,
+        fn_name,
+        fn_name_attr,
+        arg_name,
+        passing_style,
+        some_inner,
+    )?;
     Ok(quote! {
         match #arg_name {
             None => {
@@ -549,13 +556,22 @@ fn get_type_or_wrapped_type<'a>(
 /// just needs to be matched based on it's ExpEnum variant.
 fn parse_argval_value_type(
     ty: &TypePath,
+    fn_name: &str,
     fn_name_attr: &Ident,
     arg_name: &Ident,
     passing_style: ArgPassingStyle,
     inner: TokenStream,
 ) -> MacroResult<TokenStream> {
     if is_vec(ty).is_some() {
-        parse_variadic_args_type(true, ty, fn_name_attr, arg_name, inner, quote! { Vec })
+        parse_variadic_args_type(
+            true,
+            ty,
+            fn_name,
+            fn_name_attr,
+            arg_name,
+            inner,
+            quote! { Vec },
+        )
     } else {
         let ty = get_type_or_wrapped_type(ty, SPECIAL_ARG_TYPES.as_slice());
         match ty {
@@ -601,7 +617,7 @@ fn parse_argval_value_type(
                 }
             }
             Either::Right(type_tuple) => {
-                parse_type_tuple(type_tuple, fn_name_attr, inner, arg_name, no_parse)
+                parse_type_tuple(type_tuple, fn_name, fn_name_attr, inner, arg_name, no_parse)
             }
         }
     }
@@ -614,7 +630,7 @@ fn parse_argval_value_type(
 /// properly, or the rust type lookup function is busted.
 fn parse_type(
     ty: &TypePath,
-    fn_name_attr: &Ident,
+    fn_name: (&str, &Ident),
     inner: TokenStream,
     val: ArgVal,
     arg_name: &Ident,
@@ -622,14 +638,17 @@ fn parse_type(
     outer_parse: fn(&Ident, TokenStream) -> TokenStream,
 ) -> MacroResult<TokenStream> {
     let tokens = match val {
-        ArgVal::Value => parse_argval_value_type(ty, fn_name_attr, arg_name, passing_style, inner)?,
+        ArgVal::Value => {
+            parse_argval_value_type(ty, fn_name.0, fn_name.1, arg_name, passing_style, inner)?
+        }
         ArgVal::Optional => {
-            parse_argval_optional_type(ty, fn_name_attr, arg_name, passing_style, inner)?
+            parse_argval_optional_type(ty, fn_name.0, fn_name.1, arg_name, passing_style, inner)?
         }
         ArgVal::VarArgs => parse_variadic_args_type(
             false,
             ty,
-            fn_name_attr,
+            fn_name.0,
+            fn_name.1,
             arg_name,
             inner,
             quote! { crate::VarArgs },
@@ -839,13 +858,13 @@ fn generate_parse_fn(
                         #builtin_name.call_expand_args(environment, params)
                     },
                     Err(e) => {
-                        Err(crate::types::LispError::new(format!("{} is broken and can't parse its arguments.", #fn_name_attr, )))
+                        Err(crate::types::LispError::new(format!("{} is broken and can't parse its arguments.", #fn_name)))
                     }
                 }
             } else if args.len() > args_len {
-                Err(crate::types::LispError::new(format!("{} given too many arguments, expected {}, got {}.", #fn_name_attr, args_len, args.len())))
+                Err(crate::types::LispError::new(format!("{} given too many arguments, expected {}, got {}.", #fn_name, args_len, args.len())))
             } else {
-                Err(crate::types::LispError::new(format!("{} not given enough arguments, expected {}, got {}.", #fn_name_attr, args_len, args.len())))
+                Err(crate::types::LispError::new(format!("{} not given enough arguments, expected {}, got {}.", #fn_name, args_len, args.len())))
             }
         }
     }
@@ -924,8 +943,14 @@ fn generate_builtin_fn(
     for (fn_arg, arg_name) in fn_args {
         if let FnArg::Typed(ty) = fn_arg {
             let ty = &*ty.ty;
-            prev_token_stream =
-                parse_fn_arg_type(ty, fn_name_attr, prev_token_stream, arg_name, false)?;
+            prev_token_stream = parse_fn_arg_type(
+                ty,
+                fn_name,
+                fn_name_attr,
+                prev_token_stream,
+                arg_name,
+                false,
+            )?;
         }
     }
     let (return_type, _) = get_return_type(original_item_fn)?;
@@ -947,6 +972,7 @@ fn generate_builtin_fn(
 
 fn parse_fn_arg_type(
     ty: &Type,
+    fn_name: &str,
     fn_name_attr: &Ident,
     prev_token_stream: TokenStream,
     arg_name: &Ident,
@@ -959,7 +985,7 @@ fn parse_fn_arg_type(
             let passing_style = ArgPassingStyle::Move;
             parse_type(
                 ty,
-                fn_name_attr,
+                (fn_name, fn_name_attr),
                 prev_token_stream,
                 val,
                 arg_name,
@@ -972,6 +998,7 @@ fn parse_fn_arg_type(
             let parse_layer_1 = get_parser_for_arg_val(val, noop_outer_parse);
             parse_type_tuple(
                 type_tuple,
+                fn_name,
                 fn_name_attr,
                 prev_token_stream,
                 arg_name,
@@ -989,7 +1016,7 @@ fn parse_fn_arg_type(
                 };
                 parse_type(
                     ty,
-                    fn_name_attr,
+                    (fn_name, fn_name_attr),
                     prev_token_stream,
                     val,
                     arg_name,
@@ -1002,6 +1029,7 @@ fn parse_fn_arg_type(
                 let parse_layer_1 = get_parser_for_arg_val(val, noop_outer_parse);
                 parse_type_tuple(
                     type_tuple,
+                    fn_name,
                     fn_name_attr,
                     prev_token_stream,
                     arg_name,
@@ -1030,6 +1058,7 @@ fn parse_fn_arg_type(
 
 fn parse_type_tuple(
     type_tuple: &TypeTuple,
+    fn_name: &str,
     fn_name_attr: &Ident,
     inner: TokenStream,
     arg_name: &Ident,
@@ -1042,8 +1071,8 @@ fn parse_type_tuple(
     // tuple pair and put them back into the ident that this recursive process
     // expects.
     let arg_name_base = arg_name.to_string() + "_";
-    let arg_names = [0, 1]
-        .iter()
+    let arg_names = (0..type_tuple.elems.len())
+        .into_iter()
         .map(|x| {
             Ident::new(
                 &(arg_name_base.to_string() + &x.to_string()),
@@ -1055,26 +1084,41 @@ fn parse_type_tuple(
         let #arg_name = (#(#arg_names),*);
         #inner
     };
-    let tokens = if type_tuple.elems.len() == 2 {
+    let mut expressions = vec![];
+    let tuple_len = type_tuple.elems.len();
+    let tokens = if type_tuple.elems.len() > 0 {
         for (i, ty) in type_tuple.elems.iter().enumerate() {
+            expressions.push(quote! { crate::types::Expression });
             let arg_name_pair = Ident::new(
                 &(arg_name_base.to_string() + &i.to_string()),
                 Span::call_site(),
             );
-            inner = parse_fn_arg_type(ty, fn_name_attr, inner, &arg_name_pair, true)?;
+            inner = parse_fn_arg_type(ty, fn_name, fn_name_attr, inner, &arg_name_pair, true)?;
         }
         inner
     } else {
-        let arg_pos = get_arg_pos(arg_name)?;
-        let err_str = format!(
-            "Error with argument at position {}, sl_sh_fn only supports tuple pairs.",
-            arg_pos
-        );
-        return Err(Error::new(type_tuple.span(), err_str));
+        inner
     };
+    let arg_pos = get_arg_pos(arg_name)?;
     let tokens = quote! {{
-        let (#(#arg_names),*): (crate::types::Expression, crate::types::Expression) = #arg_name.try_into_for(#fn_name_attr)?;
-        #tokens
+        use std::convert::TryInto;
+        if !crate::is_sequence!(#arg_name)
+        {
+            let err_str = format!("{}: Expected a vector or list for argument at position {}.", #fn_name, #arg_pos);
+            return Err(LispError::new(err_str));
+        }
+        let #arg_name = #arg_name.iter().collect::<Vec<crate::types::Expression>>();
+        match #arg_name.try_into() {
+            Ok(#arg_name) => {
+                let #arg_name: [crate::Expression; #tuple_len] = #arg_name;
+                let [#(#arg_names),*] = #arg_name;
+                #tokens
+            }
+            Err(_) => {
+                let err_str = format!("{}: Expected a sl_sh vector or list with {} elements corresponding to the typle at argument position {}.", #fn_name, #tuple_len, #arg_pos);
+                return Err(LispError::new(err_str));
+            }
+        }
     }};
     Ok(outer_parse(arg_name, tokens))
 }
