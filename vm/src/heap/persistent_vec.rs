@@ -105,6 +105,14 @@ impl PersistentVec {
         self.length == 0
     }
 
+    pub fn first<ENV>(&self, vm: &GVm<ENV>) -> Option<Value> {
+        self.get(0, vm)
+    }
+
+    pub fn last<ENV>(&self, vm: &GVm<ENV>) -> Option<Value> {
+        self.get(self.length - 1, vm)
+    }
+
     /// Push value on vec and return the new vector.
     pub fn push<ENV>(&self, value: Value, vm: &mut GVm<ENV>) -> PersistentVec {
         let mut new_vec = *self;
@@ -153,6 +161,67 @@ impl PersistentVec {
         new_vec.tail[0] = value;
         new_vec.length += 1;
         new_vec.tail_length = 1;
+        new_vec
+    }
+
+    /// Pop the last value from vec and return the new vector.
+    pub fn pop<ENV>(&self, vm: &mut GVm<ENV>) -> PersistentVec {
+        let mut new_vec = *self;
+        if self.length == 0 {
+            return new_vec;
+        }
+        if new_vec.tail_length > 0 {
+            new_vec.length -= 1;
+            new_vec.tail_length -= 1;
+        } else {
+            let idx = self.length - 1;
+            let mut path = Vec::new();
+            match self.root {
+                None => return new_vec,
+                Some(mut node) => {
+                    let mut level = self.shift;
+                    loop {
+                        match &mut node.data {
+                            NodeType::Node(handles) => {
+                                let next_node = *vm.get_vecnode(handles[(idx >> level) & MASK]);
+                                path.push((node, (idx >> level) & MASK));
+                                node = next_node;
+                            }
+                            NodeType::Leaf(values) => {
+                                new_vec.tail = *values;
+                                new_vec.tail_length = WIDTH - 1;
+                                new_vec.length -= 1;
+                                let mut first = true;
+                                while let Some((mut prev_node, idx)) = path.pop() {
+                                    if let NodeType::Node(handles) = &mut prev_node.data {
+                                        if first && idx == 0 {
+                                            // This node is removed, stay on first to try next node.
+                                        } else if first {
+                                            handles[idx] = Handle::invalid();
+                                            first = false;
+                                        } else {
+                                            handles[idx] = vm.alloc_vecnode(node);
+                                        }
+                                        node = prev_node;
+                                    }
+                                }
+                                if first {
+                                    new_vec.root = None;
+                                } else {
+                                    new_vec.root = Some(node);
+                                }
+                                return new_vec;
+                            }
+                        }
+                        if level == 0 {
+                            break;
+                        }
+                        level -= BITS;
+                    }
+                }
+            }
+        }
+
         new_vec
     }
 
@@ -386,6 +455,91 @@ mod tests {
             max = i;
         }
         assert_eq!(max, 4999);
+        Ok(())
+    }
+
+    #[test]
+    fn test_pvec_pop() -> VMResult<()> {
+        let mut vm = Vm::new();
+        let mut pvec = PersistentVec::new();
+        assert_eq!(pvec.len(), 0);
+        assert!(pvec.is_empty());
+        for i in 0..5000 {
+            pvec = pvec.push(Value::Int(i), &mut vm);
+        }
+        assert_eq!(pvec.len(), 5000);
+        assert!(!pvec.is_empty());
+        for _i in 0..2000 {
+            pvec = pvec.pop(&mut vm);
+        }
+        assert_eq!(pvec.len(), 3000);
+        assert!(!pvec.is_empty());
+        let iter = vm.alloc_persistent_vector(pvec).iter(&vm);
+        let mut max = 0;
+        for (i, val) in iter.enumerate() {
+            assert_eq!(val, Value::Int(i as i64));
+            max = i;
+        }
+        assert_eq!(max, 2999);
+
+        for _i in 16..3000 {
+            pvec = pvec.pop(&mut vm);
+        }
+        assert_eq!(pvec.len(), 16);
+        assert!(!pvec.is_empty());
+        let iter = vm.alloc_persistent_vector(pvec).iter(&vm);
+        let mut max = 0;
+        for (i, val) in iter.enumerate() {
+            assert_eq!(val, Value::Int(i as i64));
+            max = i;
+        }
+        assert_eq!(max, 15);
+        for _i in 0..16 {
+            pvec = pvec.pop(&mut vm);
+        }
+        assert_eq!(pvec.len(), 0);
+        assert!(pvec.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn test_pvec_pop_tail_only() -> VMResult<()> {
+        let mut vm = Vm::new();
+        let mut pvec = PersistentVec::new();
+        assert_eq!(pvec.len(), 0);
+        assert!(pvec.is_empty());
+        for i in 0..16 {
+            pvec = pvec.push(Value::Int(i), &mut vm);
+        }
+        assert_eq!(pvec.len(), 16);
+        assert!(!pvec.is_empty());
+        for _i in 0..8 {
+            pvec = pvec.pop(&mut vm);
+        }
+        assert_eq!(pvec.len(), 8);
+        assert!(!pvec.is_empty());
+        let iter = vm.alloc_persistent_vector(pvec).iter(&vm);
+        let mut max = 0;
+        for (i, val) in iter.enumerate() {
+            assert_eq!(val, Value::Int(i as i64));
+            max = i;
+        }
+        assert_eq!(max, 7);
+        for _i in 0..8 {
+            pvec = pvec.pop(&mut vm);
+        }
+        assert_eq!(pvec.len(), 0);
+        assert!(pvec.is_empty());
+        let iter = vm.alloc_persistent_vector(pvec).iter(&vm);
+        let mut max = 0;
+        for (i, val) in iter.enumerate() {
+            assert_eq!(val, Value::Int(i as i64));
+            max = i;
+        }
+        assert_eq!(max, 0);
+        let pvec2 = pvec;
+        pvec.pop(&mut vm);
+        assert_eq!(pvec, pvec2);
         Ok(())
     }
 }
