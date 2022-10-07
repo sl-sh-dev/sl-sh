@@ -306,7 +306,10 @@ impl Value {
                 Box::new(vm.get_vector(*handle)[*start as usize..].iter().copied())
             }
             Value::Vector(handle) => Box::new(vm.get_vector(*handle).iter().copied()),
-            Value::PersistentVec(handle) => Box::new(PersistentVecIter::new(vm, *vm.get_persistent_vector(*handle))),
+            Value::PersistentVec(handle) => Box::new(PersistentVecIter::new(
+                vm,
+                *vm.get_persistent_vector(*handle),
+            )),
             _ => Box::new(iter::empty()),
         }
     }
@@ -378,14 +381,14 @@ impl Value {
             Value::Vector(handle) => {
                 let v = vm.get_vector(*handle);
                 let mut res = String::new();
-                res.push_str("[");
+                res.push('[');
                 list_out_iter(vm, &mut res, &mut v.iter().copied());
                 res.push(']');
                 res
             }
             Value::PersistentVec(_) => {
                 let mut res = String::new();
-                res.push_str("[");
+                res.push_str("#[");
                 list_out_iter(vm, &mut res, &mut self.iter(vm));
                 res.push(']');
                 res

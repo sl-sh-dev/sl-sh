@@ -86,8 +86,8 @@ enum Object {
     Closure(Arc<Chunk>, Arc<Vec<Handle>>),
     Continuation(Arc<Continuation>),
 
-    PersistentVec(PersistentVec),
-    VecNode(VecNode),
+    PersistentVec(Arc<PersistentVec>),
+    VecNode(Arc<VecNode>),
     // Place holder for an empty object slot.
     Empty,
 }
@@ -290,17 +290,21 @@ impl Heap {
         mutable: MutState,
         mark_roots: MarkFunc,
     ) -> Value
-        where
-            MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
+    where
+        MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        Value::PersistentVec(self.alloc(Object::PersistentVec(v), mutable.flag(), mark_roots))
+        Value::PersistentVec(self.alloc(
+            Object::PersistentVec(Arc::new(v)),
+            mutable.flag(),
+            mark_roots,
+        ))
     }
 
     pub(crate) fn alloc_vecnode<MarkFunc>(&mut self, node: VecNode, mark_roots: MarkFunc) -> Handle
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        self.alloc(Object::VecNode(node), FLAG_MUT, mark_roots)
+        self.alloc(Object::VecNode(Arc::new(node)), FLAG_MUT, mark_roots)
     }
 
     pub fn alloc_map<MarkFunc>(
@@ -423,7 +427,7 @@ impl Heap {
         }
     }
 
-    pub(crate) fn _get_vecnode_mut(&mut self, handle: Handle) -> VMResult<&mut VecNode> {
+    /*pub(crate) fn _get_vecnode_mut(&mut self, handle: Handle) -> VMResult<&mut VecNode> {
         if !self.is_mutable(handle) {
             return Err(VMError::new_heap("VecNode is not mutable!"));
         }
@@ -432,7 +436,7 @@ impl Heap {
         } else {
             panic!("Handle {} is not a vector node!", handle.idx());
         }
-    }
+    }*/
 
     pub fn get_map(&self, handle: Handle) -> &HashMap<Value, Value> {
         if let Some(Object::Map(map)) = self.objects.get(handle.idx()) {

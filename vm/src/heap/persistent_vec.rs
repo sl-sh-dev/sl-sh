@@ -45,6 +45,12 @@ fn new_path<ENV>(id: u32, shift: usize, node_handle: Handle, vm: &mut GVm<ENV>) 
     }
 }
 
+impl Default for PersistentVec {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PersistentVec {
     /// Create a new empty persistent vector.
     pub fn new() -> Self {
@@ -136,13 +142,12 @@ impl PersistentVec {
             new_root
         } else {
             // push the tail
-            let new_root = if let Some(root) = &self.root {
+            if let Some(root) = &self.root {
                 let new_tail_handle = vm.alloc_vecnode(new_tail);
                 self.push_tail(self.shift, root, new_tail_handle, vm)
             } else {
                 new_tail
-            };
-            new_root
+            }
         };
         new_vec.root = Some(new_root);
         new_vec.tail[0] = value;
@@ -184,7 +189,12 @@ impl PersistentVec {
     }
 
     /// Replace the value ad idx with new_value and return a new vec.
-    pub fn replace<ENV>(&self, idx: usize, new_value: Value, vm: &mut GVm<ENV>) -> Option<PersistentVec> {
+    pub fn replace<ENV>(
+        &self,
+        idx: usize,
+        new_value: Value,
+        vm: &mut GVm<ENV>,
+    ) -> Option<PersistentVec> {
         if idx >= self.length {
             return None;
         }
@@ -218,7 +228,7 @@ impl PersistentVec {
                             }
                             new_vec.root = Some(node);
                             return Some(new_vec);
-                        },
+                        }
                     }
                     if level == 0 {
                         break;
@@ -239,11 +249,7 @@ pub struct PersistentVecIter<'vm, ENV> {
 
 impl<'vm, ENV> PersistentVecIter<'vm, ENV> {
     pub fn new(vm: &'vm GVm<ENV>, vec: PersistentVec) -> Self {
-        Self {
-            vm,
-            vec,
-            idx: 0,
-        }
+        Self { vm, vec, idx: 0 }
     }
 }
 
@@ -259,7 +265,6 @@ impl<'vm, ENV> Iterator for PersistentVecIter<'vm, ENV> {
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
