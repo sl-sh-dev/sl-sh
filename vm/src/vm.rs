@@ -19,7 +19,8 @@ const STACK_CAP: usize = 1024;
 pub struct GVm<ENV> {
     interner: Interner,
     heap: Heap,
-    stack: Vec<Value>,
+    //stack: Vec<Value>,
+    stack: [Value; STACK_CAP],
     globals: Globals,
     buitins: Vec<CallFunc<ENV>>,
     this_fn: Option<Value>,
@@ -52,12 +53,12 @@ impl GVm<()> {
 impl<ENV> GVm<ENV> {
     pub fn new_with_env(env: ENV) -> Self {
         let globals = Globals::new();
-        let mut stack = Vec::with_capacity(STACK_CAP);
-        stack.resize(STACK_CAP, Value::Undefined);
+        //let mut stack = Vec::with_capacity(STACK_CAP);
+        //stack.resize(STACK_CAP, Value::Undefined);
         Self {
             interner: Interner::with_capacity(8192),
             heap: Heap::new(),
-            stack,
+            stack: [Value::Undefined; STACK_CAP],
             globals,
             buitins: Vec::new(),
             this_fn: None,

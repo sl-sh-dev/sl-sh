@@ -220,6 +220,20 @@ impl<ENV> GVm<ENV> {
                     //let val = get_reg!(registers, src);
                     mov_register!(registers, dest as usize, val);
                 }
+                MOVI => {
+                    let (dest, src) = decode2!(code, &mut self.ip, wide);
+                    let val = get_reg_unref!(registers, src, self);
+                    let dest = get_reg_int!(registers, dest).map_err(|e| (e, chunk.clone()))?;
+                    //let val = get_reg!(registers, src);
+                    mov_register!(registers, dest as usize, val);
+                }
+                MOVII => {
+                    let (dest, src) = decode2!(code, &mut self.ip, wide);
+                    let src = get_reg_int!(registers, src).map_err(|e| (e, chunk.clone()))?;
+                    let val = get_reg_unref!(registers, src, self);
+                    //let val = get_reg!(registers, src);
+                    mov_register!(registers, dest as usize, val);
+                }
                 BMOV => {
                     let (dest, src, len) = decode3!(code, &mut self.ip, wide);
                     for i in 0..len as usize {

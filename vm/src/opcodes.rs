@@ -28,9 +28,11 @@ pub const LDSCR: OpCode = STACK_BASE + 18; // LDSCR A B C - R(A)..R(A+B) = destr
 pub const MDSC: OpCode = STACK_BASE + 19; // MDSC A B C - R(A)..R(A+B) = destructured map in R(C) (ignore leftover values), R(A..) start with keys
 pub const COPY: OpCode = STACK_BASE + 20; // COPY A B - R(A) = deep copy of R(B)
 pub const FRZ: OpCode = STACK_BASE + 21; // FRZ A - R(A) if a heap object will be made read only
+pub const MOVI: OpCode = STACK_BASE + 22; // MOVI A B - R(R(A)) = R(B), A is an indirect index; does not respect closed over values for A
+pub const MOVII: OpCode = STACK_BASE + 23; // MOVII A B - R(A) = R(R(B)), B is an indirect index; does not respect closed over values for A
 
 // Flow control
-const FLOW_BASE: OpCode = STACK_BASE + 22;
+const FLOW_BASE: OpCode = STACK_BASE + 24;
 // CALL A B C - Call fn R(A) with B args with R(C) as first reg/param
 pub const CALL: OpCode = FLOW_BASE;
 // TCALL A B - Tail Call fn R(A) with B args with existing stack/regs

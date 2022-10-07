@@ -105,6 +105,13 @@ pub fn display_value(vm: &SloshVm, val: Value) -> String {
             res.push(']');
             res
         }
+        Value::PersistentVec(_) => {
+            let mut res = String::new();
+            res.push_str("[");
+            list_out_iter(vm, &mut res, &mut val.iter(vm));
+            res.push(']');
+            res
+        }
         Value::Map(handle) => {
             let mut res = String::new();
             res.push('{');

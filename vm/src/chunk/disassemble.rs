@@ -173,6 +173,26 @@ impl Chunk {
                 println!();
                 Ok(false)
             }
+            MOVI => {
+                print!("MOVI({:#04x})   \t", MOVI);
+                print!("R[");
+                disassemble_operand!(code, true, wide);
+                print!("]");
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(false)
+            }
+            MOVII => {
+                print!("MOVII({:#04x})  \t", MOVII);
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                print!("R[");
+                disassemble_operand!(code, true, wide);
+                print!("]");
+                println!();
+                Ok(false)
+            }
             SET => {
                 print!("SET({:#04x})    \t", SET);
                 disassemble_operand!(code, true, wide);

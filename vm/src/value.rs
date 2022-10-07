@@ -7,6 +7,7 @@ use std::sync::Arc;
 use crate::error::*;
 use crate::heap::*;
 use crate::interner::*;
+use crate::persistent_vec::PersistentVecIter;
 use crate::vm::GVm;
 
 pub type CallFuncSig<ENV> = fn(vm: &mut GVm<ENV>, registers: &[Value]) -> VMResult<Value>;
@@ -122,6 +123,7 @@ pub enum Value {
 
     String(Handle),
     Vector(Handle),
+    PersistentVec(Handle),
     Map(Handle),
     Bytes(Handle),
     Pair(Handle),
@@ -244,6 +246,7 @@ impl Value {
             Value::CharClusterLong(handle) => Some(*handle),
             Value::String(handle) => Some(*handle),
             Value::Vector(handle) => Some(*handle),
+            Value::PersistentVec(handle) => Some(*handle),
             Value::Map(handle) => Some(*handle),
             Value::Bytes(handle) => Some(*handle),
             Value::Pair(handle) => Some(*handle),
@@ -303,6 +306,7 @@ impl Value {
                 Box::new(vm.get_vector(*handle)[*start as usize..].iter().copied())
             }
             Value::Vector(handle) => Box::new(vm.get_vector(*handle).iter().copied()),
+            Value::PersistentVec(handle) => Box::new(PersistentVecIter::new(vm, *vm.get_persistent_vector(*handle))),
             _ => Box::new(iter::empty()),
         }
     }
@@ -374,9 +378,16 @@ impl Value {
             Value::Vector(handle) => {
                 let v = vm.get_vector(*handle);
                 let mut res = String::new();
-                res.push_str("#(");
+                res.push_str("[");
                 list_out_iter(vm, &mut res, &mut v.iter().copied());
-                res.push(')');
+                res.push(']');
+                res
+            }
+            Value::PersistentVec(_) => {
+                let mut res = String::new();
+                res.push_str("[");
+                list_out_iter(vm, &mut res, &mut self.iter(vm));
+                res.push(']');
                 res
             }
             Value::Map(handle) => {
@@ -448,6 +459,7 @@ impl Value {
             Value::Continuation(_) => "Continuation",
             Value::CallFrame(_) => "CallFrame",
             Value::Vector(_) => "Vector",
+            Value::PersistentVec(_) => "PersistentVector",
             Value::Map(_) => "Map",
             Value::Pair(_) => "Pair",
             Value::List(_, _) => "Pair",
