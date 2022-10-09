@@ -12,6 +12,7 @@ this package is used to guarantee at compile time that the necessary functions,
 namely Into, TryInto, and TryIntoExpression are implemented for the necessary
 Rust types so the builtin_ version of the function can be type checked properly.
 
+//TODO update this section
 - This also means that all types for a function using this proc_macro_attribute
 must implement the traits Into, TryInto, and TryIntoExpression traits defined
 in the sl-sh crate.
@@ -87,7 +88,7 @@ Limitations
 3. `VarArgs` support requires use of `crate::VarArgs` which is a type alias for Vec<T>,
     this tells the macro that the function can receive zero to N more arguments.
 4. `VarArgs<T>` must be last argument if used, but using it allows the function to accept N
-   more arguments, if flexibility in types is desired just use VarArgs<Expression>.
+   more arguments.
 5. `VarArgs<T>` and `Vec<T>` are supported but in both cases `T` must implement `TryIntoExpression`
     because a clone must occur to pass the inner `ExpEnum` in `Expression` to a Vec.
 6. Using a `Vec<T>` as a parameter corresponds to receiving an `Expression` that evaluates to
@@ -95,9 +96,11 @@ Limitations
 7. `Option<T>` types are supported but those arguments must be last (but can be before one `VarArgs<T>`).
 8. Tuples are supported but if they are in a `Vec<(U, T)>` or `VarArgs<(U, T)>` both
     U and T must implement `TryIntoExpression` in order to turn each `Expression` into a `Vec`.
+9. TODO are Vec of any length tuples suppported?
 
 Example
 -------
+- TOOD need examples of ALL types of function signatures supported
 - for example the function:
 
 ```rust

@@ -16,10 +16,11 @@ extern crate static_assertions;
 
 type MacroResult<T> = Result<T, Error>;
 
-const POSSIBLE_RESULT_TYPES: [&str; 1] = ["LispResult"];
+const POSSIBLE_RETURN_TYPES: [&str; 1] = ["LispResult"];
 const SPECIAL_ARG_TYPES: [&str; 2] = ["Option", "VarArgs"];
 const POSSIBLE_ARG_TYPES: [&str; 3] = ["Option", "VarArgs", "Vec"];
 
+//TODO this function is unnecessary just use quote!
 /// return a fully qualified crate::Expression Type this is the struct that
 /// all sl_sh types are wrapped in, because it's a lisp.
 fn build_sl_sh_expression_type() -> Type {
@@ -91,15 +92,14 @@ fn get_return_type(original_item_fn: &ItemFn) -> MacroResult<(Option<Type>, Opti
     };
 
     if let Some((inner_type, type_path)) = get_generic_argument_from_type(&return_type) {
-        //TODO this function does not need to return MacroResult, should enforce LispResult return type at compile time.
-        let wrapper = is_valid_generic_type(type_path, POSSIBLE_RESULT_TYPES.as_slice())?;
+        let wrapper = is_valid_generic_type(type_path, POSSIBLE_RETURN_TYPES.as_slice())?;
         match inner_type {
             GenericArgument::Type(ty) => Ok((Some(ty.clone()), Some(wrapper))),
             _ => Err(Error::new(
                 original_item_fn.span(),
                 format!(
-                    "Functions must return generic arguments of type {:?}.",
-                    &POSSIBLE_RESULT_TYPES
+                    "Functions must return generic arguments of type(s) {:?}.",
+                    &POSSIBLE_RETURN_TYPES
                 ),
             )),
         }
@@ -327,9 +327,9 @@ fn make_orig_fn_call(
     } else {
         quote! {}
     };
-    let (return_type, lisp_result) = get_return_type(original_item_fn)?;
+    let (return_type, lisp_return) = get_return_type(original_item_fn)?;
     let returns_none = "()" == return_type.to_token_stream().to_string();
-    let original_fn_call = match (return_type, lisp_result, returns_none) {
+    let original_fn_call = match (return_type, lisp_return, returns_none) {
         // coerce to a LispResult<Expression>
         (Some(_), Some(_), true) => quote! {
             #original_fn_name(#takes_env #(#arg_names),*)?;
@@ -432,7 +432,7 @@ fn parse_variadic_args_type(
                 let #arg_name = #arg_name
                     .iter()
                     .map(|#arg_name| {
-                        #arg_name.clone().try_into_for(#fn_name_attr)
+                        #arg_name.clone().try_into_for(#fn_name)
                     })
                     .collect::<crate::LispResult<#ty>>()?;
                 #inner
@@ -451,10 +451,74 @@ fn parse_variadic_args_type(
                         .iter()
                         .map(|exp| {
                             crate::try_inner_pair!(#fn_name_attr, exp, e0, e1, {
-                                let e0 = e0.clone().try_into_for(#fn_name_attr)?;
-                                let e1 = e1.clone().try_into_for(#fn_name_attr)?;
+                                let e0 = e0.clone().try_into_for(#fn_name)?;
+                                let e1 = e1.clone().try_into_for(#fn_name)?;
                                 return Ok(( e0, e1 ));
                             })
+                        })
+                        .collect::<crate::LispResult<#collect_type<(#(#types),*)>>>()?;
+                    #inner
+                }})
+            } else if !type_tuple.elems.is_empty() {
+                let arg_pos = get_arg_pos(arg_name)?;
+                let arg_check = if arg_name_itself_is_iter {
+                    quote! {
+                        if !crate::is_sequence!(#arg_name)
+                        {
+                            let err_str = format!("{}: Expected a vector or list for argument at position {}.", #fn_name, #arg_pos);
+                            return Err(LispError::new(err_str));
+                        }
+                    }
+                } else {
+                    quote! {}
+                };
+                let tuple_len = type_tuple.elems.len();
+                let arg_name_base = arg_name.to_string() + "_";
+                let arg_names = (0..type_tuple.elems.len())
+                    .into_iter()
+                    .map(|x| {
+                        Ident::new(
+                            &(arg_name_base.to_string() + &x.to_string()),
+                            Span::call_site(),
+                        )
+                    })
+                    .collect::<Vec<Ident>>();
+                let mut types = vec![];
+                let mut type_assertions = vec![];
+                let mut args = vec![];
+                for (elem, arg_name) in type_tuple.elems.iter().zip(arg_names.iter()) {
+                    types.push(elem.clone());
+                    type_assertions.push(quote! {
+                        static_assertions::assert_impl_all!(crate::types::Expression: crate::builtins_util::TryIntoExpression<#elem>);
+                    });
+                    args.push(quote! {
+                        let #arg_name: #elem = #arg_name.clone().try_into_for(#fn_name)?;
+                    })
+                }
+                Ok(quote! {{
+                    use crate::builtins_util::TryIntoExpression;
+                    use std::convert::TryInto;
+                    #(#type_assertions)*
+                    #arg_check
+                    let #arg_name = #arg_name
+                        .iter()
+                        .map(|#arg_name| {
+                            let #arg_name = #arg_name.iter().collect::<Vec<crate::types::Expression>>();
+                            for x in &#arg_name {
+                                println!("X type: {}", x.display_type());
+                            }
+                            match #arg_name.try_into() {
+                                Ok(#arg_name) => {
+                                    let #arg_name: [crate::Expression; #tuple_len] = #arg_name;
+                                    let [#(#arg_names),*] = #arg_name;
+                                    #(#args)*
+                                    Ok((#(#arg_names),*))
+                                }
+                                Err(_) => {
+                                    let err_str = format!("{}: Expected a sl_sh vector or list of tuples of length {} corresponding to the argument at position {}.", #fn_name, #tuple_len, #arg_pos);
+                                    Err(LispError::new(err_str))
+                                }
+                            }
                         })
                         .collect::<crate::LispResult<#collect_type<(#(#types),*)>>>()?;
                     #inner
@@ -1115,7 +1179,7 @@ fn parse_type_tuple(
                 #tokens
             }
             Err(_) => {
-                let err_str = format!("{}: Expected a sl_sh vector or list with {} elements corresponding to the typle at argument position {}.", #fn_name, #tuple_len, #arg_pos);
+                let err_str = format!("{}: Expected a sl_sh vector or list with {} elements corresponding to the tuple at argument position {}.", #fn_name, #tuple_len, #arg_pos);
                 return Err(LispError::new(err_str));
             }
         }
@@ -1638,3 +1702,4 @@ mod test {
 //          + builtin_unwind_protect
 //      - builtins_types.rs
 //          + builtin_to_symbol
+// tuple return types?
