@@ -736,8 +736,38 @@ impl Heap {
                     self.mark_trace(handle, current);
                 }
             }
-            Object::PersistentVec(_) => { /* XXXSLS TODO trace me! */ }
-            Object::VecNode(_) => { /* XXXSLS TODO trace me! */ }
+            Object::PersistentVec(pvec) => {
+                if let Some(root) = pvec.root() {
+                    if let Some(nodes) = root.nodes() {
+                        nodes
+                            .iter()
+                            .filter(|n| n.valid())
+                            .for_each(|handle| self.mark_trace(*handle, current));
+                    }
+                    if let Some(leaf) = root.leaf() {
+                        leaf.iter()
+                            .filter_map(|val| val.get_handle())
+                            .for_each(|handle| self.mark_trace(handle, current));
+                    }
+                    pvec.tail()
+                        .iter()
+                        .filter_map(|val| val.get_handle())
+                        .for_each(|handle| self.mark_trace(handle, current));
+                }
+            }
+            Object::VecNode(node) => {
+                if let Some(nodes) = node.nodes() {
+                    nodes
+                        .iter()
+                        .filter(|n| n.valid())
+                        .for_each(|handle| self.mark_trace(*handle, current));
+                }
+                if let Some(leaf) = node.leaf() {
+                    leaf.iter()
+                        .filter_map(|val| val.get_handle())
+                        .for_each(|handle| self.mark_trace(handle, current));
+                }
+            }
             Object::Empty => panic!("An empty object can not be live!"),
         }
     }
