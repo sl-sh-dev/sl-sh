@@ -285,7 +285,7 @@ fn read_utf_scalar(
         let nib = char_to_hex_num(&ch)?;
         char_u32 = (char_u32 << 4) | nib as u32;
         if let Some(pch) = chars.peek() {
-            if !has_bracket && is_whitespace(&*pch) {
+            if !has_bracket && is_whitespace(pch) {
                 return finish(char_u32);
             }
         }
