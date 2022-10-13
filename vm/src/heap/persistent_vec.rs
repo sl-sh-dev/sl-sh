@@ -10,11 +10,15 @@ const MASK: usize = WIDTH - 1; // 31, or 0x1f
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct PersistentVec {
-    id: u32,
+    // How many elements are in the vec.
     length: usize,
+    // How many elements are in the tail.
     tail_length: usize,
+    // number of bits to shift to get the first level index.  Will be a multiple of BITS.
     shift: usize,
-    root: Option<VecNode>,
+    // Need to keep PersistentVec Copy but maybe this should be a handle to a root on the heap.
+    root: VecNode,
+    // Tail array for the vector.  Elements above tail_length are not cleared of old values.
     tail: [Value; WIDTH],
 }
 
@@ -30,6 +34,42 @@ pub struct VecNode {
     data: NodeType,
 }
 
+impl VecNode {
+    fn new_node(id: u32) -> Self {
+        Self {
+            id,
+            data: NodeType::Node([Handle::invalid(); WIDTH]),
+        }
+    }
+
+    fn new_leaf(id: u32) -> Self {
+        Self {
+            id,
+            data: NodeType::Leaf([Value::Undefined; WIDTH]),
+        }
+    }
+
+    /// Return the nodes if this is a node and not a leaf.
+    /// Invalid handles are not in use.
+    pub fn nodes(&self) -> Option<&[Handle]> {
+        if let NodeType::Node(nodes) = &self.data {
+            Some(nodes)
+        } else {
+            None
+        }
+    }
+
+    /// Return the leaves if this is a leaf and not a node.
+    /// Values or Undefined are not in use.
+    pub fn leaf(&self) -> Option<&[Value]> {
+        if let NodeType::Leaf(leaf) = &self.data {
+            Some(leaf)
+        } else {
+            None
+        }
+    }
+}
+
 fn new_path<ENV>(id: u32, shift: usize, node_handle: Handle, vm: &mut GVm<ENV>) -> Handle {
     if shift == 0 {
         node_handle
@@ -39,7 +79,7 @@ fn new_path<ENV>(id: u32, shift: usize, node_handle: Handle, vm: &mut GVm<ENV>) 
             data: NodeType::Node([Handle::invalid(); WIDTH]),
         };
         if let NodeType::Node(handles) = &mut ret.data {
-            handles[0] = new_path(id, shift - 5, node_handle, vm);
+            handles[0] = new_path(id, shift - BITS, node_handle, vm);
         }
         vm.alloc_vecnode(ret)
     }
@@ -55,25 +95,24 @@ impl PersistentVec {
     /// Create a new empty persistent vector.
     pub fn new() -> Self {
         Self {
-            id: 0,
             length: 0,
             tail_length: 0,
             shift: 0,
-            root: None,
+            root: VecNode::new_leaf(0),
             tail: [Value::Undefined; WIDTH],
         }
     }
 
     fn push_tail<ENV>(
         &self,
-        level: usize,
+        shift: usize,
         parent: &VecNode,
         tailnode_handle: Handle,
         vm: &mut GVm<ENV>,
     ) -> VecNode {
-        let subidx = ((self.length - 1) >> level) & MASK;
+        let subidx = ((self.length - 1) >> shift) & MASK;
         let mut ret = *parent;
-        let node_to_insert = if level == 5 {
+        let node_to_insert = if shift == BITS {
             tailnode_handle
         } else {
             let child_handle = if let NodeType::Node(handles) = parent.data {
@@ -83,10 +122,10 @@ impl PersistentVec {
             };
             if child_handle.valid() {
                 let child = *vm.get_vecnode(child_handle);
-                let tail = self.push_tail(level - BITS, &child, tailnode_handle, vm);
+                let tail = self.push_tail(shift - BITS, &child, tailnode_handle, vm);
                 vm.alloc_vecnode(tail)
             } else {
-                new_path(parent.id, level - BITS, tailnode_handle, vm)
+                new_path(parent.id, shift - BITS, tailnode_handle, vm)
             }
         };
         if let NodeType::Node(handles) = &mut ret.data {
@@ -105,12 +144,30 @@ impl PersistentVec {
         self.length == 0
     }
 
+    /// First element (0) in list if not empty.
     pub fn first<ENV>(&self, vm: &GVm<ENV>) -> Option<Value> {
         self.get(0, vm)
     }
 
+    /// Last element (len() - 1) if not empty.
     pub fn last<ENV>(&self, vm: &GVm<ENV>) -> Option<Value> {
         self.get(self.length - 1, vm)
+    }
+
+    /// Return the current root node if it is use.
+    /// Primarily for GC.
+    pub fn root(&self) -> Option<&VecNode> {
+        if self.length > self.tail_length {
+            Some(&self.root)
+        } else {
+            None
+        }
+    }
+
+    /// Return the current tail, will have a length from 0 to WIDTH.
+    /// Primarily for GC.
+    pub fn tail(&self) -> &[Value] {
+        &self.tail[0..self.tail_length]
     }
 
     /// Push value on vec and return the new vector.
@@ -124,40 +181,37 @@ impl PersistentVec {
             return new_vec;
         }
         let new_tail = VecNode {
-            id: new_vec.id,
+            id: new_vec.root.id,
             data: NodeType::Leaf(self.tail),
         };
         let new_root = if (self.length >> BITS) > (1 << self.shift) {
             // root overflow
-            let new_root = if let Some(root_node) = self.root {
-                let mut new_root = VecNode {
-                    id: new_vec.id,
-                    data: NodeType::Node([Handle::invalid(); WIDTH]),
-                };
-                if let NodeType::Node(handles) = &mut new_root.data {
-                    handles[0] = vm.alloc_vecnode(root_node);
-                    handles[1] =
-                        new_path(new_vec.id, new_vec.shift, vm.alloc_vecnode(new_tail), vm);
-                }
-                new_root
-            } else {
-                VecNode {
-                    id: new_vec.id,
-                    data: NodeType::Leaf(self.tail),
-                }
-            };
+            let mut new_root = VecNode::new_node(new_vec.root.id);
+            if let NodeType::Node(handles) = &mut new_root.data {
+                handles[0] = vm.alloc_vecnode(new_vec.root);
+                handles[1] = new_path(
+                    new_vec.root.id,
+                    new_vec.shift,
+                    vm.alloc_vecnode(new_tail),
+                    vm,
+                );
+            }
             new_vec.shift += BITS;
             new_root
         } else {
             // push the tail
-            if let Some(root) = &self.root {
-                let new_tail_handle = vm.alloc_vecnode(new_tail);
-                self.push_tail(self.shift, root, new_tail_handle, vm)
+            if matches!(new_vec.root.data, NodeType::Leaf(_)) {
+                // If root is a leaf and this did not overflow then just copy tail to root.
+                VecNode {
+                    id: new_vec.root.id,
+                    data: NodeType::Leaf(new_vec.tail),
+                }
             } else {
-                new_tail
+                let new_tail_handle = vm.alloc_vecnode(new_tail);
+                self.push_tail(new_vec.shift, &new_vec.root, new_tail_handle, vm)
             }
         };
-        new_vec.root = Some(new_root);
+        new_vec.root = new_root;
         new_vec.tail[0] = value;
         new_vec.length += 1;
         new_vec.tail_length = 1;
@@ -176,49 +230,46 @@ impl PersistentVec {
         } else {
             let idx = self.length - 1;
             let mut path = Vec::new();
-            match self.root {
-                None => return new_vec,
-                Some(mut node) => {
-                    let mut level = self.shift;
-                    loop {
-                        match &mut node.data {
-                            NodeType::Node(handles) => {
-                                let next_node = *vm.get_vecnode(handles[(idx >> level) & MASK]);
-                                path.push((node, (idx >> level) & MASK));
-                                node = next_node;
-                            }
-                            NodeType::Leaf(values) => {
-                                new_vec.tail = *values;
-                                new_vec.tail_length = WIDTH - 1;
-                                new_vec.length -= 1;
-                                let mut first = true;
-                                while let Some((mut prev_node, idx)) = path.pop() {
-                                    if let NodeType::Node(handles) = &mut prev_node.data {
-                                        if first && idx == 0 {
-                                            // This node is removed, stay on first to try next node.
-                                        } else if first {
-                                            handles[idx] = Handle::invalid();
-                                            first = false;
-                                        } else {
-                                            handles[idx] = vm.alloc_vecnode(node);
-                                        }
-                                        node = prev_node;
-                                    }
-                                }
-                                if first {
-                                    new_vec.root = None;
+            let mut node = new_vec.root;
+            let mut level = self.shift;
+            loop {
+                match &mut node.data {
+                    NodeType::Node(handles) => {
+                        let next_node = *vm.get_vecnode(handles[(idx >> level) & MASK]);
+                        path.push((node, (idx >> level) & MASK));
+                        node = next_node;
+                    }
+                    NodeType::Leaf(values) => {
+                        new_vec.tail = *values;
+                        new_vec.tail_length = WIDTH - 1;
+                        new_vec.length -= 1;
+                        let mut first = true;
+                        while let Some((mut prev_node, idx)) = path.pop() {
+                            if let NodeType::Node(handles) = &mut prev_node.data {
+                                if first && idx == 0 {
+                                    // This node is removed, stay on first to try next node.
+                                } else if first {
+                                    handles[idx] = Handle::invalid();
+                                    first = false;
                                 } else {
-                                    new_vec.root = Some(node);
+                                    handles[idx] = vm.alloc_vecnode(node);
                                 }
-                                return new_vec;
+                                node = prev_node;
                             }
                         }
-                        if level == 0 {
-                            break;
+                        if first {
+                            new_vec.root = VecNode::new_leaf(self.root.id);
+                        } else {
+                            new_vec.root = node;
                         }
-                        level -= BITS;
+                        return new_vec;
                     }
                 }
+                if level < BITS {
+                    // Rut-Row, can't be here- should have found the leaf above when done.
+                    panic!("Invalid Persistent Tree");
+                }
+                level -= BITS;
             }
         }
 
@@ -236,25 +287,21 @@ impl PersistentVec {
             return self.tail.get(idx - tail_offset).copied();
         }
 
-        match self.root {
-            None => return None,
-            Some(mut node) => {
-                let mut level = self.shift;
-                loop {
-                    match node.data {
-                        NodeType::Node(handles) => {
-                            node = *vm.get_vecnode(handles[(idx >> level) & MASK]);
-                        }
-                        NodeType::Leaf(values) => return Some(values[idx & MASK]),
-                    }
-                    if level == 0 {
-                        break;
-                    }
-                    level -= BITS;
+        let mut level = self.shift;
+        let mut node = self.root;
+        loop {
+            match node.data {
+                NodeType::Node(handles) => {
+                    node = *vm.get_vecnode(handles[(idx >> level) & MASK]);
                 }
+                NodeType::Leaf(values) => return Some(values[idx & MASK]),
             }
+            if level < BITS {
+                // Rut-Row, can't be here- should have found the leaf above when done.
+                panic!("Invalid Persistent Tree");
+            }
+            level -= BITS;
         }
-        None
     }
 
     /// Replace the value ad idx with new_value and return a new vec.
@@ -276,35 +323,31 @@ impl PersistentVec {
         }
 
         let mut path = Vec::new();
-        match self.root {
-            None => return None,
-            Some(mut node) => {
-                let mut level = self.shift;
-                loop {
-                    match &mut node.data {
-                        NodeType::Node(handles) => {
-                            let next_node = *vm.get_vecnode(handles[(idx >> level) & MASK]);
-                            path.push((node, (idx >> level) & MASK));
-                            node = next_node;
-                        }
-                        NodeType::Leaf(values) => {
-                            values[idx & MASK] = new_value;
-                            while let Some((mut prev_node, idx)) = path.pop() {
-                                if let NodeType::Node(handles) = &mut prev_node.data {
-                                    handles[idx] = vm.alloc_vecnode(node);
-                                    node = prev_node;
-                                }
-                            }
-                            new_vec.root = Some(node);
-                            return Some(new_vec);
+        let mut level = self.shift;
+        let mut node = new_vec.root;
+        loop {
+            match &mut node.data {
+                NodeType::Node(handles) => {
+                    let next_node = *vm.get_vecnode(handles[(idx >> level) & MASK]);
+                    path.push((node, (idx >> level) & MASK));
+                    node = next_node;
+                }
+                NodeType::Leaf(values) => {
+                    values[idx & MASK] = new_value;
+                    while let Some((mut prev_node, idx)) = path.pop() {
+                        if let NodeType::Node(handles) = &mut prev_node.data {
+                            handles[idx] = vm.alloc_vecnode(node);
+                            node = prev_node;
                         }
                     }
-                    if level == 0 {
-                        break;
-                    }
-                    level -= BITS;
+                    new_vec.root = node;
+                    return Some(new_vec);
                 }
             }
+            if level == 0 {
+                break;
+            }
+            level -= BITS;
         }
         None
     }
@@ -343,7 +386,11 @@ mod tests {
     #[test]
     fn test_pvec() -> VMResult<()> {
         let mut vm = Vm::new();
+        vm.pause_gc();
         let pvec = PersistentVec::new();
+        let global = vm.reserve_global();
+        let pvec_val = vm.alloc_persistent_vector(pvec);
+        vm.set_global(global, pvec_val);
         assert_eq!(pvec.len(), 0);
         assert!(pvec.is_empty());
         let pvec2 = pvec.push(Value::Int(0), &mut vm);
@@ -404,6 +451,7 @@ mod tests {
     #[test]
     fn test_pvec_replace() -> VMResult<()> {
         let mut vm = Vm::new();
+        vm.pause_gc();
         let mut pvec = PersistentVec::new();
         assert_eq!(pvec.len(), 0);
         assert!(pvec.is_empty());
@@ -438,6 +486,7 @@ mod tests {
     #[test]
     fn test_pvec_iter() -> VMResult<()> {
         let mut vm = Vm::new();
+        vm.pause_gc();
         let mut pvec = PersistentVec::new();
         assert_eq!(pvec.len(), 0);
         assert!(pvec.is_empty());
@@ -461,6 +510,7 @@ mod tests {
     #[test]
     fn test_pvec_pop() -> VMResult<()> {
         let mut vm = Vm::new();
+        vm.pause_gc();
         let mut pvec = PersistentVec::new();
         assert_eq!(pvec.len(), 0);
         assert!(pvec.is_empty());
@@ -505,6 +555,7 @@ mod tests {
     #[test]
     fn test_pvec_pop_tail_only() -> VMResult<()> {
         let mut vm = Vm::new();
+        vm.pause_gc();
         let mut pvec = PersistentVec::new();
         assert_eq!(pvec.len(), 0);
         assert!(pvec.is_empty());
