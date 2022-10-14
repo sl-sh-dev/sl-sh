@@ -124,6 +124,7 @@ pub enum Value {
     String(Handle),
     Vector(Handle),
     PersistentVec(Handle),
+    PersistentMap(Handle),
     Map(Handle),
     Bytes(Handle),
     Pair(Handle),
@@ -247,6 +248,7 @@ impl Value {
             Value::String(handle) => Some(*handle),
             Value::Vector(handle) => Some(*handle),
             Value::PersistentVec(handle) => Some(*handle),
+            Value::PersistentMap(handle) => Some(*handle),
             Value::Map(handle) => Some(*handle),
             Value::Bytes(handle) => Some(*handle),
             Value::Pair(handle) => Some(*handle),
@@ -393,6 +395,10 @@ impl Value {
                 res.push(']');
                 res
             }
+            Value::PersistentMap(_) => {
+                // TODO- implement.
+                "IMPLEMENT".to_string()
+            }
             Value::Map(handle) => {
                 let mut res = String::new();
                 res.push('{');
@@ -463,6 +469,7 @@ impl Value {
             Value::CallFrame(_) => "CallFrame",
             Value::Vector(_) => "Vector",
             Value::PersistentVec(_) => "PersistentVector",
+            Value::PersistentMap(_) => "PersistentMap",
             Value::Map(_) => "Map",
             Value::Pair(_) => "Pair",
             Value::List(_, _) => "Pair",

@@ -5,6 +5,7 @@ use crate::chunk::*;
 use crate::error::*;
 use crate::heap::*;
 use crate::interner::*;
+use crate::persistent_map::{MapNode, PersistentMap};
 use crate::persistent_vec::{PersistentVec, VecNode};
 use crate::value::*;
 use crate::GVm;
@@ -158,6 +159,20 @@ impl<ENV> GVm<ENV> {
         heap.alloc_vecnode(node, |heap| self.mark_roots(heap))
     }
 
+    pub fn alloc_persistent_map(&mut self, map: PersistentMap) -> Value {
+        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
+        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
+        // alloc must not save mark_roots (it does not) since we broke heap away from self.
+        heap.alloc_persistent_map(map, MutState::Immutable, |heap| self.mark_roots(heap))
+    }
+
+    pub fn alloc_mapnode(&mut self, node: MapNode) -> Handle {
+        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
+        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
+        // alloc must not save mark_roots (it does not) since we broke heap away from self.
+        heap.alloc_mapnode(node, |heap| self.mark_roots(heap))
+    }
+
     pub fn alloc_map(&mut self, map: HashMap<Value, Value>) -> Value {
         // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
         let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
@@ -301,6 +316,14 @@ impl<ENV> GVm<ENV> {
 
     pub fn get_vecnode(&self, handle: Handle) -> &VecNode {
         self.heap.get_vecnode(handle)
+    }
+
+    pub(crate) fn get_persistent_map(&self, handle: Handle) -> &PersistentMap {
+        self.heap.get_persistent_map(handle)
+    }
+
+    pub fn get_mapnode(&self, handle: Handle) -> &MapNode {
+        self.heap.get_mapnode(handle)
     }
 
     pub fn get_map(&self, handle: Handle) -> &HashMap<Value, Value> {

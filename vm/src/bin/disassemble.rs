@@ -6,6 +6,9 @@ use slvm::error::*;
 use slvm::opcodes::*;
 use slvm::value::*;
 use slvm::vm::*;
+use slvm::FxHasher;
+use std::collections::HashSet;
+use std::hash::Hasher;
 use std::sync::Arc;
 
 fn main() -> Result<(), VMError> {
@@ -52,5 +55,18 @@ fn main() -> Result<(), VMError> {
     chunk.encode_jump_offset(-12)?;
     let vm = Vm::new();
     chunk.disassemble_chunk(&vm, 0)?;
+
+    let mut set = HashSet::new();
+    for i in 0..1_000_000 {
+        let mut fx = FxHasher::default();
+        fx.write_u64(i);
+        let finish = fx.finish();
+        if set.contains(&finish) {
+            println!("Collision: {:#016x}", finish);
+        } else {
+            set.insert(finish);
+        }
+        //println!("{}: {:#016x}", i, finish)
+    }
     Ok(())
 }

@@ -18,3 +18,6 @@ pub use crate::vm::*;
 
 pub mod interner;
 pub use crate::interner::*;
+
+pub mod fxhasher;
+pub use crate::fxhasher::*;

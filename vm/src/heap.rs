@@ -8,8 +8,10 @@ use crate::Interned;
 
 pub mod handle;
 pub use crate::handle::Handle;
+use crate::persistent_map::{MapNode, PersistentMap};
 use crate::persistent_vec::{PersistentVec, VecNode};
 
+pub mod persistent_map;
 pub mod persistent_vec;
 
 const FLAG_MARK: u8 = 0x01;
@@ -88,6 +90,8 @@ enum Object {
 
     PersistentVec(Arc<PersistentVec>),
     VecNode(Arc<VecNode>),
+    PersistentMap(Arc<PersistentMap>),
+    MapNode(Arc<MapNode>),
     // Place holder for an empty object slot.
     Empty,
 }
@@ -307,6 +311,29 @@ impl Heap {
         self.alloc(Object::VecNode(Arc::new(node)), FLAG_MUT, mark_roots)
     }
 
+    pub fn alloc_persistent_map<MarkFunc>(
+        &mut self,
+        v: PersistentMap,
+        mutable: MutState,
+        mark_roots: MarkFunc,
+    ) -> Value
+    where
+        MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
+    {
+        Value::PersistentMap(self.alloc(
+            Object::PersistentMap(Arc::new(v)),
+            mutable.flag(),
+            mark_roots,
+        ))
+    }
+
+    pub(crate) fn alloc_mapnode<MarkFunc>(&mut self, node: MapNode, mark_roots: MarkFunc) -> Handle
+    where
+        MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
+    {
+        self.alloc(Object::MapNode(Arc::new(node)), FLAG_MUT, mark_roots)
+    }
+
     pub fn alloc_map<MarkFunc>(
         &mut self,
         map: HashMap<Value, Value>,
@@ -437,6 +464,22 @@ impl Heap {
             panic!("Handle {} is not a vector node!", handle.idx());
         }
     }*/
+
+    pub(crate) fn get_persistent_map(&self, handle: Handle) -> &PersistentMap {
+        if let Some(Object::PersistentMap(map)) = self.objects.get(handle.idx()) {
+            map
+        } else {
+            panic!("Handle {} is not a persistent map!", handle.idx());
+        }
+    }
+
+    pub(crate) fn get_mapnode(&self, handle: Handle) -> &MapNode {
+        if let Some(Object::MapNode(node)) = self.objects.get(handle.idx()) {
+            node
+        } else {
+            panic!("Handle {} is not a map node!", handle.idx());
+        }
+    }
 
     pub fn get_map(&self, handle: Handle) -> &HashMap<Value, Value> {
         if let Some(Object::Map(map)) = self.objects.get(handle.idx()) {
@@ -768,6 +811,8 @@ impl Heap {
                         .for_each(|handle| self.mark_trace(handle, current));
                 }
             }
+            Object::PersistentMap(_pmap) => {} // TODO- trace me!
+            Object::MapNode(_node) => {}       // TODO- trace me!
             Object::Empty => panic!("An empty object can not be live!"),
         }
     }
