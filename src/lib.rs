@@ -1,91 +1,50 @@
 use either::Either;
+use std::fmt::{Display, Formatter};
 //TODO why am I using these __private versions, is it
 // just to skip out on some annoying .into()'s on TokenStream2
 use quote::quote;
 use quote::ToTokens;
 use quote::__private::TokenStream;
 use syn::__private::{Span, TokenStream2};
-use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::{
-    parse, parse_macro_input, AngleBracketedGenericArguments, AttributeArgs, Error, FnArg,
-    GenericArgument, Ident, Item, ItemFn, Lit, Meta, NestedMeta, Path, PathArguments, PathSegment,
-    ReturnType, Type, TypePath, TypeTuple,
+    parse, parse_macro_input, AttributeArgs, Error, FnArg, GenericArgument, Ident, Item, ItemFn,
+    Lit, Meta, NestedMeta, PathArguments, ReturnType, Type, TypePath, TypeTuple,
 };
 extern crate static_assertions;
 
 type MacroResult<T> = Result<T, Error>;
 
-const POSSIBLE_RETURN_TYPES: [&str; 1] = ["LispResult"];
+const POSSIBLE_RETURN_TYPES: [&str; 2] = ["LispResult", "Option"];
 const SPECIAL_ARG_TYPES: [&str; 2] = ["Option", "VarArgs"];
 const POSSIBLE_ARG_TYPES: [&str; 3] = ["Option", "VarArgs", "Vec"];
 
-//TODO this function is unnecessary just use quote!
-/// return a fully qualified crate::Expression Type this is the struct that
-/// all sl_sh types are wrapped in, because it's a lisp.
-fn build_sl_sh_expression_type() -> Type {
-    let crate_path_segment = PathSegment {
-        ident: Ident::new("crate", Span::call_site()),
-        arguments: PathArguments::None,
-    };
-    let exp_enum_path_segment = PathSegment {
-        ident: Ident::new("Expression", Span::call_site()),
-        arguments: PathArguments::None,
-    };
-    let mut pun_seq = Punctuated::new();
-    pun_seq.push(crate_path_segment);
-    pun_seq.push(exp_enum_path_segment);
-    Type::Path(TypePath {
-        qself: None,
-        path: Path {
-            leading_colon: None,
-            segments: pun_seq,
-        },
-    })
+#[derive(Copy, Clone)]
+enum SupportedGenericReturnTypes {
+    LispResult,
+    Option,
 }
 
-/// given a type and the string value of a trait in std::convert::<convert_trait>
-/// returned the given type wrapped with the std::convert::<convert_trait>
-fn wrap_with_std_convert(ty: Type, convert_trait: &str) -> Type {
-    let std_path_segment = PathSegment {
-        ident: Ident::new("std", Span::call_site()),
-        arguments: PathArguments::None,
-    };
-    let convert_path_segment = PathSegment {
-        ident: Ident::new("convert", Span::call_site()),
-        arguments: PathArguments::None,
-    };
-    let generic_argument = GenericArgument::Type(ty);
-    let mut generic_pun_seq = Punctuated::new();
-    generic_pun_seq.push(generic_argument);
-    let generic_argument = AngleBracketedGenericArguments {
-        colon2_token: None,
-        lt_token: Default::default(),
-        args: generic_pun_seq,
-        gt_token: Default::default(),
-    };
-    let trait_path_segment = PathSegment {
-        ident: Ident::new(convert_trait, Span::call_site()),
-        arguments: PathArguments::AngleBracketed(generic_argument),
-    };
-    let mut pun_seq = Punctuated::new();
-    pun_seq.push(std_path_segment);
-    pun_seq.push(convert_path_segment);
-    pun_seq.push(trait_path_segment);
-    Type::Path(TypePath {
-        qself: None,
-        path: Path {
-            leading_colon: None,
-            segments: pun_seq,
-        },
-    })
+impl Display for SupportedGenericReturnTypes {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SupportedGenericReturnTypes::LispResult => {
+                write!(f, "LispResult")
+            }
+            SupportedGenericReturnTypes::Option => {
+                write!(f, "Option")
+            }
+        }
+    }
 }
 
 /// returns the option of inner type and the wrapped generic type (None if it's
 /// not generic. If there is no return type None, None is returned. Throws
 /// an error if the generic return type is not in the list of predefined
 /// constants POSSIBLE_RESULT_TYPES.
-fn get_return_type(original_item_fn: &ItemFn) -> MacroResult<(Option<Type>, Option<&'static str>)> {
+fn get_return_type(
+    original_item_fn: &ItemFn,
+) -> MacroResult<(Option<Type>, Option<SupportedGenericReturnTypes>)> {
     let return_type = match &original_item_fn.sig.output {
         ReturnType::Default => return Ok((None, None)),
         ReturnType::Type(_ra_arrow, ty) => *ty.clone(),
@@ -98,7 +57,7 @@ fn get_return_type(original_item_fn: &ItemFn) -> MacroResult<(Option<Type>, Opti
             _ => Err(Error::new(
                 original_item_fn.span(),
                 format!(
-                    "Functions must return generic arguments of type(s) {:?}.",
+                    "sl_sh_fn macros can only return generic arguments of types {:?}.",
                     &POSSIBLE_RETURN_TYPES
                 ),
             )),
@@ -127,13 +86,17 @@ fn opt_is_valid_generic_type<'a>(
 fn is_valid_generic_type<'a>(
     type_path: &TypePath,
     possible_types: &'a [&str],
-) -> MacroResult<&'a str> {
+) -> MacroResult<SupportedGenericReturnTypes> {
     if type_path.path.segments.len() == 1 && type_path.path.segments.first().is_some() {
         let path_segment = &type_path.path.segments.first().unwrap();
         let ident = &path_segment.ident;
         for type_name in possible_types {
             if ident == type_name {
-                return Ok(type_name);
+                if type_name == &SupportedGenericReturnTypes::LispResult.to_string().as_str() {
+                    return Ok(SupportedGenericReturnTypes::LispResult);
+                } else if type_name == &SupportedGenericReturnTypes::Option.to_string().as_str() {
+                    return Ok(SupportedGenericReturnTypes::Option);
+                }
             }
         }
     }
@@ -170,9 +133,8 @@ fn get_generic_argument_from_type(ty: &Type) -> Option<(&GenericArgument, &TypeP
 }
 
 fn generate_assertions_code_for_return_type_conversions(return_type: &Type) -> TokenStream2 {
-    let to_return_type = wrap_with_std_convert(build_sl_sh_expression_type(), "Into");
     quote! {
-      static_assertions::assert_impl_all!(#return_type: #to_return_type);
+      static_assertions::assert_impl_all!(#return_type: std::convert::Into<crate::types::Expression>);
     }
 }
 
@@ -330,13 +292,23 @@ fn make_orig_fn_call(
     let (return_type, lisp_return) = get_return_type(original_item_fn)?;
     let returns_none = "()" == return_type.to_token_stream().to_string();
     let original_fn_call = match (return_type, lisp_return, returns_none) {
-        // coerce to a LispResult<Expression>
-        (Some(_), Some(_), true) => quote! {
+        (Some(_), Some(SupportedGenericReturnTypes::LispResult), true) => quote! {
             #original_fn_name(#takes_env #(#arg_names),*)?;
             Ok(crate::types::Expression::make_nil())
         },
-        (Some(_), Some(_), false) => quote! {
+        (Some(_), Some(SupportedGenericReturnTypes::Option), true) => quote! {
+            #original_fn_name(#takes_env #(#arg_names),*);
+            Ok(crate::types::Expression::make_nil())
+        },
+        (Some(_), Some(SupportedGenericReturnTypes::LispResult), false) => quote! {
             #original_fn_name(#takes_env #(#arg_names),*).map(Into::into)
+        },
+        (Some(_), Some(SupportedGenericReturnTypes::Option), false) => quote! {
+            if let Some(val) = #original_fn_name(#takes_env #(#arg_names),*) {
+                Ok(val.into())
+            } else {
+                Ok(crate::types::Expression::make_nil())
+            }
         },
         // coerce to Expression
         (Some(_), None, _) => quote! {
@@ -404,7 +376,6 @@ fn parse_variadic_args_type(
     arg_name_itself_is_iter: bool,
     ty: &TypePath,
     fn_name: &str,
-    fn_name_attr: &Ident,
     arg_name: &Ident,
     inner: TokenStream,
     collect_type: TokenStream,
@@ -439,27 +410,7 @@ fn parse_variadic_args_type(
             }})
         }
         Either::Right(type_tuple) => {
-            if type_tuple.elems.len() == 2 {
-                let types = type_tuple.elems.iter().collect::<Vec<&Type>>();
-                let type_0 = types.get(0).unwrap();
-                let type_1 = types.get(1).unwrap();
-                Ok(quote! {{
-                    use crate::builtins_util::TryIntoExpression;
-                    static_assertions::assert_impl_all!(crate::types::Expression: crate::builtins_util::TryIntoExpression<#type_0>);
-                    static_assertions::assert_impl_all!(crate::types::Expression: crate::builtins_util::TryIntoExpression<#type_1>);
-                    let #arg_name = #arg_name
-                        .iter()
-                        .map(|exp| {
-                            crate::try_inner_pair!(#fn_name_attr, exp, e0, e1, {
-                                let e0 = e0.clone().try_into_for(#fn_name)?;
-                                let e1 = e1.clone().try_into_for(#fn_name)?;
-                                return Ok(( e0, e1 ));
-                            })
-                        })
-                        .collect::<crate::LispResult<#collect_type<(#(#types),*)>>>()?;
-                    #inner
-                }})
-            } else if !type_tuple.elems.is_empty() {
+            if !type_tuple.elems.is_empty() {
                 let arg_pos = get_arg_pos(arg_name)?;
                 let arg_check = if arg_name_itself_is_iter {
                     quote! {
@@ -627,15 +578,7 @@ fn parse_argval_value_type(
     inner: TokenStream,
 ) -> MacroResult<TokenStream> {
     if is_vec(ty).is_some() {
-        parse_variadic_args_type(
-            true,
-            ty,
-            fn_name,
-            fn_name_attr,
-            arg_name,
-            inner,
-            quote! { Vec },
-        )
+        parse_variadic_args_type(true, ty, fn_name, arg_name, inner, quote! { Vec })
     } else {
         let ty = get_type_or_wrapped_type(ty, SPECIAL_ARG_TYPES.as_slice());
         match ty {
@@ -712,7 +655,6 @@ fn parse_type(
             false,
             ty,
             fn_name.0,
-            fn_name.1,
             arg_name,
             inner,
             quote! { crate::VarArgs },
@@ -1150,7 +1092,7 @@ fn parse_type_tuple(
     };
     let mut expressions = vec![];
     let tuple_len = type_tuple.elems.len();
-    let tokens = if type_tuple.elems.len() > 0 {
+    let tokens = if !type_tuple.elems.is_empty() {
         for (i, ty) in type_tuple.elems.iter().enumerate() {
             expressions.push(quote! { crate::types::Expression });
             let arg_name_pair = Ident::new(
@@ -1703,3 +1645,6 @@ mod test {
 //      - builtins_types.rs
 //          + builtin_to_symbol
 // tuple return types?
+// test cases
+// - returns Result<()>
+// -  returns Option<()>
