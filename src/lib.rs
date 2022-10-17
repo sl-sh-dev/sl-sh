@@ -25,6 +25,55 @@ enum SupportedGenericReturnTypes {
     Option,
 }
 
+enum RustType {
+    BareFn(TypeBareFn, Span),
+    Path(TypePath, Span),
+    Tuple(TypeTuple, Span),
+    Reference(TypeReference, Span),
+    Unsupported(Span),
+}
+
+impl RustType {
+    pub fn span(&self) -> Span {
+        match self {
+            RustType::BareFn(_, x) => *x,
+            RustType::Path(_, x) => *x,
+            RustType::Tuple(_, x) => *x,
+            RustType::Reference(_, x) => *x,
+            RustType::Unsupported(x) => *x,
+        }
+    }
+}
+
+impl From<Type> for RustType {
+    fn from(ty: Type) -> Self {
+        match ty {
+            // Type::Array(_) => {} // TODO
+            // Type::Slice(_) => {} // TODO
+            Type::BareFn(x) => {
+                let span = x.span();
+                RustType::BareFn(x, span)
+            }
+            Type::Path(x) => {
+                let span = x.span();
+                RustType::Path(x, span)
+            }
+            Type::Reference(x) => {
+                let span = x.span();
+                RustType::Reference(x, span)
+            }
+            Type::Tuple(x) => {
+                let span = x.span();
+                RustType::Tuple(x, span)
+            }
+            x => {
+                let span = x.span();
+                RustType::Unsupported(span)
+            }
+        }
+    }
+}
+
 impl Display for SupportedGenericReturnTypes {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -246,7 +295,7 @@ fn parse_optional(arg_name: &Ident, inner: TokenStream) -> TokenStream {
                 #arg_name,
                 crate::ArgType::Opt(#arg_name),
                 #inner,
-                "sl_sh_fn macro is broken. ArgType::Opt can't be parsed as ArgType::Opt"
+                "sl_sh_fn macro is broken. Alleged ArgType::Opt can't be parsed as ArgType::Opt"
             )
     }
 }
@@ -257,7 +306,7 @@ fn parse_varargs(arg_name: &Ident, inner: TokenStream) -> TokenStream {
                 #arg_name,
                 crate::ArgType::VarArgs(#arg_name),
                 #inner,
-                "sl_sh_fn macro is broken. ArgType::Vargs can't be parsed as ArgType::Vargs"
+                "sl_sh_fn macro is broken. Alleged ArgType::Vargs can't be parsed as ArgType::Vargs"
             )
     }
 }
@@ -528,7 +577,7 @@ fn parse_argval_optional_type(
     })
 }
 
-// None if not vec
+/// None if not Rust type vec
 fn is_vec(ty: &TypePath) -> Option<Type> {
     if let Some((ty, type_path)) = get_generic_argument_from_type_path(ty) {
         let wrapper = opt_is_valid_generic_type(type_path, &["Vec"]);
@@ -542,55 +591,6 @@ fn is_vec(ty: &TypePath) -> Option<Type> {
     None
 }
 
-enum RustType {
-    BareFn(TypeBareFn, Span),
-    Path(TypePath, Span),
-    Tuple(TypeTuple, Span),
-    Reference(TypeReference, Span),
-    Unsupported(Span),
-}
-
-impl From<Type> for RustType {
-    fn from(ty: Type) -> Self {
-        match ty {
-            // Type::Array(_) => {} // TODO
-            // Type::Slice(_) => {} // TODO
-            Type::BareFn(x) => {
-                let span = x.span();
-                RustType::BareFn(x, span)
-            }
-            Type::Path(x) => {
-                let span = x.span();
-                RustType::Path(x, span)
-            }
-            Type::Reference(x) => {
-                let span = x.span();
-                RustType::Reference(x, span)
-            }
-            Type::Tuple(x) => {
-                let span = x.span();
-                RustType::Tuple(x, span)
-            }
-            x => {
-                let span = x.span();
-                RustType::Unsupported(span)
-            }
-        }
-    }
-}
-
-impl RustType {
-    pub fn span(&self) -> Span {
-        match self {
-            RustType::BareFn(_, x) => x.clone(),
-            RustType::Path(_, x) => x.clone(),
-            RustType::Tuple(_, x) => x.clone(),
-            RustType::Reference(_, x) => x.clone(),
-            RustType::Unsupported(x) => x.clone(),
-        }
-    }
-}
-
 /// at this point the macro is only operating on types it expects
 /// which are any rust types, any rust types wrapped in Option,
 /// and any rust types wrapped in Vec. If in the future this is
@@ -600,11 +600,8 @@ impl RustType {
 fn get_type_or_wrapped_type<'a>(ty: &'a TypePath, possible_types: &'a [&str]) -> RustType {
     if let Some((ty, type_path)) = get_generic_argument_from_type_path(ty) {
         let wrapper = opt_is_valid_generic_type(type_path, possible_types);
-        match (ty, wrapper) {
-            (GenericArgument::Type(ty), Some(_)) => {
-                return <Type as Into<RustType>>::into(ty.clone());
-            }
-            (_, _) => {}
+        if let (GenericArgument::Type(ty), Some(_)) = (ty, wrapper) {
+            return <Type as Into<RustType>>::into(ty.clone());
         }
     }
     RustType::Path(ty.clone(), ty.span())
@@ -628,7 +625,7 @@ fn parse_argval_value_type(
             RustType::Path(ty, _span) => {
                 let str = ty.to_token_stream().to_string();
                 // handle &str differently, want impl RustProcedure<F> for TypedWrapper<&str>
-                // w/o this special case it generate RustProcedureRefMut on an unsized TypedWrapper<str>
+                // w/o this special case it generate RustProcedureRefMut on a TypedWrapper<str> which is unsized.
                 let (fn_ref, passing_style, ty) =
                     if str == "str" && passing_style == ArgPassingStyle::Reference {
                         let passing_style = ArgPassingStyle::Move;
