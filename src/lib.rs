@@ -1,4 +1,3 @@
-use either::Either;
 use std::fmt::{Display, Formatter};
 //TODO why am I using these __private versions, is it
 // just to skip out on some annoying .into()'s on TokenStream2
@@ -9,7 +8,8 @@ use syn::__private::{Span, TokenStream2};
 use syn::spanned::Spanned;
 use syn::{
     parse, parse_macro_input, AttributeArgs, Error, FnArg, GenericArgument, Ident, Item, ItemFn,
-    Lit, Meta, NestedMeta, PathArguments, ReturnType, Type, TypePath, TypeTuple,
+    Lit, Meta, NestedMeta, PathArguments, ReturnType, Type, TypeBareFn, TypePath, TypeReference,
+    TypeTuple,
 };
 extern crate static_assertions;
 
@@ -380,10 +380,10 @@ fn parse_variadic_args_type(
     inner: TokenStream,
     collect_type: TokenStream,
 ) -> MacroResult<TokenStream> {
-    let wrapped_ty = get_type_or_wrapped_type(ty, POSSIBLE_ARG_TYPES.as_slice());
+    let rust_type = get_type_or_wrapped_type(ty, POSSIBLE_ARG_TYPES.as_slice());
     let arg_pos = get_arg_pos(arg_name)?;
-    match wrapped_ty {
-        Either::Left(wrapped_ty) => {
+    match rust_type {
+        RustType::Path(wrapped_ty, _span) => {
             let arg_check = if arg_name_itself_is_iter {
                 quote! {
                     if !crate::is_sequence!(#arg_name)
@@ -409,7 +409,7 @@ fn parse_variadic_args_type(
                 #inner
             }})
         }
-        Either::Right(type_tuple) => {
+        RustType::Tuple(type_tuple, _span) => {
             if !type_tuple.elems.is_empty() {
                 let arg_pos = get_arg_pos(arg_name)?;
                 let arg_check = if arg_name_itself_is_iter {
@@ -455,9 +455,6 @@ fn parse_variadic_args_type(
                         .iter()
                         .map(|#arg_name| {
                             let #arg_name = #arg_name.iter().collect::<Vec<crate::types::Expression>>();
-                            for x in &#arg_name {
-                                println!("X type: {}", x.display_type());
-                            }
                             match #arg_name.try_into() {
                                 Ok(#arg_name) => {
                                     let #arg_name: [crate::Expression; #tuple_len] = #arg_name;
@@ -482,6 +479,10 @@ fn parse_variadic_args_type(
                 );
                 Err(Error::new(type_tuple.span(), err_str))
             }
+        }
+        ty => {
+            let err_str = "Vec<T> and VarArgs<T> only support T of type Type::Path or Type::Tuple.";
+            Err(Error::new(ty.span(), err_str))
         }
     }
 }
@@ -532,13 +533,62 @@ fn is_vec(ty: &TypePath) -> Option<Type> {
     if let Some((ty, type_path)) = get_generic_argument_from_type_path(ty) {
         let wrapper = opt_is_valid_generic_type(type_path, &["Vec"]);
         if let (GenericArgument::Type(ty), Some(_)) = (ty, wrapper) {
-            match ty {
-                Type::Path(_) | Type::Tuple(_) => return Some(ty.clone()),
+            match <Type as Into<RustType>>::into(ty.clone()) {
+                RustType::Path(_, _) | RustType::Tuple(_, _) => return Some(ty.clone()),
                 _ => {}
             }
         }
     }
     None
+}
+
+enum RustType {
+    BareFn(TypeBareFn, Span),
+    Path(TypePath, Span),
+    Tuple(TypeTuple, Span),
+    Reference(TypeReference, Span),
+    Unsupported(Span),
+}
+
+impl From<Type> for RustType {
+    fn from(ty: Type) -> Self {
+        match ty {
+            // Type::Array(_) => {} // TODO
+            // Type::Slice(_) => {} // TODO
+            Type::BareFn(x) => {
+                let span = x.span();
+                RustType::BareFn(x, span)
+            }
+            Type::Path(x) => {
+                let span = x.span();
+                RustType::Path(x, span)
+            }
+            Type::Reference(x) => {
+                let span = x.span();
+                RustType::Reference(x, span)
+            }
+            Type::Tuple(x) => {
+                let span = x.span();
+                RustType::Tuple(x, span)
+            }
+            x => {
+                let span = x.span();
+                RustType::Unsupported(span)
+            }
+        }
+    }
+}
+
+impl RustType {
+    pub fn span(&self) -> Span {
+        match self {
+            RustType::BareFn(_, x) => x.clone(),
+            RustType::Path(_, x) => x.clone(),
+            RustType::Tuple(_, x) => x.clone(),
+            RustType::Reference(_, x) => x.clone(),
+            RustType::Unsupported(x) => x.clone(),
+        }
+    }
 }
 
 /// at this point the macro is only operating on types it expects
@@ -547,24 +597,17 @@ fn is_vec(ty: &TypePath) -> Option<Type> {
 /// confusing wrapper types can be made, i.e. SlshVarArgs,
 /// so normal rust Vec could be used without being turned into
 /// a SlshVarArgs
-fn get_type_or_wrapped_type<'a>(
-    ty: &'a TypePath,
-    possible_types: &'a [&str],
-) -> Either<&'a TypePath, &'a TypeTuple> {
-    let orig_ty = ty;
+fn get_type_or_wrapped_type<'a>(ty: &'a TypePath, possible_types: &'a [&str]) -> RustType {
     if let Some((ty, type_path)) = get_generic_argument_from_type_path(ty) {
         let wrapper = opt_is_valid_generic_type(type_path, possible_types);
         match (ty, wrapper) {
-            (GenericArgument::Type(ty), Some(_)) => match ty {
-                Type::Path(path) => Either::Left(path),
-                Type::Tuple(type_tuple) => Either::Right(type_tuple),
-                _ => Either::Left(orig_ty),
-            },
-            (_, _) => Either::Left(orig_ty),
+            (GenericArgument::Type(ty), Some(_)) => {
+                return <Type as Into<RustType>>::into(ty.clone());
+            }
+            (_, _) => {}
         }
-    } else {
-        Either::Left(ty)
     }
+    RustType::Path(ty.clone(), ty.span())
 }
 
 /// for regular Expression values (no Optional/VarArgs) ref_exp
@@ -582,7 +625,7 @@ fn parse_argval_value_type(
     } else {
         let ty = get_type_or_wrapped_type(ty, SPECIAL_ARG_TYPES.as_slice());
         match ty {
-            Either::Left(ty) => {
+            RustType::Path(ty, _span) => {
                 let str = ty.to_token_stream().to_string();
                 // handle &str differently, want impl RustProcedure<F> for TypedWrapper<&str>
                 // w/o this special case it generate RustProcedureRefMut on an unsized TypedWrapper<str>
@@ -592,7 +635,7 @@ fn parse_argval_value_type(
                         (quote! { &#ty }, passing_style, quote! { &#ty })
                     } else {
                         (
-                            tokens_for_matching_references(passing_style, ty),
+                            tokens_for_matching_references(passing_style, &ty),
                             passing_style,
                             quote! { #ty },
                         )
@@ -623,8 +666,21 @@ fn parse_argval_value_type(
                     }}),
                 }
             }
-            Either::Right(type_tuple) => {
-                parse_type_tuple(type_tuple, fn_name, fn_name_attr, inner, arg_name, no_parse)
+            RustType::Tuple(type_tuple, _span) => parse_type_tuple(
+                &type_tuple,
+                fn_name,
+                fn_name_attr,
+                inner,
+                arg_name,
+                no_parse,
+            ),
+            RustType::BareFn(_, _) | RustType::Reference(_, _) | RustType::Unsupported(_) => {
+                let arg_pos = get_arg_pos(arg_name)?;
+                let err_str = format!(
+                    "Error with argument at position {}, sl_sh_fn only supports Vec<T>, Option<T>, and T where T is a Type::Path or Type::Tuple and can be moved, passed by reference, or passed by mutable reference (|&|&mut )(Type Path | (Type Path,*))",
+                    arg_pos
+                );
+                Err(Error::new(ty.span(), err_str))
             }
         }
     }
@@ -948,9 +1004,8 @@ fn generate_builtin_fn(
         .zip(arg_names.iter());
     for (fn_arg, arg_name) in fn_args {
         if let FnArg::Typed(ty) = fn_arg {
-            let ty = &*ty.ty;
             prev_token_stream = parse_fn_arg_type(
-                ty,
+                &*ty.ty,
                 fn_name,
                 fn_name_attr,
                 prev_token_stream,
@@ -977,20 +1032,20 @@ fn generate_builtin_fn(
 }
 
 fn parse_fn_arg_type(
-    ty: &Type,
+    ty: &Type, //TODO Cow?
     fn_name: &str,
     fn_name_attr: &Ident,
     prev_token_stream: TokenStream,
     arg_name: &Ident,
     noop_outer_parse: bool,
 ) -> MacroResult<TokenStream> {
-    match ty {
-        Type::Path(ty) => {
-            let val = get_arg_val(ty);
+    match <Type as Into<RustType>>::into(ty.clone()) {
+        RustType::Path(ty, _span) => {
+            let val = get_arg_val(&ty);
             let parse_layer_1 = get_parser_for_arg_val(val, noop_outer_parse);
             let passing_style = ArgPassingStyle::Move;
             parse_type(
-                ty,
+                &ty,
                 (fn_name, fn_name_attr),
                 prev_token_stream,
                 val,
@@ -999,11 +1054,11 @@ fn parse_fn_arg_type(
                 parse_layer_1,
             )
         }
-        Type::Tuple(type_tuple) => {
+        RustType::Tuple(type_tuple, _span) => {
             let val = ArgVal::Value;
             let parse_layer_1 = get_parser_for_arg_val(val, noop_outer_parse);
             parse_type_tuple(
-                type_tuple,
+                &type_tuple,
                 fn_name,
                 fn_name_attr,
                 prev_token_stream,
@@ -1011,9 +1066,9 @@ fn parse_fn_arg_type(
                 parse_layer_1,
             )
         }
-        Type::Reference(ty_ref) => match &*ty_ref.elem {
-            Type::Path(ty) => {
-                let val = get_arg_val(ty);
+        RustType::Reference(ty_ref, _span) => match <Type as Into<RustType>>::into(*ty_ref.elem) {
+            RustType::Path(ty, _span) => {
+                let val = get_arg_val(&ty);
                 let parse_layer_1 = get_parser_for_arg_val(val, noop_outer_parse);
                 let passing_style = if ty_ref.mutability.is_some() {
                     ArgPassingStyle::MutReference
@@ -1021,7 +1076,7 @@ fn parse_fn_arg_type(
                     ArgPassingStyle::Reference
                 };
                 parse_type(
-                    ty,
+                    &ty,
                     (fn_name, fn_name_attr),
                     prev_token_stream,
                     val,
@@ -1030,11 +1085,11 @@ fn parse_fn_arg_type(
                     parse_layer_1,
                 )
             }
-            Type::Tuple(type_tuple) => {
+            RustType::Tuple(type_tuple, _span) => {
                 let val = ArgVal::Value;
                 let parse_layer_1 = get_parser_for_arg_val(val, noop_outer_parse);
                 parse_type_tuple(
-                    type_tuple,
+                    &type_tuple,
                     fn_name,
                     fn_name_attr,
                     prev_token_stream,
@@ -1042,7 +1097,7 @@ fn parse_fn_arg_type(
                     parse_layer_1,
                 )
             }
-            _ => {
+            RustType::BareFn(_, _) | RustType::Unsupported(_) | RustType::Reference(_, _) => {
                 let arg_pos = get_arg_pos(arg_name)?;
                 let err_str = format!(
                     "Error with argument at position {}, sl_sh_fn only supports Vec<T>, Option<T>, and T where T is a Type::Path or Type::Tuple and can be moved, passed by reference, or passed by mutable reference (|&|&mut )(Type Path | (Type Path,*))",
@@ -1051,7 +1106,7 @@ fn parse_fn_arg_type(
                 Err(Error::new(ty.span(), err_str))
             }
         },
-        _ => {
+        RustType::BareFn(_, _) | RustType::Unsupported(_) => {
             let arg_pos = get_arg_pos(arg_name)?;
             let err_str = format!(
                 "Error with argument at position {}, sl_sh_fn only supports Vec<T>, Option<T>, and T where T is a Type::Path or Type::Tuple and can be moved, passed by reference, or passed by mutable reference (|&|&mut )(Type Path | (Type Path,*))",
@@ -1198,32 +1253,32 @@ fn parse_src_function_arguments(
                     "Associated functions that take the self argument are not supported.",
                 ))
             }
-            FnArg::Typed(ty) => match &*ty.ty {
-                Type::Path(ty) => {
-                    let val = get_arg_val(ty);
+            FnArg::Typed(ty) => match <Type as Into<RustType>>::into(*ty.ty.clone()) {
+                RustType::Path(ty, _span) => {
+                    let val = get_arg_val(&ty);
                     parsed_args.push(Arg {
                         val,
                         passing_style: ArgPassingStyle::Move,
                     });
                 }
-                Type::Tuple(_type_tuple) => {
+                RustType::Tuple(_type_tuple, _span) => {
                     parsed_args.push(Arg {
                         val: ArgVal::Value,
                         passing_style: ArgPassingStyle::Move,
                     });
                 }
-                Type::Reference(ty_ref) => {
+                RustType::Reference(ty_ref, _span) => {
                     let passing_style = if ty_ref.mutability.is_some() {
                         ArgPassingStyle::MutReference
                     } else {
                         ArgPassingStyle::Reference
                     };
-                    match &*ty_ref.elem {
-                        Type::Path(ty) => {
-                            let val = get_arg_val(ty);
+                    match <Type as Into<RustType>>::into(*ty_ref.elem) {
+                        RustType::Path(ty, _span) => {
+                            let val = get_arg_val(&ty);
                             parsed_args.push(Arg { val, passing_style });
                         }
-                        Type::Tuple(_type_tuple) => {
+                        RustType::Tuple(_type_tuple, _span) => {
                             parsed_args.push(Arg { val: ArgVal::Value, passing_style})
                         }
                         _ => {
