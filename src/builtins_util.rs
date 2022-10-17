@@ -294,6 +294,7 @@ where
 
     fn human_readable_dest_type(&self) -> String;
 
+    //TODO take argument position?
     fn try_into_for(self, fn_name: &str) -> Result<T, LispError> {
         let hr_src_type = self.to_string();
         let hr_dest_type = self.human_readable_dest_type();
@@ -811,6 +812,15 @@ mod test {
 
         let result = f64::try_from(Expression::alloc_data(ExpEnum::Int(7i64))).unwrap();
         assert_eq!(7f64, result);
+        let mut vs = vec![];
+        vs.push(vec![1, 2, 3]);
+        vs.push(vec![2, 2, 3]);
+        vs.push(vec![1, 2, 1]);
+        for vs in vs.iter().map(|v| v.iter()) {
+            for v in vs {
+                println!("V: {}", v);
+            }
+        }
     }
 
     impl PartialEq<Self> for Expression {

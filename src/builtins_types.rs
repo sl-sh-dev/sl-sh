@@ -574,10 +574,78 @@ fn is_falsey(exp: Expression) -> bool {
     exp.is_falsey()
 }
 
+/// Usage: (intvec-stuff-float int) -> float
+///     Cast an int as a float.
+/// Section: type
+/// Example:
+///     (test::assert-equal 34 (intvec-stuff-float '#(#(7 1 9) #(4 5 8))))
+///     (test::assert-equal 34 (intvec-stuff-float (list (join 8 (join 5 4)) (join 9 (join 4 4)))))
+///     (test::assert-equal 34 (intvec-stuff-float '((8 5 4) (9 4 4)))
+///     (test::assert-error (intvec-stuff-float "not vec"))
+///     (test::assert-error (intvec-stuff-float 9))
+#[sl_sh_fn(fn_name = "intvec-stuff-float")]
+fn intvec_stuff_float(ints: Vec<(i64, i64, i64)>) -> f64 {
+    let mut f = 0.0;
+    for i in ints.iter() {
+        f += i.0 as f64 + i.1 as f64 + i.2 as f64;
+    }
+    f
+}
+
+/// Usage: (int-stuff-float int) -> float
+///     Cast an int as a float.
+/// Section: type
+/// Example:
+///     (test::assert-equal 17 (int-stuff-float '#(8 9 0)))
+///     (test::assert-equal 18 (int-stuff-float '(8 9 1)))
+///     (test::assert-equal 17 (int-stuff-float (join 8 (join 5 4))))
+///     (test::assert-error (int-stuff-float "not vec"))
+///     (test::assert-error (int-stuff-float 8))
+#[sl_sh_fn(fn_name = "int-stuff-float")]
+fn int_stuff_float(i: (i64, i64, i64)) -> f64 {
+    i.0 as f64 + i.1 as f64 + i.2 as f64
+}
+
+/// Usage: (int-pair-float int) -> float
+///     Cast an int as a float.
+/// Section: type
+/// Example:
+///     (test::assert-equal 17 (int-pair-float '#(8 9)))
+///     (test::assert-equal 17 (int-pair-float '(8 9)))
+///     (test::assert-equal 17 (int-pair-float (join 8 9)))
+///     (test::assert-error (int-pair-float "not vec"))
+///     (test::assert-error (int-pair-float 8))
+#[sl_sh_fn(fn_name = "int-pair-float")]
+fn int_pair_float(i: (i64, i64)) -> Option<f64> {
+    Some(i.0 as f64 + i.1 as f64)
+}
+
+/// Usage: (intvec-to-float int) -> float
+///     Cast an int as a float.
+/// Section: type
+/// Example:
+///     (test::assert-equal 17 (intvec-to-float '#(8 9)))
+///     (test::assert-equal 17 (intvec-to-float '(8 9)))
+///     (test::assert-equal 17 (intvec-to-float (join 8 9)))
+///     (test::assert-error (intvec-to-float "not vec"))
+///     (test::assert-error (intvec-to-float "8))
+#[sl_sh_fn(fn_name = "intvec-to-float")]
+fn intvec_to_float(int: Vec<i64>) -> f64 {
+    let mut f: f64 = 0.0;
+    for i in int {
+        f += i as f64
+    }
+    f
+}
+
 pub fn add_type_builtins<S: BuildHasher>(
     interner: &mut Interner,
     data: &mut HashMap<&'static str, (Expression, String), S>,
 ) {
+    intern_int_pair_float(interner, data);
+    intern_intvec_stuff_float(interner, data);
+    intern_int_stuff_float(interner, data);
+    intern_intvec_to_float(interner, data);
     intern_to_type(interner, data);
     intern_is_values(interner, data);
     intern_is_nil(interner, data);
@@ -631,4 +699,48 @@ Example:
     );
     intern_symbol_to_str(interner, data);
     intern_is_falsey(interner, data);
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{ExpEnum, Expression};
+
+    #[test]
+    fn ok() {
+        use std::convert::TryInto;
+        let vec = vec![
+            Expression::make_true(),
+            Expression::make_true(),
+            Expression::make_true(),
+        ];
+        let exp_vec = Expression::alloc_data(ExpEnum::Vector(vec));
+
+        for e in exp_vec.iter() {
+            println!("vec IT lives: {:?}", e);
+        }
+
+        let exp_d = exp_vec.get();
+        let exps = exp_vec.iter().collect::<Vec<Expression>>();
+        match exps.try_into() {
+            Ok(params) => {
+                let params: [crate::Expression; 3] = params;
+                let [arg0, arg1, arg2] = params;
+            }
+            Err(e) => {
+                panic!("oh no! {}.", e.len());
+            }
+        }
+
+        let exp_pair = Expression::alloc_data(ExpEnum::Pair(
+            Expression::make_true(),
+            Expression::alloc_data(ExpEnum::Pair(
+                Expression::make_true(),
+                Expression::make_true(),
+            )),
+        ));
+
+        for e in exp_pair.iter() {
+            println!("pair IT lives: {:?}", e);
+        }
+    }
 }
