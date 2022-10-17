@@ -681,7 +681,6 @@ dependencies = [
 name = "sl-sh-proc-macros"
 version = "0.1.0"
 dependencies = [
- "either",
  "quote",
  "static_assertions",
  "syn",
