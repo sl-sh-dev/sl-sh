@@ -105,7 +105,7 @@ fn call_lambda_int(
     let mut looping = true;
     while looping {
         if test_clear_sigint() {
-            return Err(LispError::new("Lambda interupted by SIGINT."));
+            return Err(LispError::new("Lambda interrupted by SIGINT."));
         }
         let mut tmp_eval: Option<Expression> = None;
         let last_eval = match body {
