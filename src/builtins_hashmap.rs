@@ -7,7 +7,7 @@ use crate::environment::*;
 use crate::eval::*;
 use crate::interner::*;
 use crate::types::*;
-use crate::{try_inner_hash_map, LispResult};
+use crate::{try_inner_hash_map_mut, LispResult};
 
 #[allow(clippy::ptr_arg)]
 pub(crate) fn cow_to_ref(environment: &mut Environment, input: &Cow<'static, str>) -> &'static str {
@@ -106,7 +106,7 @@ fn hash_set(
 ) -> LispResult<Expression> {
     let s = environment.interner.intern(key);
     let fn_name = "hash-set!";
-    try_inner_hash_map!(fn_name, map, map, {
+    try_inner_hash_map_mut!(fn_name, map, map, {
         map.insert(s, val);
     });
     Ok(map)

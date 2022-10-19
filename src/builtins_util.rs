@@ -493,8 +493,8 @@ macro_rules! try_exp_enum {
 macro_rules! try_inner_int {
     ($fn_name:ident, $expression:expr, $name:ident, $eval:expr) => {{
         use $crate::ErrorStrings;
-        match &mut $expression.get_mut().data {
-            ExpEnum::Int(ref mut $name)=> $eval,
+        match $expression.get().data {
+            ExpEnum::Int($name)=> $eval,
             _ => return Err( LispError::new(ErrorStrings::mismatched_type(
                 $fn_name,
                 &ExpEnum::Int(Default::default()).to_string(), 
@@ -527,8 +527,9 @@ macro_rules! try_inner_file {
 macro_rules! try_inner_float {
     ($fn_name:ident, $expression:expr, $name:ident, $eval:expr) => {{
         use $crate::ErrorStrings;
-        match &mut $expression.get_mut().data {
-            ExpEnum::Float(ref mut $name)=> $eval,
+        let exp_d = $expression.get();
+        match &exp_d.data {
+            ExpEnum::Float($name)=> $eval,
             data => return Err( LispError::new(ErrorStrings::mismatched_type(
                 $fn_name,
                 &ExpEnum::Float(Default::default()).to_string(), 
@@ -554,7 +555,7 @@ macro_rules! is_sequence {
 macro_rules! try_inner_pair {
     ($fn_name:ident, $expression:expr, $name0:ident, $name1:ident, $eval:expr) => {{
         use $crate::ErrorStrings;
-        match &mut $expression.get_mut().data {
+        match $expression.get().data {
             ExpEnum::Pair($name0, $name1)=> $eval,
             _ => return Err( $crate::LispError::new(ErrorStrings::mismatched_type(
                 $fn_name,
@@ -567,6 +568,22 @@ macro_rules! try_inner_pair {
 
 #[macro_export]
 macro_rules! try_inner_hash_map {
+    ($fn_name:ident, $expression:expr, $name:ident, $eval:expr) => {{
+        use $crate::ErrorStrings;
+        let exp_d = $expression.get();
+        match &exp_d.data {
+            ExpEnum::HashMap($name)=> $eval,
+            _ => return Err( $crate::LispError::new(ErrorStrings::mismatched_type(
+                $fn_name,
+                &ExpEnum::HashMap(Default::default()).to_string(),
+                &$expression.to_string(),
+            )))
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! try_inner_hash_map_mut {
     ($fn_name:ident, $expression:expr, $name:ident, $eval:expr) => {{
         use $crate::ErrorStrings;
         match &mut $expression.get_mut().data {
@@ -584,7 +601,7 @@ macro_rules! try_inner_hash_map {
 macro_rules! try_inner_string {
     ($fn_name:ident, $expression:expr, $name:ident, $eval:expr) => {{
         use $crate::ErrorStrings;
-        match &mut $expression.get_mut().data {
+        match &$expression.get().data {
             ExpEnum::String($name, _)=> $eval,
             ExpEnum::Symbol($name, _)=> $eval,
             ExpEnum::Char($name)=> $eval,
@@ -717,6 +734,8 @@ fn get_args_optional_aware(
     Ok(parsed_args)
 }
 
+/// convert function arguments to ArgTypes so call_expand_args gets
+/// what it expects
 pub fn get_arg_types(
     fn_name: &str,
     params: Vec<Arg>,

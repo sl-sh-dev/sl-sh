@@ -123,6 +123,7 @@ pub fn my_get_file(p: String) -> Option<PathBuf> {
     Some((*p.to_path_buf()).to_owned())
 }
 
+//TODO remove once fully replaced.
 pub fn get_file(environment: &mut Environment, p: Expression) -> Option<PathBuf> {
     let p = match &eval(environment, p).ok()?.get().data {
         ExpEnum::String(p, _) => {
@@ -398,29 +399,115 @@ fn is_same_file(path_0: String, path_1: String) -> LispResult<Expression> {
     }
 }
 
-fn builtin_fs_crawl(
+/// Usage: (fs-crawl /path/to/file/or/dir (fn (x) (println "found path" x) [max-depth]
+///              [:follow-syms])
+///
+/// If a directory is provided the path is recursively searched and every
+/// file and directory is called as an argument to the provided function.
+/// If a file is provided the path is provided as an argument to the provided
+/// function. Takes two optional arguments (in any order) an integer,
+/// representing max depth to traverse if file is a directory, or the
+/// symbol, :follow-syms, to follow symbol links when traversing if
+/// desired.
+///
+///
+/// Section: file
+///
+/// Example:
+///
+/// (with-temp-file (fn (tmp-file)
+/// 	(def cnt 0)
+/// 	(fs-crawl tmp-file (fn (x)
+/// 		(test::assert-equal (fs-base tmp-file) (fs-base x))
+/// 		(set! cnt (+ 1 cnt))))
+/// 	(test::assert-equal 1 cnt)))
+///
+/// (defn create-in (in-dir num-files visited)
+/// 	(dotimes-i i num-files
+/// 		 (hash-set! visited (get-temp-file in-dir) nil)))
+///
+/// (defn create-dir (tmp-dir visited)
+/// 	(let ((new-tmp (get-temp tmp-dir)))
+/// 		(hash-set! visited new-tmp nil)
+/// 		new-tmp))
+///
+/// (with-temp (fn (root-tmp-dir)
+/// 	(let ((tmp-file-count 5)
+/// 		  (visited (make-hash)))
+/// 	(def cnt 0)
+/// 	(hash-set! visited root-tmp-dir nil)
+/// 	(create-in root-tmp-dir tmp-file-count visited)
+/// 	(let* ((tmp-dir (create-dir root-tmp-dir visited))
+/// 			(new-files (create-in tmp-dir tmp-file-count visited))
+/// 			(tmp-dir (create-dir tmp-dir visited))
+/// 			(new-files (create-in tmp-dir tmp-file-count visited)))
+/// 	(fs-crawl root-tmp-dir (fn (x)
+/// 		(let ((file (hash-get visited x)))
+/// 			(test::assert-true (not file)) ;; also tests double counting
+/// 			(hash-set! visited x #t)
+/// 			(set! cnt (+ 1 cnt)))))
+/// 	(test::assert-equal (+ 3 (* 3 tmp-file-count)) cnt)
+/// 	(test::assert-equal (+ 3 (* 3 tmp-file-count)) (length (hash-keys visited)))
+/// 	(iterator::map (fn (x) (test::assert-true (hash-get visited y))) (hash-keys visited))))))
+///
+/// (with-temp (fn (root-tmp-dir)
+/// 	(let ((tmp-file-count 5)
+/// 		  (visited (make-hash)))
+/// 	(def cnt 0)
+/// 	(hash-set! visited root-tmp-dir nil)
+/// 	(create-in root-tmp-dir tmp-file-count visited)
+/// 	(let* ((tmp-dir (create-dir root-tmp-dir visited))
+/// 			(new-files (create-in tmp-dir tmp-file-count visited))
+/// 			(tmp-dir (create-dir tmp-dir (make-hash)))
+/// 			(new-files (create-in tmp-dir tmp-file-count (make-hash))))
+/// 	(fs-crawl root-tmp-dir (fn (x)
+/// 		(let ((file (hash-get visited x)))
+/// 			(test::assert-true (not file)) ;; also tests double counting
+/// 			(hash-set! visited x #t)
+/// 			(set! cnt (+ 1 cnt)))) 2)
+/// 	(test::assert-equal (+ 3 (* 2 tmp-file-count)) cnt)
+/// 	(test::assert-equal (+ 3 (* 2 tmp-file-count)) (length (hash-keys visited)))
+/// 	(iterator::map (fn (x) (test::assert-true (hash-get visited y))) (hash-keys visited))))))
+///
+/// (with-temp (fn (root-tmp-dir)
+/// 	(let ((tmp-file-count 5)
+/// 		  (visited (make-hash)))
+/// 	(def cnt 0)
+/// 	(hash-set! visited root-tmp-dir nil)
+/// 	(create-in root-tmp-dir tmp-file-count visited)
+/// 	(let* ((tmp-dir (create-dir root-tmp-dir (make-hash)))
+/// 			(new-files (create-in tmp-dir tmp-file-count (make-hash)))
+/// 			(tmp-dir (create-dir tmp-dir (make-hash)))
+/// 			(new-files (create-in tmp-dir tmp-file-count (make-hash))))
+/// 	(fs-crawl root-tmp-dir (fn (x)
+/// 		(let ((file (hash-get visited x)))
+/// 			(test::assert-true (not file)) ;; also tests double counting
+/// 			(hash-set! visited x #t)
+/// 			(set! cnt (+ 1 cnt)))) 1)
+/// 	(test::assert-equal (+ 2 tmp-file-count) cnt)
+/// 	(test::assert-equal (+ 2 tmp-file-count) (length (hash-keys visited)))
+/// 	(iterator::map (fn (x) (test::assert-true (hash-get visited y))) (hash-keys visited))))))
+#[sl_sh_fn(fn_name = "fs-crawl", takes_env = true)]
+fn fs_crawl(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
+    path: String,
+    lambda_exp: Expression,
+    optional_depth_or_symlink: VarArgs<Expression>,
+) -> LispResult<Expression> {
     let fn_name = "fs-crawl";
-    let arg0 = param_eval(environment, args, fn_name)?;
-    let file_or_dir = get_file(environment, arg0);
-    let lambda_exp = param_eval(environment, args, fn_name)?;
+    let file_or_dir = my_get_file(path);
     let mut depth = None;
     let mut sym_links = None;
-    for _ in 0..2 {
-        if let Ok(depth_or_sym_link) = param_eval(environment, args, fn_name) {
-            if let Ok(d) = depth_or_sym_link.make_int(environment) {
-                depth = Some(d);
-            } else if let Ok(s) = depth_or_sym_link.make_string(environment) {
-                if s == ":follow-syms" {
-                    sym_links = Some(true);
-                }
+    for depth_or_symlink in optional_depth_or_symlink {
+        if let Ok(d) = depth_or_symlink.make_int(environment) {
+            depth = Some(d);
+        } else if let Ok(s) = depth_or_symlink.make_string(environment) {
+            if s == ":follow-syms" {
+                sym_links = Some(true);
             }
-        };
+        }
     }
     let lambda_exp_d = &lambda_exp.get().data;
-    params_done(args, fn_name)?;
     match lambda_exp_d {
         ExpEnum::Lambda(_) => {
             if let Some(file_or_dir) = file_or_dir {
@@ -482,14 +569,25 @@ fn builtin_fs_crawl(
     }
 }
 
-fn builtin_fs_len(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
+/// Usage: (fs-len /path/to/file/or/dir)
+///
+/// Returns the size of the file in bytes.
+///
+/// Section: file
+///
+/// Example:
+/// (with-temp-file (fn (tmp)
+///     (let ((tst-file (open tmp :create :truncate)))
+///         (write-line tst-file \"Test Line Read Line One\")
+///         (write-string tst-file \"Test Line Read Line Two\")
+///         (flush tst-file)
+///         (close tst-file)
+///         (println \"fs-len is: \" (fs-len tst-file))
+///         (test::assert-equal 47 (fs-len tst-file)))))
+#[sl_sh_fn(fn_name = "fs-len")]
+fn fs_len(file_or_dir: String) -> LispResult<Expression> {
     let fn_name = "fs-len";
-    let arg0 = param_eval(environment, args, fn_name)?;
-    let file_or_dir = get_file(environment, arg0);
-    params_done(args, fn_name)?;
+    let file_or_dir = my_get_file(file_or_dir);
     if let Some(file_or_dir) = file_or_dir {
         if let Ok(metadata) = fs::metadata(file_or_dir) {
             let len = metadata.len();
@@ -505,14 +603,10 @@ fn builtin_fs_len(
 }
 
 fn get_file_time(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
+    file_or_dir: Option<PathBuf>,
     fn_name: &str,
     to_time: fn(Metadata) -> io::Result<SystemTime>,
 ) -> Result<Expression, LispError> {
-    let arg0 = param_eval(environment, args, fn_name)?;
-    let file_or_dir = get_file(environment, arg0);
-    params_done(args, fn_name)?;
     if let Some(file_or_dir) = file_or_dir {
         if let Ok(metadata) = fs::metadata(file_or_dir) {
             if let Ok(sys_time) = to_time(metadata) {
@@ -540,18 +634,45 @@ fn get_file_time(
     }
 }
 
-fn builtin_fs_modified(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    get_file_time(environment, args, "fs-modified", |md| md.modified())
+/// Usage: (fs-modified /path/to/file/or/dir)
+///
+/// Returns the unix time file last modified in ms.
+///
+/// Section: file
+///
+/// Example:
+/// (with-temp-file (fn (tmp)
+/// (let ((tst-file (open tmp :create :truncate))
+/// (last-mod (fs-modified tmp)))
+/// (write-line tst-file \"Test Line Read Line One\")
+///         (write-string tst-file \"Test Line Read Line Two\")
+///         (flush tst-file)
+///         (close tst-file)
+///         (test::assert-true (> (fs-modified tmp) last-mod)))))
+#[sl_sh_fn(fn_name = "fs-modified")]
+fn fs_modified(file_or_dir: String) -> LispResult<Expression> {
+    let file_or_dir = my_get_file(file_or_dir);
+    get_file_time(file_or_dir, "fs-modified", |md| md.modified())
 }
 
-fn builtin_fs_accessed(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    get_file_time(environment, args, "fs-accessed", |md| md.accessed())
+/// Usage: (fs-accessed /path/to/file/or/dir)
+///
+/// Returns the unix time file last accessed in ms.
+///
+/// Section: file
+///
+/// Example:
+/// (with-temp-file (fn (tmp)
+/// (let ((tst-file (open tmp :read))
+/// (last-acc (fs-accessed tmp)))
+/// (close tst-file)
+/// (let ((tst-file (open tmp :read)))
+/// (test::assert-true (> (fs-accessed tmp) last-acc))
+/// (close tst-file))))
+#[sl_sh_fn(fn_name = "fs-accessed")]
+fn fs_accessed(file_or_dir: String) -> LispResult<Expression> {
+    let file_or_dir = my_get_file(file_or_dir);
+    get_file_time(file_or_dir, "fs-accessed", |md| md.accessed())
 }
 
 fn temp_dir() -> PathBuf {
@@ -853,170 +974,13 @@ Example:
     intern_is_file(interner, data);
     intern_is_dir(interner, data);
     intern_do_glob(interner, data);
-    data.insert(
-        interner.intern("fs-crawl"),
-        Expression::make_function(
-            builtin_fs_crawl,
-            r#"Usage: (fs-crawl /path/to/file/or/dir (fn (x) (println "found path" x) [max-depth]
-             [:follow-syms])
-
-If a directory is provided the path is recursively searched and every
-file and directory is called as an argument to the provided function.
-If a file is provided the path is provided as an argument to the provided
-function. Takes two optional arguments (in any order) an integer,
-representing max depth to traverse if file is a directory, or the
-symbol, :follow-syms, to follow symbol links when traversing if
-desired.
-
-
-Section: file
-
-Example:
-
-(with-temp-file (fn (tmp-file)
-	(def cnt 0)
-	(fs-crawl tmp-file (fn (x)
-		(test::assert-equal (fs-base tmp-file) (fs-base x))
-		(set! cnt (+ 1 cnt))))
-	(test::assert-equal 1 cnt)))
-
-(defn create-in (in-dir num-files visited)
-	(dotimes-i i num-files
-		 (hash-set! visited (get-temp-file in-dir) nil)))
-
-(defn create-dir (tmp-dir visited)
-	(let ((new-tmp (get-temp tmp-dir)))
-		(hash-set! visited new-tmp nil)
-		new-tmp))
-
-(with-temp (fn (root-tmp-dir)
-	(let ((tmp-file-count 5)
-		  (visited (make-hash)))
-	(def cnt 0)
-	(hash-set! visited root-tmp-dir nil)
-	(create-in root-tmp-dir tmp-file-count visited)
-	(let* ((tmp-dir (create-dir root-tmp-dir visited))
-			(new-files (create-in tmp-dir tmp-file-count visited))
-			(tmp-dir (create-dir tmp-dir visited))
-			(new-files (create-in tmp-dir tmp-file-count visited)))
-	(fs-crawl root-tmp-dir (fn (x)
-		(let ((file (hash-get visited x)))
-			(test::assert-true (not file)) ;; also tests double counting
-			(hash-set! visited x #t)
-			(set! cnt (+ 1 cnt)))))
-	(test::assert-equal (+ 3 (* 3 tmp-file-count)) cnt)
-	(test::assert-equal (+ 3 (* 3 tmp-file-count)) (length (hash-keys visited)))
-	(iterator::map (fn (x) (test::assert-true (hash-get visited y))) (hash-keys visited))))))
-
-(with-temp (fn (root-tmp-dir)
-	(let ((tmp-file-count 5)
-		  (visited (make-hash)))
-	(def cnt 0)
-	(hash-set! visited root-tmp-dir nil)
-	(create-in root-tmp-dir tmp-file-count visited)
-	(let* ((tmp-dir (create-dir root-tmp-dir visited))
-			(new-files (create-in tmp-dir tmp-file-count visited))
-			(tmp-dir (create-dir tmp-dir (make-hash)))
-			(new-files (create-in tmp-dir tmp-file-count (make-hash))))
-	(fs-crawl root-tmp-dir (fn (x)
-		(let ((file (hash-get visited x)))
-			(test::assert-true (not file)) ;; also tests double counting
-			(hash-set! visited x #t)
-			(set! cnt (+ 1 cnt)))) 2)
-	(test::assert-equal (+ 3 (* 2 tmp-file-count)) cnt)
-	(test::assert-equal (+ 3 (* 2 tmp-file-count)) (length (hash-keys visited)))
-	(iterator::map (fn (x) (test::assert-true (hash-get visited y))) (hash-keys visited))))))
-
-(with-temp (fn (root-tmp-dir)
-	(let ((tmp-file-count 5)
-		  (visited (make-hash)))
-	(def cnt 0)
-	(hash-set! visited root-tmp-dir nil)
-	(create-in root-tmp-dir tmp-file-count visited)
-	(let* ((tmp-dir (create-dir root-tmp-dir (make-hash)))
-			(new-files (create-in tmp-dir tmp-file-count (make-hash)))
-			(tmp-dir (create-dir tmp-dir (make-hash)))
-			(new-files (create-in tmp-dir tmp-file-count (make-hash))))
-	(fs-crawl root-tmp-dir (fn (x)
-		(let ((file (hash-get visited x)))
-			(test::assert-true (not file)) ;; also tests double counting
-			(hash-set! visited x #t)
-			(set! cnt (+ 1 cnt)))) 1)
-	(test::assert-equal (+ 2 tmp-file-count) cnt)
-	(test::assert-equal (+ 2 tmp-file-count) (length (hash-keys visited)))
-	(iterator::map (fn (x) (test::assert-true (hash-get visited y))) (hash-keys visited))))))
-
-"#,
-        ),
-    );
+    intern_fs_crawl(interner, data);
     intern_is_same_file(interner, data);
     intern_fs_base(interner, data);
     intern_fs_parent(interner, data);
-    data.insert(
-        interner.intern("fs-len"),
-        Expression::make_function(
-            builtin_fs_len,
-            r#"Usage: (fs-len /path/to/file/or/dir)
-
-Returns the size of the file in bytes.
-
-Section: file
-
-Example:
-(with-temp-file (fn (tmp)
-    (let ((tst-file (open tmp :create :truncate)))
-        (write-line tst-file \"Test Line Read Line One\")
-        (write-string tst-file \"Test Line Read Line Two\")
-        (flush tst-file)
-        (close tst-file)
-        (println \"fs-len is: \" (fs-len tst-file))
-        (test::assert-equal 47 (fs-len tst-file)))))
-"#,
-        ),
-    );
-    data.insert(
-        interner.intern("fs-modified"),
-        Expression::make_function(
-            builtin_fs_modified,
-            r#"Usage: (fs-modified /path/to/file/or/dir)
-
-Returns the unix time file last modified in ms.
-
-Section: file
-
-Example:
-(with-temp-file (fn (tmp)
-    (let ((tst-file (open tmp :create :truncate))
-          (last-mod (fs-modified tmp)))
-        (write-line tst-file \"Test Line Read Line One\")
-        (write-string tst-file \"Test Line Read Line Two\")
-        (flush tst-file)
-        (close tst-file)
-        (test::assert-true (> (fs-modified tmp) last-mod)))))
-"#,
-        ),
-    );
-    data.insert(
-        interner.intern("fs-accessed"),
-        Expression::make_function(
-            builtin_fs_accessed,
-            r#"Usage: (fs-accessed /path/to/file/or/dir)
-
-Returns the unix time file last accessed in ms.
-
-Section: file
-
-Example:
-(with-temp-file (fn (tmp)
-    (let ((tst-file (open tmp :read))
-          (last-acc (fs-accessed tmp)))
-        (close tst-file)
-        (let ((tst-file (open tmp :read)))
-            (test::assert-true (> (fs-accessed tmp) last-acc))
-            (close tst-file))))
-"#,
-        ),
-    );
+    intern_fs_len(interner, data);
+    intern_fs_modified(interner, data);
+    intern_fs_accessed(interner, data);
     data.insert(
         interner.intern("get-temp"),
         Expression::make_function(
