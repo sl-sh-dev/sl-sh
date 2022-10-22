@@ -14,6 +14,7 @@ use std::sync::Arc;
 fn main() -> Result<(), VMError> {
     let mut chunk = Chunk::new("no_file", 1);
     println!("Value size: {}", std::mem::size_of::<Value>());
+    println!("Value2 size: {}", std::mem::size_of::<Value2>());
     println!("usize: {}", std::mem::size_of::<usize>());
     //println!("Object size: {}", std::mem::size_of::<slvm::heap::Object>());
     println!("Chunk size: {}", std::mem::size_of::<slvm::chunk::Chunk>());

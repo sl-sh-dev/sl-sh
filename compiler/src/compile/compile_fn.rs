@@ -159,7 +159,7 @@ pub(crate) fn compile_fn(
     env.unpause_gc();
     if is_macro {
         // Unwrap safe since we just allocated lambda on the heap.
-        env.set_heap_property(lambda.get_handle().unwrap(), ":macro", Value::True);
+        env.set_heap_property(lambda, ":macro", Value::True);
     }
     let const_i = state.add_constant(lambda);
     state

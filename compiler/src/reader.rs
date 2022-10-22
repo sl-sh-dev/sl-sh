@@ -222,28 +222,26 @@ impl<'vm> Reader<'vm> {
     fn alloc_pair(&mut self, car: Value, cdr: Value) -> Value {
         let result = self.vm.alloc_pair_ro(car, cdr);
         // Just allocated this so the unwrap is safe.
-        let handle = result.get_handle().unwrap();
         let file_name = self.vm.intern_static(self.file_name);
         self.vm
-            .set_heap_property(handle, "dbg-file", Value::StringConst(file_name));
+            .set_heap_property(result, "dbg-file", Value::StringConst(file_name));
         self.vm
-            .set_heap_property(handle, "dbg-line", Value::UInt(self.line() as u64));
+            .set_heap_property(result, "dbg-line", Value::UInt(self.line() as u64));
         self.vm
-            .set_heap_property(handle, "dbg-col", Value::UInt(self.column() as u64));
+            .set_heap_property(result, "dbg-col", Value::UInt(self.column() as u64));
         result
     }
 
     fn alloc_list(&mut self, list: Vec<Value>) -> Value {
         let result = self.vm.alloc_list_ro(list);
         // Just allocated this so the unwrap is safe.
-        let handle = result.get_handle().unwrap();
         let file_name = self.vm.intern_static(self.file_name);
         self.vm
-            .set_heap_property(handle, "dbg-file", Value::StringConst(file_name));
+            .set_heap_property(result, "dbg-file", Value::StringConst(file_name));
         self.vm
-            .set_heap_property(handle, "dbg-line", Value::UInt(self.line() as u64));
+            .set_heap_property(result, "dbg-line", Value::UInt(self.line() as u64));
         self.vm
-            .set_heap_property(handle, "dbg-col", Value::UInt(self.column() as u64));
+            .set_heap_property(result, "dbg-col", Value::UInt(self.column() as u64));
         result
     }
 

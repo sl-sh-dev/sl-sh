@@ -28,8 +28,8 @@ mod util;
 
 fn is_macro(env: &SloshVm, val: Value) -> bool {
     match val {
-        Value::Lambda(h) => matches!(env.get_heap_property(h, ":macro"), Some(Value::True)),
-        Value::Closure(h) => matches!(env.get_heap_property(h, ":macro"), Some(Value::True)),
+        Value::Lambda(_) => matches!(env.get_heap_property(val, ":macro"), Some(Value::True)),
+        Value::Closure(_) => matches!(env.get_heap_property(val, ":macro"), Some(Value::True)),
         _ => false,
     }
 }
@@ -289,9 +289,9 @@ fn compile_list(
                 compile_call(env, state, Value::Builtin(builtin), cdr, result)?
             }
             Value::Lambda(h) => compile_call(env, state, Value::Lambda(h), cdr, result)?,
-            Value::Pair(h) | Value::List(h, _) => {
+            Value::Pair(_) | Value::List(_, _) => {
                 let (ncar, ncdr) = car.get_pair(env).expect("Pair/List not a Pair or List?");
-                env.set_line(state, h);
+                env.set_line_val(state, car);
                 if let Value::List(h, idx) = ncdr {
                     // This unsafe should be fine (it breaks the lifetime away from env) since the
                     // vector that backs a list is read only.
@@ -361,9 +361,9 @@ pub fn compile(
         state.max_regs = result;
     }
     match exp {
-        Value::Pair(handle) | Value::List(handle, _) => {
+        Value::Pair(_) | Value::List(_, _) => {
             let (car, cdr) = exp.get_pair(env).expect("Pair/List not a Pair or List?");
-            env.set_line(state, handle);
+            env.set_line_val(state, exp);
             if let Value::List(h, idx) = cdr {
                 // This unsafe should be fine (it breaks the lifetime away from env) since the
                 // vector that backs a list is read only.

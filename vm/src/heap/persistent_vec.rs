@@ -24,7 +24,7 @@ pub struct PersistentVec {
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 enum NodeType {
-    Node([Handle; WIDTH]),
+    Node([Value; WIDTH]),
     Leaf([Value; WIDTH]),
 }
 
@@ -38,7 +38,7 @@ impl VecNode {
     fn new_node(id: u32) -> Self {
         Self {
             id,
-            data: NodeType::Node([Handle::invalid(); WIDTH]),
+            data: NodeType::Node([Value::Undefined; WIDTH]),
         }
     }
 
@@ -51,7 +51,7 @@ impl VecNode {
 
     /// Return the nodes if this is a node and not a leaf.
     /// Invalid handles are not in use.
-    pub fn nodes(&self) -> Option<&[Handle]> {
+    pub fn nodes(&self) -> Option<&[Value]> {
         if let NodeType::Node(nodes) = &self.data {
             Some(nodes)
         } else {
@@ -70,13 +70,13 @@ impl VecNode {
     }
 }
 
-fn new_path<ENV>(id: u32, shift: usize, node_handle: Handle, vm: &mut GVm<ENV>) -> Handle {
+fn new_path<ENV>(id: u32, shift: usize, node_handle: Value, vm: &mut GVm<ENV>) -> Value {
     if shift == 0 {
         node_handle
     } else {
         let mut ret = VecNode {
             id,
-            data: NodeType::Node([Handle::invalid(); WIDTH]),
+            data: NodeType::Node([Value::Undefined; WIDTH]),
         };
         if let NodeType::Node(handles) = &mut ret.data {
             handles[0] = new_path(id, shift - BITS, node_handle, vm);
@@ -107,7 +107,7 @@ impl PersistentVec {
         &self,
         shift: usize,
         parent: &VecNode,
-        tailnode_handle: Handle,
+        tailnode_handle: Value,
         vm: &mut GVm<ENV>,
     ) -> VecNode {
         let subidx = ((self.length - 1) >> shift) & MASK;
@@ -118,10 +118,10 @@ impl PersistentVec {
             let child_handle = if let NodeType::Node(handles) = parent.data {
                 handles[subidx]
             } else {
-                Handle::invalid()
+                Value::Undefined
             };
-            if child_handle.valid() {
-                let child = *vm.get_vecnode(child_handle);
+            if !child_handle.is_undef() {
+                let child = *vm.get_vecnode(child_handle.get_handle().expect("Not a vecnode!"));
                 let tail = self.push_tail(shift - BITS, &child, tailnode_handle, vm);
                 vm.alloc_vecnode(tail)
             } else {
@@ -235,7 +235,11 @@ impl PersistentVec {
             loop {
                 match &mut node.data {
                     NodeType::Node(handles) => {
-                        let next_node = *vm.get_vecnode(handles[(idx >> level) & MASK]);
+                        let next_node = *vm.get_vecnode(
+                            handles[(idx >> level) & MASK]
+                                .get_handle()
+                                .expect("Not a vecnode!"),
+                        );
                         path.push((node, (idx >> level) & MASK));
                         node = next_node;
                     }
@@ -249,7 +253,7 @@ impl PersistentVec {
                                 if first && idx == 0 {
                                     // This node is removed, stay on first to try next node.
                                 } else if first {
-                                    handles[idx] = Handle::invalid();
+                                    handles[idx] = Value::Undefined;
                                     first = false;
                                 } else {
                                     handles[idx] = vm.alloc_vecnode(node);
@@ -292,7 +296,11 @@ impl PersistentVec {
         loop {
             match node.data {
                 NodeType::Node(handles) => {
-                    node = *vm.get_vecnode(handles[(idx >> level) & MASK]);
+                    node = *vm.get_vecnode(
+                        handles[(idx >> level) & MASK]
+                            .get_handle()
+                            .expect("Not a vecnode!"),
+                    );
                 }
                 NodeType::Leaf(values) => return Some(values[idx & MASK]),
             }
@@ -328,7 +336,11 @@ impl PersistentVec {
         loop {
             match &mut node.data {
                 NodeType::Node(handles) => {
-                    let next_node = *vm.get_vecnode(handles[(idx >> level) & MASK]);
+                    let next_node = *vm.get_vecnode(
+                        handles[(idx >> level) & MASK]
+                            .get_handle()
+                            .expect("Not a vecnode!"),
+                    );
                     path.push((node, (idx >> level) & MASK));
                     node = next_node;
                 }

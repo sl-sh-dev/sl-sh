@@ -82,15 +82,11 @@ fn load(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     while let Some(exp) = reader.next() {
         let reader_vm = reader.vm();
         let exp = exp.map_err(|e| VMError::new("read", e.to_string()))?;
-        if let Some(handle) = exp.get_handle() {
-            reader_vm.heap_sticky(handle);
-        }
+        reader_vm.heap_sticky(exp);
 
         let result = load_one_expression(reader_vm, exp, name, doc_string);
 
-        if let Some(handle) = exp.get_handle() {
-            reader_vm.heap_unsticky(handle);
-        }
+        reader_vm.heap_unsticky(exp);
         let (chunk, new_doc_string) = result?;
         doc_string = new_doc_string;
         last = reader_vm.execute(chunk)?;

@@ -17,9 +17,7 @@ pub fn read_test(vm: &mut SloshVm, text: &'static str) -> Value {
     };
     vm.unpause_gc();
     // Make sure we don't GC this stuff.  Don't bother with unsticky since we are testing (not the GC).
-    if let Some(handle) = res.get_handle() {
-        vm.heap_sticky(handle);
-    }
+    vm.heap_sticky(res);
     res
 }
 
@@ -35,9 +33,7 @@ pub fn exec(env: &mut SloshVm, input: &'static str) -> Value {
         state.chunk.encode0(RET, Some(1)).unwrap();
         env.execute(Arc::new(state.chunk)).unwrap();
     } else {
-        if let Some(handle) = exp.get_handle() {
-            env.heap_sticky(handle);
-        }
+        env.heap_sticky(exp);
         pass1(env, &mut state, exp).unwrap();
         compile(env, &mut state, exp, 0).unwrap();
         state.chunk.encode0(RET, Some(1)).unwrap();

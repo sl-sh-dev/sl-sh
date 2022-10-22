@@ -103,6 +103,27 @@ impl<ENV> GVm<ENV> {
         Heap::sizeof_object()
     }
 
+    pub fn alloc_i64(&mut self, num: i64) -> Value {
+        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
+        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
+        // alloc must not save mark_roots (it does not) since we broke heap away from self.
+        heap.alloc_i64(num, MutState::Mutable, |heap| self.mark_roots(heap))
+    }
+
+    pub fn alloc_u64(&mut self, num: u64) -> Value {
+        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
+        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
+        // alloc must not save mark_roots (it does not) since we broke heap away from self.
+        heap.alloc_u64(num, MutState::Mutable, |heap| self.mark_roots(heap))
+    }
+
+    pub fn alloc_f64(&mut self, num: f64) -> Value {
+        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
+        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
+        // alloc must not save mark_roots (it does not) since we broke heap away from self.
+        heap.alloc_f64(num, MutState::Mutable, |heap| self.mark_roots(heap))
+    }
+
     pub fn alloc_pair(&mut self, car: Value, cdr: Value) -> Value {
         // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
         let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
@@ -152,7 +173,7 @@ impl<ENV> GVm<ENV> {
         heap.alloc_persistent_vector(vec, MutState::Immutable, |heap| self.mark_roots(heap))
     }
 
-    pub fn alloc_vecnode(&mut self, node: VecNode) -> Handle {
+    pub fn alloc_vecnode(&mut self, node: VecNode) -> Value {
         // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
         let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
         // alloc must not save mark_roots (it does not) since we broke heap away from self.
@@ -171,6 +192,8 @@ impl<ENV> GVm<ENV> {
         let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
         // alloc must not save mark_roots (it does not) since we broke heap away from self.
         heap.alloc_mapnode(node, |heap| self.mark_roots(heap))
+            .get_handle()
+            .unwrap()
     }
 
     pub fn alloc_map(&mut self, map: HashMap<Value, Value>) -> Value {
@@ -241,12 +264,12 @@ impl<ENV> GVm<ENV> {
         heap.alloc_value(val, MutState::Mutable, |heap| self.mark_roots(heap))
     }
 
-    pub fn heap_sticky(&mut self, handle: Handle) {
-        self.heap.sticky(handle);
+    pub fn heap_sticky(&mut self, val: Value) {
+        self.heap.sticky(val);
     }
 
-    pub fn heap_unsticky(&mut self, handle: Handle) {
-        self.heap.unsticky(handle);
+    pub fn heap_unsticky(&mut self, val: Value) {
+        self.heap.unsticky(val);
     }
 
     /// Pause garbage collection.
@@ -261,25 +284,25 @@ impl<ENV> GVm<ENV> {
         self.heap.unpause_gc();
     }
 
-    pub fn get_heap_property(&self, handle: Handle, prop: &str) -> Option<Value> {
+    pub fn get_heap_property(&self, key_val: Value, prop: &str) -> Option<Value> {
         if let Some(interned) = self.get_if_interned(prop) {
-            self.heap.get_property(handle, interned)
+            self.heap.get_property(key_val, interned)
         } else {
             None
         }
     }
 
-    pub fn set_heap_property(&mut self, handle: Handle, prop: &str, value: Value) {
+    pub fn set_heap_property(&mut self, key_val: Value, prop: &str, value: Value) {
         let str_ref = self.intern(prop);
-        self.heap.set_property(handle, str_ref, value)
+        self.heap.set_property(key_val, str_ref, value)
     }
 
-    pub fn get_heap_property_interned(&self, handle: Handle, prop: Interned) -> Option<Value> {
-        self.heap.get_property(handle, prop)
+    pub fn get_heap_property_interned(&self, key_val: Value, prop: Interned) -> Option<Value> {
+        self.heap.get_property(key_val, prop)
     }
 
-    pub fn set_heap_property_interned(&mut self, handle: Handle, prop: Interned, value: Value) {
-        self.heap.set_property(handle, prop, value)
+    pub fn set_heap_property_interned(&mut self, key_val: Value, prop: Interned, value: Value) {
+        self.heap.set_property(key_val, prop, value)
     }
 
     pub fn get_global_property(&self, global: u32, prop: Interned) -> Option<Value> {
@@ -292,6 +315,18 @@ impl<ENV> GVm<ENV> {
 
     pub fn get_global(&self, idx: u32) -> Value {
         self.globals.get(idx)
+    }
+
+    pub fn get_int(&self, handle: u32) -> i64 {
+        self.heap.get_int(handle)
+    }
+
+    pub fn get_uint(&self, handle: u32) -> u64 {
+        self.heap.get_uint(handle)
+    }
+
+    pub fn get_float(&self, handle: u32) -> f64 {
+        self.heap.get_float(handle)
     }
 
     pub fn get_string(&self, handle: Handle) -> &str {
@@ -412,27 +447,19 @@ impl<ENV> GVm<ENV> {
     fn mark_roots(&mut self, heap: &mut Heap) -> VMResult<()> {
         self.globals.mark(heap);
         for i in 0..self.stack_max {
-            if let Some(handle) = self.stack[i].get_handle() {
-                heap.mark(handle);
-            }
+            heap.mark(self.stack[i]);
         }
         if let Some(this_fn) = self.this_fn {
-            if let Some(handle) = this_fn.get_handle() {
-                heap.mark(handle);
-            }
+            heap.mark(this_fn);
         }
         if let Some(on_error) = self.on_error {
-            if let Some(handle) = on_error.get_handle() {
-                heap.mark(handle);
-            }
+            heap.mark(on_error);
         }
         // TODO: XXX do we need this?  Probably but maybe not.
         //if let Some(err_frame) = &self.err_frame {
         //}
         for defer in &self.defers {
-            if let Some(handle) = defer.get_handle() {
-                heap.mark(handle);
-            }
+            heap.mark(*defer);
         }
         Ok(())
     }

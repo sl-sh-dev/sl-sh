@@ -34,14 +34,14 @@ macro_rules! get_data {
         match $exp {
             Value::Pair(_) | Value::List(_, _) => {
                 let (_, cdr) = $exp.get_pair($vm).expect("List/Pair not a List/Pair?");
-                if let Value::Pair(handle) | Value::List(handle, _) = cdr {
+                if let Value::Pair(_handle) | Value::List(_handle, _) = cdr {
                     let (ncar, ncdr) = cdr.get_pair($vm).expect("List/Pair not a List/Pair?");
                     if ncdr.is_nil() {
                         return Ok(ncar);
                     } else {
                         let (line, col) = (
-                            $vm.get_heap_property(handle, "dbg-line"),
-                            $vm.get_heap_property(handle, "dbg-col"),
+                            $vm.get_heap_property(cdr, "dbg-line"),
+                            $vm.get_heap_property(cdr, "dbg-col"),
                         );
                         if let (Some(Value::UInt(line)), Some(Value::UInt(col))) = (line, col) {
                             return Err(VMError::new_compile(format!(

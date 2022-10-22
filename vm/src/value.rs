@@ -109,6 +109,9 @@ pub enum Value {
     Int(i64),
     UInt(u64),
     Float(F64Wrap),
+    Int2(u32),
+    UInt2(u32),
+    Float2(u32),
     CodePoint(char),
     CharCluster(u8, [u8; 14]),
     CharClusterLong(Handle), // XXX TODO- move to Object?
@@ -124,7 +127,9 @@ pub enum Value {
     String(Handle),
     Vector(Handle),
     PersistentVec(Handle),
+    VecNode(Handle),
     PersistentMap(Handle),
+    MapNode(Handle),
     Map(Handle),
     Bytes(Handle),
     Pair(Handle),
@@ -134,6 +139,41 @@ pub enum Value {
     Continuation(Handle),
     CallFrame(Handle),
     Value(Handle),
+}
+
+type Handle2 = u32;
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub enum Value2 {
+    Byte(u8),
+    Int(u32),
+    UInt(u32),
+    Float(u32),
+    CodePoint(char),
+    CharCluster(u8, [u8; 6]),
+    CharClusterLong(Handle2), // XXX TODO- move to Object?
+    Symbol(Interned),
+    Keyword(Interned),
+    StringConst(Interned),
+    Builtin(u32),
+    True,
+    False,
+    Nil,
+    Undefined,
+
+    String(Handle2),
+    Vector(Handle2),
+    PersistentVec(Handle2),
+    PersistentMap(Handle2),
+    Map(Handle2),
+    Bytes(Handle2),
+    Pair(Handle2),
+    List(Handle2, u8, u16),
+    Lambda(Handle2),
+    Closure(Handle2),
+    Continuation(Handle2),
+    CallFrame(Handle2),
+    Value(Handle2),
 }
 
 impl Default for Value {
@@ -248,7 +288,9 @@ impl Value {
             Value::String(handle) => Some(*handle),
             Value::Vector(handle) => Some(*handle),
             Value::PersistentVec(handle) => Some(*handle),
+            Value::VecNode(handle) => Some(*handle),
             Value::PersistentMap(handle) => Some(*handle),
+            Value::MapNode(handle) => Some(*handle),
             Value::Map(handle) => Some(*handle),
             Value::Bytes(handle) => Some(*handle),
             Value::Pair(handle) => Some(*handle),
@@ -263,6 +305,9 @@ impl Value {
             Value::Int(_) => None,
             Value::UInt(_) => None,
             Value::Float(_) => None,
+            Value::Int2(_) => None,
+            Value::UInt2(_) => None,
+            Value::Float2(_) => None,
             Value::CodePoint(_) => None,
             Value::CharCluster(_, _) => None,
             Value::Symbol(_) => None,
@@ -364,6 +409,9 @@ impl Value {
             Value::Float(f) => format!("{}", f.0),
             Value::Int(i) => format!("{}", i),
             Value::UInt(i) => format!("{}", i),
+            Value::Float2(handle) => format!("{}", vm.get_float(*handle)),
+            Value::Int2(handle) => format!("{}", vm.get_int(*handle)),
+            Value::UInt2(handle) => format!("{}", vm.get_uint(*handle)),
             Value::Byte(b) => format!("{}", b),
             Value::Symbol(i) => vm.get_interned(*i).to_string(),
             Value::Keyword(i) => format!(":{}", vm.get_interned(*i)),
@@ -395,7 +443,15 @@ impl Value {
                 res.push(']');
                 res
             }
+            Value::VecNode(_) => {
+                // TODO- implement.
+                "IMPLEMENT".to_string()
+            }
             Value::PersistentMap(_) => {
+                // TODO- implement.
+                "IMPLEMENT".to_string()
+            }
+            Value::MapNode(_) => {
                 // TODO- implement.
                 "IMPLEMENT".to_string()
             }
@@ -453,6 +509,9 @@ impl Value {
             Value::Float(_) => "Float",
             Value::Int(_) => "Int",
             Value::UInt(_) => "UInt",
+            Value::Float2(_) => "Float",
+            Value::Int2(_) => "Int",
+            Value::UInt2(_) => "UInt",
             Value::Symbol(_) => "Symbol",
             Value::Keyword(_) => "Keyword",
             Value::StringConst(_) => "String",
@@ -469,7 +528,9 @@ impl Value {
             Value::CallFrame(_) => "CallFrame",
             Value::Vector(_) => "Vector",
             Value::PersistentVec(_) => "PersistentVector",
+            Value::VecNode(_) => "PersistentVectorNode",
             Value::PersistentMap(_) => "PersistentMap",
+            Value::MapNode(_) => "PersistentMapNode",
             Value::Map(_) => "Map",
             Value::Pair(_) => "Pair",
             Value::List(_, _) => "Pair",
@@ -532,9 +593,7 @@ impl Globals {
 
     pub fn mark(&self, heap: &mut Heap) {
         self.objects.iter().for_each(|obj| {
-            if let Some(handle) = obj.get_handle() {
-                heap.mark(handle);
-            }
+            heap.mark(*obj);
         });
     }
 

@@ -81,6 +81,9 @@ pub fn display_value(vm: &SloshVm, val: Value) -> String {
         Value::Float(f) => format!("{}", f.0),
         Value::Int(i) => format!("{}", i),
         Value::UInt(i) => format!("{}", i),
+        Value::Float2(handle) => format!("{}", vm.get_float(*handle)),
+        Value::Int2(handle) => format!("{}", vm.get_int(*handle)),
+        Value::UInt2(handle) => format!("{}", vm.get_uint(*handle)),
         Value::Byte(b) => format!("{}", b),
         Value::Symbol(i) => vm.get_interned(*i).to_string(),
         Value::Keyword(i) => format!(":{}", vm.get_interned(*i)),
@@ -115,6 +118,14 @@ pub fn display_value(vm: &SloshVm, val: Value) -> String {
         Value::PersistentMap(_) => {
             // TODO- implement
             "IMPLEMENT".to_string()
+        }
+        Value::MapNode(_) => {
+            // TODO- implement
+            "MapNode".to_string()
+        }
+        Value::VecNode(_) => {
+            // TODO- implement
+            "VecNode".to_string()
         }
         Value::Map(handle) => {
             let mut res = String::new();

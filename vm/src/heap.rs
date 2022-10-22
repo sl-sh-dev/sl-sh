@@ -4,51 +4,19 @@ use std::sync::Arc;
 use crate::chunk::*;
 use crate::error::*;
 use crate::value::*;
-use crate::Interned;
+use crate::{FxHashMap, Interned};
+use crate::bits::FLAG_MUT;
 
 pub mod handle;
 pub use crate::handle::Handle;
+use crate::heap::storage::Storage;
 use crate::persistent_map::{MapNode, PersistentMap};
 use crate::persistent_vec::{PersistentVec, VecNode};
 
 pub mod persistent_map;
 pub mod persistent_vec;
-
-const FLAG_MARK: u8 = 0x01;
-const FLAG_STICKY: u8 = 0x02;
-const FLAG_MUT: u8 = 0x04;
-
-macro_rules! is_bit_set {
-    ($val:expr, $bit:expr) => {{
-        ($val & $bit) != 0
-    }};
-}
-
-macro_rules! set_bit {
-    ($val:expr, $bit:expr) => {{
-        $val |= $bit;
-    }};
-}
-
-macro_rules! clear_bit {
-    ($val:expr, $bit:expr) => {{
-        if is_bit_set!($val, $bit) {
-            $val ^= $bit;
-        }
-    }};
-}
-
-fn is_live(flag: u8) -> bool {
-    is_bit_set!(flag, FLAG_MARK | FLAG_STICKY)
-}
-
-fn is_marked(flag: u8) -> bool {
-    is_bit_set!(flag, FLAG_MARK)
-}
-
-fn is_mutable(flag: u8) -> bool {
-    is_bit_set!(flag, FLAG_MUT)
-}
+pub mod bits;
+mod storage;
 
 #[derive(Clone, Debug)]
 pub struct CallFrame {
@@ -72,7 +40,7 @@ pub struct Continuation {
 
 // This is anything that can live on the heap.  Values normally live on the
 // stack or as constants.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 enum Object {
     String(Arc<String>),
     Vector(Arc<Vec<Value>>),
@@ -81,19 +49,27 @@ enum Object {
     Bytes(Arc<Vec<u8>>),
     Pair(Arc<(Value, Value)>),
     Value(Value),
+
+    PersistentVec(Arc<PersistentVec>),
+    VecNode(Arc<VecNode>),
+    PersistentMap(Arc<PersistentMap>),
+    MapNode(Arc<MapNode>),
+
     // CallFrame can be mutable for internal purposes.
     CallFrame(Arc<CallFrame>),
     // Everything below here is always read only.
     Lambda(Arc<Chunk>),
     Closure(Arc<Chunk>, Arc<Vec<Handle>>),
     Continuation(Arc<Continuation>),
-
-    PersistentVec(Arc<PersistentVec>),
-    VecNode(Arc<VecNode>),
-    PersistentMap(Arc<PersistentMap>),
-    MapNode(Arc<MapNode>),
     // Place holder for an empty object slot.
     Empty,
+}
+
+#[derive(Clone, Copy)]
+union Numeric64 {
+    int: i64,
+    uint: u64,
+    float: f64
 }
 
 pub enum MutState {
@@ -110,46 +86,12 @@ impl MutState {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct HeapStats {
-    live_objects: usize,
-    sticky_objects: usize,
-    //string_bytes: usize,
-    //vec_bytes: usize,
-    //byte_bytes: usize,
-}
-
-impl HeapStats {
-    pub fn new() -> Self {
-        HeapStats {
-            live_objects: 0,
-            sticky_objects: 0,
-            //string_bytes: 0,
-            //vec_bytes: 0,
-            //byte_bytes: 0,
-        }
-    }
-
-    pub fn live_objects(&self) -> usize {
-        self.live_objects
-    }
-}
-
-impl Default for HeapStats {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[derive(Debug)]
+//#[derive(Debug)]
 pub struct Heap {
-    flags: Vec<u8>,
-    objects: Vec<Object>,
-    props: HashMap<Handle, Arc<HashMap<Interned, Value>>>,
-    greys: Vec<usize>,
-    grow_factor: f64,
-    capacity: usize,
-    stats: HeapStats,
+    objects: Storage<Object>,
+    numerics: Storage<Numeric64>,
+    props: FxHashMap<Value, Arc<FxHashMap<Interned, Value>>>,
+    greys: Vec<Value>,
     paused: u32,
 }
 
@@ -159,31 +101,61 @@ impl Default for Heap {
     }
 }
 
+macro_rules! value_op {
+    ($heap:expr, $val:expr, $op:ident, $default:expr) => {{
+        match $val {
+            Value::CharClusterLong(handle) => $heap.objects.$op(handle.idx()),
+            Value::String(handle) => $heap.objects.$op(handle.idx()),
+            Value::Vector(handle) => $heap.objects.$op(handle.idx()),
+            Value::PersistentVec(handle) => $heap.objects.$op(handle.idx()),
+            Value::PersistentMap(handle) => $heap.objects.$op(handle.idx()),
+            Value::VecNode(handle) => $heap.objects.$op(handle.idx()),
+            Value::MapNode(handle) => $heap.objects.$op(handle.idx()),
+            Value::Map(handle) => $heap.objects.$op(handle.idx()),
+            Value::Bytes(handle) => $heap.objects.$op(handle.idx()),
+            Value::Pair(handle) => $heap.objects.$op(handle.idx()),
+            Value::List(handle, _) => $heap.objects.$op(handle.idx()),
+            Value::Lambda(handle) => $heap.objects.$op(handle.idx()),
+            Value::Closure(handle) => $heap.objects.$op(handle.idx()),
+            Value::Continuation(handle) => $heap.objects.$op(handle.idx()),
+            Value::CallFrame(handle) => $heap.objects.$op(handle.idx()),
+            Value::Value(handle) => $heap.objects.$op(handle.idx()),
+
+            Value::Int2(handle) => $heap.numerics.$op(handle as usize),
+            Value::UInt2(handle) => $heap.numerics.$op(handle as usize),
+            Value::Float2(handle) => $heap.numerics.$op(handle as usize),
+
+            Value::Byte(_) |
+            Value::Int(_) |
+            Value::UInt(_) |
+            Value::Float(_) |
+            Value::CodePoint(_) |
+            Value::CharCluster(_, _) |
+            Value::Symbol(_) |
+            Value::Keyword(_) |
+            Value::StringConst(_) |
+            Value::Builtin(_) |
+            Value::True |
+            Value::False |
+            Value::Nil |
+            Value::Undefined => $default,
+        }
+    }};
+}
+
+macro_rules! mark {
+    ($heap:expr, $val:expr) => {{
+        value_op!($heap, $val, mark, ());
+    }};
+}
+
 impl Heap {
     pub fn new() -> Self {
         Heap {
-            flags: Vec::with_capacity(512),
-            // Keep one extra slot to do swap on replace.
-            objects: Vec::with_capacity(512 + 1),
-            props: HashMap::new(),
+            objects: Storage::default(),
+            numerics: Storage::default(),
+            props: FxHashMap::default(),
             greys: vec![],
-            grow_factor: 2.0,
-            capacity: 512,
-            stats: HeapStats::default(),
-            paused: 0,
-        }
-    }
-
-    pub fn with_capacity(capacity: usize) -> Self {
-        Heap {
-            flags: Vec::with_capacity(capacity),
-            // Keep one extra slot to do sway on replace.
-            objects: Vec::with_capacity(capacity + 1),
-            props: HashMap::new(),
-            greys: vec![],
-            grow_factor: 2.0,
-            capacity,
-            stats: HeapStats::default(),
             paused: 0,
         }
     }
@@ -205,45 +177,62 @@ impl Heap {
     }
 
     pub fn set_grow_factor(&mut self, grow_factor: f64) {
-        self.grow_factor = grow_factor;
+        self.objects.set_grow_factor(grow_factor);
     }
 
     fn alloc<MarkFunc>(&mut self, obj: Object, flags: u8, mark_roots: MarkFunc) -> Handle
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        if self.stats.live_objects() >= self.capacity() {
-            if self.paused == 0 {
-                self.collect(mark_roots);
+        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
+        let heap: &mut Heap = unsafe { (self as *mut Heap).as_mut().unwrap() };
+        self.objects.alloc(obj, flags, || {
+            if heap.paused == 0 {
+                heap.collect(mark_roots);
             }
-            let new_min = (self.stats.live_objects() as f64 * self.grow_factor) as usize;
-            if new_min > self.capacity() {
-                self.capacity = new_min;
-                self.flags.reserve(new_min - self.flags.len());
-                self.objects.reserve((new_min - self.objects.len()) + 1);
+        })
+    }
+
+    pub fn alloc_u64<MarkFunc>(&mut self, num: u64, mutable: MutState, mark_roots: MarkFunc) -> Value
+        where
+            MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
+    {
+        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
+        let heap: &mut Heap = unsafe { (self as *mut Heap).as_mut().unwrap() };
+        let num = Numeric64 { uint: num };
+        Value::Int2(self.numerics.alloc(num, mutable.flag(), || {
+            if heap.paused == 0 {
+                heap.collect(mark_roots);
             }
-        }
-        if self.objects.len() < self.capacity() {
-            let idx = self.objects.len();
-            self.objects.push(obj);
-            self.flags.push(flags | FLAG_MARK);
-            self.stats.live_objects += 1;
-            Handle::new(idx)
-        } else {
-            for (idx, flag) in self.flags.iter_mut().enumerate() {
-                if !is_live(*flag) {
-                    self.stats.live_objects += 1;
-                    *flag = flags | FLAG_MARK;
-                    self.objects.push(obj);
-                    self.objects.swap_remove(idx);
-                    let handle = Handle::new(idx);
-                    // Remove any old properties.
-                    self.props.remove(&handle);
-                    return handle;
-                }
+        }).idx() as u32)
+    }
+
+    pub fn alloc_i64<MarkFunc>(&mut self, num: i64, mutable: MutState, mark_roots: MarkFunc) -> Value
+        where
+            MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
+    {
+        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
+        let heap: &mut Heap = unsafe { (self as *mut Heap).as_mut().unwrap() };
+        let num = Numeric64 { int: num };
+        Value::UInt2(self.numerics.alloc(num, mutable.flag(), || {
+            if heap.paused == 0 {
+                heap.collect(mark_roots);
             }
-            panic!("Failed to allocate to heap- no free objects and no capacity!");
-        }
+        }).idx() as u32)
+    }
+
+    pub fn alloc_f64<MarkFunc>(&mut self, num: f64, mutable: MutState, mark_roots: MarkFunc) -> Value
+        where
+            MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
+    {
+        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
+        let heap: &mut Heap = unsafe { (self as *mut Heap).as_mut().unwrap() };
+        let num = Numeric64 { float: num };
+        Value::Float2(self.numerics.alloc(num, mutable.flag(), || {
+            if heap.paused == 0 {
+                heap.collect(mark_roots);
+            }
+        }).idx() as u32)
     }
 
     pub fn alloc_pair<MarkFunc>(
@@ -304,11 +293,11 @@ impl Heap {
         ))
     }
 
-    pub(crate) fn alloc_vecnode<MarkFunc>(&mut self, node: VecNode, mark_roots: MarkFunc) -> Handle
+    pub(crate) fn alloc_vecnode<MarkFunc>(&mut self, node: VecNode, mark_roots: MarkFunc) -> Value
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        self.alloc(Object::VecNode(Arc::new(node)), FLAG_MUT, mark_roots)
+        Value::VecNode(self.alloc(Object::VecNode(Arc::new(node)), FLAG_MUT, mark_roots))
     }
 
     pub fn alloc_persistent_map<MarkFunc>(
@@ -327,11 +316,11 @@ impl Heap {
         ))
     }
 
-    pub(crate) fn alloc_mapnode<MarkFunc>(&mut self, node: MapNode, mark_roots: MarkFunc) -> Handle
+    pub(crate) fn alloc_mapnode<MarkFunc>(&mut self, node: MapNode, mark_roots: MarkFunc) -> Value
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        self.alloc(Object::MapNode(Arc::new(node)), FLAG_MUT, mark_roots)
+        Value::MapNode(self.alloc(Object::MapNode(Arc::new(node)), FLAG_MUT, mark_roots))
     }
 
     pub fn alloc_map<MarkFunc>(
@@ -403,16 +392,46 @@ impl Heap {
         Value::Value(self.alloc(Object::Value(val), mutable.flag(), mark_roots))
     }
 
+    pub fn get_int(&self, handle: u32) -> i64 {
+        unsafe {
+            if let Some(Numeric64 { int }) = self.numerics.vals().get(handle as usize) {
+                *int
+            } else {
+                panic!("Handle {} is not a valid int!", handle);
+            }
+        }
+    }
+
+    pub fn get_uint(&self, handle: u32) -> u64 {
+        unsafe {
+            if let Some(Numeric64 { uint }) = self.numerics.vals().get(handle as usize) {
+                *uint
+            } else {
+                panic!("Handle {} is not a valid uint!", handle);
+            }
+        }
+    }
+
+    pub fn get_float(&self, handle: u32) -> f64 {
+        unsafe {
+            if let Some(Numeric64 { float }) = self.numerics.vals().get(handle as usize) {
+                *float
+            } else {
+                panic!("Handle {} is not a valid float!", handle);
+            }
+        }
+    }
+
     pub fn get_string(&self, handle: Handle) -> &str {
-        if let Some(Object::String(ptr)) = self.objects.get(handle.idx()) {
-            ptr
+        if let Some(Object::String(ptr)) = self.objects.vals().get(handle.idx()) {
+            &ptr
         } else {
             panic!("Handle {} is not a string!", handle.idx());
         }
     }
 
     pub fn get_string_mut(&mut self, handle: Handle) -> &mut String {
-        if let Some(Object::String(ptr)) = self.objects.get_mut(handle.idx()) {
+        if let Some(Object::String(ptr)) = self.objects.vals_mut().get_mut(handle.idx()) {
             Arc::make_mut(ptr)
         } else {
             panic!("Handle {} is not a string!", handle.idx());
@@ -420,18 +439,18 @@ impl Heap {
     }
 
     pub fn get_vector(&self, handle: Handle) -> &[Value] {
-        if let Some(Object::Vector(v)) = self.objects.get(handle.idx()) {
-            v
+        if let Some(Object::Vector(v)) = self.objects.vals().get(handle.idx()) {
+            &v
         } else {
             panic!("Handle {} is not a vector!", handle.idx());
         }
     }
 
     pub fn get_vector_mut(&mut self, handle: Handle) -> VMResult<&mut Vec<Value>> {
-        if !self.is_mutable(handle) {
+        if !self.objects.is_mutable(handle.idx()) {
             return Err(VMError::new_heap("Vector is not mutable!"));
         }
-        if let Some(Object::Vector(v)) = self.objects.get_mut(handle.idx()) {
+        if let Some(Object::Vector(v)) = self.objects.vals_mut().get_mut(handle.idx()) {
             Ok(Arc::make_mut(v))
         } else {
             panic!("Handle {} is not a vector!", handle.idx());
@@ -439,16 +458,16 @@ impl Heap {
     }
 
     pub(crate) fn get_persistent_vector(&self, handle: Handle) -> &PersistentVec {
-        if let Some(Object::PersistentVec(vec)) = self.objects.get(handle.idx()) {
-            vec
+        if let Some(Object::PersistentVec(vec)) = self.objects.vals().get(handle.idx()) {
+            &vec
         } else {
             panic!("Handle {} is not a persistent vector!", handle.idx());
         }
     }
 
     pub(crate) fn get_vecnode(&self, handle: Handle) -> &VecNode {
-        if let Some(Object::VecNode(node)) = self.objects.get(handle.idx()) {
-            node
+        if let Some(Object::VecNode(node)) = self.objects.vals().get(handle.idx()) {
+            &node
         } else {
             panic!("Handle {} is not a vector node!", handle.idx());
         }
@@ -466,34 +485,34 @@ impl Heap {
     }*/
 
     pub(crate) fn get_persistent_map(&self, handle: Handle) -> &PersistentMap {
-        if let Some(Object::PersistentMap(map)) = self.objects.get(handle.idx()) {
-            map
+        if let Some(Object::PersistentMap(map)) = self.objects.vals().get(handle.idx()) {
+            &map
         } else {
             panic!("Handle {} is not a persistent map!", handle.idx());
         }
     }
 
     pub(crate) fn get_mapnode(&self, handle: Handle) -> &MapNode {
-        if let Some(Object::MapNode(node)) = self.objects.get(handle.idx()) {
-            node
+        if let Some(Object::MapNode(node)) = self.objects.vals().get(handle.idx()) {
+            &node
         } else {
             panic!("Handle {} is not a map node!", handle.idx());
         }
     }
 
     pub fn get_map(&self, handle: Handle) -> &HashMap<Value, Value> {
-        if let Some(Object::Map(map)) = self.objects.get(handle.idx()) {
-            map
+        if let Some(Object::Map(map)) = self.objects.vals().get(handle.idx()) {
+            &map
         } else {
             panic!("Handle {} is not a map!", handle.idx());
         }
     }
 
     pub fn get_map_mut(&mut self, handle: Handle) -> VMResult<&mut HashMap<Value, Value>> {
-        if !self.is_mutable(handle) {
+        if !self.objects.is_mutable(handle.idx()) {
             return Err(VMError::new_heap("Map is not mutable!"));
         }
-        if let Some(Object::Map(map)) = self.objects.get_mut(handle.idx()) {
+        if let Some(Object::Map(map)) = self.objects.vals_mut().get_mut(handle.idx()) {
             Ok(Arc::make_mut(map))
         } else {
             panic!("Handle {} is not a map!", handle.idx());
@@ -501,15 +520,15 @@ impl Heap {
     }
 
     pub fn get_bytes(&self, handle: Handle) -> &[u8] {
-        if let Some(Object::Bytes(v)) = self.objects.get(handle.idx()) {
-            v
+        if let Some(Object::Bytes(v)) = self.objects.vals().get(handle.idx()) {
+            &v
         } else {
             panic!("Handle {} is not bytes!", handle.idx());
         }
     }
 
     pub fn get_pair(&self, handle: Handle) -> (Value, Value) {
-        if let Some(Object::Pair(ptr)) = self.objects.get(handle.idx()) {
+        if let Some(Object::Pair(ptr)) = self.objects.vals().get(handle.idx()) {
             (ptr.0, ptr.1)
         } else {
             panic!("Handle {} is not a pair!", handle.idx());
@@ -517,10 +536,10 @@ impl Heap {
     }
 
     pub fn get_pair_mut(&mut self, handle: Handle) -> VMResult<(&mut Value, &mut Value)> {
-        if !self.is_mutable(handle) {
+        if !self.objects.is_mutable(handle.idx()) {
             return Err(VMError::new_heap("Pair is not mutable!"));
         }
-        if let Some(Object::Pair(ptr)) = self.objects.get_mut(handle.idx()) {
+        if let Some(Object::Pair(ptr)) = self.objects.vals_mut().get_mut(handle.idx()) {
             let data = Arc::make_mut(ptr);
             Ok((&mut data.0, &mut data.1))
         } else {
@@ -529,7 +548,7 @@ impl Heap {
     }
 
     pub fn get_pair_mut_override(&mut self, handle: Handle) -> (&mut Value, &mut Value) {
-        if let Some(Object::Pair(ptr)) = self.objects.get_mut(handle.idx()) {
+        if let Some(Object::Pair(ptr)) = self.objects.vals_mut().get_mut(handle.idx()) {
             let data = Arc::make_mut(ptr);
             (&mut data.0, &mut data.1)
         } else {
@@ -538,7 +557,7 @@ impl Heap {
     }
 
     pub fn get_lambda(&self, handle: Handle) -> Arc<Chunk> {
-        if let Some(Object::Lambda(lambda)) = self.objects.get(handle.idx()) {
+        if let Some(Object::Lambda(lambda)) = self.objects.vals().get(handle.idx()) {
             lambda.clone()
         } else {
             panic!("Handle {} is not a lambda!", handle.idx());
@@ -546,39 +565,39 @@ impl Heap {
     }
 
     pub fn get_closure(&self, handle: Handle) -> (Arc<Chunk>, &[Handle]) {
-        if let Some(Object::Closure(lambda, captures)) = self.objects.get(handle.idx()) {
-            (lambda.clone(), captures)
+        if let Some(Object::Closure(lambda, captures)) = self.objects.vals().get(handle.idx()) {
+            (lambda.clone(), &captures)
         } else {
             panic!("Handle {} is not a closure!", handle.idx());
         }
     }
 
     pub fn get_closure_captures(&self, handle: Handle) -> &[Handle] {
-        if let Some(Object::Closure(_, captures)) = self.objects.get(handle.idx()) {
-            captures
+        if let Some(Object::Closure(_, captures)) = self.objects.vals().get(handle.idx()) {
+            &captures
         } else {
             panic!("Handle {} is not a closure!", handle.idx());
         }
     }
 
     pub fn get_continuation(&self, handle: Handle) -> &Continuation {
-        if let Some(Object::Continuation(cont)) = self.objects.get(handle.idx()) {
-            cont
+        if let Some(Object::Continuation(cont)) = self.objects.vals().get(handle.idx()) {
+            &cont
         } else {
             panic!("Handle {} is not a continuation!", handle.idx());
         }
     }
 
     pub fn get_callframe(&self, handle: Handle) -> &CallFrame {
-        if let Some(Object::CallFrame(call_frame)) = self.objects.get(handle.idx()) {
-            call_frame
+        if let Some(Object::CallFrame(call_frame)) = self.objects.vals().get(handle.idx()) {
+            &call_frame
         } else {
             panic!("Handle {} is not a continuation!", handle.idx());
         }
     }
 
     pub fn get_callframe_mut(&mut self, handle: Handle) -> &mut CallFrame {
-        if let Some(Object::CallFrame(call_frame)) = self.objects.get_mut(handle.idx()) {
+        if let Some(Object::CallFrame(call_frame)) = self.objects.vals_mut().get_mut(handle.idx()) {
             Arc::make_mut(call_frame)
         } else {
             panic!("Handle {} is not a continuation!", handle.idx());
@@ -586,7 +605,7 @@ impl Heap {
     }
 
     pub fn get_value(&self, handle: Handle) -> Value {
-        if let Some(Object::Value(value)) = self.objects.get(handle.idx()) {
+        if let Some(Object::Value(value)) = self.objects.vals().get(handle.idx()) {
             //if let Object::Value(value) = self.objects[handle.idx()] {
             *value
         } else {
@@ -602,213 +621,120 @@ impl Heap {
         }
     }
 
-    // Used for a couple of tests, DO NOT try this on real code you WILL break the heap.
-    #[cfg(test)]
-    fn replace(&mut self, handle: Handle, obj: Object) -> Object {
-        self.objects.push(obj);
-        let old = self.objects.swap_remove(handle.idx());
-        self.flags[handle.idx()] &= 0x0f;
-        old
+    pub fn sticky(&mut self, val: Value) {
+        value_op!(self, val, sticky, ());
     }
 
-    pub fn is_live(&self, handle: Handle) -> bool {
-        if let Some(flag) = self.flags.get(handle.idx()) {
-            is_live(*flag)
-        } else {
-            false
-        }
+    pub fn unsticky(&mut self, val: Value) {
+        value_op!(self, val, unsticky, ());
     }
 
-    pub fn is_marked(&self, handle: Handle) -> bool {
-        if let Some(flag) = self.flags.get(handle.idx()) {
-            is_marked(*flag)
-        } else {
-            false
-        }
+    pub fn is_traced(&mut self, val: Value) -> bool {
+        value_op!(self, val, is_traced, true)
     }
 
-    fn is_mutable(&self, handle: Handle) -> bool {
-        if let Some(flag) = self.flags.get(handle.idx()) {
-            is_mutable(*flag)
-        } else {
-            false
-        }
+    pub fn is_traced_and_set(&mut self, val: Value) -> bool {
+        value_op!(self, val, is_traced_and_set, true)
     }
 
-    pub fn mark(&mut self, handle: Handle) {
-        if let Some(flag) = self.flags.get_mut(handle.idx()) {
-            if !is_marked(*flag) {
-                self.stats.live_objects += 1;
-                set_bit!(*flag, FLAG_MARK);
-            }
-        } else {
-            panic!("Invalid object handle in mark!")
-        }
-    }
-
-    pub fn sticky(&mut self, handle: Handle) {
-        if let Some(flag) = self.flags.get_mut(handle.idx()) {
-            if !is_bit_set!(*flag, FLAG_STICKY) {
-                self.stats.sticky_objects += 1;
-                set_bit!(*flag, FLAG_STICKY);
-            }
-        } else {
-            panic!("Invalid object handle in sticky!")
-        }
-    }
-
-    pub fn unsticky(&mut self, handle: Handle) {
-        if let Some(flag) = self.flags.get_mut(handle.idx()) {
-            if is_bit_set!(*flag, FLAG_STICKY) {
-                self.stats.sticky_objects -= 1;
-                clear_bit!(*flag, FLAG_STICKY);
-            }
-        } else {
-            panic!("Invalid object handle in unsticky!")
-        }
+    pub fn mark(&mut self, value: Value) {
+        mark!(self, value);
     }
 
     // mark_trace has an invariant to maintain, do not touch objects (see unsafe in
     // trace below).
-    fn mark_trace(&mut self, handle: Handle, current: usize) {
-        if !self.is_marked(handle) {
-            self.mark(handle);
-            if handle.idx() < current {
-                self.greys.push(handle.idx());
-            }
-        }
+    fn mark_trace(&mut self, val: Value) {
+            mark!(self, val);
+                self.greys.push(val);
     }
 
-    fn mark_chunk(&mut self, chunk: &Chunk, current: usize) {
+    fn mark_chunk(&mut self, chunk: &Chunk) {
         for constant in &chunk.constants {
-            if let Some(handle) = constant.get_handle() {
-                self.mark_trace(handle, current);
-            }
+                self.mark_trace(*constant);
         }
     }
 
-    fn mark_call_frame(&mut self, call_frame: &CallFrame, current: usize) {
-        self.mark_chunk(&call_frame.chunk, current);
+    fn mark_call_frame(&mut self, call_frame: &CallFrame) {
+        self.mark_chunk(&call_frame.chunk);
         if let Some(this_fn) = call_frame.this_fn {
-            if let Some(handle) = this_fn.get_handle() {
-                self.mark_trace(handle, current);
-            }
+                self.mark_trace(this_fn);
         }
         for defer in &call_frame.defers {
-            if let Some(handle) = defer.get_handle() {
-                self.mark_trace(handle, current);
-            }
+                self.mark_trace(*defer);
         }
         if let Some(on_error) = call_frame.on_error {
-            if let Some(handle) = on_error.get_handle() {
-                self.mark_trace(handle, current);
-            }
+                self.mark_trace(on_error);
         }
-        if let Some(handle) = call_frame.called.get_handle() {
-            self.mark_trace(handle, current);
-        }
+            self.mark_trace(call_frame.called);
     }
 
-    fn trace(&mut self, idx: usize, current: usize) {
-        // First trace any properties for the object.
-        if let Some(props) = self.props.get(&Handle::new(idx)) {
-            // Break the props lifetime loose from self so we can call mark_trace below.
-            // mark_trace does not touch props so should be good.
-            let props: &Arc<HashMap<Interned, Value>> = unsafe {
-                (props as *const Arc<HashMap<Interned, Value>>)
-                    .as_ref()
-                    .unwrap()
-            };
-            for (_, val) in props.iter() {
-                if let Some(handle) = val.get_handle() {
-                    self.mark_trace(handle, current);
-                }
-            }
-        }
+    fn trace_object(&mut self, obj: &Object) {
         // This unsafe avoids cloning the object to avoid having a mutable and immutable self.
         // This should be fine because we are not touching objects in a mark, only flags.
         // idx should also have been validated before it gets here (by mark if nothing else).
-        let obj = unsafe { &*(self.objects.get_unchecked(idx) as *const Object) };
+        //let obj = unsafe { &*(self.objects.vals.get_unchecked(idx) as *const Object) };
         match obj {
             Object::String(_) => {}
             Object::Vector(vec) => {
                 for v in vec.iter() {
-                    if let Some(h) = v.get_handle() {
-                        self.mark_trace(h, current);
-                    }
+                        self.mark_trace(*v);
                 }
             }
             Object::Map(map) => {
                 for (key, val) in map.iter() {
-                    if let Some(h) = key.get_handle() {
-                        self.mark_trace(h, current);
-                    }
-                    if let Some(h) = val.get_handle() {
-                        self.mark_trace(h, current);
-                    }
+                        self.mark_trace(*key);
+                        self.mark_trace(*val);
                 }
             }
             Object::Bytes(_) => {}
-            Object::Pair(data) => match (data.0.get_handle(), data.1.get_handle()) {
-                (Some(car), Some(cdr)) => {
-                    self.mark_trace(car, current);
-                    self.mark_trace(cdr, current);
-                }
-                (Some(car), None) => self.mark_trace(car, current),
-                (None, Some(cdr)) => self.mark_trace(cdr, current),
-                (None, None) => {}
+            Object::Pair(data) => {
+                self.mark_trace(data.0);
+                self.mark_trace(data.1);
             },
-            Object::Lambda(chunk) => self.mark_chunk(chunk, current),
+            Object::Lambda(chunk) => self.mark_chunk(chunk),
             Object::Closure(chunk, closures) => {
-                self.mark_chunk(chunk, current);
+                self.mark_chunk(chunk);
                 for close in closures.iter() {
-                    self.mark_trace(*close, current);
+                    self.mark_trace(Value::Value(*close));
                 }
             }
             Object::Continuation(continuation) => {
-                self.mark_call_frame(&continuation.frame, current);
+                self.mark_call_frame(&continuation.frame);
                 for obj in &continuation.stack {
-                    if let Some(handle) = obj.get_handle() {
-                        self.mark_trace(handle, current);
-                    }
+                        self.mark_trace(*obj);
                 }
             }
-            Object::CallFrame(call_frame) => self.mark_call_frame(call_frame, current),
+            Object::CallFrame(call_frame) => self.mark_call_frame(call_frame),
             Object::Value(val) => {
-                if let Some(handle) = val.get_handle() {
-                    self.mark_trace(handle, current);
-                }
+                    self.mark_trace(*val);
             }
             Object::PersistentVec(pvec) => {
                 if let Some(root) = pvec.root() {
                     if let Some(nodes) = root.nodes() {
                         nodes
                             .iter()
-                            .filter(|n| n.valid())
-                            .for_each(|handle| self.mark_trace(*handle, current));
+                            .filter(|n| !n.is_undef())
+                            .for_each(|val| self.mark_trace(*val));
                     }
                     if let Some(leaf) = root.leaf() {
                         leaf.iter()
-                            .filter_map(|val| val.get_handle())
-                            .for_each(|handle| self.mark_trace(handle, current));
+                            .for_each(|val| self.mark_trace(*val));
                     }
                     pvec.tail()
                         .iter()
-                        .filter_map(|val| val.get_handle())
-                        .for_each(|handle| self.mark_trace(handle, current));
+                        .for_each(|val| self.mark_trace(*val));
                 }
             }
             Object::VecNode(node) => {
                 if let Some(nodes) = node.nodes() {
                     nodes
                         .iter()
-                        .filter(|n| n.valid())
-                        .for_each(|handle| self.mark_trace(*handle, current));
+                        .filter(|n| !n.is_undef())
+                        .for_each(|val| self.mark_trace(*val));
                 }
                 if let Some(leaf) = node.leaf() {
                     leaf.iter()
-                        .filter_map(|val| val.get_handle())
-                        .for_each(|handle| self.mark_trace(handle, current));
+                        .for_each(|val| self.mark_trace(*val));
                 }
             }
             Object::PersistentMap(_pmap) => {} // TODO- trace me!
@@ -817,51 +743,89 @@ impl Heap {
         }
     }
 
+    fn trace(&mut self, val: Value) {
+        match val {
+            Value::CharClusterLong(handle) |
+            Value::String(handle) |
+            Value::Vector(handle) |
+            Value::PersistentVec(handle) |
+            Value::PersistentMap(handle) |
+            Value::VecNode(handle) |
+            Value::MapNode(handle) |
+            Value::Map(handle) |
+            Value::Bytes(handle) |
+            Value::Pair(handle) |
+            Value::List(handle, _) |
+            Value::Lambda(handle) |
+            Value::Closure(handle) |
+            Value::Continuation(handle) |
+            Value::CallFrame(handle) |
+            Value::Value(handle) => {
+                let obj = self.objects.vals().get(handle.idx()).expect("Invalid object handle!").clone();
+                self.trace_object(&obj);
+            }
+
+            Value::Int2(_) |
+            Value::UInt2(_) |
+            Value::Float2(_) |
+
+            Value::Byte(_) |
+            Value::Int(_) |
+            Value::UInt(_) |
+            Value::Float(_) |
+            Value::CodePoint(_) |
+            Value::CharCluster(_, _) |
+            Value::Symbol(_) |
+            Value::Keyword(_) |
+            Value::StringConst(_) |
+            Value::Builtin(_) |
+            Value::True |
+            Value::False |
+            Value::Nil |
+            Value::Undefined => {}
+        }
+    }
+
     fn collect<MarkFunc>(&mut self, mut mark_roots: MarkFunc)
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        self.stats.live_objects = 0; //self.stats.sticky_objects;
-        for flag in self.flags.iter_mut() {
-            clear_bit!(*flag, FLAG_MARK);
-        }
+        self.objects.clear_marks();
+        self.numerics.clear_marks();
         mark_roots(self).expect("Failed to mark the roots!");
-        let mut cur = 0;
-        //for (cur, flag) in self.flags.iter().enumerate() {
-        let mut val = self.flags.get(cur);
-        while let Some(flag) = val {
-            if is_live(*flag) {
-                // if it just sticky mark it as well
-                if !is_marked(*flag) {
-                    self.mark(Handle::new(cur));
-                }
-                self.trace(cur, cur);
-                while let Some(idx) = self.greys.pop() {
-                    self.trace(idx, cur);
-                }
-            }
-            cur += 1;
-            val = self.flags.get(cur);
-        }
-        // Free any objects that are no longer live
-        for (cur, flag) in self.flags.iter().enumerate() {
-            if !is_live(*flag) {
-                self.objects.push(Object::Empty);
-                self.objects.swap_remove(cur);
+        // Mark properties.
+        for (key, value) in &self.props {
+            mark!(self, *key);
+            for val in value.values() {
+                mark!(self, *val);
             }
         }
+        let mut objs = Vec::new();
+        self.objects.trace_all_live(|obj| {
+            // this cloning is not great...
+            objs.push(obj.clone());
+        });
+        for obj in &objs {
+            self.trace_object(obj);
+        }
+        while let Some(val) = self.greys.pop() {
+            if !self.is_traced_and_set(val) {
+                self.trace(val);
+            }
+        }
+        self.objects.set_all_dead(Object::Empty);
     }
 
     pub fn capacity(&self) -> usize {
-        self.capacity
+        self.objects.capacity()
     }
 
     pub fn live_objects(&self) -> usize {
-        self.stats.live_objects()
+        self.objects.live_objects() + self.numerics.live_objects()
     }
 
-    pub fn get_property(&self, handle: Handle, prop: Interned) -> Option<Value> {
-        if let Some(map) = self.props.get(&handle) {
+    pub fn get_property(&self, value: Value, prop: Interned) -> Option<Value> {
+        if let Some(map) = self.props.get(&value) {
             if let Some(val) = map.get(&prop) {
                 return Some(*val);
             }
@@ -869,14 +833,14 @@ impl Heap {
         None
     }
 
-    pub fn set_property(&mut self, handle: Handle, prop: Interned, value: Value) {
-        if let Some(map) = self.props.get_mut(&handle) {
+    pub fn set_property(&mut self, key_value: Value, prop: Interned, value: Value) {
+        if let Some(map) = self.props.get_mut(&key_value) {
             let map = Arc::make_mut(map);
             map.insert(prop, value);
         } else {
-            let mut map = HashMap::new();
+            let mut map = FxHashMap::default();
             map.insert(prop, value);
-            self.props.insert(handle, Arc::new(map));
+            self.props.insert(key_value, Arc::new(map));
         }
     }
 }
@@ -924,7 +888,7 @@ mod tests {
         }
         let mark_roots = |heap: &mut Heap| -> VMResult<()> {
             for idx in 0..512 {
-                heap.mark(Handle::new(idx));
+                heap.mark(Value::Pair(Handle::new(idx)));
             }
             Ok(())
         };
@@ -947,7 +911,7 @@ mod tests {
         let mark_roots = |heap: &mut Heap| -> VMResult<()> {
             for idx in 0..513 {
                 if idx % 2 == 0 {
-                    heap.mark(Handle::new(idx));
+                    heap.mark(Value::Pair(Handle::new(idx)));
                 }
             }
             Ok(())
@@ -961,7 +925,7 @@ mod tests {
         assert!(heap.live_objects() == 0);
         for x in 0..512 {
             let h = heap.alloc_pair(Value::Int(x), Value::Nil, MutState::Mutable, mark_roots);
-            heap.sticky(h.get_handle().unwrap());
+            heap.sticky(h);
         }
         heap.collect(mark_roots);
         assert!(heap.capacity() == 1024);
@@ -971,7 +935,7 @@ mod tests {
         }
         let mark_roots = |heap: &mut Heap| -> VMResult<()> {
             for idx in 0..1024 {
-                heap.mark(Handle::new(idx));
+                heap.mark(Value::Pair(Handle::new(idx)));
             }
             Ok(())
         };
@@ -1002,15 +966,13 @@ mod tests {
             let inner = heap.alloc_pair(Value::Int(x), Value::Nil, MutState::Mutable, mark_roots);
             outers.borrow_mut().push(
                 heap.alloc_pair(inner, Value::Nil, MutState::Mutable, mark_roots)
-                    .get_handle()
-                    .unwrap(),
             );
         }
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 512);
         let mut i = 0;
         for h in outers.borrow().iter() {
-            if let (Value::Pair(inner), Value::Nil) = heap.get_pair(*h) {
+            if let (Value::Pair(inner), Value::Nil) = heap.get_pair(h.get_handle().unwrap()) {
                 if let (Value::Int(v), Value::Nil) = heap.get_pair(inner) {
                     assert!(i == v as usize);
                 } else {
@@ -1024,19 +986,21 @@ mod tests {
         heap.collect(mark_roots);
         assert_eq!(heap.capacity(), 512);
         assert_eq!(heap.live_objects(), 512);
+        /* XXXSLS
         for h in outers.borrow().iter() {
             //let data = Box::new("bloop".to_string());
             //let d = Box::into_raw(data) as usize;
-            heap.replace(*h, Object::String(Arc::new("bloop".into())));
+            heap.replace(h.get_handle().unwrap(), Object::String(Arc::new("bloop".into())));
         }
         heap.collect(mark_roots);
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 256);
         for h in outers.borrow().iter() {
-            let sstr = heap.get_string(*h);
+            let sstr = heap.get_string(h.get_handle().unwrap());
             assert!(sstr == "bloop");
             i += 1;
         }
+        */
         Ok(())
     }
 
@@ -1059,15 +1023,15 @@ mod tests {
             let inner = heap.alloc_pair(Value::Int(x), Value::Nil, MutState::Mutable, mark_roots);
             v.push(inner);
         }
-        outers.borrow_mut().push(heap.alloc(
+        outers.borrow_mut().push(Value::Vector(heap.alloc(
             Object::Vector(Arc::new(v)),
             MutState::Mutable.flag(),
             mark_roots,
-        ));
+        )));
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 257);
         for h in outers.borrow().iter() {
-            let v = heap.get_vector(*h);
+            let v = heap.get_vector(h.get_handle().unwrap());
             for (i, hv) in v.iter().enumerate() {
                 if let Value::Pair(hv) = hv {
                     if let (Value::Int(v), Value::Nil) = heap.get_pair(*hv) {
@@ -1084,7 +1048,7 @@ mod tests {
         assert_eq!(heap.capacity(), 512);
         assert_eq!(heap.live_objects(), 257);
         for h in outers.borrow().iter() {
-            let v = heap.get_vector(*h);
+            let v = heap.get_vector(h.get_handle().unwrap());
             for (i, hv) in v.iter().enumerate() {
                 if let Value::Pair(hv) = hv {
                     if let (Value::Int(v), Value::Nil) = heap.get_pair(*hv) {
@@ -1097,19 +1061,21 @@ mod tests {
                 }
             }
         }
+        /* XXXSLS
         for h in outers.borrow().iter() {
             //let data = Box::new("bloop".to_string());
             //let d = Box::into_raw(data) as usize;
             //heap.replace(*h, Object::StringMut(d));
-            heap.replace(*h, Object::String(Arc::new("bloop".into())));
+            heap.replace(h.get_handle().unwrap(), Object::String(Arc::new("bloop".into())));
         }
         heap.collect(mark_roots);
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 1);
         for h in outers.borrow().iter() {
-            let sstr = heap.get_string(*h);
+            let sstr = heap.get_string(h.get_handle().unwrap());
             assert!(sstr == "bloop");
         }
+        */
         Ok(())
     }
 
@@ -1128,25 +1094,17 @@ mod tests {
         };
         outers.borrow_mut().push(
             heap.alloc_pair(Value::Int(1), Value::Int(2), MutState::Mutable, mark_roots)
-                .get_handle()
-                .unwrap(),
         );
         let car_h = heap.alloc_pair(Value::Int(3), Value::Nil, MutState::Mutable, mark_roots);
         let cdr_h = heap.alloc_pair(Value::Int(4), Value::Nil, MutState::Mutable, mark_roots);
         outers.borrow_mut().push(
             heap.alloc_pair(car_h, Value::Int(2), MutState::Mutable, mark_roots)
-                .get_handle()
-                .unwrap(),
         );
         outers.borrow_mut().push(
             heap.alloc_pair(Value::Int(1), cdr_h, MutState::Mutable, mark_roots)
-                .get_handle()
-                .unwrap(),
         );
         outers.borrow_mut().push(
             heap.alloc_pair(car_h, cdr_h, MutState::Mutable, mark_roots)
-                .get_handle()
-                .unwrap(),
         );
         assert_eq!(heap.capacity(), 512);
         assert_eq!(heap.live_objects(), 6);
@@ -1154,7 +1112,7 @@ mod tests {
         assert_eq!(heap.capacity(), 512);
         assert_eq!(heap.live_objects(), 6);
         for (i, h) in outers.borrow().iter().enumerate() {
-            let (car, cdr) = heap.get_pair(*h);
+            let (car, cdr) = heap.get_pair(h.get_handle().unwrap());
             if i == 0 {
                 let (car, cdr) = if let Value::Int(car) = car {
                     if let Value::Int(cdr) = cdr {

@@ -26,14 +26,9 @@ pub fn get_prop(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
                 ))
             }
         }
-        _ => {
-            let handle = registers[0].get_handle().ok_or_else(|| {
-                VMError::new_vm("get-prop: Not a heap object or global symbol".to_string())
-            })?;
-            Ok(vm
-                .get_heap_property_interned(handle, key)
-                .unwrap_or(Value::Nil))
-        }
+        _ => Ok(vm
+            .get_heap_property_interned(registers[0], key)
+            .unwrap_or(Value::Nil)),
     }
 }
 
@@ -58,10 +53,7 @@ pub fn set_prop(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
             ))
         }
     } else {
-        let handle = registers[0].get_handle().ok_or_else(|| {
-            VMError::new_vm("set-prop: Not a heap object or global symbol".to_string())
-        })?;
-        vm.set_heap_property_interned(handle, key, registers[2]);
+        vm.set_heap_property_interned(registers[0], key, registers[2]);
         Ok(registers[2])
     }
 }
