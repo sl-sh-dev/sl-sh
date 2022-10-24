@@ -72,7 +72,7 @@ impl<ENV> GVm<ENV> {
         match num_args {
             1 => {
                 let v = self.heap.get_vector(handle);
-                let idx = registers[first_reg as usize + 1].get_int()?;
+                let idx = registers[first_reg as usize + 1].get_int(self)?;
                 let res = if idx >= 0 {
                     if let Some(val) = v.get(idx as usize) {
                         *val
@@ -88,8 +88,8 @@ impl<ENV> GVm<ENV> {
             }
             3 => {
                 let eqi = self.intern("=");
+                let idx = registers[first_reg as usize + 1].get_int(self)?;
                 let v = self.heap.get_vector_mut(handle)?;
-                let idx = registers[first_reg as usize + 1].get_int()?;
                 if idx < 0 {
                     return Err(VMError::new_vm("A vector requires a positive index."));
                 }
@@ -127,7 +127,7 @@ impl<ENV> GVm<ENV> {
     ) -> VMResult<()> {
         match num_args {
             1 => {
-                let idx = registers[first_reg as usize + 1].get_int()?;
+                let idx = registers[first_reg as usize + 1].get_int(self)?;
                 let res = if idx >= 0 {
                     if let Some((mut car_out, mut cdr)) = head.get_pair(self) {
                         for _ in 0..idx {

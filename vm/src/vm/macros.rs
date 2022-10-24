@@ -258,12 +258,14 @@ macro_rules! get_reg_unref_int {
 
 #[macro_export]
 macro_rules! get_reg_int {
-    ($regs:expr, $idx:expr) => {{
+    ($vm:expr, $regs:expr, $idx:expr) => {{
         let reg = $regs[$idx as usize];
         match reg {
             Value::Byte(b) => Ok(b as i64),
-            Value::Int(i) => Ok(i),
-            Value::UInt(i) => Ok(i as i64),
+            Value::Int32(i) => Ok(i as i64),
+            Value::UInt32(i) => Ok(i as i64),
+            Value::Int64(handle) => Ok($vm.get_int(handle)),
+            Value::UInt64(handle) => Ok($vm.get_uint(handle) as i64), // XXX TODO- overflow.
             _ => Err(VMError::new_value(format!("Not an integer: {:?}", reg))),
         }
     }};
@@ -284,15 +286,15 @@ macro_rules! compare_int {
         for reg in reg1..reg2 {
             let op1 = get_reg_unref!($registers, reg, $vm);
             let op2 = get_reg_unref!($registers, reg + 1, $vm);
-            val = if matches!(op1, Value::Float(_)) || matches!(op2, Value::Float(_)) {
+            val = if matches!(op1, Value::Float64(_)) || matches!(op2, Value::Float64(_)) {
                 $comp_fn(
-                    get_float!(op1).map_err(|e| (e, $chunk.clone()))?,
-                    get_float!(op2).map_err(|e| (e, $chunk.clone()))?,
+                    get_float!($vm, op1).map_err(|e| (e, $chunk.clone()))?,
+                    get_float!($vm, op2).map_err(|e| (e, $chunk.clone()))?,
                 )
             } else {
                 $comp_fn(
-                    get_int!(op1).map_err(|e| (e, $chunk.clone()))?,
-                    get_int!(op2).map_err(|e| (e, $chunk.clone()))?,
+                    get_int!($vm, op1).map_err(|e| (e, $chunk.clone()))?,
+                    get_int!($vm, op2).map_err(|e| (e, $chunk.clone()))?,
                 )
             };
             if !val {
@@ -318,67 +320,71 @@ macro_rules! compare {
 }
 
 macro_rules! get_int {
-    ($val:expr) => {{
+    ($vm:expr, $val:expr) => {{
         match $val {
             Value::Byte(b) => Ok(b as i64),
-            Value::Int(i) => Ok(i),
-            Value::UInt(i) => Ok(i as i64),
+            Value::Int32(i) => Ok(i as i64),
+            Value::UInt32(i) => Ok(i as i64),
+            Value::Int64(handle) => Ok($vm.get_int(handle)),
+            Value::UInt64(handle) => Ok($vm.get_uint(handle) as i64), // XXX TODO- overflow.
             _ => Err(VMError::new_value(format!("Not an integer: {:?}", $val))),
         }
     }};
 }
 
 macro_rules! get_float {
-    ($val:expr) => {{
+    ($vm:expr, $val:expr) => {{
         match $val {
             Value::Byte(b) => Ok(b as f64),
-            Value::Int(i) => Ok(i as f64),
-            Value::UInt(i) => Ok(i as f64),
-            Value::Float(f) => Ok(f.0),
+            Value::Int32(i) => Ok(i as f64),
+            Value::UInt32(i) => Ok(i as f64),
+            Value::Int64(handle) => Ok($vm.get_int(handle) as f64),
+            Value::UInt64(handle) => Ok($vm.get_uint(handle) as f64),
+            Value::Float64(handle) => Ok($vm.get_float(handle)),
             _ => Err(VMError::new_value(format!("Not a float: {:?}", $val))),
         }
     }};
 }
 
 macro_rules! binary_math {
-    ($chunk:expr, $code:expr, $ip:expr, $registers:expr, $bin_fn:expr, $wide:expr) => {{
+    ($vm:expr, $chunk:expr, $code:expr, $ip:expr, $registers:expr, $bin_fn:expr, $wide:expr) => {{
         let (dest, op2) = decode2!($code, $ip, $wide);
         let op1 = get_reg!($registers, dest);
         let op2 = get_reg!($registers, op2);
-        let val = if matches!(op1, Value::Float(_)) || matches!(op2, Value::Float(_)) {
-            Value::Float(F64Wrap($bin_fn(
-                get_float!(op1).map_err(|e| (e, $chunk.clone()))?,
-                get_float!(op2).map_err(|e| (e, $chunk.clone()))?,
-            )))
-        } else {
-            Value::Int($bin_fn(
-                get_int!(op1).map_err(|e| (e, $chunk.clone()))?,
-                get_int!(op2).map_err(|e| (e, $chunk.clone()))?,
+        let val = if matches!(op1, Value::Float64(_)) || matches!(op2, Value::Float64(_)) {
+            $vm.alloc_f64($bin_fn(
+                get_float!($vm, op1).map_err(|e| (e, $chunk.clone()))?,
+                get_float!($vm, op2).map_err(|e| (e, $chunk.clone()))?,
             ))
+        } else {
+            // XXX TODO- overflow
+            Value::Int32($bin_fn(
+                get_int!($vm, op1).map_err(|e| (e, $chunk.clone()))?,
+                get_int!($vm, op2).map_err(|e| (e, $chunk.clone()))?,
+            ) as i32)
         };
         mov_register!($registers, dest as usize, val);
     }};
 }
 
 macro_rules! div_math {
-    ($chunk:expr, $code:expr, $ip:expr, $registers:expr, $wide:expr) => {{
+    ($vm:expr, $chunk:expr, $code:expr, $ip:expr, $registers:expr, $wide:expr) => {{
         let (dest, op2) = decode2!($code, $ip, $wide);
         let op1 = get_reg!($registers, dest);
         let op2 = get_reg!($registers, op2);
-        let val = if matches!(op1, Value::Float(_)) || matches!(op2, Value::Float(_)) {
-            let op2 = get_float!(op2).map_err(|e| (e, $chunk.clone()))?;
+        let val = if matches!(op1, Value::Float64(_)) || matches!(op2, Value::Float64(_)) {
+            let op2 = get_float!($vm, op2).map_err(|e| (e, $chunk.clone()))?;
             if op2 == 0.0 {
                 return Err((VMError::new_vm("Divide by zero error."), $chunk));
             }
-            Value::Float(F64Wrap(
-                get_float!(op1).map_err(|e| (e, $chunk.clone()))? / op2,
-            ))
+            $vm.alloc_f64(get_float!($vm, op1).map_err(|e| (e, $chunk.clone()))? / op2)
         } else {
-            let op2 = get_int!(op2).map_err(|e| (e, $chunk.clone()))?;
+            // XXX TODO- overflow
+            let op2 = get_int!($vm, op2).map_err(|e| (e, $chunk.clone()))? as i32;
             if op2 == 0 {
                 return Err((VMError::new_vm("Divide by zero error."), $chunk));
             }
-            Value::Int(get_int!(op1).map_err(|e| (e, $chunk.clone()))? / op2)
+            Value::Int32(get_int!($vm, op1).map_err(|e| (e, $chunk.clone()))? as i32 / op2)
         };
         mov_register!($registers, dest as usize, val);
     }};

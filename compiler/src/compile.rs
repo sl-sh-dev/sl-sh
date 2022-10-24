@@ -331,12 +331,12 @@ pub fn mkconst(
         Value::Byte(i) => state
             .chunk
             .encode2(REGB, result as u16, i as u16, env.own_line())?,
-        Value::Int(i) if i >= 0 && i <= u16::MAX as i64 => {
+        Value::Int32(i) if i >= 0 && i <= u16::MAX as i32 => {
             state
                 .chunk
                 .encode2(REGI, result as u16, i as u16, env.own_line())?;
         }
-        Value::UInt(i) if i <= u16::MAX as u64 => {
+        Value::UInt32(i) if i <= u16::MAX as u32 => {
             state
                 .chunk
                 .encode2(REGU, result as u16, i as u16, env.own_line())?;
@@ -402,12 +402,12 @@ pub fn compile(
         Value::Byte(i) => state
             .chunk
             .encode2(REGB, result as u16, i as u16, env.own_line())?,
-        Value::Int(i) if i >= 0 && i <= u16::MAX as i64 => {
+        Value::Int32(i) if i >= 0 && i <= u16::MAX as i32 => {
             state
                 .chunk
                 .encode2(REGI, result as u16, i as u16, env.own_line())?
         }
-        Value::UInt(i) if i <= u16::MAX as u64 => {
+        Value::UInt32(i) if i <= u16::MAX as u32 => {
             state
                 .chunk
                 .encode2(REGU, result as u16, i as u16, env.own_line())?

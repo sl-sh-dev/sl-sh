@@ -5,6 +5,7 @@ use std::iter;
 use std::sync::Arc;
 
 use crate::error::*;
+use crate::handle::Numeric64Handle;
 use crate::heap::*;
 use crate::interner::*;
 use crate::persistent_vec::PersistentVecIter;
@@ -106,14 +107,14 @@ impl Hash for F64Wrap {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum Value {
     Byte(u8),
-    Int(i64),
-    UInt(u64),
-    Float(F64Wrap),
-    Int2(u32),
-    UInt2(u32),
-    Float2(u32),
+    Int32(i32),
+    UInt32(u32),
+    //Float(F64Wrap),
+    Int64(Numeric64Handle),
+    UInt64(Numeric64Handle),
+    Float64(Numeric64Handle),
     CodePoint(char),
-    CharCluster(u8, [u8; 14]),
+    CharCluster(u8, [u8; 6]),
     CharClusterLong(Handle), // XXX TODO- move to Object?
     Symbol(Interned),
     Keyword(Interned),
@@ -133,7 +134,7 @@ pub enum Value {
     Map(Handle),
     Bytes(Handle),
     Pair(Handle),
-    List(Handle, u32),
+    List(Handle, u16),
     Lambda(Handle),
     Closure(Handle),
     Continuation(Handle),
@@ -185,10 +186,6 @@ impl Default for Value {
 impl Value {
     pub fn new() -> Self {
         Value::Undefined
-    }
-
-    pub fn float(f: f64) -> Self {
-        Value::Float(F64Wrap(f))
     }
 
     #[inline(always)]
@@ -244,31 +241,47 @@ impl Value {
     }
 
     pub fn is_int(&self) -> bool {
-        matches!(&self, Value::Byte(_) | Value::Int(_) | Value::UInt(_))
+        matches!(
+            &self,
+            Value::Byte(_)
+                | Value::Int32(_)
+                | Value::UInt32(_)
+                | Value::Int64(_)
+                | Value::UInt64(_)
+        )
     }
 
     pub fn is_number(&self) -> bool {
         matches!(
             &self,
-            Value::Byte(_) | Value::Int(_) | Value::UInt(_) | Value::Float(_)
+            Value::Byte(_)
+                | Value::Int32(_)
+                | Value::UInt32(_)
+                | Value::Int64(_)
+                | Value::UInt64(_)
+                | Value::Float64(_)
         )
     }
 
-    pub fn get_int(&self) -> VMResult<i64> {
+    pub fn get_int<ENV>(&self, vm: &GVm<ENV>) -> VMResult<i64> {
         match &self {
             Value::Byte(b) => Ok(*b as i64),
-            Value::Int(i) => Ok(*i),
-            Value::UInt(i) => Ok(*i as i64),
+            Value::Int32(i) => Ok(*i as i64),
+            Value::UInt32(i) => Ok(*i as i64),
+            Value::Int64(handle) => Ok(vm.get_int(*handle)),
+            Value::UInt64(handle) => Ok(vm.get_uint(*handle) as i64), // XXX TODO- overflow.
             _ => Err(VMError::new_value(format!("Not an integer: {:?}", self))),
         }
     }
 
-    pub fn get_float(&self) -> VMResult<f64> {
+    pub fn get_float<ENV>(&self, vm: &GVm<ENV>) -> VMResult<f64> {
         match &self {
             Value::Byte(b) => Ok(*b as f64),
-            Value::Int(i) => Ok(*i as f64),
-            Value::UInt(i) => Ok(*i as f64),
-            Value::Float(f) => Ok(f.0),
+            Value::Int32(i) => Ok(*i as f64),
+            Value::UInt32(i) => Ok(*i as f64),
+            Value::Float64(handle) => Ok(vm.get_float(*handle)),
+            Value::Int64(handle) => Ok(vm.get_int(*handle) as f64),
+            Value::UInt64(handle) => Ok(vm.get_uint(*handle) as f64),
             _ => Err(VMError::new_value(format!("Not a float: {:?}", self))),
         }
     }
@@ -302,12 +315,11 @@ impl Value {
             Value::Value(handle) => Some(*handle),
 
             Value::Byte(_) => None,
-            Value::Int(_) => None,
-            Value::UInt(_) => None,
-            Value::Float(_) => None,
-            Value::Int2(_) => None,
-            Value::UInt2(_) => None,
-            Value::Float2(_) => None,
+            Value::Int32(_) => None,
+            Value::UInt32(_) => None,
+            Value::Int64(_) => None,
+            Value::UInt64(_) => None,
+            Value::Float64(_) => None,
             Value::CodePoint(_) => None,
             Value::CharCluster(_, _) => None,
             Value::Symbol(_) => None,
@@ -406,12 +418,11 @@ impl Value {
         match self {
             Value::True => "true".to_string(),
             Value::False => "false".to_string(),
-            Value::Float(f) => format!("{}", f.0),
-            Value::Int(i) => format!("{}", i),
-            Value::UInt(i) => format!("{}", i),
-            Value::Float2(handle) => format!("{}", vm.get_float(*handle)),
-            Value::Int2(handle) => format!("{}", vm.get_int(*handle)),
-            Value::UInt2(handle) => format!("{}", vm.get_uint(*handle)),
+            Value::Int32(i) => format!("{}", i),
+            Value::UInt32(i) => format!("{}", i),
+            Value::Float64(handle) => format!("{}", vm.get_float(*handle)),
+            Value::Int64(handle) => format!("{}", vm.get_int(*handle)),
+            Value::UInt64(handle) => format!("{}", vm.get_uint(*handle)),
             Value::Byte(b) => format!("{}", b),
             Value::Symbol(i) => vm.get_interned(*i).to_string(),
             Value::Keyword(i) => format!(":{}", vm.get_interned(*i)),
@@ -506,12 +517,11 @@ impl Value {
         match self {
             Value::True => "True",
             Value::False => "False",
-            Value::Float(_) => "Float",
-            Value::Int(_) => "Int",
-            Value::UInt(_) => "UInt",
-            Value::Float2(_) => "Float",
-            Value::Int2(_) => "Int",
-            Value::UInt2(_) => "UInt",
+            Value::Int32(_) => "Int",
+            Value::UInt32(_) => "UInt",
+            Value::Float64(_) => "Float",
+            Value::Int64(_) => "Int",
+            Value::UInt64(_) => "UInt",
             Value::Symbol(_) => "Symbol",
             Value::Keyword(_) => "Keyword",
             Value::StringConst(_) => "String",

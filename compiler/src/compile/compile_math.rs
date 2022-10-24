@@ -55,12 +55,15 @@ pub(crate) fn compile_math(
             if cdr.len() == 1 {
                 state.chunk.encode2(INC, dest as u16, 1, env.own_line())?;
             } else if cdr.len() == 2 {
+                // XXX TODO- int 64s
                 let amount = match cdr[1] {
                     Value::Byte(i) => i as u16,
-                    Value::Int(i) if i >= 0 && i <= u16::MAX as i64 => i as u16,
-                    Value::Int(_) => return Err(VMError::new_compile("inc!: second arg to large")),
-                    Value::UInt(i) if i <= u16::MAX as u64 => i as u16,
-                    Value::UInt(_) => {
+                    Value::Int32(i) if i >= 0 && i <= u16::MAX as i32 => i as u16,
+                    Value::Int32(_) => {
+                        return Err(VMError::new_compile("inc!: second arg to large"))
+                    }
+                    Value::UInt32(i) if i <= u16::MAX as u32 => i as u16,
+                    Value::UInt32(_) => {
                         return Err(VMError::new_compile("inc!: second arg < 0 or to large"))
                     }
                     _ => return Err(VMError::new_compile("inc!: second arg must be integer")),
@@ -91,12 +94,15 @@ pub(crate) fn compile_math(
             if cdr.len() == 1 {
                 state.chunk.encode2(DEC, dest as u16, 1, env.own_line())?;
             } else if cdr.len() == 2 {
+                // XXX TODO- int 64s
                 let amount = match cdr[1] {
                     Value::Byte(i) => i as u16,
-                    Value::Int(i) if i >= 0 && i <= u16::MAX as i64 => i as u16,
-                    Value::Int(_) => return Err(VMError::new_compile("inc!: second arg to large")),
-                    Value::UInt(i) if i <= u16::MAX as u64 => i as u16,
-                    Value::UInt(_) => {
+                    Value::Int32(i) if i >= 0 && i <= u16::MAX as i32 => i as u16,
+                    Value::Int32(_) => {
+                        return Err(VMError::new_compile("inc!: second arg to large"))
+                    }
+                    Value::UInt32(i) if i <= u16::MAX as u32 => i as u16,
+                    Value::UInt32(_) => {
                         return Err(VMError::new_compile("inc!: second arg < 0 or to large"))
                     }
                     _ => return Err(VMError::new_compile("inc!: second arg must be integer")),
@@ -110,7 +116,7 @@ pub(crate) fn compile_math(
         }
         Value::Symbol(i) if i == env.specials().add => {
             if cdr.is_empty() {
-                compile(env, state, Value::Int(0), result)?;
+                compile(env, state, Value::Int32(0), result)?;
             } else if cdr.len() == 1 {
                 compile(env, state, cdr[0], result)?;
             } else {
@@ -135,10 +141,12 @@ pub(crate) fn compile_math(
                     "Malformed -, requires at least one argument.",
                 ));
             } else if cdr.len() == 1 {
-                if let Ok(i) = cdr[0].get_int() {
-                    compile(env, state, Value::Int(-i), result)?;
-                } else if let Ok(f) = cdr[0].get_float() {
-                    compile(env, state, Value::float(-f), result)?;
+                if let Ok(i) = cdr[0].get_int(env) {
+                    // XXX TODO- handle int 64
+                    compile(env, state, Value::Int32(-i as i32), result)?;
+                } else if let Ok(f) = cdr[0].get_float(env) {
+                    let var = env.alloc_f64(-f);
+                    compile(env, state, var, result)?;
                 }
             } else {
                 for (i, v) in cdr.iter().enumerate() {
@@ -158,7 +166,7 @@ pub(crate) fn compile_math(
         }
         Value::Symbol(i) if i == env.specials().mul => {
             if cdr.is_empty() {
-                compile(env, state, Value::Int(1), result)?;
+                compile(env, state, Value::Int32(1), result)?;
             } else if cdr.len() == 1 {
                 compile(env, state, cdr[0], result)?;
             } else {

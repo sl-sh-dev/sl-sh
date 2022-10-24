@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use crate::chunk::*;
 use crate::error::*;
+use crate::handle::Numeric64Handle;
 use crate::heap::*;
 use crate::interner::*;
 use crate::persistent_map::{MapNode, PersistentMap};
@@ -101,6 +102,19 @@ impl<ENV> GVm<ENV> {
 
     pub fn sizeof_heap_object() -> usize {
         Heap::sizeof_object()
+    }
+
+    pub fn alloc_int(&mut self, num: i64) -> Value {
+        if num >= 0 && num < u32::MAX as i64 {
+            Value::UInt32(num as u32)
+        } else if num > i32::MIN as i64 && num < i32::MAX as i64 {
+            Value::Int32(num as i32)
+        } else {
+            // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
+            let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
+            // alloc must not save mark_roots (it does not) since we broke heap away from self.
+            heap.alloc_i64(num, MutState::Mutable, |heap| self.mark_roots(heap))
+        }
     }
 
     pub fn alloc_i64(&mut self, num: i64) -> Value {
@@ -317,15 +331,15 @@ impl<ENV> GVm<ENV> {
         self.globals.get(idx)
     }
 
-    pub fn get_int(&self, handle: u32) -> i64 {
+    pub fn get_int(&self, handle: Numeric64Handle) -> i64 {
         self.heap.get_int(handle)
     }
 
-    pub fn get_uint(&self, handle: u32) -> u64 {
+    pub fn get_uint(&self, handle: Numeric64Handle) -> u64 {
         self.heap.get_uint(handle)
     }
 
-    pub fn get_float(&self, handle: u32) -> f64 {
+    pub fn get_float(&self, handle: Numeric64Handle) -> f64 {
         self.heap.get_float(handle)
     }
 

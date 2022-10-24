@@ -26,19 +26,21 @@ fn main() -> Result<(), VMError> {
         (println pu)))
              */
     let mut vm = Vm::new();
+    vm.pause_gc();
     let mut chunk = Chunk::new("no_file", 1);
-    let n = chunk.add_constant(Value::Int(500_000)) as u16;
-    let x = chunk.add_constant(Value::float(0.2)) as u16;
-    let su = chunk.add_constant(Value::float(0.0)) as u16;
-    let mu = chunk.add_constant(Value::float(10.0)) as u16;
-    let pu = chunk.add_constant(Value::float(0.0)) as u16;
-    let zero = chunk.add_constant(Value::Int(0)) as u16;
+    chunk.extra_regs = 150;
+    let n = chunk.add_constant(Value::Int32(500_000)) as u16;
+    let x = chunk.add_constant(vm.alloc_f64(0.2)) as u16;
+    let su = chunk.add_constant(vm.alloc_f64(0.0)) as u16;
+    let mu = chunk.add_constant(vm.alloc_f64(10.0)) as u16;
+    let pu = chunk.add_constant(vm.alloc_f64(0.0)) as u16;
+    let zero = chunk.add_constant(Value::Int32(0)) as u16;
     //let five_hundred = chunk.add_constant(Value::Int(500)) as u16;
-    let zerof = chunk.add_constant(Value::float(0.0)) as u16;
-    let twof = chunk.add_constant(Value::float(2.0)) as u16;
-    let hundred = chunk.add_constant(Value::Int(100)) as u16;
+    let zerof = chunk.add_constant(vm.alloc_f64(0.0)) as u16;
+    let twof = chunk.add_constant(vm.alloc_f64(2.0)) as u16;
+    let hundred = chunk.add_constant(Value::Int32(100)) as u16;
     //let hundred = chunk.add_constant(Value::Int(600)) as u16;
-    let one = chunk.add_constant(Value::Int(1)) as u16;
+    let one = chunk.add_constant(Value::Int32(1)) as u16;
     chunk.encode2(CONST, 1, n, Some(1))?;
     chunk.encode2(CONST, 2, x, None)?;
     chunk.encode2(CONST, 3, su, None)?;
@@ -100,7 +102,7 @@ fn main() -> Result<(), VMError> {
     //chunk.disassemble_chunk(&vm, 0);
     let chunk = Arc::new(chunk);
     vm.execute(chunk)?;
-    let result = vm.get_stack(5).get_float()?;
+    let result = vm.get_stack(5).get_float(&vm)?;
     println!("{}", result);
 
     Ok(())

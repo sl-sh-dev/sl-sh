@@ -40,9 +40,9 @@ pub fn pass1(env: &mut SloshVm, state: &mut CompileState, exp: Value) -> VMResul
         Value::Nil => {}
         Value::Undefined => {}
         Value::Byte(_) => {}
-        Value::Int(i) if i >= 0 && i <= u16::MAX as i64 => {}
-        Value::UInt(i) if i <= u16::MAX as u64 => {}
-
+        Value::Int32(i) if i >= 0 && i <= u16::MAX as i32 => {}
+        Value::UInt32(i) if i <= u16::MAX as u32 => {}
+        // XXX TODO- cover 64?
         Value::String(_) => {}
         Value::Bytes(_) => {}
         Value::Lambda(_) => {}

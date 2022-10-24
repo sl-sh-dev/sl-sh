@@ -132,11 +132,11 @@ impl<ENV> GVm<ENV> {
         if val1 == val2 {
             val = Value::True;
         } else if val1.is_int() && val2.is_int() {
-            if val1.get_int()? == val2.get_int()? {
+            if val1.get_int(self)? == val2.get_int(self)? {
                 val = Value::True;
             }
         } else if val1.is_number() && val2.is_number() {
-            if (val1.get_float()? - val2.get_float()?).abs() < f64::EPSILON {
+            if (val1.get_float(self)? - val2.get_float(self)?).abs() < f64::EPSILON {
                 val = Value::True;
             }
         } else {
@@ -250,7 +250,7 @@ impl<ENV> GVm<ENV> {
         self.on_error = None;
         self.stack_top = self.stack_max;
         self.stack_max = self.stack_top + chunk.input_regs + chunk.extra_regs;
-        self.stack[self.stack_top] = Value::UInt(params.len() as u64);
+        self.stack[self.stack_top] = Value::UInt32(params.len() as u32);
         if !params.is_empty() {
             self.stack[self.stack_top + 1..self.stack_top + 1 + params.len()]
                 .copy_from_slice(params);
@@ -380,8 +380,8 @@ mod tests {
     use crate::opcodes::*;
 
     fn get_int(_vm: &Vm, val: &Value) -> VMResult<i64> {
-        if let Value::Int(i) = val {
-            Ok(*i)
+        if let Value::Int32(i) = val {
+            Ok(*i as i64)
         } else {
             Err(VMError::new_vm("Not an int"))
         }
@@ -399,10 +399,10 @@ mod tests {
     fn test_list() -> VMResult<()> {
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
-        chunk.add_constant(Value::Int(1));
-        chunk.add_constant(Value::Int(2));
-        chunk.add_constant(Value::Int(3));
-        chunk.add_constant(Value::Int(4));
+        chunk.add_constant(Value::Int32(1));
+        chunk.add_constant(Value::Int32(2));
+        chunk.add_constant(Value::Int32(3));
+        chunk.add_constant(Value::Int32(4));
         chunk.add_constant(Value::Nil);
         chunk.encode2(CONST, 0, 0, Some(line)).unwrap();
         chunk.encode2(CONST, 1, 1, Some(line)).unwrap();
@@ -413,7 +413,7 @@ mod tests {
         chunk.add_constant(Value::Nil);
         let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
-        let result = vm.stack[0].get_int()?;
+        let result = vm.stack[0].get_int(&vm)?;
         assert!(result == 2);
 
         let mut chunk = Arc::try_unwrap(chunk).unwrap();
@@ -422,7 +422,7 @@ mod tests {
         chunk.encode0(RET, Some(line))?;
         let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
-        let result = vm.stack[0].get_int()?;
+        let result = vm.stack[0].get_int(&vm)?;
         assert!(result == 1);
 
         // car with nil
@@ -472,7 +472,7 @@ mod tests {
         chunk.encode0(RET, Some(line))?;
         let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
-        let result = vm.stack[0].get_int()?;
+        let result = vm.stack[0].get_int(&vm)?;
         assert!(result == 3);
 
         let mut chunk = Arc::try_unwrap(chunk).unwrap();
@@ -483,7 +483,7 @@ mod tests {
         chunk.encode0(RET, Some(line))?;
         let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
-        let result = vm.stack[0].get_int()?;
+        let result = vm.stack[0].get_int(&vm)?;
         assert!(result == 4);
 
         let mut chunk = Arc::try_unwrap(chunk).unwrap();
@@ -562,7 +562,7 @@ mod tests {
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
         for i in 0..257 {
-            chunk.add_constant(Value::Int(i as i64));
+            chunk.add_constant(Value::Int32(i as i32));
         }
         chunk.encode2(CONST, 0, 0, Some(line)).unwrap();
         chunk.encode2(CONST, 1, 255, Some(line)).unwrap();
@@ -572,7 +572,7 @@ mod tests {
         let mut vm = Vm::new();
         let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
-        let result = vm.stack[0].get_int()?;
+        let result = vm.stack[0].get_int(&vm)?;
         assert!(result == 255);
 
         let mut chunk = Arc::try_unwrap(chunk).unwrap();
@@ -583,24 +583,24 @@ mod tests {
 
         let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
-        let result = vm.stack[0].get_int()?;
+        let result = vm.stack[0].get_int(&vm)?;
         assert!(result == 255 + 256);
 
         let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         chunk.encode2(MOV, 1, 0, Some(line)).unwrap();
         chunk.encode0(RET, Some(line))?;
-        let result = vm.stack[1].get_int()?;
+        let result = vm.stack[1].get_int(&vm)?;
         assert!(result == 256);
         let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
-        let result = vm.stack[1].get_int()?;
+        let result = vm.stack[1].get_int(&vm)?;
         assert!(result == 255 + 256);
 
         let mut vm = Vm::new();
-        vm.stack[0] = vm.new_upval(Value::Int(1));
-        vm.stack[1] = Value::Int(10);
-        vm.stack[2] = Value::Int(1);
+        vm.stack[0] = vm.new_upval(Value::Int32(1));
+        vm.stack[1] = Value::Int32(10);
+        vm.stack[2] = Value::Int32(1);
         let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         chunk.encode2(MOV, 1, 0, Some(line)).unwrap();
@@ -610,9 +610,9 @@ mod tests {
         chunk.encode0(RET, Some(line))?;
         let chunk = Arc::new(chunk);
         vm.execute(chunk)?;
-        let result = vm.stack[0].unref(&vm).get_int()?;
+        let result = vm.stack[0].unref(&vm).get_int(&vm)?;
         assert!(result == 1);
-        let result = vm.stack[1].unref(&vm).get_int()?;
+        let result = vm.stack[1].unref(&vm).get_int(&vm)?;
         assert!(result == 4);
 
         Ok(())
@@ -625,13 +625,13 @@ mod tests {
         let mut vm = Vm::new();
         let slot = vm.globals.reserve();
         let slot2 = vm.globals.reserve();
-        let const2 = chunk.add_constant(Value::Int(42)) as u16;
-        vm.globals.set(slot, Value::Int(11));
+        let const2 = chunk.add_constant(Value::Int32(42)) as u16;
+        vm.globals.set(slot, Value::Int32(11));
         chunk.encode_refi(1, slot, Some(line))?;
         chunk.encode0(RET, Some(line))?;
         let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
-        assert!(vm.stack[1].unref(&vm).get_int()? == 11);
+        assert!(vm.stack[1].unref(&vm).get_int(&vm)? == 11);
 
         let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
@@ -641,13 +641,13 @@ mod tests {
         chunk.encode0(RET, Some(line))?;
         let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
-        assert!(vm.stack[2].unref(&vm).get_int()? == 42);
+        assert!(vm.stack[2].unref(&vm).get_int(&vm)? == 42);
 
         let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
-        vm.globals.set(slot, Value::Int(11));
-        let const2 = chunk.add_constant(Value::Int(43)) as u16;
-        let const3 = chunk.add_constant(Value::Int(53)) as u16;
+        vm.globals.set(slot, Value::Int32(11));
+        let const2 = chunk.add_constant(Value::Int32(43)) as u16;
+        let const3 = chunk.add_constant(Value::Int32(53)) as u16;
         chunk.encode2(CONST, 1, const2, Some(line))?;
         chunk.encode2(CONST, 3, const3, Some(line))?;
         chunk.encode_def(1, slot2, Some(line), false)?;
@@ -656,14 +656,14 @@ mod tests {
         chunk.encode0(RET, Some(line))?;
         let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
-        assert!(vm.stack[2].unref(&vm).get_int()? == 43);
+        assert!(vm.stack[2].unref(&vm).get_int(&vm)? == 43);
 
         let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
-        vm.globals.set(slot2, Value::Int(11));
-        assert!(vm.globals.get(slot2).get_int()? == 11);
-        let const2 = chunk.add_constant(Value::Int(43)) as u16;
-        let const3 = chunk.add_constant(Value::Int(53)) as u16;
+        vm.globals.set(slot2, Value::Int32(11));
+        assert!(vm.globals.get(slot2).get_int(&vm)? == 11);
+        let const2 = chunk.add_constant(Value::Int32(43)) as u16;
+        let const3 = chunk.add_constant(Value::Int32(53)) as u16;
         chunk.encode2(CONST, 1, const2, Some(line))?;
         chunk.encode2(CONST, 3, const3, Some(line))?;
         chunk.encode_def(1, slot, Some(line), false)?;
@@ -674,16 +674,16 @@ mod tests {
         chunk.encode0(RET, Some(line))?;
         let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
-        assert!(vm.stack[2].unref(&vm).get_int()? == 43);
-        assert!(vm.stack[5].unref(&vm).get_int()? == 53);
-        assert_eq!(vm.globals.get(slot).get_int()?, 43);
+        assert!(vm.stack[2].unref(&vm).get_int(&vm)? == 43);
+        assert!(vm.stack[5].unref(&vm).get_int(&vm)? == 53);
+        assert_eq!(vm.globals.get(slot).get_int(&vm)?, 43);
 
         let mut vm = Vm::new();
         let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         let slot = vm.globals.reserve();
-        let const2 = chunk.add_constant(Value::Int(44)) as u16;
-        let const3 = chunk.add_constant(Value::Int(53)) as u16;
+        let const2 = chunk.add_constant(Value::Int32(44)) as u16;
+        let const3 = chunk.add_constant(Value::Int32(53)) as u16;
         chunk.encode2(CONST, 2, const2, Some(line))?;
         chunk.encode2(CONST, 3, const3, Some(line))?;
         chunk.encode_def(2, slot, Some(line), true)?;
@@ -692,14 +692,14 @@ mod tests {
         chunk.encode0(RET, Some(line))?;
         let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
-        assert!(vm.stack[0].unref(&vm).get_int()? == 44);
+        assert!(vm.stack[0].unref(&vm).get_int(&vm)? == 44);
 
         let mut vm = Vm::new();
         let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         let slot = vm.globals.reserve();
-        let const2 = chunk.add_constant(Value::Int(45)) as u16;
-        let const3 = chunk.add_constant(Value::Int(55)) as u16;
+        let const2 = chunk.add_constant(Value::Int32(45)) as u16;
+        let const3 = chunk.add_constant(Value::Int32(55)) as u16;
         chunk.encode2(CONST, 2, const2, Some(line))?;
         chunk.encode2(CONST, 3, const3, Some(line))?;
         chunk.encode_def(2, slot, Some(line), true)?;
@@ -708,14 +708,14 @@ mod tests {
         chunk.encode0(RET, Some(line))?;
         let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
-        assert!(vm.stack[0].unref(&vm).get_int()? == 55);
+        assert!(vm.stack[0].unref(&vm).get_int(&vm)? == 55);
 
         let mut vm = Vm::new();
         let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         let slot = vm.globals.reserve();
-        let const2 = chunk.add_constant(Value::Int(45)) as u16;
-        let const3 = chunk.add_constant(Value::Int(1)) as u16;
+        let const2 = chunk.add_constant(Value::Int32(45)) as u16;
+        let const3 = chunk.add_constant(Value::Int32(1)) as u16;
         chunk.encode2(CONST, 2, const2, Some(line))?;
         chunk.encode2(CONST, 3, const3, Some(line))?;
         chunk.encode_def(2, slot, Some(line), true)?;
@@ -728,12 +728,12 @@ mod tests {
         chunk.encode0(RET, Some(line))?;
         let chunk = Arc::new(chunk);
         vm.execute(chunk)?;
-        assert!(vm.stack[0].unref(&vm).get_int()? == 1);
-        assert!(vm.stack[0].unref(&vm).get_int()? == 1);
-        assert!(vm.stack[0].unref(&vm).get_int()? == 1);
-        assert!(vm.stack[0].unref(&vm).get_int()? == 1);
-        assert!(vm.stack[5].unref(&vm).get_int()? == 3);
-        assert!(vm.globals.get(slot).get_int()? == 1);
+        assert!(vm.stack[0].unref(&vm).get_int(&vm)? == 1);
+        assert!(vm.stack[0].unref(&vm).get_int(&vm)? == 1);
+        assert!(vm.stack[0].unref(&vm).get_int(&vm)? == 1);
+        assert!(vm.stack[0].unref(&vm).get_int(&vm)? == 1);
+        assert!(vm.stack[5].unref(&vm).get_int(&vm)? == 3);
+        assert!(vm.globals.get(slot).get_int(&vm)? == 1);
 
         Ok(())
     }
@@ -759,17 +759,19 @@ mod tests {
             (println pu)))
                  */
         let mut vm = Vm::new();
+        // XXX TODO- get rid of this pause when gc fixed.
+        vm.pause_gc();
         let mut chunk = Chunk::new("no_file", 1);
-        let n = chunk.add_constant(Value::Int(5000)) as u16;
-        let x = chunk.add_constant(Value::float(0.2)) as u16;
-        let su = chunk.add_constant(Value::float(0.0)) as u16;
-        let mu = chunk.add_constant(Value::float(10.0)) as u16;
-        let pu = chunk.add_constant(Value::float(0.0)) as u16;
-        let zero = chunk.add_constant(Value::Int(0)) as u16;
-        let zerof = chunk.add_constant(Value::float(0.0)) as u16;
-        let twof = chunk.add_constant(Value::float(2.0)) as u16;
-        let hundred = chunk.add_constant(Value::Int(100)) as u16;
-        let one = chunk.add_constant(Value::Int(1)) as u16;
+        let n = chunk.add_constant(Value::Int32(5000)) as u16;
+        let x = chunk.add_constant(vm.alloc_f64(0.2)) as u16;
+        let su = chunk.add_constant(vm.alloc_f64(0.0)) as u16;
+        let mu = chunk.add_constant(vm.alloc_f64(10.0)) as u16;
+        let pu = chunk.add_constant(vm.alloc_f64(0.0)) as u16;
+        let zero = chunk.add_constant(Value::Int32(0)) as u16;
+        let zerof = chunk.add_constant(vm.alloc_f64(0.0)) as u16;
+        let twof = chunk.add_constant(vm.alloc_f64(2.0)) as u16;
+        let hundred = chunk.add_constant(Value::Int32(100)) as u16;
+        let one = chunk.add_constant(Value::Int32(1)) as u16;
         let line = 1;
         chunk.encode2(CONST, 1, n, Some(line))?;
         chunk.encode2(CONST, 2, x, Some(line))?;
@@ -821,7 +823,7 @@ mod tests {
 
         let chunk = Arc::new(chunk);
         vm.execute(chunk)?;
-        let result = vm.stack[5].get_float()?;
+        let result = vm.stack[5].get_float(&vm)?;
         assert!(result == 12500.0);
 
         Ok(())
@@ -840,7 +842,7 @@ mod tests {
 
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
-        let const1 = chunk.add_constant(Value::Int(10)) as u16;
+        let const1 = chunk.add_constant(Value::Int32(10)) as u16;
         chunk.encode2(CONST, 2, const1, Some(line)).unwrap();
         chunk.encode2(ADD, 1, 2, Some(line)).unwrap();
         chunk.encode2(MOV, 3, 1, Some(line)).unwrap();
@@ -852,20 +854,20 @@ mod tests {
         let line = 1;
         vm.stack[0] = add;
         vm.stack[1] = add_ten;
-        vm.stack[3] = Value::Int(5);
-        vm.stack[4] = Value::Int(2);
-        vm.stack[6] = Value::Int(2);
+        vm.stack[3] = Value::Int32(5);
+        vm.stack[4] = Value::Int32(2);
+        vm.stack[6] = Value::Int32(2);
         chunk.encode3(CALL, 0, 2, 2, Some(line)).unwrap();
         chunk.encode3(CALL, 1, 1, 5, Some(line)).unwrap();
         chunk.encode0(RET, Some(line))?;
 
         let chunk = Arc::new(chunk);
         vm.execute(chunk)?;
-        let result = vm.stack[2].get_int()?;
+        let result = vm.stack[2].get_int(&vm)?;
         assert!(result == 7);
-        let result = vm.stack[5].get_int()?;
+        let result = vm.stack[5].get_int(&vm)?;
         assert!(result == 12);
-        let result = vm.stack[7].get_int()?;
+        let result = vm.stack[7].get_int(&vm)?;
         assert!(result == 10);
 
         Ok(())
@@ -884,7 +886,7 @@ mod tests {
 
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
-        let const1 = chunk.add_constant(Value::Int(10)) as u16;
+        let const1 = chunk.add_constant(Value::Int32(10)) as u16;
         let const2 = chunk.add_constant(add) as u16;
         chunk.encode2(CONST, 2, const1, Some(line)).unwrap();
         chunk.encode2(CONST, 3, const2, Some(line)).unwrap();
@@ -896,9 +898,9 @@ mod tests {
 
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
-        vm.stack[1] = Value::Int(5);
-        vm.stack[2] = Value::Int(2);
-        vm.stack[4] = Value::Int(2);
+        vm.stack[1] = Value::Int32(5);
+        vm.stack[2] = Value::Int32(2);
+        vm.stack[4] = Value::Int32(2);
         vm.stack[50] = add;
         vm.stack[60] = add_ten;
         chunk.encode3(CALL, 60, 1, 3, Some(line)).unwrap();
@@ -908,9 +910,9 @@ mod tests {
 
         let chunk = Arc::new(chunk);
         vm.execute(chunk)?;
-        //let result = vm.stack[0].get_int()?;
+        //let result = vm.stack[0].get_int(&vm)?;
         //assert!(result == 7);
-        let result = vm.stack[3].get_int()?;
+        let result = vm.stack[3].get_int(&vm)?;
         assert!(result == 12);
 
         Ok(())
@@ -918,19 +920,19 @@ mod tests {
 
     #[test]
     fn test_builtin() -> VMResult<()> {
-        fn add_b(_vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+        fn add_b(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
             if registers.len() != 2 {
                 return Err(VMError::new_vm("test add: wrong number of args."));
             }
-            Ok(Value::Int(
-                registers[0].get_int()? + registers[1].get_int()?,
+            Ok(Value::Int32(
+                (registers[0].get_int(vm)? + registers[1].get_int(vm)?) as i32,
             ))
         }
-        fn add_10(_vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+        fn add_10(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
             if registers.len() != 1 {
                 return Err(VMError::new_vm("test add_10: wrong number of args."));
             }
-            Ok(Value::Int(registers[0].get_int()? + 10))
+            Ok(Value::Int32(registers[0].get_int(vm)? as i32 + 10))
         }
         fn make_str(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
             if !registers.is_empty() {
@@ -974,9 +976,9 @@ mod tests {
         let line = 1;
         vm.stack[0] = add;
         vm.stack[1] = add_ten;
-        vm.stack[3] = Value::Int(6);
-        vm.stack[4] = Value::Int(3);
-        vm.stack[8] = Value::Int(12);
+        vm.stack[3] = Value::Int32(6);
+        vm.stack[4] = Value::Int32(3);
+        vm.stack[8] = Value::Int32(12);
         let const1 = chunk.add_constant(vm.add_builtin(make_str)) as u16;
         chunk.encode3(CALL, 0, 2, 2, Some(line)).unwrap();
         chunk.encode3(CALL, 1, 1, 7, Some(line)).unwrap();
@@ -985,9 +987,9 @@ mod tests {
         chunk.encode0(RET, Some(line))?;
         let chunk = Arc::new(chunk);
         vm.execute(chunk)?;
-        let result = vm.stack[2].get_int()?;
+        let result = vm.stack[2].get_int(&vm)?;
         assert!(result == 9);
-        let result = vm.stack[7].get_int()?;
+        let result = vm.stack[7].get_int(&vm)?;
         assert!(result == 22);
         match vm.stack[15] {
             Value::String(h) => assert!(vm.heap.get_string(h) == "builtin hello"),
@@ -1001,9 +1003,9 @@ mod tests {
         }
         vm.stack[0] = tadd;
         vm.stack[1] = add_ten;
-        vm.stack[3] = Value::Int(6);
-        vm.stack[4] = Value::Int(3);
-        vm.stack[6] = Value::Int(12);
+        vm.stack[3] = Value::Int32(6);
+        vm.stack[4] = Value::Int32(3);
+        vm.stack[6] = Value::Int32(12);
         let const1 = chunk.add_constant(vm.add_builtin(make_str)) as u16;
         chunk.encode3(CALL, 0, 2, 2, Some(line)).unwrap();
         chunk.encode3(CALL, 1, 1, 5, Some(line)).unwrap();
@@ -1012,9 +1014,9 @@ mod tests {
         chunk.encode0(RET, Some(line))?;
         let chunk = Arc::new(chunk);
         vm.execute(chunk)?;
-        let result = vm.stack[2].get_int()?;
+        let result = vm.stack[2].get_int(&vm)?;
         assert!(result == 9);
-        let result = vm.stack[5].get_int()?;
+        let result = vm.stack[5].get_int(&vm)?;
         assert!(result == 22);
         match vm.stack[11] {
             Value::String(h) => assert!(vm.heap.get_string(h) == "builtin hello"),
@@ -1028,12 +1030,12 @@ mod tests {
     fn test_jumps() -> VMResult<()> {
         let mut vm = Vm::new();
         let mut chunk = Chunk::new("no_file", 1);
-        let const0 = chunk.add_constant(Value::Int(2_i64)) as u16;
-        let const1 = chunk.add_constant(Value::Int(3_i64)) as u16;
+        let const0 = chunk.add_constant(Value::Int32(2_i32)) as u16;
+        let const1 = chunk.add_constant(Value::Int32(3_i32)) as u16;
         vm.stack[0] = Value::True;
         vm.stack[1] = Value::False;
         vm.stack[2] = Value::Nil;
-        vm.stack[3] = Value::Int(0);
+        vm.stack[3] = Value::Int32(0);
         let line = 1;
         chunk.encode2(CONST, 4, const0, Some(line))?;
         chunk.encode0(JMP, Some(line))?;
@@ -1107,28 +1109,28 @@ mod tests {
         chunk.encode0(RET, Some(line))?;
         let chunk = Arc::new(chunk);
         vm.execute(chunk)?;
-        assert!(vm.stack[4].get_int()? == 2);
-        assert!(vm.stack[5].get_int()? == 3);
-        assert!(vm.stack[6].get_int()? == 2);
-        assert!(vm.stack[7].get_int()? == 3);
-        assert!(vm.stack[8].get_int()? == 2);
-        assert!(vm.stack[9].get_int()? == 3);
-        assert!(vm.stack[10].get_int()? == 2);
-        assert!(vm.stack[11].get_int()? == 3);
-        assert!(vm.stack[12].get_int()? == 2);
-        assert!(vm.stack[13].get_int()? == 3);
-        assert!(vm.stack[14].get_int()? == 2);
-        assert!(vm.stack[15].get_int()? == 3);
-        assert!(vm.stack[16].get_int()? == 2);
-        assert!(vm.stack[17].get_int()? == 3);
-        assert!(vm.stack[18].get_int()? == 3);
-        assert!(vm.stack[19].get_int()? == 3);
-        assert!(vm.stack[20].get_int()? == 3);
-        assert!(vm.stack[21].get_int()? == 3);
-        assert!(vm.stack[22].get_int()? == 3);
-        assert!(vm.stack[23].get_int()? == 3);
-        assert!(vm.stack[24].get_int()? == 3);
-        assert!(vm.stack[25].get_int()? == 3);
+        assert!(vm.stack[4].get_int(&vm)? == 2);
+        assert!(vm.stack[5].get_int(&vm)? == 3);
+        assert!(vm.stack[6].get_int(&vm)? == 2);
+        assert!(vm.stack[7].get_int(&vm)? == 3);
+        assert!(vm.stack[8].get_int(&vm)? == 2);
+        assert!(vm.stack[9].get_int(&vm)? == 3);
+        assert!(vm.stack[10].get_int(&vm)? == 2);
+        assert!(vm.stack[11].get_int(&vm)? == 3);
+        assert!(vm.stack[12].get_int(&vm)? == 2);
+        assert!(vm.stack[13].get_int(&vm)? == 3);
+        assert!(vm.stack[14].get_int(&vm)? == 2);
+        assert!(vm.stack[15].get_int(&vm)? == 3);
+        assert!(vm.stack[16].get_int(&vm)? == 2);
+        assert!(vm.stack[17].get_int(&vm)? == 3);
+        assert!(vm.stack[18].get_int(&vm)? == 3);
+        assert!(vm.stack[19].get_int(&vm)? == 3);
+        assert!(vm.stack[20].get_int(&vm)? == 3);
+        assert!(vm.stack[21].get_int(&vm)? == 3);
+        assert!(vm.stack[22].get_int(&vm)? == 3);
+        assert!(vm.stack[23].get_int(&vm)? == 3);
+        assert!(vm.stack[24].get_int(&vm)? == 3);
+        assert!(vm.stack[25].get_int(&vm)? == 3);
         Ok(())
     }
 
@@ -1136,9 +1138,9 @@ mod tests {
     fn test_vecs() -> VMResult<()> {
         let mut vm = Vm::new();
         let mut chunk = Chunk::new("no_file", 1);
-        let zero = chunk.add_constant(Value::Int(0)) as u16;
-        let hundred = chunk.add_constant(Value::Int(100)) as u16;
-        let one = chunk.add_constant(Value::Int(1)) as u16;
+        let zero = chunk.add_constant(Value::Int32(0)) as u16;
+        let hundred = chunk.add_constant(Value::Int32(100)) as u16;
+        let one = chunk.add_constant(Value::Int32(1)) as u16;
         let line = 1;
         chunk.encode2(CONST, 2, hundred, Some(line))?;
         chunk.encode2(CONST, 3, zero, Some(line))?;
@@ -1168,33 +1170,33 @@ mod tests {
         chunk.encode0(RET, Some(line))?;
         let chunk = Arc::new(chunk);
         vm.execute(chunk)?;
-        assert!(vm.stack[5].get_int()? == 1);
-        assert!(vm.stack[6].get_int()? == 0);
-        assert!(vm.stack[7].get_int()? == 1);
-        assert!(vm.stack[8].get_int()? == 0);
+        assert!(vm.stack[5].get_int(&vm)? == 1);
+        assert!(vm.stack[6].get_int(&vm)? == 0);
+        assert!(vm.stack[7].get_int(&vm)? == 1);
+        assert!(vm.stack[8].get_int(&vm)? == 0);
 
-        assert!(vm.stack[15].get_int()? == 0);
-        assert!(vm.stack[16].get_int()? == 1);
-        assert!(vm.stack[17].get_int()? == 1);
-        assert!(vm.stack[18].get_int()? == 0);
+        assert!(vm.stack[15].get_int(&vm)? == 0);
+        assert!(vm.stack[16].get_int(&vm)? == 1);
+        assert!(vm.stack[17].get_int(&vm)? == 1);
+        assert!(vm.stack[18].get_int(&vm)? == 0);
         let vc = vm.stack[1];
         if let Value::Vector(h) = vc {
-            let v = vm.get_vector_mut(h).unwrap();
+            let v = vm.get_vector(h);
             assert!(v.len() == 101);
-            assert!(v[0].get_int()? == 0);
+            assert!(v[0].get_int(&vm)? == 0);
         }
         let vc = vm.stack[10];
         if let Value::Vector(h) = vc {
-            let v = vm.get_vector_mut(h).unwrap();
+            let v = vm.get_vector(h);
             assert!(v.len() == 2);
-            assert!(v[0].get_int()? == 0);
-            assert!(v[1].get_int()? == 1);
+            assert!(v[0].get_int(&vm)? == 0);
+            assert!(v[1].get_int(&vm)? == 1);
         }
         let vc = vm.stack[20];
         if let Value::Vector(h) = vc {
-            let v = vm.get_vector_mut(h).unwrap();
+            let v = vm.get_vector(h);
             assert!(v.len() == 100);
-            assert!(v[0].get_int()? == 0);
+            assert!(v[0].get_int(&vm)? == 0);
             assert!(v[1].is_undef());
             assert!(v[99].is_undef());
         }
@@ -1205,8 +1207,8 @@ mod tests {
     fn test_add() -> VMResult<()> {
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
-        let const0 = chunk.add_constant(Value::Int(2_i64)) as u16;
-        let const1 = chunk.add_constant(Value::Int(3_i64)) as u16;
+        let const0 = chunk.add_constant(Value::Int32(2_i32)) as u16;
+        let const1 = chunk.add_constant(Value::Int32(3_i32)) as u16;
         let const2 = chunk.add_constant(Value::Byte(1)) as u16;
         chunk.encode2(CONST, 0, const0, Some(line))?;
         chunk.encode2(CONST, 1, const1, Some(line))?;
@@ -1217,11 +1219,11 @@ mod tests {
         let mut vm = Vm::new();
         let chunk = Arc::new(chunk);
         vm.execute(chunk)?;
-        assert!(vm.stack[0].get_int()? == 6);
+        assert!(vm.stack[0].get_int(&vm)? == 6);
 
         let mut chunk = Chunk::new("no_file", 1);
-        let const0 = chunk.add_constant(Value::float(2_f64)) as u16;
-        let const1 = chunk.add_constant(Value::Int(3_i64)) as u16;
+        let const0 = chunk.add_constant(vm.alloc_f64(2_f64)) as u16;
+        let const1 = chunk.add_constant(Value::Int32(3_i32)) as u16;
         let const2 = chunk.add_constant(Value::Byte(1)) as u16;
         chunk.encode2(CONST, 0, const0, Some(line))?;
         chunk.encode2(CONST, 1, const1, Some(line))?;
@@ -1229,17 +1231,16 @@ mod tests {
         chunk.encode2(ADD, 0, 1, Some(line)).unwrap();
         chunk.encode2(ADD, 0, 2, Some(line)).unwrap();
         chunk.encode0(RET, Some(line))?;
-        let mut vm = Vm::new();
         let chunk = Arc::new(chunk);
         vm.execute(chunk)?;
         let item = vm.stack[0];
         assert!(!item.is_int());
         assert!(item.is_number());
-        assert!(item.get_float()? == 6.0);
+        assert!(item.get_float(&vm)? == 6.0);
 
         let mut chunk = Chunk::new("no_file", 1);
         for i in 0..501 {
-            chunk.add_constant(Value::Int(i as i64));
+            chunk.add_constant(Value::Int32(i as i32));
         }
         chunk.encode2(CONST, 1, 1, Some(line))?;
         chunk.encode2(CONST, 2, 2, Some(line))?;
@@ -1251,14 +1252,13 @@ mod tests {
         chunk.encode2(ADD, 500, 0, Some(line)).unwrap();
         chunk.encode2(MOV, 1, 500, Some(line)).unwrap();
         chunk.encode0(RET, Some(line))?;
-        let mut vm = Vm::new();
         let chunk = Arc::new(chunk);
         vm.execute(chunk)?;
         let item = vm.stack[0];
         let item2 = vm.stack[1];
         assert!(item.is_int());
-        assert!(item.get_int()? == 8);
-        assert!(item2.get_int()? == 508);
+        assert!(item.get_int(&vm)? == 8);
+        assert!(item2.get_int(&vm)? == 508);
         Ok(())
     }
 
@@ -1266,8 +1266,8 @@ mod tests {
     fn test_sub() -> VMResult<()> {
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
-        let const0 = chunk.add_constant(Value::Int(2_i64)) as u16;
-        let const1 = chunk.add_constant(Value::Int(3_i64)) as u16;
+        let const0 = chunk.add_constant(Value::Int32(2_i32)) as u16;
+        let const1 = chunk.add_constant(Value::Int32(3_i32)) as u16;
         let const2 = chunk.add_constant(Value::Byte(1)) as u16;
         chunk.encode2(CONST, 0, const0, Some(line))?;
         chunk.encode2(CONST, 1, const1, Some(line))?;
@@ -1278,11 +1278,11 @@ mod tests {
         let mut vm = Vm::new();
         let chunk = Arc::new(chunk);
         vm.execute(chunk)?;
-        assert_eq!(vm.stack[0].get_int()?, -2);
+        assert_eq!(vm.stack[0].get_int(&vm)?, -2);
 
         let mut chunk = Chunk::new("no_file", 1);
-        let const0 = chunk.add_constant(Value::float(5_f64)) as u16;
-        let const1 = chunk.add_constant(Value::Int(3_i64)) as u16;
+        let const0 = chunk.add_constant(vm.alloc_f64(5_f64)) as u16;
+        let const1 = chunk.add_constant(Value::Int32(3_i32)) as u16;
         let const2 = chunk.add_constant(Value::Byte(1)) as u16;
         chunk.encode2(CONST, 0, const0, Some(line))?;
         chunk.encode2(CONST, 1, const1, Some(line))?;
@@ -1290,17 +1290,16 @@ mod tests {
         chunk.encode2(SUB, 0, 1, Some(line)).unwrap();
         chunk.encode2(SUB, 0, 2, Some(line)).unwrap();
         chunk.encode0(RET, Some(line))?;
-        let mut vm = Vm::new();
         let chunk = Arc::new(chunk);
         vm.execute(chunk)?;
         let item = vm.stack[0];
         assert!(!item.is_int(), "Item an int");
         assert!(item.is_number(), "Item not a number");
-        assert_eq!(item.get_float()?, 1.0);
+        assert_eq!(item.get_float(&vm)?, 1.0);
 
         let mut chunk = Chunk::new("no_file", 1);
         for i in 0..501 {
-            chunk.add_constant(Value::Int(i as i64));
+            chunk.add_constant(Value::Int32(i as i32));
         }
         chunk.encode2(CONST, 1, 1, Some(line))?;
         chunk.encode2(CONST, 2, 2, Some(line))?;
@@ -1312,14 +1311,13 @@ mod tests {
         chunk.encode2(SUB, 500, 5, Some(line)).unwrap();
         chunk.encode2(MOV, 1, 500, Some(line)).unwrap();
         chunk.encode0(RET, Some(line))?;
-        let mut vm = Vm::new();
         let chunk = Arc::new(chunk);
         vm.execute(chunk)?;
         let item = vm.stack[0];
         let item2 = vm.stack[1];
         assert!(item.is_int(), "Item not an int");
-        assert_eq!(item.get_int()?, 6);
-        assert_eq!(item2.get_int()?, 494);
+        assert_eq!(item.get_int(&vm)?, 6);
+        assert_eq!(item2.get_int(&vm)?, 494);
         Ok(())
     }
 
@@ -1327,8 +1325,8 @@ mod tests {
     fn test_mul() -> VMResult<()> {
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
-        let const0 = chunk.add_constant(Value::Int(2_i64)) as u16;
-        let const1 = chunk.add_constant(Value::Int(3_i64)) as u16;
+        let const0 = chunk.add_constant(Value::Int32(2_i32)) as u16;
+        let const1 = chunk.add_constant(Value::Int32(3_i32)) as u16;
         let const2 = chunk.add_constant(Value::Byte(1)) as u16;
         chunk.encode2(CONST, 0, const0, Some(line))?;
         chunk.encode2(CONST, 1, const1, Some(line))?;
@@ -1339,11 +1337,11 @@ mod tests {
         let mut vm = Vm::new();
         let chunk = Arc::new(chunk);
         vm.execute(chunk)?;
-        assert!(vm.stack[0].get_int()? == 6);
+        assert!(vm.stack[0].get_int(&vm)? == 6);
 
         let mut chunk = Chunk::new("no_file", 1);
-        let const0 = chunk.add_constant(Value::float(5_f64)) as u16;
-        let const1 = chunk.add_constant(Value::Int(3_i64)) as u16;
+        let const0 = chunk.add_constant(vm.alloc_f64(5_f64)) as u16;
+        let const1 = chunk.add_constant(Value::Int32(3_i32)) as u16;
         let const2 = chunk.add_constant(Value::Byte(2)) as u16;
         chunk.encode2(CONST, 0, const0, Some(line))?;
         chunk.encode2(CONST, 1, const1, Some(line))?;
@@ -1351,17 +1349,16 @@ mod tests {
         chunk.encode2(MUL, 0, 1, Some(line)).unwrap();
         chunk.encode2(MUL, 0, 2, Some(line)).unwrap();
         chunk.encode0(RET, Some(line))?;
-        let mut vm = Vm::new();
         let chunk = Arc::new(chunk);
         vm.execute(chunk)?;
         let item = vm.stack[0];
         assert!(!item.is_int());
         assert!(item.is_number());
-        assert!(item.get_float()? == 30.0);
+        assert!(item.get_float(&vm)? == 30.0);
 
         let mut chunk = Chunk::new("no_file", 1);
         for i in 0..501 {
-            chunk.add_constant(Value::Int(i as i64));
+            chunk.add_constant(Value::Int32(i as i32));
         }
         chunk.encode2(CONST, 1, 1, Some(line))?;
         chunk.encode2(CONST, 2, 2, Some(line))?;
@@ -1373,14 +1370,13 @@ mod tests {
         chunk.encode2(MUL, 500, 0, Some(line)).unwrap();
         chunk.encode2(MOV, 1, 500, Some(line)).unwrap();
         chunk.encode0(RET, Some(line))?;
-        let mut vm = Vm::new();
         let chunk = Arc::new(chunk);
         vm.execute(chunk)?;
         let item = vm.stack[0];
         let item2 = vm.stack[1];
         assert!(item.is_int());
-        assert!(item.get_int()? == 10);
-        assert!(item2.get_int()? == 5000);
+        assert!(item.get_int(&vm)? == 10);
+        assert!(item2.get_int(&vm)? == 5000);
         Ok(())
     }
 
@@ -1388,8 +1384,8 @@ mod tests {
     fn test_div() -> VMResult<()> {
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
-        let const0 = chunk.add_constant(Value::Int(18_i64)) as u16;
-        let const1 = chunk.add_constant(Value::Int(2_i64)) as u16;
+        let const0 = chunk.add_constant(Value::Int32(18_i32)) as u16;
+        let const1 = chunk.add_constant(Value::Int32(2_i32)) as u16;
         let const2 = chunk.add_constant(Value::Byte(3)) as u16;
         chunk.encode2(CONST, 0, const0, Some(line))?;
         chunk.encode2(CONST, 1, const1, Some(line))?;
@@ -1398,13 +1394,15 @@ mod tests {
         chunk.encode2(DIV, 0, 2, Some(line)).unwrap();
         chunk.encode0(RET, Some(line))?;
         let mut vm = Vm::new();
+        let val10 = vm.alloc_f64(10_f64);
+        let val0 = vm.alloc_f64(0_f64);
         let chunk = Arc::new(chunk);
         vm.execute(chunk)?;
-        assert!(vm.stack[0].get_int()? == 3);
+        assert!(vm.stack[0].get_int(&vm)? == 3);
 
         let mut chunk = Chunk::new("no_file", 1);
-        let const0 = chunk.add_constant(Value::float(10_f64)) as u16;
-        let const1 = chunk.add_constant(Value::Int(2_i64)) as u16;
+        let const0 = chunk.add_constant(val10) as u16;
+        let const1 = chunk.add_constant(Value::Int32(2_i32)) as u16;
         let const2 = chunk.add_constant(Value::Byte(2)) as u16;
         chunk.encode2(CONST, 0, const0, Some(line))?;
         chunk.encode2(CONST, 1, const1, Some(line))?;
@@ -1412,17 +1410,16 @@ mod tests {
         chunk.encode2(DIV, 0, 1, Some(line)).unwrap();
         chunk.encode2(DIV, 0, 2, Some(line)).unwrap();
         chunk.encode0(RET, Some(line))?;
-        let mut vm = Vm::new();
         let chunk = Arc::new(chunk);
         vm.execute(chunk)?;
         let item = vm.stack[0];
         assert!(!item.is_int());
         assert!(item.is_number());
-        assert!(item.get_float()? == 2.5);
+        assert!(item.get_float(&vm)? == 2.5);
 
         let mut chunk = Chunk::new("no_file", 1);
         for i in 0..501 {
-            chunk.add_constant(Value::Int(i as i64));
+            chunk.add_constant(Value::Int32(i as i32));
         }
         chunk.encode2(CONST, 1, 1, Some(line))?;
         chunk.encode2(CONST, 2, 2, Some(line))?;
@@ -1435,49 +1432,44 @@ mod tests {
         chunk.encode2(DIV, 500, 0, Some(line)).unwrap();
         chunk.encode2(MOV, 1, 500, Some(line)).unwrap();
         chunk.encode0(RET, Some(line))?;
-        let mut vm = Vm::new();
         let chunk = Arc::new(chunk);
         vm.execute(chunk)?;
         let item = vm.stack[0];
         let item2 = vm.stack[1];
         assert!(item.is_int());
-        assert!(item.get_int()? == 5);
-        assert!(item2.get_int()? == 100);
+        assert!(item.get_int(&vm)? == 5);
+        assert!(item2.get_int(&vm)? == 100);
 
         let mut chunk = Chunk::new("no_file", 1);
-        let const0 = chunk.add_constant(Value::Int(10_i64)) as u16;
-        let const1 = chunk.add_constant(Value::Int(0_i64)) as u16;
+        let const0 = chunk.add_constant(Value::Int32(10_i32)) as u16;
+        let const1 = chunk.add_constant(Value::Int32(0_i32)) as u16;
         chunk.encode2(CONST, 0, const0, Some(line))?;
         chunk.encode2(CONST, 1, const1, Some(line))?;
         chunk.encode2(DIV, 0, 1, Some(line)).unwrap();
         chunk.encode0(RET, Some(line))?;
-        let mut vm = Vm::new();
         let chunk = Arc::new(chunk);
         let res = vm.execute(chunk);
         assert!(res.is_err());
         assert!(res.unwrap_err().to_string() == "[rt]: Divide by zero error.");
 
         let mut chunk = Chunk::new("no_file", 1);
-        let const0 = chunk.add_constant(Value::float(10_f64)) as u16;
-        let const1 = chunk.add_constant(Value::float(0_f64)) as u16;
+        let const0 = chunk.add_constant(val10) as u16;
+        let const1 = chunk.add_constant(val0) as u16;
         chunk.encode2(CONST, 0, const0, Some(line))?;
         chunk.encode2(CONST, 1, const1, Some(line))?;
         chunk.encode2(DIV, 0, 1, Some(line)).unwrap();
         chunk.encode0(RET, Some(line))?;
-        let mut vm = Vm::new();
         let chunk = Arc::new(chunk);
         let res = vm.execute(chunk);
         assert!(res.is_err());
         assert!(res.unwrap_err().to_string() == "[rt]: Divide by zero error.");
 
         let mut chunk = Chunk::new("no_file", 1);
-        let const0 = chunk.add_constant(Value::float(10_f64)) as u16;
         let const1 = chunk.add_constant(Value::Byte(0)) as u16;
         chunk.encode2(CONST, 0, const0, Some(line))?;
         chunk.encode2(CONST, 1, const1, Some(line))?;
         chunk.encode2(DIV, 0, 1, Some(line)).unwrap();
         chunk.encode0(RET, Some(line))?;
-        let mut vm = Vm::new();
         let chunk = Arc::new(chunk);
         let res = vm.execute(chunk);
         assert!(res.is_err());

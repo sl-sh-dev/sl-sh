@@ -160,7 +160,7 @@ pub fn debug(env: &mut SloshVm) {
             Some(Ok(Value::Keyword(k))) if k == globals => env.dump_globals(),
             Some(Ok(Value::Keyword(k))) if k == dasm => {
                 if let Some(Ok(parm)) = exps.next() {
-                    if let Ok(stk_idx) = parm.get_int() {
+                    if let Ok(stk_idx) = parm.get_int(env) {
                         let stk_idx = stk_idx.unsigned_abs() as usize;
                         for (i, frame) in env.get_call_stack().enumerate() {
                             if i + 1 == stk_idx {
@@ -183,7 +183,7 @@ pub fn debug(env: &mut SloshVm) {
             }
             Some(Ok(Value::Keyword(k))) if k == regs => {
                 if let Some(Ok(parm)) = exps.next() {
-                    if let Ok(stk_idx) = parm.get_int() {
+                    if let Ok(stk_idx) = parm.get_int(env) {
                         let stk_idx = stk_idx.unsigned_abs() as usize;
                         for (i, frame) in env.get_call_stack().enumerate() {
                             if i + 1 == stk_idx {

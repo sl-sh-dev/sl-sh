@@ -226,9 +226,9 @@ impl<'vm> Reader<'vm> {
         self.vm
             .set_heap_property(result, "dbg-file", Value::StringConst(file_name));
         self.vm
-            .set_heap_property(result, "dbg-line", Value::UInt(self.line() as u64));
+            .set_heap_property(result, "dbg-line", Value::UInt32(self.line() as u32));
         self.vm
-            .set_heap_property(result, "dbg-col", Value::UInt(self.column() as u64));
+            .set_heap_property(result, "dbg-col", Value::UInt32(self.column() as u32));
         result
     }
 
@@ -239,9 +239,9 @@ impl<'vm> Reader<'vm> {
         self.vm
             .set_heap_property(result, "dbg-file", Value::StringConst(file_name));
         self.vm
-            .set_heap_property(result, "dbg-line", Value::UInt(self.line() as u64));
+            .set_heap_property(result, "dbg-line", Value::UInt32(self.line() as u32));
         self.vm
-            .set_heap_property(result, "dbg-col", Value::UInt(self.column() as u64));
+            .set_heap_property(result, "dbg-col", Value::UInt32(self.column() as u32));
         result
     }
 
@@ -341,8 +341,8 @@ impl<'vm> Reader<'vm> {
             }
             if ch.len() == 1 {
                 Ok(Value::CodePoint(ch.chars().next().unwrap()))
-            } else if ch.len() < 15 {
-                let mut v: [u8; 14] = [0; 14];
+            } else if ch.len() < 7 {
+                let mut v: [u8; 6] = [0; 6];
                 for (i, c) in ch.bytes().enumerate() {
                     v[i] = c;
                 }
@@ -583,11 +583,11 @@ impl<'vm> Reader<'vm> {
             num_str.retain(|ch| ch != '_');
             let potential_int: Result<i64, ParseIntError> = num_str.parse();
             match potential_int {
-                Ok(v) => Value::Int(v),
+                Ok(v) => self.vm.alloc_int(v),
                 Err(_) => {
                     let potential_float: Result<f64, ParseFloatError> = num_str.parse();
                     match potential_float {
-                        Ok(v) => Value::float(v),
+                        Ok(f) => self.vm.alloc_f64(f),
                         Err(_) => Value::Symbol(self.vm.intern(symbol)),
                     }
                 }
@@ -1122,17 +1122,17 @@ impl<'vm> Reader<'vm> {
                         // Read an octal int
                         "o" => {
                             let exp = self.read_num_radix(buffer, 8, &read_table_term)?;
-                            return Ok(Some(Value::Int(exp)));
+                            return Ok(Some(self.vm.alloc_int(exp)));
                         }
                         // Read a hex int
                         "x" => {
                             let exp = self.read_num_radix(buffer, 16, &read_table_term)?;
-                            return Ok(Some(Value::Int(exp)));
+                            return Ok(Some(self.vm.alloc_int(exp)));
                         }
                         // Read a binary int
                         "b" => {
                             let exp = self.read_num_radix(buffer, 2, &read_table_term)?;
-                            return Ok(Some(Value::Int(exp)));
+                            return Ok(Some(self.vm.alloc_int(exp)));
                         }
                         ";" => {
                             match self.read_inner(buffer, in_back_quote, ReadReturn::None) {
@@ -1328,8 +1328,8 @@ mod tests {
         assert!(tokens[2] == "Symbol:two");
         assert!(tokens[3] == "Symbol:three");
         assert!(tokens[4] == "String:\"four\"");
-        assert!(tokens[5] == "Int:5");
-        assert!(tokens[6] == "Int:6");
+        assert!(tokens[5] == "UInt:5");
+        assert!(tokens[6] == "UInt:6");
         assert!(tokens[7] == "]");
 
         let tokens = tokenize(&mut vm, "one, two,three ,,,, \"four\" 5 , 6,");
@@ -1339,37 +1339,37 @@ mod tests {
         assert!(tokens[2] == "Symbol:two");
         assert!(tokens[3] == "Symbol:three");
         assert!(tokens[4] == "String:\"four\"");
-        assert!(tokens[5] == "Int:5");
-        assert!(tokens[6] == "Int:6");
+        assert!(tokens[5] == "UInt:5");
+        assert!(tokens[6] == "UInt:6");
         assert!(tokens[7] == "]");
 
         let tokens = tokenize(&mut vm, "(1 2 3)");
         assert!(tokens.len() == 5);
         assert!(tokens[0] == "(");
-        assert!(tokens[1] == "Int:1");
-        assert!(tokens[2] == "Int:2");
-        assert!(tokens[3] == "Int:3");
+        assert!(tokens[1] == "UInt:1");
+        assert!(tokens[2] == "UInt:2");
+        assert!(tokens[3] == "UInt:3");
         assert!(tokens[4] == ")");
         let tokens = tokenize(&mut vm, "  (  1    2\t3   )  ");
         assert!(tokens.len() == 5);
         assert!(tokens[0] == "(");
-        assert!(tokens[1] == "Int:1");
-        assert!(tokens[2] == "Int:2");
-        assert!(tokens[3] == "Int:3");
+        assert!(tokens[1] == "UInt:1");
+        assert!(tokens[2] == "UInt:2");
+        assert!(tokens[3] == "UInt:3");
         assert!(tokens[4] == ")");
         let tokens = tokenize(&mut vm, "[\\A 2 3]");
         assert!(tokens.len() == 5);
         assert!(tokens[0] == "[");
         assert!(tokens[1] == "Char:\\A");
-        assert!(tokens[2] == "Int:2");
-        assert!(tokens[3] == "Int:3");
+        assert!(tokens[2] == "UInt:2");
+        assert!(tokens[3] == "UInt:3");
         assert!(tokens[4] == "]");
         let tokens = tokenize(&mut vm, "[\\  2 3]");
         assert!(tokens.len() == 5);
         assert!(tokens[0] == "[");
         assert!(tokens[1] == "Char:\\ ");
-        assert!(tokens[2] == "Int:2");
-        assert!(tokens[3] == "Int:3");
+        assert!(tokens[2] == "UInt:2");
+        assert!(tokens[3] == "UInt:3");
         assert!(tokens[4] == "]");
         let tokens = tokenize(&mut vm, "'((1 2 (3)))");
         assert!(tokens.len() == 12);
@@ -1377,10 +1377,10 @@ mod tests {
         assert!(tokens[1] == "Symbol:quote");
         assert!(tokens[2] == "(");
         assert!(tokens[3] == "(");
-        assert!(tokens[4] == "Int:1");
-        assert!(tokens[5] == "Int:2");
+        assert!(tokens[4] == "UInt:1");
+        assert!(tokens[5] == "UInt:2");
         assert!(tokens[6] == "(");
-        assert!(tokens[7] == "Int:3");
+        assert!(tokens[7] == "UInt:3");
         assert!(tokens[8] == ")");
         assert!(tokens[9] == ")");
         assert!(tokens[10] == ")");
@@ -1391,10 +1391,10 @@ mod tests {
         assert!(tokens[1] == "Symbol:quote");
         assert!(tokens[2] == "(");
         assert!(tokens[3] == "(");
-        assert!(tokens[4] == "Int:1");
-        assert!(tokens[5] == "Int:2");
+        assert!(tokens[4] == "UInt:1");
+        assert!(tokens[5] == "UInt:2");
         assert!(tokens[6] == "(");
-        assert!(tokens[7] == "Int:3");
+        assert!(tokens[7] == "UInt:3");
         assert!(tokens[8] == ")");
         assert!(tokens[9] == ")");
         assert!(tokens[10] == ")");
@@ -1421,9 +1421,9 @@ mod tests {
         assert!(tokens[0] == "(");
         assert!(tokens[1] == "Symbol:quote");
         assert!(tokens[2] == "(");
-        assert!(tokens[3] == "Int:1");
-        assert!(tokens[4] == "Int:2");
-        assert!(tokens[5] == "Int:3");
+        assert!(tokens[3] == "UInt:1");
+        assert!(tokens[4] == "UInt:2");
+        assert!(tokens[5] == "UInt:3");
         assert!(tokens[6] == ")");
         assert!(tokens[7] == ")");
         tokenize_err(&mut vm, "'(1 2 ~3)");
@@ -1433,11 +1433,11 @@ mod tests {
         assert!(tokens[0] == "(");
         assert!(tokens[1] == "Symbol:back-quote");
         assert!(tokens[2] == "(");
-        assert!(tokens[3] == "Int:1");
-        assert!(tokens[4] == "Int:2");
+        assert!(tokens[3] == "UInt:1");
+        assert!(tokens[4] == "UInt:2");
         assert!(tokens[5] == "(");
         assert!(tokens[6] == "Symbol:unquote");
-        assert!(tokens[7] == "Int:3");
+        assert!(tokens[7] == "UInt:3");
         assert!(tokens[8] == ")");
         assert!(tokens[9] == ")");
         assert!(tokens[10] == ")");
@@ -1446,11 +1446,11 @@ mod tests {
         assert!(tokens[0] == "(");
         assert!(tokens[1] == "Symbol:back-quote");
         assert!(tokens[2] == "(");
-        assert!(tokens[3] == "Int:1");
-        assert!(tokens[4] == "Int:2");
+        assert!(tokens[3] == "UInt:1");
+        assert!(tokens[4] == "UInt:2");
         assert!(tokens[5] == "(");
         assert!(tokens[6] == "Symbol:unquote-splice");
-        assert!(tokens[7] == "Int:3");
+        assert!(tokens[7] == "UInt:3");
         assert!(tokens[8] == ")");
         assert!(tokens[9] == ")");
         assert!(tokens[10] == ")");
@@ -1459,11 +1459,11 @@ mod tests {
         assert!(tokens[0] == "(");
         assert!(tokens[1] == "Symbol:back-quote");
         assert!(tokens[2] == "(");
-        assert!(tokens[3] == "Int:1");
-        assert!(tokens[4] == "Int:2");
+        assert!(tokens[3] == "UInt:1");
+        assert!(tokens[4] == "UInt:2");
         assert!(tokens[5] == "(");
         assert!(tokens[6] == "Symbol:unquote-splice!");
-        assert!(tokens[7] == "Int:3");
+        assert!(tokens[7] == "UInt:3");
         assert!(tokens[8] == ")");
         assert!(tokens[9] == ")");
         assert!(tokens[10] == ")");
@@ -1472,14 +1472,14 @@ mod tests {
         assert!(tokens[0] == "(");
         assert!(tokens[1] == "Symbol:back-quote");
         assert!(tokens[2] == "(");
-        assert!(tokens[3] == "Int:1");
+        assert!(tokens[3] == "UInt:1");
         assert!(tokens[4] == "(");
         assert!(tokens[5] == "Symbol:back-quote");
-        assert!(tokens[6] == "Int:2");
+        assert!(tokens[6] == "UInt:2");
         assert!(tokens[7] == ")");
         assert!(tokens[8] == "(");
         assert!(tokens[9] == "Symbol:unquote-splice");
-        assert!(tokens[10] == "Int:3");
+        assert!(tokens[10] == "UInt:3");
         assert!(tokens[11] == ")");
         assert!(tokens[12] == ")");
         assert!(tokens[13] == ")");
@@ -1488,11 +1488,11 @@ mod tests {
         assert!(tokens[0] == "(");
         assert!(tokens[1] == "Symbol:back-quote");
         assert!(tokens[2] == "(");
-        assert!(tokens[3] == "Int:1");
+        assert!(tokens[3] == "UInt:1");
         assert!(tokens[4] == "(");
         assert!(tokens[5] == "Symbol:back-quote");
         assert!(tokens[6] == "(");
-        assert!(tokens[7] == "Int:2");
+        assert!(tokens[7] == "UInt:2");
         assert!(tokens[8] == "(");
         assert!(tokens[9] == "Symbol:unquote");
         assert!(tokens[10] == "Symbol:x");
@@ -1501,7 +1501,7 @@ mod tests {
         assert!(tokens[13] == ")");
         assert!(tokens[14] == "(");
         assert!(tokens[15] == "Symbol:unquote-splice");
-        assert!(tokens[16] == "Int:3");
+        assert!(tokens[16] == "UInt:3");
         assert!(tokens[17] == ")");
         assert!(tokens[18] == ")");
         assert!(tokens[19] == ")");
@@ -1514,7 +1514,7 @@ mod tests {
         assert!(tokens.len() == 11);
         assert!(tokens[0] == "(");
         assert!(tokens[1] == "Symbol:one");
-        assert!(tokens[2] == "Int:2");
+        assert!(tokens[2] == "UInt:2");
         assert!(tokens[3] == "Float:3");
         assert!(tokens[4] == "String:\"four\"");
         assert!(tokens[5] == "Char:\\B");
@@ -1528,7 +1528,7 @@ mod tests {
         assert!(tokens.len() == 11);
         assert!(tokens[0] == "[");
         assert!(tokens[1] == "Symbol:one");
-        assert!(tokens[2] == "Int:2");
+        assert!(tokens[2] == "UInt:2");
         assert!(tokens[3] == "Float:3");
         assert!(tokens[4] == "String:\"four\"");
         assert!(tokens[5] == "Char:\\B");
@@ -1542,7 +1542,7 @@ mod tests {
         assert!(tokens.len() == 11);
         assert!(tokens[0] == "[");
         assert!(tokens[1] == "Symbol:one");
-        assert!(tokens[2] == "Int:2");
+        assert!(tokens[2] == "UInt:2");
         assert!(tokens[3] == "Float:3");
         assert!(tokens[4] == "String:\"four\"");
         assert!(tokens[5] == "Char:\\B");
@@ -1557,63 +1557,64 @@ mod tests {
     fn test_wrap() {
         let mut vm = build_def_vm();
         let tokens = tokenize(&mut vm, "(1 2 3)");
+        println!("XXXX toks {:?}", tokens);
         assert!(tokens.len() == 5);
         assert!(tokens[0] == "(");
-        assert!(tokens[1] == "Int:1");
-        assert!(tokens[2] == "Int:2");
-        assert!(tokens[3] == "Int:3");
+        assert!(tokens[1] == "UInt:1");
+        assert!(tokens[2] == "UInt:2");
+        assert!(tokens[3] == "UInt:3");
         assert!(tokens[4] == ")");
         let tokens = tokenize_wrap(&mut vm, "(1 2 3)");
         assert!(tokens.len() == 7);
         assert!(tokens[0] == "[");
         assert!(tokens[1] == "(");
-        assert!(tokens[2] == "Int:1");
-        assert!(tokens[3] == "Int:2");
-        assert!(tokens[4] == "Int:3");
+        assert!(tokens[2] == "UInt:1");
+        assert!(tokens[3] == "UInt:2");
+        assert!(tokens[4] == "UInt:3");
         assert!(tokens[5] == ")");
         assert!(tokens[6] == "]");
 
         let tokens = tokenize(&mut vm, "1 2 3");
         assert!(tokens.len() == 5);
         assert!(tokens[0] == "[");
-        assert!(tokens[1] == "Int:1");
-        assert!(tokens[2] == "Int:2");
-        assert!(tokens[3] == "Int:3");
+        assert!(tokens[1] == "UInt:1");
+        assert!(tokens[2] == "UInt:2");
+        assert!(tokens[3] == "UInt:3");
         assert!(tokens[4] == "]");
         let tokens = tokenize_wrap(&mut vm, "1 2 3");
         assert!(tokens.len() == 5);
         assert!(tokens[0] == "[");
-        assert!(tokens[1] == "Int:1");
-        assert!(tokens[2] == "Int:2");
-        assert!(tokens[3] == "Int:3");
+        assert!(tokens[1] == "UInt:1");
+        assert!(tokens[2] == "UInt:2");
+        assert!(tokens[3] == "UInt:3");
         assert!(tokens[4] == "]");
 
         let tokens = tokenize(&mut vm, "(1 2 3) (4 5 6)");
         assert!(tokens.len() == 12);
         assert!(tokens[0] == "[");
         assert!(tokens[1] == "(");
-        assert!(tokens[2] == "Int:1");
-        assert!(tokens[3] == "Int:2");
-        assert!(tokens[4] == "Int:3");
+        assert!(tokens[2] == "UInt:1");
+        assert!(tokens[3] == "UInt:2");
+        assert!(tokens[4] == "UInt:3");
         assert!(tokens[5] == ")");
         assert!(tokens[6] == "(");
-        assert!(tokens[7] == "Int:4");
-        assert!(tokens[8] == "Int:5");
-        assert!(tokens[9] == "Int:6");
+        assert!(tokens[7] == "UInt:4");
+        assert!(tokens[8] == "UInt:5");
+        assert!(tokens[9] == "UInt:6");
         assert!(tokens[10] == ")");
         assert!(tokens[11] == "]");
         let tokens = tokenize_wrap(&mut vm, "(1 2 3) (4 5 6)");
         assert!(tokens.len() == 12);
         assert!(tokens[0] == "[");
         assert!(tokens[1] == "(");
-        assert!(tokens[2] == "Int:1");
-        assert!(tokens[3] == "Int:2");
-        assert!(tokens[4] == "Int:3");
+        assert!(tokens[2] == "UInt:1");
+        assert!(tokens[3] == "UInt:2");
+        assert!(tokens[4] == "UInt:3");
         assert!(tokens[5] == ")");
         assert!(tokens[6] == "(");
-        assert!(tokens[7] == "Int:4");
-        assert!(tokens[8] == "Int:5");
-        assert!(tokens[9] == "Int:6");
+        assert!(tokens[7] == "UInt:4");
+        assert!(tokens[8] == "UInt:5");
+        assert!(tokens[9] == "UInt:6");
         assert!(tokens[10] == ")");
         assert!(tokens[11] == "]");
 
@@ -1622,9 +1623,9 @@ mod tests {
         assert!(tokens[0] == "(");
         assert!(tokens[1] == "Symbol:quote");
         assert!(tokens[2] == "(");
-        assert!(tokens[3] == "Int:1");
-        assert!(tokens[4] == "Int:2");
-        assert!(tokens[5] == "Int:3");
+        assert!(tokens[3] == "UInt:1");
+        assert!(tokens[4] == "UInt:2");
+        assert!(tokens[5] == "UInt:3");
         assert!(tokens[6] == ")");
         assert!(tokens[7] == ")");
         let tokens = tokenize_wrap(&mut vm, "'(1 2 3)");
@@ -1633,9 +1634,9 @@ mod tests {
         assert!(tokens[1] == "(");
         assert!(tokens[2] == "Symbol:quote");
         assert!(tokens[3] == "(");
-        assert!(tokens[4] == "Int:1");
-        assert!(tokens[5] == "Int:2");
-        assert!(tokens[6] == "Int:3");
+        assert!(tokens[4] == "UInt:1");
+        assert!(tokens[5] == "UInt:2");
+        assert!(tokens[6] == "UInt:3");
         assert!(tokens[7] == ")");
         assert!(tokens[8] == ")");
         assert!(tokens[9] == "]");
@@ -1669,8 +1670,8 @@ mod tests {
         assert!(tokens[2] == "Symbol:two");
         assert!(tokens[3] == "String:\"th\rree\"");
         assert!(tokens[4] == "String:\"fo\"u\\r\"");
-        assert!(tokens[5] == "Int:5");
-        assert!(tokens[6] == "Int:6");
+        assert!(tokens[5] == "UInt:5");
+        assert!(tokens[6] == "UInt:6");
         assert!(tokens[7] == "String:\"slash/x/:;\"");
         assert!(tokens[8] == "]");
 
@@ -1687,8 +1688,8 @@ two""#
         assert!(tokens[2] == "Symbol:two");
         assert!(tokens[3] == "String:\"th\rree\"");
         assert!(tokens[4] == "String:\"fo\"u\\r\"");
-        assert!(tokens[5] == "Int:5");
-        assert!(tokens[6] == "Int:6");
+        assert!(tokens[5] == "UInt:5");
+        assert!(tokens[6] == "UInt:6");
         assert!(tokens[7] == "String:\"slash/x/:;\"");
         assert!(tokens[8] == "]");
 
@@ -1700,8 +1701,8 @@ two""#
         assert!(tokens[1] == "String:\"\u{03bb} two \"");
         assert!(tokens[2] == "String:\"  λ end\"");
         assert!(tokens[3] == "String:\"fo\"u\\r\"");
-        assert!(tokens[4] == "Int:5");
-        assert!(tokens[5] == "Int:6");
+        assert!(tokens[4] == "UInt:5");
+        assert!(tokens[5] == "UInt:6");
         assert!(tokens[6] == "String:\"slash/x/:;\"");
         assert!(tokens[7] == "]");
 
@@ -1713,8 +1714,8 @@ two""#
         assert!(tokens[1] == "String:\"\u{03bb} two \"");
         assert!(tokens[2] == "String:\"  λ \nend\"");
         assert!(tokens[3] == "String:\"fo\"u\\r\"");
-        assert!(tokens[4] == "Int:5");
-        assert!(tokens[5] == "Int:6");
+        assert!(tokens[4] == "UInt:5");
+        assert!(tokens[5] == "UInt:6");
         assert!(tokens[6] == "String:\"slash/x/:;\"");
         assert!(tokens[7] == "]");
     }
@@ -1742,18 +1743,18 @@ two""#
         let tokens = tokenize(&mut vm, input);
         assert!(tokens.len() == 14);
         assert!(tokens[0] == "[");
-        assert!(tokens[1] == "Int:2300");
-        assert!(tokens[2] == "Int:23000");
-        assert!(tokens[3] == "Int:255");
-        assert!(tokens[4] == "Int:255");
-        assert!(tokens[5] == "Int:15");
-        assert!(tokens[6] == "Int:15");
-        assert!(tokens[7] == "Int:0");
-        assert!(tokens[8] == "Int:255");
-        assert!(tokens[9] == "Int:255");
-        assert!(tokens[10] == "Int:65535");
-        assert!(tokens[11] == "Int:7");
-        assert!(tokens[12] == "Int:15");
+        assert!(tokens[1] == "UInt:2300");
+        assert!(tokens[2] == "UInt:23000");
+        assert!(tokens[3] == "UInt:255");
+        assert!(tokens[4] == "UInt:255");
+        assert!(tokens[5] == "UInt:15");
+        assert!(tokens[6] == "UInt:15");
+        assert!(tokens[7] == "UInt:0");
+        assert!(tokens[8] == "UInt:255");
+        assert!(tokens[9] == "UInt:255");
+        assert!(tokens[10] == "UInt:65535");
+        assert!(tokens[11] == "UInt:7");
+        assert!(tokens[12] == "UInt:15");
         assert!(tokens[13] == "]");
         let input = "#xFG";
         tokenize_err(&mut vm, input);

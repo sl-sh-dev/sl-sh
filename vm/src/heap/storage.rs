@@ -1,5 +1,5 @@
 use crate::bits::{is_live, is_marked, is_mutable, is_traced, FLAG_MARK, FLAG_STICKY, FLAG_TRACED};
-use crate::{clear_bit, is_bit_set, set_bit, Handle};
+use crate::{clear_bit, is_bit_set, set_bit};
 
 #[derive(Debug)]
 pub(super) struct Storage<T: Clone> {
@@ -24,24 +24,12 @@ impl<T: Clone> Storage<T> {
         }
     }
 
-    pub fn vals(&self) -> &[T] {
-        &self.vals
-    }
-
-    pub fn vals_mut(&mut self) -> &mut [T] {
-        &mut self.vals
+    pub fn get(&self, idx: usize) -> Option<&T> {
+        self.vals.get(idx)
     }
 
     pub fn get_mut(&mut self, idx: usize) -> Option<&mut T> {
         self.vals.get_mut(idx)
-    }
-
-    pub fn flags(&self) -> &[u8] {
-        &self.flags
-    }
-
-    pub fn flags_mut(&mut self) -> &mut [u8] {
-        &mut self.flags
     }
 
     pub fn set_grow_factor(&mut self, grow_factor: f64) {
@@ -56,9 +44,9 @@ impl<T: Clone> Storage<T> {
         self.live_objects
     }
 
-    pub fn alloc<CollectFunc>(&mut self, obj: T, flags: u8, collect: CollectFunc) -> Handle
+    pub fn alloc<CollectFunc>(&mut self, obj: T, flags: u8, collect: CollectFunc) -> u32
     where
-        CollectFunc: FnOnce() -> (),
+        CollectFunc: FnOnce(),
     {
         if self.live_objects >= self.capacity {
             collect();
@@ -74,7 +62,7 @@ impl<T: Clone> Storage<T> {
             self.vals.push(obj);
             self.flags.push(flags | FLAG_MARK);
             self.live_objects += 1;
-            Handle::new(idx)
+            idx as u32
         } else {
             for (idx, flag) in self.flags.iter_mut().enumerate() {
                 if !is_live(*flag) {
@@ -82,8 +70,7 @@ impl<T: Clone> Storage<T> {
                     *flag = flags | FLAG_MARK;
                     self.vals.push(obj);
                     self.vals.swap_remove(idx);
-                    let handle = Handle::new(idx);
-                    return handle;
+                    return idx as u32;
                 }
             }
             panic!("Failed to allocate to heap- no free objects and no capacity!");
@@ -104,30 +91,6 @@ impl<T: Clone> Storage<T> {
         }
     }
 
-    pub fn is_live(&self, idx: usize) -> bool {
-        if let Some(flag) = self.flags.get(idx) {
-            is_live(*flag)
-        } else {
-            false
-        }
-    }
-
-    pub fn is_marked(&self, idx: usize) -> bool {
-        if let Some(flag) = self.flags.get(idx) {
-            is_marked(*flag)
-        } else {
-            false
-        }
-    }
-
-    pub fn is_traced(&self, idx: usize) -> bool {
-        if let Some(flag) = self.flags.get(idx) {
-            is_traced(*flag)
-        } else {
-            false
-        }
-    }
-
     pub fn is_mutable(&self, idx: usize) -> bool {
         if let Some(flag) = self.flags.get(idx) {
             is_mutable(*flag)
@@ -144,14 +107,6 @@ impl<T: Clone> Storage<T> {
             }
         } else {
             panic!("Invalid object handle in mark!")
-        }
-    }
-
-    pub fn traced(&mut self, idx: usize) {
-        if let Some(flag) = self.flags.get_mut(idx) {
-            set_bit!(*flag, FLAG_TRACED);
-        } else {
-            panic!("Invalid object handle in traced!")
         }
     }
 
@@ -189,14 +144,11 @@ impl<T: Clone> Storage<T> {
 
     /// For any dead, live bit not set, objects in heap set them to val.
     pub fn set_all_dead(&mut self, val: T) {
-        let mut cur = 0;
-        let mut flags_iter = self.flags.iter();
-        while let Some(flag) = flags_iter.next() {
+        for (cur, flag) in self.flags.iter().enumerate() {
             if !is_live(*flag) {
                 self.vals.push(val.clone());
                 self.vals.swap_remove(cur);
             }
-            cur += 1;
         }
     }
 

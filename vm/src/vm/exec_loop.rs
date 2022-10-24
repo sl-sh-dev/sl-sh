@@ -1,5 +1,5 @@
 use crate::opcodes::*;
-use crate::{CallFrame, Chunk, Continuation, F64Wrap, GVm, VMError, VMErrorObj, VMResult, Value};
+use crate::{CallFrame, Chunk, Continuation, GVm, VMError, VMErrorObj, VMResult, Value};
 use std::marker::PhantomData;
 use std::sync::Arc;
 
@@ -34,7 +34,7 @@ impl<ENV> GVm<ENV> {
                     for i in 0..len as usize {
                         let key = get_reg!(registers, dest + i);
                         if key.is_int() {
-                            let key = key.get_int()?;
+                            let key = key.get_int(self)?;
                             if key >= 0 && key < vector.len() as i64 {
                                 registers[dest + i] = vector[key as usize];
                             } else {
@@ -59,7 +59,7 @@ impl<ENV> GVm<ENV> {
                     for i in 0..len as usize {
                         let key = get_reg!(registers, dest + i);
                         if key.is_int() {
-                            let key = key.get_int()?;
+                            let key = key.get_int(self)?;
                             if key >= 0 && key < vector.len() as i64 {
                                 registers[dest + i] = vector[key as usize];
                             } else {
@@ -83,7 +83,7 @@ impl<ENV> GVm<ENV> {
                     for i in 0..len as usize {
                         let key = get_reg!(registers, dest + i);
                         if key.is_int() {
-                            let key = key.get_int()?;
+                            let key = key.get_int(self)?;
                             if key >= 0 {
                                 let mut iter = val.iter(self);
                                 if let Some(item) = iter.nth(key as usize) {
@@ -223,13 +223,14 @@ impl<ENV> GVm<ENV> {
                 MOVI => {
                     let (dest, src) = decode2!(code, &mut self.ip, wide);
                     let val = get_reg_unref!(registers, src, self);
-                    let dest = get_reg_int!(registers, dest).map_err(|e| (e, chunk.clone()))?;
+                    let dest =
+                        get_reg_int!(self, registers, dest).map_err(|e| (e, chunk.clone()))?;
                     //let val = get_reg!(registers, src);
                     mov_register!(registers, dest as usize, val);
                 }
                 MOVII => {
                     let (dest, src) = decode2!(code, &mut self.ip, wide);
-                    let src = get_reg_int!(registers, src).map_err(|e| (e, chunk.clone()))?;
+                    let src = get_reg_int!(self, registers, src).map_err(|e| (e, chunk.clone()))?;
                     let val = get_reg_unref!(registers, src, self);
                     //let val = get_reg!(registers, src);
                     mov_register!(registers, dest as usize, val);
@@ -378,11 +379,11 @@ impl<ENV> GVm<ENV> {
                 }
                 REGI => {
                     let (dest, i) = decode2!(code, &mut self.ip, wide);
-                    set_register!(self, registers, dest as usize, Value::Int(i as i64));
+                    set_register!(self, registers, dest as usize, Value::Int32(i as i32));
                 }
                 REGU => {
                     let (dest, i) = decode2!(code, &mut self.ip, wide);
-                    set_register!(self, registers, dest as usize, Value::UInt(i as u64));
+                    set_register!(self, registers, dest as usize, Value::UInt32(i as u32));
                 }
                 CLOSE => {
                     let (dest, src) = decode2!(code, &mut self.ip, wide);
@@ -544,10 +545,10 @@ impl<ENV> GVm<ENV> {
                     let (op1, op2) = decode2!(code, &mut self.ip, wide);
                     let ipoff = decode_i24!(code, &mut self.ip);
                     let op1 = get_reg!(registers, op1)
-                        .get_int()
+                        .get_int(self)
                         .map_err(|e| (e, chunk.clone()))?;
                     let op2 = get_reg!(registers, op2)
-                        .get_int()
+                        .get_int(self)
                         .map_err(|e| (e, chunk.clone()))?;
                     if op1 == op2 {
                         self.ip = (self.ip as isize + ipoff) as usize;
@@ -556,8 +557,8 @@ impl<ENV> GVm<ENV> {
                 JMPLT => {
                     let (op1, op2) = decode2!(code, &mut self.ip, wide);
                     let ipoff = decode_i24!(code, &mut self.ip);
-                    let op1 = get_reg_int!(registers, op1).map_err(|e| (e, chunk.clone()))?;
-                    let op2 = get_reg_int!(registers, op2).map_err(|e| (e, chunk.clone()))?;
+                    let op1 = get_reg_int!(self, registers, op1).map_err(|e| (e, chunk.clone()))?;
+                    let op2 = get_reg_int!(self, registers, op2).map_err(|e| (e, chunk.clone()))?;
                     if op1 < op2 {
                         self.ip = (self.ip as isize + ipoff) as usize;
                     }
@@ -565,8 +566,8 @@ impl<ENV> GVm<ENV> {
                 JMPGT => {
                     let (op1, op2) = decode2!(code, &mut self.ip, wide);
                     let ipoff = decode_i24!(code, &mut self.ip);
-                    let op1 = get_reg_int!(registers, op1).map_err(|e| (e, chunk.clone()))?;
-                    let op2 = get_reg_int!(registers, op2).map_err(|e| (e, chunk.clone()))?;
+                    let op1 = get_reg_int!(self, registers, op1).map_err(|e| (e, chunk.clone()))?;
+                    let op2 = get_reg_int!(self, registers, op2).map_err(|e| (e, chunk.clone()))?;
                     if op1 > op2 {
                         self.ip = (self.ip as isize + ipoff) as usize;
                     }
@@ -726,10 +727,34 @@ impl<ENV> GVm<ENV> {
                         self.on_error = Some(on_error);
                     }
                 }
-                ADD => binary_math!(chunk, code, &mut self.ip, registers, |a, b| a + b, wide),
-                SUB => binary_math!(chunk, code, &mut self.ip, registers, |a, b| a - b, wide),
-                MUL => binary_math!(chunk, code, &mut self.ip, registers, |a, b| a * b, wide),
-                DIV => div_math!(chunk, code, &mut self.ip, registers, wide),
+                ADD => binary_math!(
+                    self,
+                    chunk,
+                    code,
+                    &mut self.ip,
+                    registers,
+                    |a, b| a + b,
+                    wide
+                ),
+                SUB => binary_math!(
+                    self,
+                    chunk,
+                    code,
+                    &mut self.ip,
+                    registers,
+                    |a, b| a - b,
+                    wide
+                ),
+                MUL => binary_math!(
+                    self,
+                    chunk,
+                    code,
+                    &mut self.ip,
+                    registers,
+                    |a, b| a * b,
+                    wide
+                ),
+                DIV => div_math!(self, chunk, code, &mut self.ip, registers, wide),
                 NUMEQ => compare_int!(
                     self,
                     chunk,
@@ -797,9 +822,10 @@ impl<ENV> GVm<ENV> {
                 INC => {
                     let (dest, i) = decode2!(code, &mut self.ip, wide);
                     let val = match get_reg!(registers, dest) {
+                        // XXX TODO- int 64, overflow
                         Value::Byte(v) => Value::Byte(v + i as u8),
-                        Value::Int(v) => Value::Int(v + i as i64),
-                        Value::UInt(v) => Value::UInt(v + i as u64),
+                        Value::Int32(v) => Value::Int32(v + i as i32),
+                        Value::UInt32(v) => Value::UInt32(v + i as u32),
                         _ => {
                             return Err((
                                 VMError::new_vm(format!(
@@ -816,9 +842,10 @@ impl<ENV> GVm<ENV> {
                 DEC => {
                     let (dest, i) = decode2!(code, &mut self.ip, wide);
                     let val = match get_reg!(registers, dest) {
+                        // XXX TODO- int 64, overflow
                         Value::Byte(v) => Value::Byte(v - i as u8),
-                        Value::Int(v) => Value::Int(v - i as i64),
-                        Value::UInt(v) => Value::UInt(v - i as u64),
+                        Value::Int32(v) => Value::Int32(v - i as i32),
+                        Value::UInt32(v) => Value::UInt32(v - i as u32),
                         _ => {
                             return Err((
                                 VMError::new_vm(format!(
@@ -909,7 +936,7 @@ impl<ENV> GVm<ENV> {
                 VECMK => {
                     let (dest, op) = decode2!(code, &mut self.ip, wide);
                     let len = get_reg!(registers, op)
-                        .get_int()
+                        .get_int(self)
                         .map_err(|e| (e, chunk.clone()))?;
                     let val = self.alloc_vector(Vec::with_capacity(len as usize));
                     set_register!(self, registers, dest as usize, val);
@@ -917,7 +944,7 @@ impl<ENV> GVm<ENV> {
                 VECELS => {
                     let (dest, op) = decode2!(code, &mut self.ip, wide);
                     let len = get_reg!(registers, op)
-                        .get_int()
+                        .get_int(self)
                         .map_err(|e| (e, chunk.clone()))?;
                     if let Value::Vector(h) = get_reg!(registers, dest) {
                         let v = self
@@ -957,7 +984,8 @@ impl<ENV> GVm<ENV> {
                 }
                 VECNTH => {
                     let (vc, dest, i) = decode3!(code, &mut self.ip, wide);
-                    let i = get_reg_int!(registers, i).map_err(|e| (e, chunk.clone()))? as usize;
+                    let i =
+                        get_reg_int!(self, registers, i).map_err(|e| (e, chunk.clone()))? as usize;
                     let val = match get_reg!(registers, vc) {
                         Value::Vector(h) => {
                             let v = self.get_vector(h);
@@ -997,7 +1025,8 @@ impl<ENV> GVm<ENV> {
                 }
                 VECSTH => {
                     let (vc, src, i) = decode3!(code, &mut self.ip, wide);
-                    let i = get_reg_int!(registers, i).map_err(|e| (e, chunk.clone()))? as usize;
+                    let i =
+                        get_reg_int!(self, registers, i).map_err(|e| (e, chunk.clone()))? as usize;
                     let val = get_reg!(registers, src);
                     if let Value::Vector(h) = get_reg!(registers, vc) {
                         let v = self
@@ -1015,7 +1044,7 @@ impl<ENV> GVm<ENV> {
                 VECMKD => {
                     let (dest, len, dfn) = decode3!(code, &mut self.ip, wide);
                     let len = get_reg!(registers, len)
-                        .get_int()
+                        .get_int(self)
                         .map_err(|e| (e, chunk.clone()))?;
                     let dfn = get_reg!(registers, dfn);
                     let mut v = Vec::with_capacity(len as usize);
@@ -1030,12 +1059,12 @@ impl<ENV> GVm<ENV> {
                     match get_reg!(registers, v) {
                         Value::Vector(h) => {
                             let v = self.get_vector(h);
-                            let len = Value::UInt(v.len() as u64);
+                            let len = Value::UInt32(v.len() as u32); // XXX TODO- overflow
                             set_register!(self, registers, dest as usize, len);
                         }
                         Value::List(h, start) => {
                             let v = self.get_vector(h);
-                            let len = Value::UInt((v.len() - start as usize) as u64);
+                            let len = Value::UInt32((v.len() - start as usize) as u32); // XXX TODO- overflow
                             set_register!(self, registers, dest as usize, len);
                         }
                         _ => return Err((VMError::new_vm("VECLEN: Not a vector."), chunk)),

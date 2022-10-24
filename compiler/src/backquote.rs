@@ -43,7 +43,7 @@ macro_rules! get_data {
                             $vm.get_heap_property(cdr, "dbg-line"),
                             $vm.get_heap_property(cdr, "dbg-col"),
                         );
-                        if let (Some(Value::UInt(line)), Some(Value::UInt(col))) = (line, col) {
+                        if let (Some(Value::UInt32(line)), Some(Value::UInt32(col))) = (line, col) {
                             return Err(VMError::new_compile(format!(
                                 "Invalid tag at {}:{}, takes one expression.",
                                 line, col

@@ -5,7 +5,7 @@ use std::collections::HashMap;
 pub fn vec_slice(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let (vector, start, end) = match registers.len() {
         2 => {
-            if let (Value::Vector(vector), Ok(start)) = (registers[0], registers[1].get_int()) {
+            if let (Value::Vector(vector), Ok(start)) = (registers[0], registers[1].get_int(vm)) {
                 let v = vm.get_vector(vector);
                 (v, start as usize, v.len())
             } else {
@@ -13,9 +13,11 @@ pub fn vec_slice(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
             }
         }
         3 => {
-            if let (Value::Vector(vector), Ok(start), Ok(end)) =
-                (registers[0], registers[1].get_int(), registers[2].get_int())
-            {
+            if let (Value::Vector(vector), Ok(start), Ok(end)) = (
+                registers[0],
+                registers[1].get_int(vm),
+                registers[2].get_int(vm),
+            ) {
                 let v = vm.get_vector(vector);
                 (v, start as usize, end as usize)
             } else {

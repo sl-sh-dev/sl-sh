@@ -215,45 +215,45 @@ mod tests {
         assert_eq!(pmap.len(), 0);
         assert!(pmap.is_empty());
 
-        pmap = pmap.insert(Value::UInt(1), Value::Int(1), &mut vm);
-        pmap = pmap.insert(Value::UInt(2), Value::Int(2), &mut vm);
-        pmap = pmap.insert(Value::UInt(3), Value::Int(3), &mut vm);
+        pmap = pmap.insert(Value::UInt32(1), Value::Int32(1), &mut vm);
+        pmap = pmap.insert(Value::UInt32(2), Value::Int32(2), &mut vm);
+        pmap = pmap.insert(Value::UInt32(3), Value::Int32(3), &mut vm);
         assert_eq!(pmap.len(), 3);
         assert!(!pmap.is_empty());
-        assert_eq!(pmap.get(Value::UInt(1), &vm).unwrap(), Value::Int(1));
-        assert_eq!(pmap.get(Value::UInt(2), &vm).unwrap(), Value::Int(2));
-        assert_eq!(pmap.get(Value::UInt(3), &vm).unwrap(), Value::Int(3));
+        assert_eq!(pmap.get(Value::UInt32(1), &vm).unwrap(), Value::Int32(1));
+        assert_eq!(pmap.get(Value::UInt32(2), &vm).unwrap(), Value::Int32(2));
+        assert_eq!(pmap.get(Value::UInt32(3), &vm).unwrap(), Value::Int32(3));
         let pmap2 = pmap;
 
-        pmap = pmap.insert(Value::UInt(3), Value::Int(30), &mut vm);
+        pmap = pmap.insert(Value::UInt32(3), Value::Int32(30), &mut vm);
         assert_eq!(pmap.len(), 3);
         assert!(!pmap.is_empty());
-        assert_eq!(pmap.get(Value::UInt(1), &vm).unwrap(), Value::Int(1));
-        assert_eq!(pmap.get(Value::UInt(2), &vm).unwrap(), Value::Int(2));
-        assert_eq!(pmap.get(Value::UInt(3), &vm).unwrap(), Value::Int(30));
+        assert_eq!(pmap.get(Value::UInt32(1), &vm).unwrap(), Value::Int32(1));
+        assert_eq!(pmap.get(Value::UInt32(2), &vm).unwrap(), Value::Int32(2));
+        assert_eq!(pmap.get(Value::UInt32(3), &vm).unwrap(), Value::Int32(30));
 
         assert_eq!(pmap2.len(), 3);
         assert!(!pmap2.is_empty());
-        assert_eq!(pmap2.get(Value::UInt(1), &vm).unwrap(), Value::Int(1));
-        assert_eq!(pmap2.get(Value::UInt(2), &vm).unwrap(), Value::Int(2));
-        assert_eq!(pmap2.get(Value::UInt(3), &vm).unwrap(), Value::Int(3));
+        assert_eq!(pmap2.get(Value::UInt32(1), &vm).unwrap(), Value::Int32(1));
+        assert_eq!(pmap2.get(Value::UInt32(2), &vm).unwrap(), Value::Int32(2));
+        assert_eq!(pmap2.get(Value::UInt32(3), &vm).unwrap(), Value::Int32(3));
 
         assert_eq!(pmap_orig.len(), 0);
         assert!(pmap_orig.is_empty());
 
-        let pmap3 = pmap.remove(Value::UInt(2), &mut vm).unwrap();
+        let pmap3 = pmap.remove(Value::UInt32(2), &mut vm).unwrap();
         assert_eq!(pmap3.len(), 2);
         assert!(!pmap3.is_empty());
-        assert_eq!(pmap3.get(Value::UInt(1), &vm).unwrap(), Value::Int(1));
-        assert_eq!(pmap3.get(Value::UInt(2), &vm), None);
-        assert_eq!(pmap3.get(Value::UInt(3), &vm).unwrap(), Value::Int(30));
-        assert_eq!(pmap3.remove(Value::UInt(2), &mut vm), None);
+        assert_eq!(pmap3.get(Value::UInt32(1), &vm).unwrap(), Value::Int32(1));
+        assert_eq!(pmap3.get(Value::UInt32(2), &vm), None);
+        assert_eq!(pmap3.get(Value::UInt32(3), &vm).unwrap(), Value::Int32(30));
+        assert_eq!(pmap3.remove(Value::UInt32(2), &mut vm), None);
 
         assert_eq!(pmap.len(), 3);
         assert!(!pmap.is_empty());
-        assert_eq!(pmap.get(Value::UInt(1), &vm).unwrap(), Value::Int(1));
-        assert_eq!(pmap.get(Value::UInt(2), &vm).unwrap(), Value::Int(2));
-        assert_eq!(pmap.get(Value::UInt(3), &vm).unwrap(), Value::Int(30));
+        assert_eq!(pmap.get(Value::UInt32(1), &vm).unwrap(), Value::Int32(1));
+        assert_eq!(pmap.get(Value::UInt32(2), &vm).unwrap(), Value::Int32(2));
+        assert_eq!(pmap.get(Value::UInt32(3), &vm).unwrap(), Value::Int32(30));
 
         Ok(())
     }

@@ -64,7 +64,7 @@ pub fn sizeof_heap_object(_vm: &mut SloshVm, registers: &[Value]) -> VMResult<Va
             "sizeof-heap-object: takes no arguments".to_string(),
         ));
     }
-    Ok(Value::UInt(SloshVm::sizeof_heap_object() as u64))
+    Ok(Value::UInt32(SloshVm::sizeof_heap_object() as u32))
 }
 
 pub fn sizeof_value(_vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
@@ -73,5 +73,5 @@ pub fn sizeof_value(_vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
             "sizeof-value: takes no arguments".to_string(),
         ));
     }
-    Ok(Value::UInt(std::mem::size_of::<Value>() as u64))
+    Ok(Value::UInt32(std::mem::size_of::<Value>() as u32))
 }
