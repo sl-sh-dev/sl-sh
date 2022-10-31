@@ -19,7 +19,7 @@ use std::fs::{File, Metadata};
 use std::time::SystemTime;
 use walkdir::{DirEntry, WalkDir};
 
-const LEN: u64 = 5;
+const LEN: i64 = 5;
 
 fn cd_expand_all_dots(cd: String) -> String {
     let mut all_dots = false;
@@ -679,41 +679,52 @@ fn temp_dir() -> PathBuf {
     env::temp_dir()
 }
 
-fn builtin_get_temp_dir(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
+/// Usage: (get-temp [\"/path/to/directory/to/use/as/base\" \"optional-prefix\" \"optional-suffix\" length])
+///
+/// Creates a directory inside of an OS specific temporary directory. See [temp-dir](root::temp-dir)
+/// for OS specific notes. Also accepts an optional prefix, an optional suffix, and an optional
+/// length for the random number of characters in the temporary file created. Defaults to prefix of
+/// \".tmp\", no suffix, and five random characters.
+///
+/// Section: file
+///
+/// Example:
+/// (test::assert-true (str-contains (temp-dir) (get-temp)))
+///
+/// (with-temp (fn (tmp)
+///         (let ((tmp-dir (get-temp tmp)))
+///             (test::assert-true (str-contains tmp tmp-dir)))))
+///
+/// (with-temp (fn (tmp)
+///         (let ((tmp-dir (get-temp tmp \"some-prefix\")))
+///             (test::assert-true (str-contains tmp tmp-dir))
+///             (test::assert-true (str-contains \"some-prefix\" tmp-dir)))))
+///
+/// (with-temp (fn (tmp)
+///         (let ((tmp-dir (get-temp tmp \"some-prefix\" \"some-suffix\")))
+///             (test::assert-true (str-contains tmp tmp-dir))
+///             (test::assert-true (str-contains \"some-prefix\" tmp-dir))
+///             (test::assert-true (str-contains \"some-suffix\" tmp-dir)))))
+///
+/// (with-temp (fn (tmp)
+///         (let ((tmp-dir (get-temp tmp \"some-prefix\" \"some-suffix\" 6)))
+///             (test::assert-true (str-contains tmp tmp-dir))
+///             (test::assert-true (str-contains \"some-prefix\" tmp-dir))
+///             (test::assert-true (str-contains \"some-suffix\" tmp-dir))
+///             (test::assert-equal (length \"some-prefix012345some-suffix\") (length (fs-base tmp-dir))))))
+#[sl_sh_fn(fn_name = "get-temp")]
+fn get_temp(
+    path: Option<String>,
+    prefix: Option<String>,
+    suffix: Option<String>,
+    len: Option<i64>,
+) -> LispResult<Expression> {
     let fn_name = "get-temp";
-    let dir;
-    let mut prefix = String::from("");
-    let mut suffix = String::from("");
-    let mut len = LEN;
-    if let Some(s) = args.next() {
-        let fp = eval(environment, s)?;
-        if let Some(path) = get_file(environment, fp) {
-            let p = path.as_path();
-            if p.exists() && p.is_dir() {
-                dir = path;
-                let (p, s, l) = get_temp_name_defaults(environment, args)?;
-                params_done(args, fn_name)?;
-                prefix = p;
-                suffix = s;
-                len = l;
-            } else {
-                let msg = format!(
-                    "{} unable to provide temporary file in provided directory",
-                    fn_name
-                );
-                return Err(LispError::new(msg));
-            }
-        } else {
-            let msg = format!("{} unable to access provided file", fn_name);
-            return Err(LispError::new(msg));
-        }
-    } else {
-        dir = temp_dir();
-    }
-    let dir = get_temp_dir(&dir, &prefix, &suffix, len, fn_name)?;
+    let dir = get_provided_or_default_temp(path, fn_name)?;
+    let prefix = prefix.as_ref().map(|x| x.as_str()).unwrap_or_default();
+    let suffix = suffix.as_ref().map(|x| x.as_str()).unwrap_or_default();
+    let len = len.unwrap_or(LEN);
+    let dir = create_temp_dir(dir.as_path(), prefix, suffix, len, fn_name)?;
     if let Some(path) = dir.to_str() {
         let path = Expression::alloc_data(ExpEnum::String(path.to_string().into(), None));
         Ok(path)
@@ -723,18 +734,42 @@ fn builtin_get_temp_dir(
     }
 }
 
-fn random_name(prefix: &str, suffix: &str, len: u64) -> String {
+fn random_name(prefix: &str, suffix: &str, len: i64) -> String {
     let prefix = if prefix.is_empty() { ".tmp" } else { prefix };
     let mut rng = rand::thread_rng();
-    let name = rand_alphanumeric_str(len, &mut rng);
+    let name = rand_alphanumeric_str(len.abs() as u64, &mut rng);
     format!("{}{}{}", prefix, name, suffix)
 }
 
-fn get_temp_dir(
+fn get_provided_or_default_temp(path: Option<String>, fn_name: &str) -> LispResult<PathBuf> {
+    match path {
+        None => Ok(temp_dir()),
+        Some(path) => match my_get_file(path) {
+            None => {
+                let msg = format!("{} unable to access provided file", fn_name);
+                return Err(LispError::new(msg));
+            }
+            Some(dir) => {
+                let p = dir.as_path();
+                if p.exists() && p.is_dir() {
+                    Ok(dir)
+                } else {
+                    let msg = format!(
+                        "{} unable to provide temporary file in provided directory",
+                        fn_name
+                    );
+                    return Err(LispError::new(msg));
+                }
+            }
+        },
+    }
+}
+
+fn create_temp_dir(
     path: &Path,
     prefix: &str,
     suffix: &str,
-    len: u64,
+    len: i64,
     fn_name: &str,
 ) -> Result<PathBuf, LispError> {
     if path.exists() && path.is_dir() {
@@ -755,7 +790,7 @@ fn get_temp_dir(
 fn get_temp_name_defaults<'a>(
     environment: &'a mut Environment,
     args: &'a mut dyn Iterator<Item = Expression>,
-) -> Result<(String, String, u64), LispError> {
+) -> Result<(String, String, i64), LispError> {
     let mut prefix = String::from("");
     let mut suffix = String::from("");
     let mut len = LEN;
@@ -769,8 +804,8 @@ fn get_temp_name_defaults<'a>(
                     suffix = s.parse().unwrap_or_default();
                     if let Some(arg) = args.next() {
                         let exp = eval(environment, arg)?;
-                        if let Ok(i) = exp.make_float(environment) {
-                            len = i as u64;
+                        if let Ok(i) = exp.make_int(environment) {
+                            len = i;
                         };
                     };
                 };
@@ -792,7 +827,7 @@ fn builtin_with_temp_dir(
     match lambda_exp_d {
         ExpEnum::Lambda(_) => {
             let p = &temp_dir();
-            let dir = get_temp_dir(p, &prefix, &suffix, len, fn_name)?;
+            let dir = create_temp_dir(p, &prefix, &suffix, len, fn_name)?;
             if let Some(path) = dir.as_path().to_str() {
                 let path = Expression::alloc_data(ExpEnum::String(path.to_string().into(), None));
                 let mut args = iter::once(path);
@@ -811,11 +846,25 @@ fn builtin_with_temp_dir(
     }
 }
 
-fn get_temp(
+fn my_create_temp_file(
+    dir: PathBuf,
+    prefix: &Option<String>,
+    suffix: &Option<String>,
+    len: Option<i64>,
+    fn_name: &str,
+) -> LispResult<PathBuf> {
+    //TODO LEN to i64
+    let prefix = prefix.as_ref().map(|x| x.as_str()).unwrap_or_default();
+    let suffix = suffix.as_ref().map(|x| x.as_str()).unwrap_or_default();
+    let len = len.unwrap_or(LEN);
+    create_temp_file(dir, prefix, suffix, len, fn_name)
+}
+
+fn create_temp_file(
     dir: PathBuf,
     prefix: &str,
     suffix: &str,
-    len: u64,
+    len: i64,
     fn_name: &str,
 ) -> Result<PathBuf, LispError> {
     let filename = random_name(prefix, suffix, len);
@@ -834,42 +883,46 @@ fn get_temp(
     Ok(file)
 }
 
-fn builtin_get_temp_file(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
+/// Usage: (get-temp-file [\"/path/to/directory/to/use/as/base\" \"optional-prefix\" \"optional-suffix\" length])
+///
+/// Returns name of file created inside temporary directory. Optionally takes a directory to use as
+/// the parent directory of the temporary file. Also accepts an optional prefix, an optional suffix,
+/// and an optional length for the random number of characters in the temporary files created. Defaults
+/// to prefix of \".tmp\", no suffix, and five random characters.
+///
+/// Section: file
+///
+/// Example:
+/// (test::assert-true (str-contains (temp-dir) (get-temp-file)))
+///
+/// (with-temp (fn (tmp)
+///         (let ((tmp-file (get-temp-file tmp)))
+///             (test::assert-true (str-contains tmp tmp-file)))))
+///
+/// (with-temp (fn (tmp)
+///         (let ((tmp-file (get-temp-file tmp \"some-prefix\")))
+///             (test::assert-true (str-contains \"some-prefix\" tmp-file)))))
+///
+/// (with-temp (fn (tmp)
+///         (let ((tmp-file (get-temp-file tmp \"some-prefix\" \"some-suffix\")))
+///             (test::assert-true (str-contains \"some-prefix\" tmp-file))
+///             (test::assert-true (str-contains \"some-suffix\" tmp-file)))))
+///
+/// (with-temp (fn (tmp)
+///         (let ((tmp-file (get-temp-file tmp \"some-prefix\" \"some-suffix\" 10)))
+///             (test::assert-true (str-contains \"some-prefix\" tmp-file))
+///             (test::assert-true (str-contains \"some-suffix\" tmp-file))
+///             (test::assert-equal (length \"some-prefix0123456789some-suffix\") (length (fs-base tmp-file))))))
+#[sl_sh_fn(fn_name = "get-temp-file")]
+fn get_temp_file(
+    path: Option<String>,
+    prefix: Option<String>,
+    suffix: Option<String>,
+    len: Option<i64>,
+) -> LispResult<Expression> {
     let fn_name = "get-temp-file";
-    let dir;
-    let mut prefix = String::from("");
-    let mut suffix = String::from("");
-    let mut len = LEN;
-    if let Some(s) = args.next() {
-        let fp = eval(environment, s)?;
-        if let Some(path) = get_file(environment, fp) {
-            let p = path.as_path();
-            if p.exists() && p.is_dir() {
-                dir = path;
-                let (p, s, l) = get_temp_name_defaults(environment, args)?;
-                params_done(args, fn_name)?;
-                prefix = p;
-                suffix = s;
-                len = l;
-            } else {
-                let msg = format!(
-                    "{} unable to provide temporary file in provided directory",
-                    fn_name
-                );
-                return Err(LispError::new(msg));
-            }
-        } else {
-            let msg = format!("{} unable to access provided file", fn_name);
-            return Err(LispError::new(msg));
-        }
-    } else {
-        let p = &temp_dir();
-        dir = get_temp_dir(p, &prefix, &suffix, len, fn_name)?;
-    }
-    let file = get_temp(dir, &prefix, &suffix, len, fn_name)?;
+    let dir = get_provided_or_default_temp(path, fn_name)?;
+    let file = my_create_temp_file(dir, &prefix, &suffix, len, fn_name)?;
     if let Some(path) = file.as_path().to_str() {
         let path = Expression::alloc_data(ExpEnum::String(path.to_string().into(), None));
         Ok(path)
@@ -891,8 +944,8 @@ fn builtin_with_temp_file(
     match lambda_exp_d {
         ExpEnum::Lambda(_) => {
             let p = &temp_dir();
-            let dir = get_temp_dir(p, &prefix, &suffix, len, fn_name)?;
-            let file = get_temp(dir, &prefix, &suffix, len, fn_name)?;
+            let dir = create_temp_dir(p, &prefix, &suffix, len, fn_name)?;
+            let file = create_temp_file(dir, &prefix, &suffix, len, fn_name)?;
             if let Some(path) = file.as_path().to_str() {
                 let path = Expression::alloc_data(ExpEnum::String(path.to_string().into(), None));
                 let mut args = iter::once(path);
@@ -981,83 +1034,8 @@ Example:
     intern_fs_len(interner, data);
     intern_fs_modified(interner, data);
     intern_fs_accessed(interner, data);
-    data.insert(
-        interner.intern("get-temp"),
-        Expression::make_function(
-            builtin_get_temp_dir,
-            "Usage: (get-temp [\"/path/to/directory/to/use/as/base\" \"optional-prefix\" \"optional-suffix\" length])
-
-Creates a directory inside of an OS specific temporary directory. See [temp-dir](root::temp-dir)
-for OS specific notes. Also accepts an optional prefix, an optional suffix, and an optional
-length for the random number of characters in the temporary file created. Defaults to prefix of
-\".tmp\", no suffix, and five random characters.
-
-Section: file
-
-Example:
-(test::assert-true (str-contains (temp-dir) (get-temp)))
-
-(with-temp (fn (tmp)
-        (let ((tmp-dir (get-temp tmp)))
-            (test::assert-true (str-contains tmp tmp-dir)))))
-
-(with-temp (fn (tmp)
-        (let ((tmp-dir (get-temp tmp \"some-prefix\")))
-            (test::assert-true (str-contains tmp tmp-dir))
-            (test::assert-true (str-contains \"some-prefix\" tmp-dir)))))
-
-(with-temp (fn (tmp)
-        (let ((tmp-dir (get-temp tmp \"some-prefix\" \"some-suffix\")))
-            (test::assert-true (str-contains tmp tmp-dir))
-            (test::assert-true (str-contains \"some-prefix\" tmp-dir))
-            (test::assert-true (str-contains \"some-suffix\" tmp-dir)))))
-
-(with-temp (fn (tmp)
-        (let ((tmp-dir (get-temp tmp \"some-prefix\" \"some-suffix\" 6)))
-            (test::assert-true (str-contains tmp tmp-dir))
-            (test::assert-true (str-contains \"some-prefix\" tmp-dir))
-            (test::assert-true (str-contains \"some-suffix\" tmp-dir))
-            (test::assert-equal (length \"some-prefix012345some-suffix\") (length (fs-base tmp-dir))))))
-",
-        ),
-    );
-    data.insert(
-        interner.intern("get-temp-file"),
-        Expression::make_function(
-            builtin_get_temp_file,
-            "Usage: (get-temp-file [\"/path/to/directory/to/use/as/base\" \"optional-prefix\" \"optional-suffix\" length])
-
-Returns name of file created inside temporary directory. Optionally takes a directory to use as
-the parent directory of the temporary file. Also accepts an optional prefix, an optional suffix,
-and an optional length for the random number of characters in the temporary files created. Defaults
-to prefix of \".tmp\", no suffix, and five random characters.
-
-Section: file
-
-Example:
-(test::assert-true (str-contains (temp-dir) (get-temp-file)))
-
-(with-temp (fn (tmp)
-        (let ((tmp-file (get-temp-file tmp)))
-            (test::assert-true (str-contains tmp tmp-file)))))
-
-(with-temp (fn (tmp)
-        (let ((tmp-file (get-temp-file tmp \"some-prefix\")))
-            (test::assert-true (str-contains \"some-prefix\" tmp-file)))))
-
-(with-temp (fn (tmp)
-        (let ((tmp-file (get-temp-file tmp \"some-prefix\" \"some-suffix\")))
-            (test::assert-true (str-contains \"some-prefix\" tmp-file))
-            (test::assert-true (str-contains \"some-suffix\" tmp-file)))))
-
-(with-temp (fn (tmp)
-        (let ((tmp-file (get-temp-file tmp \"some-prefix\" \"some-suffix\" 10)))
-            (test::assert-true (str-contains \"some-prefix\" tmp-file))
-            (test::assert-true (str-contains \"some-suffix\" tmp-file))
-            (test::assert-equal (length \"some-prefix0123456789some-suffix\") (length (fs-base tmp-file))))))
-",
-        ),
-    );
+    intern_get_temp(interner, data);
+    intern_get_temp_file(interner, data);
     data.insert(
         interner.intern("with-temp-file"),
         Expression::make_function(
