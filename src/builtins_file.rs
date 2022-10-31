@@ -11,7 +11,7 @@ use crate::environment::*;
 use crate::eval::*;
 use crate::interner::*;
 use crate::types::*;
-use crate::{param_eval, params_done, rand_alphanumeric_str, LispResult, VarArgs};
+use crate::{rand_alphanumeric_str, LispResult, VarArgs};
 use core::iter;
 use same_file;
 use std::ffi::OsStr;
@@ -117,29 +117,14 @@ fn builtin_cd(
     }
 }
 
-pub fn my_get_file(p: String) -> Option<PathBuf> {
+pub fn get_file(p: String) -> Option<PathBuf> {
     let p = expand_tilde(p.as_str()).unwrap_or(p);
     let p = Path::new(&p);
     Some((*p.to_path_buf()).to_owned())
 }
 
-//TODO remove once fully replaced.
-pub fn get_file(environment: &mut Environment, p: Expression) -> Option<PathBuf> {
-    let p = match &eval(environment, p).ok()?.get().data {
-        ExpEnum::String(p, _) => {
-            match expand_tilde(p) {
-                Some(p) => p,
-                None => p.to_string(), // XXX not great.
-            }
-        }
-        _ => return None,
-    };
-    let p = Path::new(&p);
-    Some((*p.to_path_buf()).to_owned())
-}
-
 fn file_test(path: String, test: fn(path: &Path) -> bool, fn_name: &str) -> LispResult<Expression> {
-    if let Some(path) = my_get_file(path) {
+    if let Some(path) = get_file(path) {
         if test(path.as_path()) {
             Ok(Expression::make_true())
         } else {
@@ -320,7 +305,7 @@ fn do_glob(args: VarArgs<String>) -> LispResult<Expression> {
 #[sl_sh_fn(fn_name = "fs-parent")]
 fn fs_parent(path: String) -> LispResult<String> {
     let fn_name = "fs-parent";
-    if let Some(path) = my_get_file(path) {
+    if let Some(path) = get_file(path) {
         let mut path = path.canonicalize().map_err(|_| {
             let msg = format!("{} failed to get full filepath of parent", fn_name);
             LispError::new(msg)
@@ -349,7 +334,7 @@ fn fs_parent(path: String) -> LispResult<String> {
 #[sl_sh_fn(fn_name = "fs-base")]
 fn fs_base(path: String) -> LispResult<String> {
     let fn_name = "fs-base";
-    match my_get_file(path) {
+    match get_file(path) {
         Some(path) => {
             let path = path.file_name().and_then(|s| s.to_str()).ok_or_else(|| {
                 let msg = format!("{} failed to extract name of file", fn_name);
@@ -376,7 +361,7 @@ fn fs_base(path: String) -> LispResult<String> {
 #[sl_sh_fn(fn_name = "fs-same?")]
 fn is_same_file(path_0: String, path_1: String) -> LispResult<Expression> {
     let fn_name = "fs-same?";
-    match (my_get_file(path_0), my_get_file(path_1)) {
+    match (get_file(path_0), get_file(path_1)) {
         (Some(path_0), Some(path_1)) => {
             if let Ok(b) = same_file::is_same_file(path_0.as_path(), path_1.as_path()) {
                 if b {
@@ -495,7 +480,7 @@ fn fs_crawl(
     optional_depth_or_symlink: VarArgs<Expression>,
 ) -> LispResult<Expression> {
     let fn_name = "fs-crawl";
-    let file_or_dir = my_get_file(path);
+    let file_or_dir = get_file(path);
     let mut depth = None;
     let mut sym_links = None;
     for depth_or_symlink in optional_depth_or_symlink {
@@ -563,7 +548,7 @@ fn fs_crawl(
             }
         }
         _ => {
-            let msg = format!("{} second argument must be function", fn_name);
+            let msg = format!("{} second argument must be a lambda", fn_name);
             Err(LispError::new(msg))
         }
     }
@@ -587,7 +572,7 @@ fn fs_crawl(
 #[sl_sh_fn(fn_name = "fs-len")]
 fn fs_len(file_or_dir: String) -> LispResult<Expression> {
     let fn_name = "fs-len";
-    let file_or_dir = my_get_file(file_or_dir);
+    let file_or_dir = get_file(file_or_dir);
     if let Some(file_or_dir) = file_or_dir {
         if let Ok(metadata) = fs::metadata(file_or_dir) {
             let len = metadata.len();
@@ -651,7 +636,7 @@ fn get_file_time(
 ///         (test::assert-true (> (fs-modified tmp) last-mod)))))
 #[sl_sh_fn(fn_name = "fs-modified")]
 fn fs_modified(file_or_dir: String) -> LispResult<Expression> {
-    let file_or_dir = my_get_file(file_or_dir);
+    let file_or_dir = get_file(file_or_dir);
     get_file_time(file_or_dir, "fs-modified", |md| md.modified())
 }
 
@@ -671,7 +656,7 @@ fn fs_modified(file_or_dir: String) -> LispResult<Expression> {
 /// (close tst-file))))
 #[sl_sh_fn(fn_name = "fs-accessed")]
 fn fs_accessed(file_or_dir: String) -> LispResult<Expression> {
-    let file_or_dir = my_get_file(file_or_dir);
+    let file_or_dir = get_file(file_or_dir);
     get_file_time(file_or_dir, "fs-accessed", |md| md.accessed())
 }
 
@@ -744,7 +729,7 @@ fn random_name(prefix: &str, suffix: &str, len: i64) -> String {
 fn get_provided_or_default_temp(path: Option<String>, fn_name: &str) -> LispResult<PathBuf> {
     match path {
         None => Ok(temp_dir()),
-        Some(path) => match my_get_file(path) {
+        Some(path) => match get_file(path) {
             None => {
                 let msg = format!("{} unable to access provided file", fn_name);
                 return Err(LispError::new(msg));
@@ -787,43 +772,59 @@ fn create_temp_dir(
     }
 }
 
-fn get_temp_name_defaults<'a>(
-    environment: &'a mut Environment,
-    args: &'a mut dyn Iterator<Item = Expression>,
-) -> Result<(String, String, i64), LispError> {
-    let mut prefix = String::from("");
-    let mut suffix = String::from("");
-    let mut len = LEN;
-    if let Some(arg) = args.next() {
-        let exp = eval(environment, arg)?;
-        if let ExpEnum::String(s, _) = &exp.get().data {
-            prefix = s.parse().unwrap_or_default();
-            if let Some(arg) = args.next() {
-                let exp = eval(environment, arg)?;
-                if let ExpEnum::String(s, _) = &exp.get().data {
-                    suffix = s.parse().unwrap_or_default();
-                    if let Some(arg) = args.next() {
-                        let exp = eval(environment, arg)?;
-                        if let Ok(i) = exp.make_int(environment) {
-                            len = i;
-                        };
-                    };
-                };
-            };
-        };
-    };
-    Ok((prefix, suffix, len))
-}
-
-fn builtin_with_temp_dir(
+/// Usage: (with-temp (fn (x) (println \"given temp dir:\" x)) [\"optional-prefix\" \"optional-suffix\" length])
+///
+/// Takes a function that accepts a temporary directory. This directory will be recursively removed
+/// when the provided function is finished executing. Also accepts an optional prefix, an optional
+/// suffix, and an optional length for the random number of characters in the temporary directory
+/// created. Defaults to prefix of \".tmp\", no suffix, and five random characters.
+///
+/// Section: file
+///
+/// Example:
+/// (def fp nil)
+/// (with-temp (fn (tmp-dir)
+///     (let* ((tmp-file (str tmp-dir \"/sl-sh-tmp-file.txt\"))
+///         (a-file (open tmp-file :create :truncate)))
+///         (test::assert-true (fs-exists? tmp-file))
+///         (set! fp tmp-file)
+///         (close a-file))))
+/// (test::assert-false (nil? fp))
+/// (test::assert-false (fs-exists? fp))
+///
+/// (with-temp
+///     (fn (tmp)
+///         (test::assert-true (str-contains \"some-prefix\" tmp)))
+///     \"some-prefix\")
+///
+/// (with-temp
+///     (fn (tmp)
+///         (test::assert-true (str-contains \"some-prefix\" tmp))
+///         (test::assert-true (str-contains \"some-suffix\" tmp)))
+///     \"some-prefix\"
+///     \"some-suffix\")
+///
+/// (with-temp
+///     (fn (tmp)
+///         (test::assert-true (str-contains \"some-prefix\" tmp))
+///         (test::assert-true (str-contains \"some-suffix\" tmp))
+///         (test::assert-equal (length \"some-prefix0123456789some-suffix\") (length (fs-base tmp))))
+///     \"some-prefix\"
+///     \"some-suffix\"
+///     10)
+#[sl_sh_fn(fn_name = "with-temp", takes_env = true)]
+fn with_temp_dir(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
+    lambda_exp: Expression,
+    prefix: Option<String>,
+    suffix: Option<String>,
+    len: Option<i64>,
+) -> LispResult<Expression> {
     let fn_name = "with-temp";
-    let lambda_exp = param_eval(environment, args, fn_name)?;
+    let prefix = prefix.as_ref().map(|x| x.as_str()).unwrap_or_default();
+    let suffix = suffix.as_ref().map(|x| x.as_str()).unwrap_or_default();
+    let len = len.unwrap_or(LEN);
     let lambda_exp_d = &lambda_exp.get().data;
-    let (prefix, suffix, len) = get_temp_name_defaults(environment, args)?;
-    params_done(args, fn_name)?;
     match lambda_exp_d {
         ExpEnum::Lambda(_) => {
             let p = &temp_dir();
@@ -840,33 +841,22 @@ fn builtin_with_temp_dir(
             }
         }
         _ => {
-            let msg = format!("{} first argument must be function", fn_name);
+            let msg = format!("{} first argument must be a lambda", fn_name);
             Err(LispError::new(msg))
         }
     }
 }
 
-fn my_create_temp_file(
+fn create_temp_file(
     dir: PathBuf,
     prefix: &Option<String>,
     suffix: &Option<String>,
     len: Option<i64>,
     fn_name: &str,
 ) -> LispResult<PathBuf> {
-    //TODO LEN to i64
     let prefix = prefix.as_ref().map(|x| x.as_str()).unwrap_or_default();
     let suffix = suffix.as_ref().map(|x| x.as_str()).unwrap_or_default();
     let len = len.unwrap_or(LEN);
-    create_temp_file(dir, prefix, suffix, len, fn_name)
-}
-
-fn create_temp_file(
-    dir: PathBuf,
-    prefix: &str,
-    suffix: &str,
-    len: i64,
-    fn_name: &str,
-) -> Result<PathBuf, LispError> {
     let filename = random_name(prefix, suffix, len);
     let p = Path::new::<OsStr>(filename.as_ref());
     let file = dir.join(p);
@@ -922,7 +912,7 @@ fn get_temp_file(
 ) -> LispResult<Expression> {
     let fn_name = "get-temp-file";
     let dir = get_provided_or_default_temp(path, fn_name)?;
-    let file = my_create_temp_file(dir, &prefix, &suffix, len, fn_name)?;
+    let file = create_temp_file(dir, &prefix, &suffix, len, fn_name)?;
     if let Some(path) = file.as_path().to_str() {
         let path = Expression::alloc_data(ExpEnum::String(path.to_string().into(), None));
         Ok(path)
@@ -932,19 +922,64 @@ fn get_temp_file(
     }
 }
 
-fn builtin_with_temp_file(
+/// Usage: (with-temp-file (fn (x) (println \"given temp file:\" x)) [\"optional-prefix\" \"optional-suffix\" length])
+///
+/// Takes a function that accepts a temporary file. This file will be removed when the provided function
+/// is finished executing. Also accepts an optional prefix, an optional suffix, and an optional
+/// length for the random number of characters in the temporary file created. Defaults to prefix of
+/// \".tmp\", no suffix, and five random characters.
+///
+/// Section: file
+///
+/// Example:
+/// (def fp nil)
+/// (with-temp-file (fn (tmp-file)
+///     (let* ((a-file (open tmp-file :create :truncate)))
+///         (test::assert-true (fs-exists? tmp-file))
+///         (set! fp tmp-file)
+///         (close a-file))))
+/// (test::assert-false (nil? fp))
+/// (test::assert-false (fs-exists? fp))
+///
+/// (with-temp-file
+///     (fn (tmp)
+///         (test::assert-true (str-contains \"some-prefix\" tmp)))
+///     \"some-prefix\")
+///
+/// (with-temp-file
+///     (fn (tmp)
+///         (test::assert-true (str-contains \"some-prefix\" tmp))
+///         (test::assert-true (str-contains \"some-suffix\" tmp)))
+///     \"some-prefix\"
+///     \"some-suffix\")
+///
+/// (with-temp-file
+///     (fn (tmp)
+///         (test::assert-true (str-contains \"some-prefix\" tmp))
+///         (test::assert-true (str-contains \"some-suffix\" tmp))
+///         (test::assert-equal (length \"some-prefix0123456789some-suffix\") (length (fs-base tmp))))
+///     \"some-prefix\"
+///     \"some-suffix\"
+///     10)
+#[sl_sh_fn(fn_name = "with-temp-file", takes_env = true)]
+fn with_temp_file(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
+    lambda_exp: Expression,
+    prefix: Option<String>,
+    suffix: Option<String>,
+    len: Option<i64>,
+) -> LispResult<Expression> {
     let fn_name = "with-temp-file";
-    let lambda_exp = param_eval(environment, args, fn_name)?;
     let lambda_exp_d = &lambda_exp.get().data;
-    let (prefix, suffix, len) = get_temp_name_defaults(environment, args)?;
-    params_done(args, fn_name)?;
     match lambda_exp_d {
         ExpEnum::Lambda(_) => {
             let p = &temp_dir();
-            let dir = create_temp_dir(p, &prefix, &suffix, len, fn_name)?;
+            let dir = {
+                let prefix = prefix.as_ref().map(|x| x.as_str()).unwrap_or_default();
+                let suffix = suffix.as_ref().map(|x| x.as_str()).unwrap_or_default();
+                let len = len.unwrap_or(LEN);
+                create_temp_dir(p, &prefix, &suffix, len, fn_name)?
+            };
             let file = create_temp_file(dir, &prefix, &suffix, len, fn_name)?;
             if let Some(path) = file.as_path().to_str() {
                 let path = Expression::alloc_data(ExpEnum::String(path.to_string().into(), None));
@@ -958,7 +993,7 @@ fn builtin_with_temp_file(
             }
         }
         _ => {
-            let msg = format!("{} first argument must be function", fn_name);
+            let msg = format!("{} first argument must be a lambda", fn_name);
             Err(LispError::new(msg))
         }
     }
@@ -1036,98 +1071,7 @@ Example:
     intern_fs_accessed(interner, data);
     intern_get_temp(interner, data);
     intern_get_temp_file(interner, data);
-    data.insert(
-        interner.intern("with-temp-file"),
-        Expression::make_function(
-            builtin_with_temp_file,
-            "Usage: (with-temp-file (fn (x) (println \"given temp file:\" x)) [\"optional-prefix\" \"optional-suffix\" length])
-
-Takes a function that accepts a temporary file. This file will be removed when the provided function
-is finished executing. Also accepts an optional prefix, an optional suffix, and an optional
-length for the random number of characters in the temporary file created. Defaults to prefix of
-\".tmp\", no suffix, and five random characters.
-
-Section: file
-
-Example:
-(def fp nil)
-(with-temp-file (fn (tmp-file)
-    (let* ((a-file (open tmp-file :create :truncate)))
-        (test::assert-true (fs-exists? tmp-file))
-        (set! fp tmp-file)
-        (close a-file))))
-(test::assert-false (nil? fp))
-(test::assert-false (fs-exists? fp))
-
-(with-temp-file
-    (fn (tmp)
-        (test::assert-true (str-contains \"some-prefix\" tmp)))
-    \"some-prefix\")
-
-(with-temp-file
-    (fn (tmp)
-        (test::assert-true (str-contains \"some-prefix\" tmp))
-        (test::assert-true (str-contains \"some-suffix\" tmp)))
-    \"some-prefix\"
-    \"some-suffix\")
-
-(with-temp-file
-    (fn (tmp)
-        (test::assert-true (str-contains \"some-prefix\" tmp))
-        (test::assert-true (str-contains \"some-suffix\" tmp))
-        (test::assert-equal (length \"some-prefix0123456789some-suffix\") (length (fs-base tmp))))
-    \"some-prefix\"
-    \"some-suffix\"
-    10)
-",
-        ),
-    );
-    data.insert(
-        interner.intern("with-temp"),
-        Expression::make_function(
-            builtin_with_temp_dir,
-            "Usage: (with-temp (fn (x) (println \"given temp dir:\" x)) [\"optional-prefix\" \"optional-suffix\" length])
-
-Takes a function that accepts a temporary directory. This directory will be recursively removed
-when the provided function is finished executing. Also accepts an optional prefix, an optional
-suffix, and an optional length for the random number of characters in the temporary directory
-created. Defaults to prefix of \".tmp\", no suffix, and five random characters.
-
-Section: file
-
-Example:
-(def fp nil)
-(with-temp (fn (tmp-dir)
-    (let* ((tmp-file (str tmp-dir \"/sl-sh-tmp-file.txt\"))
-        (a-file (open tmp-file :create :truncate)))
-        (test::assert-true (fs-exists? tmp-file))
-        (set! fp tmp-file)
-        (close a-file))))
-(test::assert-false (nil? fp))
-(test::assert-false (fs-exists? fp))
-
-(with-temp
-    (fn (tmp)
-        (test::assert-true (str-contains \"some-prefix\" tmp)))
-    \"some-prefix\")
-
-(with-temp
-    (fn (tmp)
-        (test::assert-true (str-contains \"some-prefix\" tmp))
-        (test::assert-true (str-contains \"some-suffix\" tmp)))
-    \"some-prefix\"
-    \"some-suffix\")
-
-(with-temp
-    (fn (tmp)
-        (test::assert-true (str-contains \"some-prefix\" tmp))
-        (test::assert-true (str-contains \"some-suffix\" tmp))
-        (test::assert-equal (length \"some-prefix0123456789some-suffix\") (length (fs-base tmp))))
-    \"some-prefix\"
-    \"some-suffix\"
-    10)
-",
-        ),
-    );
+    intern_with_temp_file(interner, data);
+    intern_with_temp_dir(interner, data);
     intern_builtin_temp_dir(interner, data);
 }
