@@ -20,7 +20,7 @@ use crate::eval::*;
 use crate::interner::*;
 use crate::reader::*;
 use crate::types::*;
-use crate::{get_file, param_eval, params_done, LispResult};
+use crate::{get_file, LispResult};
 
 fn builtin_open(
     environment: &mut Environment,
@@ -504,14 +504,24 @@ fn builtin_write_string(
     ))
 }
 
-fn builtin_rm(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
+/// Usage: (fs-rm \"/dir/or/file/to/remove\")
+///
+/// Takes a file or directory as a string and removes it. Works recursively for directories.
+///
+/// Section: file
+///
+/// Example:
+/// (def fp nil)
+/// (let* ((a-file (get-temp-file)))
+///         (test::assert-true (fs-exists? a-file))
+///         (set! fp a-file)
+///         (fs-rm a-file)))
+/// (test::assert-false (nil? fp))
+/// (test::assert-false (fs-exists? fp))
+#[sl_sh_fn(fn_name = "fs-rm")]
+fn fs_rm(path: String) -> LispResult<Expression> {
     let fn_name = "fs-rm";
-    let fp = param_eval(environment, args, fn_name)?;
-    params_done(args, fn_name)?;
-    if let Some(path) = get_file(environment, fp) {
+    if let Some(path) = get_file(path) {
         let p = path.as_path();
         if p.exists() {
             let removed = if p.is_dir() {
@@ -732,25 +742,5 @@ Example:
 ",
         ),
     );
-    data.insert(
-        interner.intern("fs-rm"),
-        Expression::make_function(
-            builtin_rm,
-            "Usage: (fs-rm \"/dir/or/file/to/remove\")
-
-Takes a file or directory as a string and removes it. Works recursively for directories.
-
-Section: file
-
-Example:
-(def fp nil)
-(let* ((a-file (get-temp-file)))
-        (test::assert-true (fs-exists? a-file))
-        (set! fp a-file)
-        (fs-rm a-file)))
-(test::assert-false (nil? fp))
-(test::assert-false (fs-exists? fp))
-",
-        ),
-    );
+    intern_fs_rm(interner, data);
 }
