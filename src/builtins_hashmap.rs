@@ -7,7 +7,7 @@ use crate::environment::*;
 use crate::eval::*;
 use crate::interner::*;
 use crate::types::*;
-use crate::{try_inner_hash_map_mut, LispResult};
+use crate::{try_inner_hash_map_mut, LispResult, VarArgs};
 
 #[allow(clippy::ptr_arg)]
 pub(crate) fn cow_to_ref(environment: &mut Environment, input: &Cow<'static, str>) -> &'static str {
@@ -17,53 +17,64 @@ pub(crate) fn cow_to_ref(environment: &mut Environment, input: &Cow<'static, str
     }
 }
 
-fn build_map(
-    environment: &mut Environment,
-    mut map: HashMap<&'static str, Expression>,
-    assocs: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    for key_val in assocs {
-        if let ExpEnum::Pair(key, val) = &key_val.get().data {
-            match &key.get().data {
-                ExpEnum::Symbol(sym, _) => map.insert(sym, val.clone()),
-                ExpEnum::String(s, _) => map.insert(cow_to_ref(environment, s), val.clone()),
-                ExpEnum::Char(ch) => map.insert(cow_to_ref(environment, ch), val.clone()),
-                _ => {
-                    return Err(LispError::new(
-                        "make-hash key can only be a symbol or string",
-                    ))
-                }
-            };
-        } else {
-            return Err(LispError::new(
-                "make-hash each association must be a pair (key . val)",
-            ));
+/// Usage: (make-hash associations?)
+///
+/// Make a new hash map.
+///
+/// If associations is provided (makes an empty map if not) then it is a list of
+/// pairs (key . value) that populate the intial map.  Neither key nor value in the
+/// associations will be evaluated.
+///
+/// Section: hashmap
+///
+/// Example:
+/// (def tst-hash (make-hash))
+/// (test::assert-equal 0 (length (hash-keys tst-hash)))
+/// (def tst-hash (make-hash ()))
+/// (test::assert-equal 0 (length (hash-keys tst-hash)))
+/// (def tst-hash (make-hash nil))
+/// (test::assert-equal 0 (length (hash-keys tst-hash)))
+/// (def tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\"))))
+/// (test::assert-equal 3 (length (hash-keys tst-hash)))
+/// (test::assert-equal \"val one\" (hash-get tst-hash :key1))
+/// (test::assert-equal \"val two\" (hash-get tst-hash 'key2))
+/// (test::assert-equal \"val three\" (hash-get tst-hash \"key3\"))
+/// (def tst-hash (make-hash '#((:keyv1 . \"val one\")(keyv2 . \"val two\")(\"keyv3\" . \"val three\"))))
+/// (test::assert-equal 3 (length (hash-keys tst-hash)))
+/// (test::assert-equal \"val one\" (hash-get tst-hash :keyv1))
+/// (test::assert-equal \"val two\" (hash-get tst-hash 'keyv2))
+/// (test::assert-equal \"val three\" (hash-get tst-hash \"keyv3\"))
+/// ; Not in test below that tst-hash-val is NOT evaluated so the symbol is the value.
+/// (def tst-hash-val \"some val\")
+/// (def tst-hash (make-hash '#((:keyv1 . \"val one\")(:keyv2 . \"val two\")(:keyv3 . tst-hash-val))))
+/// (test::assert-equal 3 (length (hash-keys tst-hash)))
+/// (test::assert-equal \"val one\" (hash-get tst-hash :keyv1))
+/// (test::assert-equal \"val two\" (hash-get tst-hash :keyv2))
+/// (test::assert-equal 'tst-hash-val (hash-get tst-hash :keyv3))
+#[sl_sh_fn(fn_name = "make-hash", takes_env = true)]
+fn make_hash(environment: &mut Environment, assocs: Option<Expression>) -> LispResult<Expression> {
+    let mut map: HashMap<&'static str, Expression> = HashMap::new();
+    if let Some(assocs) = assocs {
+        for key_val in assocs.iter() {
+            if let ExpEnum::Pair(key, val) = &key_val.get().data {
+                match &key.get().data {
+                    ExpEnum::Symbol(sym, _) => map.insert(sym, val.clone()),
+                    ExpEnum::String(s, _) => map.insert(cow_to_ref(environment, s), val.clone()),
+                    ExpEnum::Char(ch) => map.insert(cow_to_ref(environment, ch), val.clone()),
+                    _ => {
+                        return Err(LispError::new(
+                            "make-hash key can only be a symbol or string",
+                        ))
+                    }
+                };
+            } else {
+                return Err(LispError::new(
+                    "make-hash each association must be a pair (key . val)",
+                ));
+            }
         }
     }
     Ok(Expression::alloc_data(ExpEnum::HashMap(map)))
-}
-
-fn builtin_make_hash(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    let map: HashMap<&'static str, Expression> = HashMap::new();
-    if let Some(assocs) = args.next() {
-        if args.next().is_none() {
-            let assocs = eval(environment, assocs)?;
-            let assocs_d = assocs.get();
-            match &assocs_d.data {
-                ExpEnum::Pair(_, _) => build_map(environment, map, &mut assocs.iter()),
-                ExpEnum::Nil => Ok(Expression::alloc_data(ExpEnum::HashMap(map))),
-                ExpEnum::Vector(_) => build_map(environment, map, &mut assocs.iter()),
-                _ => Err(LispError::new("make-hash takes a sequence")),
-            }
-        } else {
-            Err(LispError::new("make-hash takes one form, a sequence"))
-        }
-    } else {
-        Ok(Expression::alloc_data(ExpEnum::HashMap(map)))
-    }
 }
 
 /// Usage: (hash-set! hashmap key value)
@@ -280,47 +291,7 @@ pub fn add_hash_builtins<S: BuildHasher>(
     interner: &mut Interner,
     data: &mut HashMap<&'static str, (Expression, String), S>,
 ) {
-    data.insert(
-        interner.intern("make-hash"),
-        Expression::make_function(
-            builtin_make_hash,
-            "Usage: (make-hash associations?)
-
-Make a new hash map.
-
-If associations is provided (makes an empty map if not) then it is a list of
-pairs (key . value) that populate the intial map.  Neither key nor value in the
-associations will be evaluated.
-
-Section: hashmap
-
-Example:
-(def tst-hash (make-hash))
-(test::assert-equal 0 (length (hash-keys tst-hash)))
-(def tst-hash (make-hash ()))
-(test::assert-equal 0 (length (hash-keys tst-hash)))
-(def tst-hash (make-hash nil))
-(test::assert-equal 0 (length (hash-keys tst-hash)))
-(def tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\"))))
-(test::assert-equal 3 (length (hash-keys tst-hash)))
-(test::assert-equal \"val one\" (hash-get tst-hash :key1))
-(test::assert-equal \"val two\" (hash-get tst-hash 'key2))
-(test::assert-equal \"val three\" (hash-get tst-hash \"key3\"))
-(def tst-hash (make-hash '#((:keyv1 . \"val one\")(keyv2 . \"val two\")(\"keyv3\" . \"val three\"))))
-(test::assert-equal 3 (length (hash-keys tst-hash)))
-(test::assert-equal \"val one\" (hash-get tst-hash :keyv1))
-(test::assert-equal \"val two\" (hash-get tst-hash 'keyv2))
-(test::assert-equal \"val three\" (hash-get tst-hash \"keyv3\"))
-; Not in test below that tst-hash-val is NOT evaluated so the symbol is the value.
-(def tst-hash-val \"some val\")
-(def tst-hash (make-hash '#((:keyv1 . \"val one\")(:keyv2 . \"val two\")(:keyv3 . tst-hash-val))))
-(test::assert-equal 3 (length (hash-keys tst-hash)))
-(test::assert-equal \"val one\" (hash-get tst-hash :keyv1))
-(test::assert-equal \"val two\" (hash-get tst-hash :keyv2))
-(test::assert-equal 'tst-hash-val (hash-get tst-hash :keyv3))
-"
-        ),
-    );
+    intern_make_hash(interner, data);
     intern_hash_set(interner, data);
     intern_hash_remove(interner, data);
     data.insert(
