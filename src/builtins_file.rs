@@ -45,10 +45,26 @@ fn cd_expand_all_dots(cd: String) -> String {
     }
 }
 
-fn builtin_cd(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
+/// Usage: (cd dir-to-change-to)
+///
+/// Change directory.
+///
+/// Section: file
+///
+/// Example:
+/// (syscall 'mkdir "/tmp/tst-fs-cd")
+/// (syscall 'touch "/tmp/tst-fs-cd/fs-cd-marker")
+/// (test::assert-false (fs-exists? "fs-cd-marker"))
+/// (pushd "/tmp/tst-fs-cd")
+/// (root::cd "/tmp")
+/// (root::cd "/tmp/tst-fs-cd")
+/// (test::assert-true (fs-exists? "fs-cd-marker"))
+/// (syscall 'rm "/tmp/tst-fs-cd/fs-cd-marker")
+/// (popd)
+/// (syscall 'rmdir "/tmp/tst-fs-cd")
+#[sl_sh_fn(fn_name = "cd", takes_env = true)]
+fn cd(environment: &mut Environment, arg: Option<String>) -> LispResult<Expression> {
+    let fn_name = "cd";
     let home = match env::var("HOME") {
         Ok(val) => val,
         Err(_) => "/".to_string(),
@@ -57,50 +73,17 @@ fn builtin_cd(
         Ok(val) => val,
         Err(_) => home.to_string(),
     };
-    let new_dir = if let Some(arg) = args.next() {
-        if args.next().is_none() {
-            let arg_d = arg.get();
-            let new_arg = match &arg_d.data {
-                ExpEnum::Symbol(s, _) => match get_expression(environment, arg.clone()) {
-                    Some(exp) => match &exp.get().data {
-                        ExpEnum::Function(_) => eval(
-                            environment,
-                            Expression::alloc_data(ExpEnum::String((*s).into(), None)),
-                        )?,
-                        ExpEnum::Lambda(_) => eval(
-                            environment,
-                            Expression::alloc_data(ExpEnum::String((*s).into(), None)),
-                        )?,
-                        ExpEnum::Macro(_) => eval(
-                            environment,
-                            Expression::alloc_data(ExpEnum::String((*s).into(), None)),
-                        )?,
-                        _ => {
-                            drop(arg_d);
-                            eval(environment, &arg)?
-                        }
-                    },
-                    _ => {
-                        drop(arg_d);
-                        eval(environment, &arg)?
-                    }
-                },
-                _ => {
-                    drop(arg_d);
-                    eval(environment, &arg)?
-                }
-            }
-            .as_string(environment)?;
+    let new_dir = match arg {
+        Some(arg) => {
+            let new_arg =
+                Expression::alloc_data(ExpEnum::String(arg.into(), None)).as_string(environment)?;
             if let Some(h) = expand_tilde(&new_arg) {
                 h
             } else {
                 new_arg
             }
-        } else {
-            return Err(LispError::new("cd can not have more then one form"));
         }
-    } else {
-        home
+        None => home,
     };
     let new_dir = if new_dir == "-" { &old_dir } else { &new_dir };
     let new_dir = cd_expand_all_dots(new_dir.to_string());
@@ -109,7 +92,7 @@ fn builtin_cd(
         env::set_var("OLDPWD", oldpwd);
     }
     if let Err(e) = env::set_current_dir(&root) {
-        eprintln!("Error changing to {}, {}", root.display(), e);
+        eprintln!("{} Error changing to {}, {}", fn_name, root.display(), e);
         Ok(Expression::make_nil())
     } else {
         env::set_var("PWD", env::current_dir()?);
@@ -1034,30 +1017,7 @@ pub fn add_file_builtins<S: BuildHasher>(
     interner: &mut Interner,
     data: &mut HashMap<&'static str, (Expression, String), S>,
 ) {
-    data.insert(
-        interner.intern("cd"),
-        Expression::make_function(
-            builtin_cd,
-            r#"Usage: (cd dir-to-change-to)
-
-Change directory.
-
-Section: file
-
-Example:
-(syscall 'mkdir "/tmp/tst-fs-cd")
-(syscall 'touch "/tmp/tst-fs-cd/fs-cd-marker")
-(test::assert-false (fs-exists? "fs-cd-marker"))
-(pushd "/tmp/tst-fs-cd")
-(root::cd "/tmp")
-(root::cd "/tmp/tst-fs-cd")
-(test::assert-true (fs-exists? "fs-cd-marker"))
-(syscall 'rm "/tmp/tst-fs-cd/fs-cd-marker")
-(popd)
-(syscall 'rmdir "/tmp/tst-fs-cd")
-"#,
-        ),
-    );
+    intern_cd(interner, data);
     intern_path_exists(interner, data);
     intern_is_file(interner, data);
     intern_is_dir(interner, data);
