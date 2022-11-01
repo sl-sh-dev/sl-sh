@@ -4,7 +4,6 @@
 (ns-import 'shell)
 (ns-import 'test)
 
-;;TODO gpwclark remove this error stack on call when "(error-stack-on)" becomes an environment variable
 (error-stack-on)
 
 (def *tests-dir* "tests")

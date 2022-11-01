@@ -294,7 +294,6 @@ where
 
     fn human_readable_dest_type(&self) -> String;
 
-    //TODO take argument position?
     fn try_into_for(self, fn_name: &str) -> Result<T, LispError> {
         let hr_src_type = self.to_string();
         let hr_dest_type = self.human_readable_dest_type();
@@ -1313,7 +1312,6 @@ mod test {
         .unwrap();
     }
 
-    //TODO need all LispError tests (unreachable!?)
     #[test]
     fn test_all_optional() {
         let two_opts = vec![
