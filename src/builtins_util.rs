@@ -445,9 +445,7 @@ impl TryFrom<Expression> for (Expression, Expression) {
         let data = &value.get().data;
         let data_type = data.to_string();
         match data {
-            ExpEnum::Pair(e0, e1) => {
-                Ok((e0.clone(), e1.clone()))
-            }
+            ExpEnum::Pair(e0, e1) => Ok((e0.clone(), e1.clone())),
             _ => {
                 let reason = format!("Expected Pair got {}.", data_type);
                 Err(LispError::new(reason))
@@ -495,12 +493,14 @@ macro_rules! try_inner_int {
     ($fn_name:ident, $expression:expr, $name:ident, $eval:expr) => {{
         use $crate::ErrorStrings;
         match $expression.get().data {
-            ExpEnum::Int($name)=> $eval,
-            _ => return Err( LispError::new(ErrorStrings::mismatched_type(
-                $fn_name,
-                &ExpEnum::Int(Default::default()).to_string(), 
-                &$expression.to_string(),
-            )))
+            ExpEnum::Int($name) => $eval,
+            _ => {
+                return Err(LispError::new(ErrorStrings::mismatched_type(
+                    $fn_name,
+                    &ExpEnum::Int(Default::default()).to_string(),
+                    &$expression.to_string(),
+                )))
+            }
         }
     }};
 }
@@ -510,19 +510,23 @@ macro_rules! try_inner_file {
     ($fn_name:ident, $expression:expr, $name:ident, $eval:expr) => {{
         use $crate::ErrorStrings;
         match &$expression.get().data {
-            ExpEnum::File($name)=> {
+            ExpEnum::File($name) => {
                 let $name = $name.clone();
                 $eval
-            },
-            data => return Err( LispError::new(ErrorStrings::mismatched_type(
-                $fn_name,
-                &ExpEnum::File(std::rc::Rc::new(std::cell::RefCell::new($crate::types::FileState::Closed))).to_string(),
-                &data.to_string(),
-            )))
+            }
+            data => {
+                return Err(LispError::new(ErrorStrings::mismatched_type(
+                    $fn_name,
+                    &ExpEnum::File(std::rc::Rc::new(std::cell::RefCell::new(
+                        $crate::types::FileState::Closed,
+                    )))
+                    .to_string(),
+                    &data.to_string(),
+                )))
+            }
         }
     }};
 }
-
 
 #[macro_export]
 macro_rules! try_inner_float {
@@ -530,12 +534,14 @@ macro_rules! try_inner_float {
         use $crate::ErrorStrings;
         let exp_d = $expression.get();
         match &exp_d.data {
-            ExpEnum::Float($name)=> $eval,
-            data => return Err( LispError::new(ErrorStrings::mismatched_type(
-                $fn_name,
-                &ExpEnum::Float(Default::default()).to_string(), 
-                &data.to_string(),
-            )))
+            ExpEnum::Float($name) => $eval,
+            data => {
+                return Err(LispError::new(ErrorStrings::mismatched_type(
+                    $fn_name,
+                    &ExpEnum::Float(Default::default()).to_string(),
+                    &data.to_string(),
+                )))
+            }
         }
     }};
 }
@@ -544,8 +550,8 @@ macro_rules! try_inner_float {
 macro_rules! is_sequence {
     ($expression:expr) => {{
         match &$expression.get().data {
-            ExpEnum::Pair(_, _)=> true,
-            ExpEnum::Vector(_)=> true,
+            ExpEnum::Pair(_, _) => true,
+            ExpEnum::Vector(_) => true,
             ExpEnum::Nil => true,
             _ => false,
         }
@@ -557,12 +563,18 @@ macro_rules! try_inner_pair {
     ($fn_name:ident, $expression:expr, $name0:ident, $name1:ident, $eval:expr) => {{
         use $crate::ErrorStrings;
         match $expression.get().data {
-            ExpEnum::Pair($name0, $name1)=> $eval,
-            _ => return Err( $crate::LispError::new(ErrorStrings::mismatched_type(
-                $fn_name,
-                &ExpEnum::Pair($crate::Expression::make_nil(), $crate::Expression::make_nil()).to_string(),
-                &$expression.to_string(),
-            )))
+            ExpEnum::Pair($name0, $name1) => $eval,
+            _ => {
+                return Err($crate::LispError::new(ErrorStrings::mismatched_type(
+                    $fn_name,
+                    &ExpEnum::Pair(
+                        $crate::Expression::make_nil(),
+                        $crate::Expression::make_nil(),
+                    )
+                    .to_string(),
+                    &$expression.to_string(),
+                )))
+            }
         }
     }};
 }
@@ -573,12 +585,14 @@ macro_rules! try_inner_hash_map {
         use $crate::ErrorStrings;
         let exp_d = $expression.get();
         match &exp_d.data {
-            ExpEnum::HashMap($name)=> $eval,
-            _ => return Err( $crate::LispError::new(ErrorStrings::mismatched_type(
-                $fn_name,
-                &ExpEnum::HashMap(Default::default()).to_string(),
-                &$expression.to_string(),
-            )))
+            ExpEnum::HashMap($name) => $eval,
+            _ => {
+                return Err($crate::LispError::new(ErrorStrings::mismatched_type(
+                    $fn_name,
+                    &ExpEnum::HashMap(Default::default()).to_string(),
+                    &$expression.to_string(),
+                )))
+            }
         }
     }};
 }
@@ -588,12 +602,14 @@ macro_rules! try_inner_hash_map_mut {
     ($fn_name:ident, $expression:expr, $name:ident, $eval:expr) => {{
         use $crate::ErrorStrings;
         match &mut $expression.get_mut().data {
-            ExpEnum::HashMap(ref mut $name)=> $eval,
-            _ => return Err( $crate::LispError::new(ErrorStrings::mismatched_type(
-                $fn_name,
-                &ExpEnum::HashMap(Default::default()).to_string(), 
-                &$expression.to_string(),
-            )))
+            ExpEnum::HashMap(ref mut $name) => $eval,
+            _ => {
+                return Err($crate::LispError::new(ErrorStrings::mismatched_type(
+                    $fn_name,
+                    &ExpEnum::HashMap(Default::default()).to_string(),
+                    &$expression.to_string(),
+                )))
+            }
         }
     }};
 }
@@ -603,17 +619,21 @@ macro_rules! try_inner_string {
     ($fn_name:ident, $expression:expr, $name:ident, $eval:expr) => {{
         use $crate::ErrorStrings;
         match &$expression.get().data {
-            ExpEnum::String($name, _)=> $eval,
-            ExpEnum::Symbol($name, _)=> $eval,
-            ExpEnum::Char($name)=> $eval,
-            _ => return Err( $crate::LispError::new(ErrorStrings::mismatched_type(
-                $fn_name,
-                &format!("{}, {}, or {}, ",
-                    ExpEnum::String(Default::default(), Default::default()).to_string(),
-                    ExpEnum::Symbol(Default::default(), Default::default()).to_string(),
-                    ExpEnum::Char(Default::default()).to_string()),
-                &$expression.to_string(),
-            )))
+            ExpEnum::String($name, _) => $eval,
+            ExpEnum::Symbol($name, _) => $eval,
+            ExpEnum::Char($name) => $eval,
+            _ => {
+                return Err($crate::LispError::new(ErrorStrings::mismatched_type(
+                    $fn_name,
+                    &format!(
+                        "{}, {}, or {}, ",
+                        ExpEnum::String(Default::default(), Default::default()).to_string(),
+                        ExpEnum::Symbol(Default::default(), Default::default()).to_string(),
+                        ExpEnum::Char(Default::default()).to_string()
+                    ),
+                    &$expression.to_string(),
+                )))
+            }
         }
     }};
 }
@@ -714,7 +734,7 @@ fn get_args_optional_aware(
                     // enforced at compile time.
                     ArgVal::VarArgs => {
                         let mut exps = vec![exp];
-                        for exp  in args_iter.by_ref() {
+                        for exp in args_iter.by_ref() {
                             exps.push(exp);
                         }
                         parsed_args.push(ArgType::VarArgs(exps));
@@ -1067,7 +1087,7 @@ mod test {
                         None => {
                             let int_1 = None;
                             optional_int_2_float(int_0, int_1)
-                        },
+                        }
                         Some(exp_1) => {
                             let float = ret_err_exp_enum!(
                                 exp_1.get().data,
@@ -1441,11 +1461,10 @@ mod test {
     }
 
     fn sample_builtin_int_2_float(arg_0: ArgType, arg_1: ArgType) -> Result<Expression, LispError> {
-        // Ok(Expression::make_false());
-        match arg_1 { 
+        match arg_1 {
             ArgType::Exp (arg_1) => match arg_1.get().data {
                 ExpEnum::Int(arg_1) => {
-                    match arg_0 { 
+                    match arg_0 {
                         ArgType::Exp(arg_0) => match arg_0.get().data {
                             ExpEnum::Int (arg_0) => {
                                 int_2_float (arg_0 , arg_1).map(Into :: into)
