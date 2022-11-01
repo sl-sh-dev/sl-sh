@@ -7,7 +7,7 @@ use crate::environment::*;
 use crate::eval::*;
 use crate::interner::*;
 use crate::types::*;
-use crate::{try_inner_hash_map_mut, LispResult, VarArgs};
+use crate::{try_inner_hash_map_mut, LispResult};
 
 #[allow(clippy::ptr_arg)]
 pub(crate) fn cow_to_ref(environment: &mut Environment, input: &Cow<'static, str>) -> &'static str {
