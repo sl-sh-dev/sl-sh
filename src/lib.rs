@@ -1,9 +1,7 @@
-use std::fmt::{Display, Formatter};
-//TODO why am I using these __private versions, is it
-// just to skip out on some annoying .into()'s on TokenStream2
 use quote::quote;
 use quote::ToTokens;
 use quote::__private::TokenStream;
+use std::fmt::{Display, Formatter};
 use syn::__private::{Span, TokenStream2};
 use syn::spanned::Spanned;
 use syn::{
@@ -1679,24 +1677,6 @@ mod test {
 }
 
 //TODO
-//  - use takes-env
-//      - builtins_hashmap.rs
-//          + builtin_make_hash
-//  - functions that return optional.
 //  - functions that return Values.
-//  - use Option-al arguments
-//      - builtins_file.rs
-//          + builtin_get_temp_file
-//          + builtin_with_temp_dir
-//      - builtins_hashmap.rs
-//          + builtin_hash_get
-//  - use variadic functions
-//      - builtins.rs
-//          + builtin_apply
-//          + builtin_unwind_protect
-//      - builtins_types.rs
-//          + builtin_to_symbol
 // tuple return types?
 // test cases
-// - returns Result<()>
-// -  returns Option<()>

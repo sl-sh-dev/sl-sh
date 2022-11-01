@@ -94,9 +94,8 @@ Limitations
 6. Using a `Vec<T>` as a parameter corresponds to receiving an `Expression` that evaluates to
     `ExpEnum::Nil`/`Pair`/`Vector`.
 7. `Option<T>` types are supported but those arguments must be last (but can be before one `VarArgs<T>`).
-8. Tuples are supported but if they are in a `Vec<(U, T)>` or `VarArgs<(U, T)>` both
-    U and T must implement `TryIntoExpression` in order to turn each `Expression` into a `Vec`.
-9. TODO are Vec of any length tuples suppported?
+8. Tuples are supported but if they are in a `Vec<(U, T, ...)>` or `VarArgs<(U, T, ..)>` but
+    all tuple members must implement `TryIntoExpression` in order to turn each `Expression` into a `Vec`.
 
 Example
 -------
