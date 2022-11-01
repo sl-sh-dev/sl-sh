@@ -625,21 +625,21 @@ pub enum ArgType {
     VarArgs(Vec<Expression>),
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum ArgVal {
     Value,
     Optional,
     VarArgs,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum ArgPassingStyle {
     Move,
     Reference,
     MutReference,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Arg {
     pub val: ArgVal,
     pub passing_style: ArgPassingStyle,

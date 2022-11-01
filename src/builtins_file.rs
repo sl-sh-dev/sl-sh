@@ -689,8 +689,8 @@ fn get_temp(
 ) -> LispResult<Expression> {
     let fn_name = "get-temp";
     let dir = get_provided_or_default_temp(path, fn_name)?;
-    let prefix = prefix.as_ref().map(|x| x.as_str()).unwrap_or_default();
-    let suffix = suffix.as_ref().map(|x| x.as_str()).unwrap_or_default();
+    let prefix = prefix.as_deref().unwrap_or_default();
+    let suffix = suffix.as_deref().unwrap_or_default();
     let len = len.unwrap_or(LEN);
     let dir = create_temp_dir(dir.as_path(), prefix, suffix, len, fn_name)?;
     if let Some(path) = dir.to_str() {
@@ -705,7 +705,7 @@ fn get_temp(
 fn random_name(prefix: &str, suffix: &str, len: i64) -> String {
     let prefix = if prefix.is_empty() { ".tmp" } else { prefix };
     let mut rng = rand::thread_rng();
-    let name = rand_alphanumeric_str(len.abs() as u64, &mut rng);
+    let name = rand_alphanumeric_str(len.unsigned_abs() as u64, &mut rng);
     format!("{}{}{}", prefix, name, suffix)
 }
 
@@ -715,7 +715,7 @@ fn get_provided_or_default_temp(path: Option<String>, fn_name: &str) -> LispResu
         Some(path) => match get_file(path) {
             None => {
                 let msg = format!("{} unable to access provided file", fn_name);
-                return Err(LispError::new(msg));
+                Err(LispError::new(msg))
             }
             Some(dir) => {
                 let p = dir.as_path();
@@ -726,7 +726,7 @@ fn get_provided_or_default_temp(path: Option<String>, fn_name: &str) -> LispResu
                         "{} unable to provide temporary file in provided directory",
                         fn_name
                     );
-                    return Err(LispError::new(msg));
+                    Err(LispError::new(msg))
                 }
             }
         },
@@ -804,14 +804,14 @@ fn with_temp_dir(
     len: Option<i64>,
 ) -> LispResult<Expression> {
     let fn_name = "with-temp";
-    let prefix = prefix.as_ref().map(|x| x.as_str()).unwrap_or_default();
-    let suffix = suffix.as_ref().map(|x| x.as_str()).unwrap_or_default();
+    let prefix = prefix.as_deref().unwrap_or_default();
+    let suffix = suffix.as_deref().unwrap_or_default();
     let len = len.unwrap_or(LEN);
     let lambda_exp_d = &lambda_exp.get().data;
     match lambda_exp_d {
         ExpEnum::Lambda(_) => {
             let p = &temp_dir();
-            let dir = create_temp_dir(p, &prefix, &suffix, len, fn_name)?;
+            let dir = create_temp_dir(p, prefix, suffix, len, fn_name)?;
             if let Some(path) = dir.as_path().to_str() {
                 let path = Expression::alloc_data(ExpEnum::String(path.to_string().into(), None));
                 let mut args = iter::once(path);
@@ -958,10 +958,10 @@ fn with_temp_file(
         ExpEnum::Lambda(_) => {
             let p = &temp_dir();
             let dir = {
-                let prefix = prefix.as_ref().map(|x| x.as_str()).unwrap_or_default();
-                let suffix = suffix.as_ref().map(|x| x.as_str()).unwrap_or_default();
+                let prefix = prefix.as_deref().unwrap_or_default();
+                let suffix = suffix.as_deref().unwrap_or_default();
                 let len = len.unwrap_or(LEN);
-                create_temp_dir(p, &prefix, &suffix, len, fn_name)?
+                create_temp_dir(p, prefix, suffix, len, fn_name)?
             };
             let file = create_temp_file(dir, &prefix, &suffix, len, fn_name)?;
             if let Some(path) = file.as_path().to_str() {

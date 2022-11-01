@@ -1158,13 +1158,11 @@ where
                 let mut sym = Symbol(*str, loc.clone());
                 fun(&mut sym)
             }
-            _ => {
-                return Err(LispError::new(ErrorStrings::mismatched_type(
-                    fn_name,
-                    &ExpEnum::Symbol(Default::default(), SymLoc::None).to_string(),
-                    &got,
-                )))
-            }
+            _ => Err(LispError::new(ErrorStrings::mismatched_type(
+                fn_name,
+                &ExpEnum::Symbol(Default::default(), SymLoc::None).to_string(),
+                &got,
+            ))),
         }
     }
 }
@@ -1180,13 +1178,11 @@ where
                 let sym = Symbol(*str, loc.clone());
                 fun(&sym)
             }
-            _ => {
-                return Err(LispError::new(ErrorStrings::mismatched_type(
-                    fn_name,
-                    &ExpEnum::Symbol(Default::default(), SymLoc::None).to_string(),
-                    &got,
-                )))
-            }
+            _ => Err(LispError::new(ErrorStrings::mismatched_type(
+                fn_name,
+                &ExpEnum::Symbol(Default::default(), SymLoc::None).to_string(),
+                &got,
+            ))),
         }
     }
 }
@@ -1202,13 +1198,11 @@ where
                 let sym = Symbol(*str, loc.clone());
                 fun(sym)
             }
-            _ => {
-                return Err(LispError::new(ErrorStrings::mismatched_type(
-                    fn_name,
-                    &ExpEnum::Symbol(Default::default(), SymLoc::None).to_string(),
-                    &got,
-                )))
-            }
+            _ => Err(LispError::new(ErrorStrings::mismatched_type(
+                fn_name,
+                &ExpEnum::Symbol(Default::default(), SymLoc::None).to_string(),
+                &got,
+            ))),
         }
     }
 }
@@ -1273,7 +1267,7 @@ where
     F: FnOnce(&str) -> LispResult<Expression>,
 {
     fn apply(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
-        try_inner_string!(fn_name, &self.0, arg, fun(&arg))
+        try_inner_string!(fn_name, &self.0, arg, fun(arg))
     }
 }
 
