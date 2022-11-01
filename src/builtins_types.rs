@@ -5,10 +5,9 @@ use std::num::{ParseFloatError, ParseIntError};
 
 use crate::builtins_util::*;
 use crate::environment::*;
-use crate::eval::*;
 use crate::interner::*;
 use crate::types::*;
-use crate::LispResult;
+use crate::{LispResult, VarArgs};
 
 /// Usage: (type expression)
 ///
@@ -522,13 +521,28 @@ fn float_to_int(float: f64) -> i64 {
     }
 }
 
-fn builtin_to_symbol(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
+/// Usage: (sym expression+) -> symbol
+///
+/// Takes one or more forms, converts them to strings, concatenates them and returns
+/// a symbol with that name.
+///
+/// Section: type
+///
+/// Example:
+/// (def test-to-symbol-sym nil)
+/// (test::assert-true (symbol? (sym 55)))
+/// (test::assert-true (symbol? (sym 55.0)))
+/// (test::assert-true (symbol? (sym "to-symbol-test-new-symbol")))
+/// (test::assert-true (symbol? (sym (str "to-symbol-test-new-symbol-buf"))))
+/// (test::assert-true (symbol? (sym 'test-to-symbol-sym)))
+/// (set! test-to-symbol-sym "testing-sym")
+/// (test::assert-equal "testing-sym" (sym->str (sym test-to-symbol-sym)))
+/// (test::assert-true (symbol? (sym (sym->str 'test-to-symbol-sym))))
+#[sl_sh_fn(fn_name = "sym", takes_env = true)]
+fn sym(environment: &mut Environment, args: VarArgs<Expression>) -> LispResult<Expression> {
     let mut res = String::new();
     for a in args {
-        res.push_str(&eval(environment, a)?.as_string(environment)?);
+        res.push_str(&a.as_string(environment)?);
     }
     Ok(Expression::alloc_data(ExpEnum::Symbol(
         environment.interner.intern(&res),
@@ -605,30 +619,7 @@ pub fn add_type_builtins<S: BuildHasher>(
     intern_str_to_float(interner, data);
     intern_int_to_float(interner, data);
     intern_float_to_int(interner, data);
-    data.insert(
-        interner.intern("sym"),
-        Expression::make_function(
-            builtin_to_symbol,
-            r#"Usage: (sym expression+) -> symbol
-
-Takes one or more forms, converts them to strings, concatenates them and returns
-a symbol with that name.
-
-Section: type
-
-Example:
-(def test-to-symbol-sym nil)
-(test::assert-true (symbol? (sym 55)))
-(test::assert-true (symbol? (sym 55.0)))
-(test::assert-true (symbol? (sym "to-symbol-test-new-symbol")))
-(test::assert-true (symbol? (sym (str "to-symbol-test-new-symbol-buf"))))
-(test::assert-true (symbol? (sym 'test-to-symbol-sym)))
-(set! test-to-symbol-sym "testing-sym")
-(test::assert-equal "testing-sym" (sym->str (sym test-to-symbol-sym)))
-(test::assert-true (symbol? (sym (sym->str 'test-to-symbol-sym))))
-"#,
-        ),
-    );
+    intern_sym(interner, data);
     intern_symbol_to_str(interner, data);
     intern_is_falsey(interner, data);
 }

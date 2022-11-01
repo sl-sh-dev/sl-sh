@@ -22,6 +22,7 @@ use crate::reader::*;
 use crate::symbols::*;
 use crate::types::*;
 use crate::LispResult;
+use crate::VarArgs;
 
 const CORE_LISP: &[u8] = include_bytes!("../lisp/core.lisp");
 const STRUCT_LISP: &[u8] = include_bytes!("../lisp/struct.lisp");
@@ -122,26 +123,28 @@ fn apply_fn_call(
     }
 }
 
-fn builtin_apply(
+/// Usage: (apply function arg* list)
+///
+/// Call the provided function with the supplied arguments, last is a list that will be expanded.
+///
+/// Section: core
+///
+/// Example:
+/// (def test-apply-one (apply str '(\"O\" \"NE\")))
+/// (test::assert-equal \"ONE\" test-apply-one)
+/// (test::assert-equal 10 (apply + 1 '(2 7)))
+#[sl_sh_fn(fn_name = "apply", takes_env = true)]
+fn apply(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    let mut call_list: Vec<Expression> = Vec::new();
-    let mut last_arg: Option<Expression> = None;
-    for arg in args {
-        if let Some(a) = last_arg {
-            call_list.push(eval(environment, a)?);
-        }
-        last_arg = Some(arg);
-    }
-    let last_evaled;
-    if let Some(alist) = last_arg {
-        last_evaled = eval(environment, alist)?;
-        let last_d = last_evaled.get();
+    mut call_list: VarArgs<Expression>,
+) -> LispResult<Expression> {
+    let last_arg = call_list.pop();
+    if let Some(last_arg) = last_arg {
+        let last_d = last_arg.get();
         let itr = match &last_d.data {
-            ExpEnum::Vector(_) => last_evaled.iter(),
-            ExpEnum::Pair(_, _) => last_evaled.iter(),
-            ExpEnum::Nil => last_evaled.iter(),
+            ExpEnum::Vector(_) => last_arg.iter(),
+            ExpEnum::Pair(_, _) => last_arg.iter(),
+            ExpEnum::Nil => last_arg.iter(),
             _ => return Err(LispError::new("apply: last arg not a list")),
         };
         for a in itr {
@@ -1479,23 +1482,7 @@ Example:
 ",
         ),
     );
-    data.insert(
-        interner.intern("apply"),
-        Expression::make_function(
-            builtin_apply,
-            "Usage: (apply function arg* list)
-
-Call the provided function with the supplied arguments, last is a list that will be expanded.
-
-Section: core
-
-Example:
-(def test-apply-one (apply str '(\"O\" \"NE\")))
-(test::assert-equal \"ONE\" test-apply-one)
-(test::assert-equal 10 (apply + 1 '(2 7)))
-",
-        ),
-    );
+    intern_apply(interner, data);
     data.insert(
         interner.intern("unwind-protect"),
         Expression::make_function(
