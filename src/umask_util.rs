@@ -87,7 +87,7 @@ fn decode_symbolic_mode_string(
 ) -> Result<(u32, u32), LispError> {
     let mode_strings = str.split(split_char).collect::<Vec<&str>>();
     if mode_strings.len() == 2 {
-        if let (Some(c), Some(p)) = (mode_strings.get(0), mode_strings.get(1)) {
+        if let (Some(c), Some(p)) = (mode_strings.first(), mode_strings.get(1)) {
             if c.is_empty() && p.is_empty() {
                 let msg = format!(
                     "{}: symbolic mode string must have a valid character before and/or \

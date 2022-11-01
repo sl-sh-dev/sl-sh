@@ -187,7 +187,7 @@ fn builtin_probool(
     let tup: Option<(u32, u32)> = match count {
         0 => Some((1, 2)),
         2 => {
-            let i = *ints.get(0).unwrap() as u32;
+            let i = *ints.first().unwrap() as u32;
             let j = *ints.get(1).unwrap() as u32;
             Some((i, j))
         }

@@ -761,7 +761,7 @@ impl Expression {
                 if v.is_empty() {
                     "Nil".to_string()
                 } else {
-                    let v: Expression = (&v[0]).clone();
+                    let v: Expression = (v[0]).clone();
                     v.display_type()
                 }
             }
@@ -988,7 +988,7 @@ impl Expression {
                 if v.is_empty() {
                     write!(writer, "{}", self)?;
                 } else {
-                    let v: Expression = (&v[0]).clone();
+                    let v: Expression = (v[0]).clone();
                     v.writef(environment, writer)?;
                 }
             }

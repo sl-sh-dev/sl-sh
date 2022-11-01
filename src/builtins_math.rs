@@ -345,7 +345,7 @@ pub fn add_math_builtins<S: BuildHasher>(
                 if floats.len() != 1 {
                     Err(LispError::new("expected one float"))
                 } else {
-                    let arg1 = floats.get(0).unwrap();
+                    let arg1 = floats.first().unwrap();
                     Ok(Expression::alloc_data(ExpEnum::Float(arg1.sqrt())))
                 }
             },
@@ -375,7 +375,7 @@ Example:
                 if floats.len() != 1 {
                     Err(LispError::new("expected one number"))
                 } else {
-                    let base = floats.get(0).unwrap();
+                    let base = floats.first().unwrap();
                     Ok(Expression::alloc_data(ExpEnum::Float(base.exp2())))
                 }
             },
@@ -404,7 +404,7 @@ Example:
                 if floats.len() != 2 {
                     Err(LispError::new("expected two numbers"))
                 } else {
-                    let base = floats.get(0).unwrap();
+                    let base = floats.first().unwrap();
                     let power = floats.get(1).unwrap();
                     Ok(Expression::alloc_data(ExpEnum::Float(base.powf(*power))))
                 }
@@ -473,7 +473,7 @@ Example:
                 if floats.len() != 1 {
                     Err(LispError::new("expected one number"))
                 } else {
-                    let arg1 = floats.get(0).unwrap();
+                    let arg1 = floats.first().unwrap();
                     Ok(Expression::alloc_data(ExpEnum::Float(arg1.abs())))
                 }
             },
@@ -503,7 +503,7 @@ Example:
                 if floats.len() != 1 {
                     Err(LispError::new("expected one number"))
                 } else {
-                    let arg1 = floats.get(0).unwrap();
+                    let arg1 = floats.first().unwrap();
                     Ok(Expression::alloc_data(ExpEnum::Int(arg1.floor() as i64)))
                 }
             },
@@ -533,7 +533,7 @@ Example:
                 if floats.len() != 1 {
                     Err(LispError::new("expected one number"))
                 } else {
-                    let arg1 = floats.get(0).unwrap();
+                    let arg1 = floats.first().unwrap();
                     Ok(Expression::alloc_data(ExpEnum::Int(arg1.ceil() as i64)))
                 }
             },
@@ -563,7 +563,7 @@ Example:
                 if floats.len() != 1 {
                     Err(LispError::new("expected one number"))
                 } else {
-                    let arg1 = floats.get(0).unwrap();
+                    let arg1 = floats.first().unwrap();
                     Ok(Expression::alloc_data(ExpEnum::Int(arg1.round() as i64)))
                 }
             },
@@ -593,7 +593,7 @@ Example:
                 if floats.len() != 1 {
                     Err(LispError::new("expected one number"))
                 } else {
-                    let arg1 = floats.get(0).unwrap();
+                    let arg1 = floats.first().unwrap();
                     Ok(Expression::alloc_data(ExpEnum::Float(arg1.log2())))
                 }
             },
@@ -622,7 +622,7 @@ Example:
                 if floats.len() != 2 {
                     Err(LispError::new("expected two numbers"))
                 } else {
-                    let num = floats.get(0).unwrap();
+                    let num = floats.first().unwrap();
                     let base = floats.get(1).unwrap();
                     if (*base - 2.0).abs() < f64::EPSILON {
                         Ok(Expression::alloc_data(ExpEnum::Float(num.log2())))
@@ -662,7 +662,7 @@ Example:
                 if floats.len() != 1 {
                     Err(LispError::new("expected one number"))
                 } else {
-                    let arg1 = floats.get(0).unwrap();
+                    let arg1 = floats.first().unwrap();
                     Ok(Expression::alloc_data(ExpEnum::Float(arg1.exp())))
                 }
             },
@@ -692,7 +692,7 @@ Example:
                 if floats.len() != 1 {
                     Err(LispError::new("expected one number"))
                 } else {
-                    let arg1 = floats.get(0).unwrap();
+                    let arg1 = floats.first().unwrap();
                     Ok(Expression::alloc_data(ExpEnum::Float(arg1.ln())))
                 }
             },
@@ -726,7 +726,7 @@ Example:
                 if floats.len() != 1 {
                     Err(LispError::new("expected one number"))
                 } else {
-                    let arg1 = floats.get(0).unwrap();
+                    let arg1 = floats.first().unwrap();
                     Ok(Expression::alloc_data(ExpEnum::Float(arg1.fract())))
                 }
             },
@@ -755,7 +755,7 @@ Example:
                 if floats.len() != 1 {
                     Err(LispError::new("expected one number"))
                 } else {
-                    let arg1 = floats.get(0).unwrap();
+                    let arg1 = floats.first().unwrap();
                     Ok(Expression::alloc_data(ExpEnum::Float(arg1.sin())))
                 }
             },
@@ -784,7 +784,7 @@ Example:
                 if floats.len() != 1 {
                     Err(LispError::new("expected one number"))
                 } else {
-                    let arg1 = floats.get(0).unwrap();
+                    let arg1 = floats.first().unwrap();
                     Ok(Expression::alloc_data(ExpEnum::Float(arg1.sin())))
                 }
             },
@@ -812,7 +812,7 @@ Example:
                 if floats.len() != 1 {
                     Err(LispError::new("expected one number"))
                 } else {
-                    let arg1 = floats.get(0).unwrap();
+                    let arg1 = floats.first().unwrap();
                     Ok(Expression::alloc_data(ExpEnum::Float(arg1.cos())))
                 }
             },
@@ -841,7 +841,7 @@ Example:
                 if floats.len() != 1 {
                     Err(LispError::new("expected one number"))
                 } else {
-                    let arg1 = floats.get(0).unwrap();
+                    let arg1 = floats.first().unwrap();
                     Ok(Expression::alloc_data(ExpEnum::Float(arg1.acos())))
                 }
             },
@@ -869,7 +869,7 @@ Example:
                 if floats.len() != 1 {
                     Err(LispError::new("expected one number"))
                 } else {
-                    let arg1 = floats.get(0).unwrap();
+                    let arg1 = floats.first().unwrap();
                     Ok(Expression::alloc_data(ExpEnum::Float(arg1.tan())))
                 }
             },
@@ -898,7 +898,7 @@ Example:
                 if floats.len() != 1 {
                     Err(LispError::new("expected one number"))
                 } else {
-                    let arg1 = floats.get(0).unwrap();
+                    let arg1 = floats.first().unwrap();
                     Ok(Expression::alloc_data(ExpEnum::Float(arg1.tan())))
                 }
             },
@@ -926,7 +926,7 @@ Example:
                 if floats.len() != 1 {
                     Err(LispError::new("expected one number"))
                 } else {
-                    let arg1 = floats.get(0).unwrap();
+                    let arg1 = floats.first().unwrap();
                     Ok(Expression::alloc_data(ExpEnum::Float(arg1.to_degrees())))
                 }
             },
@@ -954,7 +954,7 @@ Example:
                 if floats.len() != 1 {
                     Err(LispError::new("expected one number"))
                 } else {
-                    let arg1 = floats.get(0).unwrap();
+                    let arg1 = floats.first().unwrap();
                     Ok(Expression::alloc_data(ExpEnum::Float(arg1.to_radians())))
                 }
             },
