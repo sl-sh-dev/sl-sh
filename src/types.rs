@@ -17,8 +17,8 @@ use crate::process::*;
 use crate::symbols::*;
 use crate::unix::fd_to_file;
 use crate::{
-    try_inner_file, try_inner_float, try_inner_hash_map, try_inner_hash_map_mut, try_inner_int,
-    try_inner_string, ErrorStrings, LispResult,
+    try_inner_file, try_inner_hash_map, try_inner_hash_map_mut, try_inner_int, try_inner_string,
+    ErrorStrings, LispResult,
 };
 
 #[derive(Clone, Debug)]
@@ -1366,7 +1366,20 @@ where
     F: FnOnce(f64) -> LispResult<Expression>,
 {
     fn apply(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
-        try_inner_float!(fn_name, self.0, num, fun(*num))
+        match &self.0.get().data {
+            ExpEnum::Float(f) => fun(*f),
+            ExpEnum::Int(i) => fun(*i as f64),
+            _ => {
+                let expected = ExpEnum::Float(f64::default()).to_string()
+                    + ", or "
+                    + &ExpEnum::Int(i64::default()).to_string();
+                return Err(LispError::new(ErrorStrings::mismatched_type(
+                    fn_name,
+                    &expected,
+                    &self.0.to_string(),
+                )));
+            }
+        }
     }
 }
 

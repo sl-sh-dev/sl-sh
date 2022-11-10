@@ -534,12 +534,19 @@ macro_rules! try_inner_float {
         let exp_d = $expression.get();
         match &exp_d.data {
             ExpEnum::Float($name) => $eval,
+            ExpEnum::Int($name) => {
+                let $name = *$name as i64;
+                $eval
+            }
             data => {
+                let expected = ExpEnum::Float(f64::default()).to_string()
+                    + ", or "
+                    + &ExpEnum::Int(i64::default()).to_string();
                 return Err(LispError::new(ErrorStrings::mismatched_type(
                     $fn_name,
-                    &ExpEnum::Float(Default::default()).to_string(),
+                    &expected,
                     &data.to_string(),
-                )))
+                )));
             }
         }
     }};
@@ -750,6 +757,115 @@ fn get_args_optional_aware(
                 }
             }
         }
+    }
+    Ok(parsed_args)
+}
+
+/// arrays may be of different sizes, but there is at least 1 param that is optional or vec.
+fn get_args_optional_aware_fast(
+    fn_name: &str,
+    params: Vec<Arg>,
+    args: Vec<Expression>,
+) -> LispResult<Vec<ArgType>> {
+    let mut parsed_args = vec![];
+    // if they are equal it should be easy to parse regardless of the types, it's one for one.
+    if args.len() == params.len() {
+        for (exp, arg) in args.into_iter().zip(params.into_iter()) {
+            match arg.val {
+                ArgVal::Value => parsed_args.push(ArgType::Exp(exp)),
+                ArgVal::Optional => parsed_args.push(ArgType::Opt(Some(exp))),
+                ArgVal::VarArgs => parsed_args.push(ArgType::VarArgs(vec![exp])),
+            }
+        }
+    } else {
+        // if there are more args than params for the receiving fn,
+        // the last param must be a vector.
+        if args.len() > params.len() {
+            if let Some(param) = params.iter().rev().next() {
+                match param.val {
+                    ArgVal::Value | ArgVal::Optional => {
+                        return Err(LispError::new(format!(
+                            "{} given too many arguments, expected {}, got {}.",
+                            fn_name,
+                            params.len(),
+                            args.len()
+                        )));
+                    }
+                    ArgVal::VarArgs => {}
+                }
+            }
+        }
+        let mut args_iter = args.into_iter();
+        for param in params {
+            if let Some(exp) = args_iter.next() {
+                match param.val {
+                    ArgVal::Value => parsed_args.push(ArgType::Exp(exp)),
+                    ArgVal::Optional => parsed_args.push(ArgType::Opt(Some(exp))),
+                    // There can only be one ArgVal::VarArgs and it's always the last one, this is
+                    // enforced at compile time.
+                    ArgVal::VarArgs => {
+                        let mut exps = vec![exp];
+                        for exp in args_iter.by_ref() {
+                            exps.push(exp);
+                        }
+                        parsed_args.push(ArgType::VarArgs(exps));
+                    }
+                }
+            } else {
+                match param.val {
+                    ArgVal::Value => {
+                        // it can't be the case that we don't have enough required arguments,
+                        // we already checked for that.
+                    }
+                    ArgVal::Optional => parsed_args.push(ArgType::Opt(None)),
+                    ArgVal::VarArgs => parsed_args.push(ArgType::VarArgs(vec![])),
+                }
+            }
+        }
+    }
+    Ok(parsed_args)
+}
+
+/// convert function arguments to ArgTypes so call_expand_args gets
+/// what it expects
+pub fn get_arg_types_fast(
+    fn_name: &str,
+    params: Vec<Arg>,
+    args: Vec<Expression>,
+    args_len: usize,
+) -> LispResult<Vec<ArgType>> {
+    let parsed_args = vec![];
+    let required_args = num_required_args(params.as_slice());
+    let has_optional = has_optional_params(params.as_slice());
+    let has_optional_str = if has_optional { "at least " } else { "" };
+    match (
+        args.len() < required_args,
+        has_optional,
+        args.len() == required_args,
+        args.len() > required_args,
+    ) {
+        (true, _, _, _) => {
+            return Err(LispError::new(format!(
+                "{} not given enough arguments, expected {}{}, got {}.",
+                fn_name,
+                has_optional_str,
+                required_args,
+                args.len()
+            )));
+        }
+        (_, true, _, _) | (_, _, true, _) => {
+            return get_args_optional_aware_fast(fn_name, params, args);
+        }
+        (_, _, _, true) => {
+            // if the length of the passed in args is
+            return Err(LispError::new(format!(
+                "{} given too many arguments, expected {}, got {}.",
+                fn_name,
+                required_args,
+                args.len()
+            )));
+        }
+        (false, false, false, false) => {}
     }
     Ok(parsed_args)
 }
