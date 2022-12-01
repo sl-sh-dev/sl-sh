@@ -7,7 +7,7 @@ use crate::builtins_util::*;
 use crate::environment::*;
 use crate::interner::*;
 use crate::types::*;
-use crate::{LispResult, VarArgs};
+use crate::{LispError, LispResult, VarArgs};
 
 /// Usage: (type expression)
 ///
@@ -527,71 +527,110 @@ fn parse_float_to_inty(
 ) -> crate::LispResult<crate::types::Expression> {
     use crate::builtins_util::ExpandVecToArgs;
     use std::convert::TryInto;
-    let args = crate::builtins_util::make_args_eval_no_values(environment, args)?;
     let fn_name = "float->int";
-    const args_len: usize = 1usize;
-    let arg_types = vec![crate::builtins_util::Arg {
+    const ARGS_LEN: usize = 1usize;
+    let params = vec![crate::builtins_util::Arg {
         val: crate::builtins_util::ArgVal::Value,
         passing_style: crate::builtins_util::ArgPassingStyle::Move,
     }];
-    let args = crate::get_arg_types_fast(fn_name, arg_types, args, args_len)?;
-    if args.len() == args_len {
-        match args.try_into() {
-            Ok(params) => {
-                let params: [crate::ArgType; args_len] = params;
-                let [arg_0] = params;
-                let fn_name = "float->int";
-                match arg_0 {
-                    crate::ArgType::Exp(arg_0) => {
-                        use crate::types::RustProcedure;
-                        let mut typed_data: crate::types::TypedWrapper<
-                            f64,
-                            crate::types::Expression,
-                        > = crate::types::TypedWrapper::new(arg_0);
-                        let callback = |arg_0: f64| -> crate::LispResult<crate::types::Expression> {
-                            Ok(match arg_0 {
-                                float if float.is_nan() => 0,
-                                float if float > i64::MAX as f64 || float == f64::INFINITY => {
-                                    i64::MAX
-                                }
-                                float if float < i64::MIN as f64 || float == f64::NEG_INFINITY => {
-                                    i64::MIN
-                                }
-                                float => float as i64,
-                            }
-                            .into())
-                        };
-                        typed_data.apply(fn_name, callback)
-                    }
-                    _ => return Err(LispError::new(
-                        "sl_sh_fn macro is broken. ArgType::Exp can't be parsed as ArgType::Exp",
-                    )),
+    let required_args = num_required_args(params.as_slice());
+    let has_optional = has_optional_params(params.as_slice());
+    let has_optional_str = if has_optional { "at least " } else { "" };
+    let mut i = 0;
+    if let Some(arg_0) = args.next() {
+        let arg_0 = crate::eval(environment, arg_0)?;
+        if let Some(param_0) = params.get(0) {
+            match (param_0.val, param_0.passing_style) {
+                (ArgVal::Value, ArgPassingStyle::Move) => {
+                    use crate::types::RustProcedure;
+                    let mut typed_data: crate::types::TypedWrapper<f64, crate::types::Expression> =
+                        crate::types::TypedWrapper::new(arg_0);
+                    let callback = |arg_0: f64| -> crate::LispResult<crate::types::Expression> {
+                        Ok(float_to_int(arg_0).into())
+                    };
+                    typed_data.apply(fn_name, callback)
+                }
+                (_, _) => {
+                    Err(LispError::new(format!(
+                        "{} macro is unable to parse its arguments, expected specific args at idx {} but arg_types vec had types that violated the generated codes expectations.",
+                        fn_name,
+                        i,
+                    )))
                 }
             }
-            Err(e) => Err(crate::types::LispError::new({
-                format!("{} is broken and can't parse its arguments.", "float->inty")
-            })),
+        } else {
+            Err(LispError::new(format!(
+                "{} macro is unable to parse its arguments, expected {} args but arg_types vec did not have the item.",
+                fn_name,
+                i + 1,
+            )))
         }
-    } else if args.len() > args_len {
-        Err(crate::types::LispError::new({
-            format!(
-                "{} given too many arguments, expected {}, got {}.",
-                &"float->inty",
-                &args_len,
-                &args.len()
-            )
-        }))
     } else {
-        Err(crate::types::LispError::new({
-            format!(
-                "{} not given enough arguments, expected {}, got {}.",
-                "float->inty",
-                args_len,
-                args.len()
-            )
-        }))
+        Err(LispError::new(format!(
+            "{}  not given enough arguments, expected {}, got, {}.",
+            fn_name, ARGS_LEN, i,
+        )))
     }
 }
+
+fn parse_float_to_intyy(
+    environment: &mut crate::environment::Environment,
+    args: &mut dyn Iterator<Item = crate::types::Expression>,
+) -> crate::LispResult<crate::types::Expression> {
+    use crate::builtins_util::ExpandVecToArgs;
+    use std::convert::TryInto;
+    let fn_name = "float->int";
+    const ARGS_LEN: usize = 1usize;
+    let params = vec![crate::builtins_util::Arg {
+        val: crate::builtins_util::ArgVal::Value,
+        passing_style: crate::builtins_util::ArgPassingStyle::Move,
+    }];
+    let required_args = num_required_args(params.as_slice());
+    let has_optional = has_optional_params(params.as_slice());
+    let has_optional_str = if has_optional { "at least " } else { "" };
+    let mut i = 0;
+    if let Some(arg_0) = args.next() {
+        let arg_0 = crate::eval(environment, arg_0)?;
+        if let Some(param_0) = params.get(0) {
+            match (param_0.val, param_0.passing_style) {
+                (ArgVal::Value, ArgPassingStyle::Move) => {
+                    use crate::types::RustProcedure;
+                    let mut typed_data: crate::types::TypedWrapper<f64, crate::types::Expression> =
+                        crate::types::TypedWrapper::new(arg_0);
+                    let callback = |arg_0: f64| -> crate::LispResult<crate::types::Expression> {
+                        Ok(match arg_0 {
+                            float if float.is_nan() => 0,
+                            float if float > i64::MAX as f64 || float == f64::INFINITY => i64::MAX,
+                            float if float < i64::MIN as f64 || float == f64::NEG_INFINITY => i64::MIN,
+                            float => float as i64,
+                        }
+                            .into())
+                    };
+                    typed_data.apply(fn_name, callback)
+                }
+                (_, _) => {
+                    Err(LispError::new(format!(
+                        "{} macro is unable to parse its arguments, expected specific args at idx {} but arg_types vec had types that violated the generated codes expectations.",
+                        fn_name,
+                        i,
+                    )))
+                }
+            }
+        } else {
+            Err(LispError::new(format!(
+                "{} macro is unable to parse its arguments, expected {} args but arg_types vec did not have the item.",
+                fn_name,
+                i + 1,
+            )))
+        }
+    } else {
+        Err(LispError::new(format!(
+            "{}  not given enough arguments, expected {}, got, {}.",
+            fn_name, ARGS_LEN, i,
+        )))
+    }
+}
+
 fn intern_float_to_inty<S: std::hash::BuildHasher>(
     interner: &mut crate::Interner,
     data: &mut std::collections::HashMap<&'static str, (crate::types::Expression, String), S>,
@@ -600,6 +639,17 @@ fn intern_float_to_inty<S: std::hash::BuildHasher>(
     data.insert(
         interner.intern(fn_name),
         crate::types::Expression::make_function(parse_float_to_inty, "Inlined!"),
+    );
+}
+
+fn intern_float_to_intyy<S: std::hash::BuildHasher>(
+    interner: &mut crate::Interner,
+    data: &mut std::collections::HashMap<&'static str, (crate::types::Expression, String), S>,
+) {
+    let fn_name = "float->intyy";
+    data.insert(
+        interner.intern(fn_name),
+        crate::types::Expression::make_function(parse_float_to_intyy, "Inlined!"),
     );
 }
 
@@ -702,6 +752,7 @@ pub fn add_type_builtins<S: BuildHasher>(
     intern_int_to_float(interner, data);
     intern_float_to_int(interner, data);
     intern_float_to_inty(interner, data);
+    intern_float_to_intyy(interner, data);
     intern_sym(interner, data);
     intern_symbol_to_str(interner, data);
     intern_is_falsey(interner, data);
