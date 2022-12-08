@@ -110,7 +110,7 @@ fn declare_var(
                             s
                         )))
                     } else {
-                        let idx = syms.insert(*s);
+                        let idx = syms.insert(s);
                         location.replace(SymLoc::Stack(idx));
                         Ok(())
                     }
@@ -145,7 +145,7 @@ fn patch_symbol(
             if let Some(idx) = syms.get(name) {
                 location.replace(SymLoc::Stack(idx));
             } else if syms.can_capture(name) {
-                let idx = syms.insert_capture(name, environment);
+                let idx = syms.insert_capture(name);
                 location.replace(SymLoc::Stack(idx));
             } else if let Some(binding) = syms.namespace().borrow().get_with_outer(name) {
                 location.replace(SymLoc::Ref(binding));

@@ -110,7 +110,7 @@ fn call_lambda_int(
         let mut tmp_eval: Option<Expression> = None;
         let last_eval = match body {
             MultiExpression::None => Expression::make_nil(),
-            MultiExpression::Single(body) => eval_nr(environment, &body)?,
+            MultiExpression::Single(body) => eval_nr(environment, body)?,
             MultiExpression::Multiple(body) => {
                 for arg in body {
                     if let Some(ret) = tmp_eval {

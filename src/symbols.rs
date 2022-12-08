@@ -184,7 +184,7 @@ impl Symbols {
         count
     }
 
-    pub fn insert_capture(&self, key: &'static str, environment: &mut Environment) -> usize {
+    pub fn insert_capture(&self, key: &'static str) -> usize {
         let mut data = self.data.borrow_mut();
         let count = data.count;
         data.syms.insert(key, count);
@@ -196,7 +196,7 @@ impl Symbols {
             // Also capture in outer lexical scope or bad things can happen.
             let outer = outer.borrow();
             if !outer.contains_symbol(key) {
-                outer.insert_capture(key, environment);
+                outer.insert_capture(key);
             }
         }
         count

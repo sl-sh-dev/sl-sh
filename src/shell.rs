@@ -76,7 +76,7 @@ pub fn start_interactive(is_tty: bool) -> i32 {
     let mut hostname = [0_u8; 512];
     env::set_var(
         "HOST",
-        &gethostname(&mut hostname)
+        gethostname(&mut hostname)
             .ok()
             .map_or_else(|| "?".into(), CStr::to_string_lossy)
             .as_ref(),

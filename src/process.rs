@@ -135,7 +135,7 @@ fn run_command(
         }
         // If we still have procs running then maybe don't orphin them (at least not yet).
         if environment.procs.borrow().is_empty() {
-            return Err(exec(&command, &args).into());
+            return Err(exec(command, &args).into());
         }
     }
 

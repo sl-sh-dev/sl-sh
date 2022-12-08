@@ -21,7 +21,7 @@ fn unescape(input: &str) -> String {
                 check = false;
             }
             _ if check => {
-                output.extend(&[b'\\', character]);
+                output.extend([b'\\', character]);
                 check = false;
             }
             _ => output.push(character),
