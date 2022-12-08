@@ -343,7 +343,7 @@ NOTE: var is deprecated, use let or let* to create local bindings.
 Adds an expression to the current lexical scope.  Return the expression that was defined.
 This will not add to a namespace (use def for that), use it within functions or
 let forms to create local bindings.
-Symbol is not evaluted.
+Symbol is not evaluated.
 
 Section: core
 
