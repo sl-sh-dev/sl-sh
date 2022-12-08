@@ -852,7 +852,7 @@ fn builtin_codepoints(
     match &next_arg_d.data {
         ExpEnum::String(s, _) => with_str(s),
         ExpEnum::Char(s) => with_str(s),
-        ExpEnum::CodePoint(c) => with_str(&*format!("{}", c)),
+        ExpEnum::CodePoint(c) => with_str(&format!("{}", c)),
         _ => Err(LispError::new(
             "codepoints expects one argument of type Char or String",
         )),

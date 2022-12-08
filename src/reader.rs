@@ -91,7 +91,7 @@ fn char_to_hex_num(ch: &str) -> Result<u8, ReadError> {
 fn escape_to_char(chars: &mut CharIter, reader_state: &mut ReaderState) -> Result<char, ReadError> {
     if let (Some(ch1), Some(ch2)) = (chars.next(), chars.next()) {
         reader_state.column += 1;
-        let ch_n: u8 = (char_to_hex_num(&*ch1)? * 16) + (char_to_hex_num(&*ch2)?);
+        let ch_n: u8 = (char_to_hex_num(&ch1)? * 16) + (char_to_hex_num(&ch2)?);
         if ch_n > 0x7f {
             Err(ReadError {
                 reason: "Invalid hex ascii code, must be less then \\x7f.".to_string(),
@@ -220,7 +220,7 @@ fn do_char(
             }
         }
         Ok(make_exp(
-            ExpEnum::Char(environment.interner.intern(&*ch).into()),
+            ExpEnum::Char(environment.interner.intern(&ch).into()),
             meta,
         ))
     } else {
