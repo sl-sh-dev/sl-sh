@@ -12,8 +12,8 @@ sl-liner = { git = "https://github.com/sl-sh-dev/sl-liner.git" }
 #sl-liner = { path = "../sl-liner" }
 glob = "0.3"
 nix = "0.23.1"
-unicode-segmentation = "1"
-unicode_reader = "1.7.1"
+unicode-segmentation = "1.7.1"
+unicode_reader = "1"
 unicode-width = "0.1"
 rand = "0.8.3"
 walkdir = "2"
