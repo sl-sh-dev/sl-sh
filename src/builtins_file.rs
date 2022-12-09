@@ -91,7 +91,7 @@ fn cd(environment: &mut Environment, arg: Option<String>) -> LispResult<Expressi
     if let Ok(oldpwd) = env::current_dir() {
         env::set_var("OLDPWD", oldpwd);
     }
-    if let Err(e) = env::set_current_dir(&root) {
+    if let Err(e) = env::set_current_dir(root) {
         eprintln!("{} Error changing to {}, {}", fn_name, root.display(), e);
         Ok(Expression::make_nil())
     } else {

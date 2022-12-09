@@ -1155,7 +1155,7 @@ where
         let got = self.0.display_type();
         match &self.0.get().data {
             ExpEnum::Symbol(str, loc) => {
-                let mut sym = Symbol(*str, loc.clone());
+                let mut sym = Symbol(str, loc.clone());
                 fun(&mut sym)
             }
             _ => Err(LispError::new(ErrorStrings::mismatched_type(
@@ -1175,7 +1175,7 @@ where
         let got = self.0.display_type();
         match &self.0.get().data {
             ExpEnum::Symbol(str, loc) => {
-                let sym = Symbol(*str, loc.clone());
+                let sym = Symbol(str, loc.clone());
                 fun(&sym)
             }
             _ => Err(LispError::new(ErrorStrings::mismatched_type(
@@ -1195,7 +1195,7 @@ where
         let got = self.0.display_type();
         match &self.0.get().data {
             ExpEnum::Symbol(str, loc) => {
-                let sym = Symbol(*str, loc.clone());
+                let sym = Symbol(str, loc.clone());
                 fun(sym)
             }
             _ => Err(LispError::new(ErrorStrings::mismatched_type(
