@@ -5,10 +5,9 @@ use std::num::{ParseFloatError, ParseIntError};
 
 use crate::builtins_util::*;
 use crate::environment::*;
-use crate::eval::*;
 use crate::interner::*;
 use crate::types::*;
-use crate::LispResult;
+use crate::{LispResult, VarArgs};
 
 /// Usage: (type expression)
 ///
@@ -450,7 +449,7 @@ fn is_list(exp: Expression) -> bool {
 /// (test::assert-error (str->int "10.0"))
 /// (test::assert-error (str->int "--10"))
 #[sl_sh_fn(fn_name = "str->int")]
-fn str_to_int(istr: String) -> LispResult<i64> {
+fn str_to_int(istr: &str) -> LispResult<i64> {
     let potential_int: Result<i64, ParseIntError> = istr.parse();
     match potential_int {
         Ok(v) => Ok(v),
@@ -473,7 +472,7 @@ fn str_to_int(istr: String) -> LispResult<i64> {
 /// (test::assert-error (str->float "not int"))
 /// (test::assert-error (str->float "--10"))
 #[sl_sh_fn(fn_name = "str->float")]
-fn str_to_float(istr: String) -> LispResult<f64> {
+fn str_to_float(istr: &str) -> LispResult<f64> {
     let potential_float: Result<f64, ParseFloatError> = istr.parse();
     match potential_float {
         Ok(v) => Ok(v),
@@ -522,13 +521,28 @@ fn float_to_int(float: f64) -> i64 {
     }
 }
 
-fn builtin_to_symbol(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
+/// Usage: (sym expression+) -> symbol
+///
+/// Takes one or more forms, converts them to strings, concatenates them and returns
+/// a symbol with that name.
+///
+/// Section: type
+///
+/// Example:
+/// (def test-to-symbol-sym nil)
+/// (test::assert-true (symbol? (sym 55)))
+/// (test::assert-true (symbol? (sym 55.0)))
+/// (test::assert-true (symbol? (sym "to-symbol-test-new-symbol")))
+/// (test::assert-true (symbol? (sym (str "to-symbol-test-new-symbol-buf"))))
+/// (test::assert-true (symbol? (sym 'test-to-symbol-sym)))
+/// (set! test-to-symbol-sym "testing-sym")
+/// (test::assert-equal "testing-sym" (sym->str (sym test-to-symbol-sym)))
+/// (test::assert-true (symbol? (sym (sym->str 'test-to-symbol-sym))))
+#[sl_sh_fn(fn_name = "sym", takes_env = true)]
+fn sym(environment: &mut Environment, args: VarArgs<Expression>) -> LispResult<Expression> {
     let mut res = String::new();
     for a in args {
-        res.push_str(&eval(environment, a)?.as_string(environment)?);
+        res.push_str(&a.as_string(environment)?);
     }
     Ok(Expression::alloc_data(ExpEnum::Symbol(
         environment.interner.intern(&res),
@@ -605,30 +619,110 @@ pub fn add_type_builtins<S: BuildHasher>(
     intern_str_to_float(interner, data);
     intern_int_to_float(interner, data);
     intern_float_to_int(interner, data);
-    data.insert(
-        interner.intern("sym"),
-        Expression::make_function(
-            builtin_to_symbol,
-            r#"Usage: (sym expression+) -> symbol
-
-Takes one or more forms, converts them to strings, concatenates them and returns
-a symbol with that name.
-
-Section: type
-
-Example:
-(def test-to-symbol-sym nil)
-(test::assert-true (symbol? (sym 55)))
-(test::assert-true (symbol? (sym 55.0)))
-(test::assert-true (symbol? (sym "to-symbol-test-new-symbol")))
-(test::assert-true (symbol? (sym (str "to-symbol-test-new-symbol-buf"))))
-(test::assert-true (symbol? (sym 'test-to-symbol-sym)))
-(set! test-to-symbol-sym "testing-sym")
-(test::assert-equal "testing-sym" (sym->str (sym test-to-symbol-sym)))
-(test::assert-true (symbol? (sym (sym->str 'test-to-symbol-sym))))
-"#,
-        ),
-    );
+    intern_sym(interner, data);
     intern_symbol_to_str(interner, data);
     intern_is_falsey(interner, data);
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    /// Usage: (intvec-stuff-float int) -> float
+    ///     Cast an int as a float.
+    /// Section: type
+    /// Example:
+    ///     (test::assert-equal 34 (intvec-stuff-float '#(#(7 1 9) #(4 5 8))))
+    ///     (test::assert-equal 34 (intvec-stuff-float (list (join 8 (join 5 4)) (join 9 (join 4 4)))))
+    ///     (test::assert-equal 34 (intvec-stuff-float '((8 5 4) (9 4 4)))
+    ///     (test::assert-error (intvec-stuff-float "not vec"))
+    ///     (test::assert-error (intvec-stuff-float 9))
+    #[sl_sh_fn(fn_name = "intvec-stuff-float")]
+    fn intvec_stuff_float(ints: Vec<(i64, i64, i64)>) -> f64 {
+        let mut f = 0.0;
+        for i in ints.iter() {
+            f += i.0 as f64 + i.1 as f64 + i.2 as f64;
+        }
+        f
+    }
+
+    /// Usage: (int-stuff-float int) -> float
+    ///     Cast an int as a float.
+    /// Section: type
+    /// Example:
+    ///     (test::assert-equal 17 (int-stuff-float '#(8 9 0)))
+    ///     (test::assert-equal 18 (int-stuff-float '(8 9 1)))
+    ///     (test::assert-equal 17 (int-stuff-float (join 8 (join 5 4))))
+    ///     (test::assert-error (int-stuff-float "not vec"))
+    ///     (test::assert-error (int-stuff-float 8))
+    #[sl_sh_fn(fn_name = "int-stuff-float")]
+    fn int_stuff_float(i: (i64, i64, i64)) -> f64 {
+        i.0 as f64 + i.1 as f64 + i.2 as f64
+    }
+
+    /// Usage: (int-pair-float int) -> float
+    ///     Cast an int as a float.
+    /// Section: type
+    /// Example:
+    ///     (test::assert-equal 17 (int-pair-float '#(8 9)))
+    ///     (test::assert-equal 17 (int-pair-float '(8 9)))
+    ///     (test::assert-equal 17 (int-pair-float (join 8 9)))
+    ///     (test::assert-error (int-pair-float "not vec"))
+    ///     (test::assert-error (int-pair-float 8))
+    #[sl_sh_fn(fn_name = "int-pair-float")]
+    fn int_pair_float(i: (i64, i64)) -> Option<f64> {
+        Some(i.0 as f64 + i.1 as f64)
+    }
+
+    /// Usage: (intvec-to-float int) -> float
+    ///     Cast an int as a float.
+    /// Section: type
+    /// Example:
+    ///     (test::assert-equal 17 (intvec-to-float '#(8 9)))
+    ///     (test::assert-equal 17 (intvec-to-float '(8 9)))
+    ///     (test::assert-equal 17 (intvec-to-float (join 8 9)))
+    ///     (test::assert-error (intvec-to-float "not vec"))
+    ///     (test::assert-error (intvec-to-float "8))
+    #[sl_sh_fn(fn_name = "intvec-to-float")]
+    fn intvec_to_float(int: Vec<i64>) -> f64 {
+        let mut f: f64 = 0.0;
+        for i in int {
+            f += i as f64
+        }
+        f
+    }
+
+    #[test]
+    fn test_sl_sh_fn() {
+        let int8 = Expression::alloc_data(ExpEnum::Int(8));
+        let int9 = Expression::alloc_data(ExpEnum::Int(9));
+        let f_result = Expression::alloc_data(ExpEnum::Float(17.0));
+        let intvec = Expression::alloc_data(ExpEnum::Pair(int8.clone(), int9.clone()));
+        let mut env = build_default_environment();
+        let result = builtin_intvec_to_float(&mut env, ArgType::Exp(intvec.clone())).unwrap();
+        assert_eq!(f_result, result);
+
+        let result = builtin_int_pair_float(&mut env, ArgType::Exp(intvec.clone())).unwrap();
+        assert_eq!(f_result, result);
+
+        let int4 = Expression::alloc_data(ExpEnum::Int(4));
+        let intvec = Expression::alloc_data(ExpEnum::Pair(
+            int9.clone(),
+            Expression::alloc_data(ExpEnum::Pair(int4.clone(), int4.clone())),
+        ));
+        let result = builtin_int_stuff_float(&mut env, ArgType::Exp(intvec.clone())).unwrap();
+        assert_eq!(f_result, result);
+
+        let intvec = Expression::alloc_data(ExpEnum::Vector(vec![
+            int4.clone(),
+            int9.clone(),
+            int4.clone(),
+        ]));
+        let result = builtin_intvec_stuff_float(
+            &mut env,
+            ArgType::Exp(Expression::alloc_data(ExpEnum::Vector(vec![intvec]))),
+        )
+        .unwrap();
+        assert_eq!(f_result, result);
+    }
 }

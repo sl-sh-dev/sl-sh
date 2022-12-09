@@ -76,9 +76,15 @@ all namespaces loaded at startup in the user's slshrc, see [this](https://sl-sh-
 
 ## Status
 
-Sl-sh is still in a beta stage and an official 1.0 release is targeted for end of 2021.
-While the project is in beta, the API is not stable (although it is fairly stable)
-and documentation on certain features is lacking (but improving!). Finding
-examples on how to do things can best be achieved by searching in the contrib
-directory and consulting the [documentation](https://sl-sh-dev.github.io/sl-sh/).
+Sl-sh is still in a beta stage and an official 1.0 release is targeted for 2023.
+The current tree based interpreter is being rewritten as a register-based
+virtual machine called slosh. The sl_sh_proc_macro library is being written to
+smooth the transition between the current implementation and slosh by allowing
+the standard library to be implemented using native rust functions. The macro
+takes care of converting the lisp types to rust types and back again for the
+return value(s) at runtime. While the project is in beta, the API is not
+stable (although it is fairly stable) and documentation on certain features is
+lacking (but improving!). Finding examples on how to do things can best be
+achieved by searching in the contrib directory and consulting the
+[documentation](https://sl-sh-dev.github.io/sl-sh/).
 

@@ -3,6 +3,7 @@ extern crate nix;
 extern crate sl_liner;
 
 pub type LispResult<T> = Result<T, LispError>;
+pub type VarArgs<T> = Vec<T>;
 
 pub mod types;
 pub use crate::types::*;

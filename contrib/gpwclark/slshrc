@@ -10,21 +10,12 @@
 (def slshrc-total-timer ((timer) :init "slshrc" nil))
 
 ;; gpwclark TODOs
-;; - put in docs about how you call doc on the cmd line all the time with custom stuff!!
 ;; - rewrite bash-completions so we don't have gpl in here?
-;; - tab cmpletion for paths with ~ does not work when bash-completions is on
 ;; - chain completion hooks
-;; - track bkrd processes in PS1? could be helpful?
-;; - string interpolation sytnax includes $my-var and ${my-var} as well as $(println foo)
-;; - use this or make it: https://hg.stevelosh.com/t/
-;; - maybe list bkrd processes as well in prompt.
-;; - once implemented replace use of find with sl-sh builtins. to check for elapsed time
-;; - maybe a version of this that strips out all non first/last char consononants
-
-(def default-namespaces (collect-vec (filter (fn (x) (not (= x "user"))) (ns-list))))
-
+;; - track bkrd processes in PS1? could be helpful? maybe list bkrd processes too.
+;; - string interpolation syntax includes $my-var and ${my-var} as well as $(println foo)
 ;; bash-completions.lisp is located in `contrib/gpwclark`
-;;(load "~/.config/sl-sh/bash-completions.lisp")
+;; (load "~/.config/sl-sh/bash-completions.lisp")
 
 ;; shell helpers {{{
 

@@ -12,6 +12,7 @@ use nix::{
     sys::signal::{self, Signal},
     unistd,
 };
+
 extern crate static_assertions;
 
 fn main() -> Result<(), LispError> {

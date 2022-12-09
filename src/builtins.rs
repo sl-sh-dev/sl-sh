@@ -1,3 +1,4 @@
+use sl_sh_proc_macros::sl_sh_fn;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -20,6 +21,8 @@ use crate::pretty_print::*;
 use crate::reader::*;
 use crate::symbols::*;
 use crate::types::*;
+use crate::LispResult;
+use crate::VarArgs;
 
 const CORE_LISP: &[u8] = include_bytes!("../lisp/core.lisp");
 const STRUCT_LISP: &[u8] = include_bytes!("../lisp/struct.lisp");
@@ -120,26 +123,28 @@ fn apply_fn_call(
     }
 }
 
-fn builtin_apply(
+/// Usage: (apply function arg* list)
+///
+/// Call the provided function with the supplied arguments, last is a list that will be expanded.
+///
+/// Section: core
+///
+/// Example:
+/// (def test-apply-one (apply str '(\"O\" \"NE\")))
+/// (test::assert-equal \"ONE\" test-apply-one)
+/// (test::assert-equal 10 (apply + 1 '(2 7)))
+#[sl_sh_fn(fn_name = "apply", takes_env = true)]
+fn apply(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    let mut call_list: Vec<Expression> = Vec::new();
-    let mut last_arg: Option<Expression> = None;
-    for arg in args {
-        if let Some(a) = last_arg {
-            call_list.push(eval(environment, a)?);
-        }
-        last_arg = Some(arg);
-    }
-    let last_evaled;
-    if let Some(alist) = last_arg {
-        last_evaled = eval(environment, alist)?;
-        let last_d = last_evaled.get();
+    mut call_list: VarArgs<Expression>,
+) -> LispResult<Expression> {
+    let last_arg = call_list.pop();
+    if let Some(last_arg) = last_arg {
+        let last_d = last_arg.get();
         let itr = match &last_d.data {
-            ExpEnum::Vector(_) => last_evaled.iter(),
-            ExpEnum::Pair(_, _) => last_evaled.iter(),
-            ExpEnum::Nil => last_evaled.iter(),
+            ExpEnum::Vector(_) => last_arg.iter(),
+            ExpEnum::Pair(_, _) => last_arg.iter(),
+            ExpEnum::Nil => last_arg.iter(),
             _ => return Err(LispError::new("apply: last arg not a list")),
         };
         for a in itr {
@@ -323,57 +328,65 @@ fn builtin_load(
     Err(LispError::new("load needs one argument"))
 }
 
-fn builtin_length(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(arg) = args.next() {
-        if args.next().is_none() {
-            let arg = eval_no_values(environment, arg)?;
-            return match &arg.get().data {
-                ExpEnum::String(s, _) => {
-                    let mut i = 0;
-                    // Need to walk the chars to get the length in utf8 chars not bytes.
-                    for _ in UnicodeSegmentation::graphemes(s.as_ref(), true) {
-                        i += 1;
-                    }
-                    Ok(Expression::alloc_data(ExpEnum::Int(i64::from(i))))
-                }
-                ExpEnum::Vector(list) => {
-                    Ok(Expression::alloc_data(ExpEnum::Int(list.len() as i64)))
-                }
-                ExpEnum::Pair(_, e2) => {
-                    let mut len = 0;
-                    let mut e_next = e2.clone();
-                    loop {
-                        let e2 = if let ExpEnum::Pair(_, e2) = &e_next.get().data {
-                            Some(e2.clone())
-                        } else {
-                            None
-                        };
-                        match e2 {
-                            Some(e2) => {
-                                len += 1;
-                                e_next = e2.clone();
-                            }
-                            None => {
-                                len += 1;
-                                break;
-                            }
-                        }
-                    }
-                    Ok(Expression::alloc_data(ExpEnum::Int(len)))
-                }
-                ExpEnum::Nil => Ok(Expression::alloc_data(ExpEnum::Int(0))),
-                ExpEnum::HashMap(map) => Ok(Expression::alloc_data(ExpEnum::Int(map.len() as i64))),
-                _ => Err(LispError::new(format!(
-                    "expression of type {} has no length",
-                    arg.display_type()
-                ))),
-            };
+/// Usage: (length expression) -> int
+///
+/// Return length of supplied expression.
+///
+/// Section: core
+///
+/// Example:
+/// (test::assert-equal 0 (length nil))
+/// (test::assert-equal 5 (length \"12345\"))
+/// ; Note the unicode symbol is only one char even though it is more then one byte.
+/// (test::assert-equal 6 (length \"12345Σ\"))
+/// (test::assert-equal 3 (length '(1 2 3)))
+/// (test::assert-equal 3 (length '#(1 2 3)))
+/// (test::assert-equal 3 (length (list 1 2 3)))
+/// (test::assert-equal 3 (length (vec 1 2 3)))
+/// (test::assert-error (length 100))
+/// (test::assert-error (length 100.0))
+/// (test::assert-error (length #\\x))
+#[sl_sh_fn(fn_name = "length")]
+fn length(exp: Expression) -> LispResult<Expression> {
+    return match &exp.get().data {
+        ExpEnum::String(s, _) => {
+            let mut i = 0;
+            // Need to walk the chars to get the length in utf8 chars not bytes.
+            for _ in UnicodeSegmentation::graphemes(s.as_ref(), true) {
+                i += 1;
+            }
+            Ok(Expression::alloc_data(ExpEnum::Int(i64::from(i))))
         }
-    }
-    Err(LispError::new("length takes one form"))
+        ExpEnum::Vector(list) => Ok(Expression::alloc_data(ExpEnum::Int(list.len() as i64))),
+        ExpEnum::Pair(_, e2) => {
+            let mut len = 0;
+            let mut e_next = e2.clone();
+            loop {
+                let e2 = if let ExpEnum::Pair(_, e2) = &e_next.get().data {
+                    Some(e2.clone())
+                } else {
+                    None
+                };
+                match e2 {
+                    Some(e2) => {
+                        len += 1;
+                        e_next = e2.clone();
+                    }
+                    None => {
+                        len += 1;
+                        break;
+                    }
+                }
+            }
+            Ok(Expression::alloc_data(ExpEnum::Int(len)))
+        }
+        ExpEnum::Nil => Ok(Expression::alloc_data(ExpEnum::Int(0))),
+        ExpEnum::HashMap(map) => Ok(Expression::alloc_data(ExpEnum::Int(map.len() as i64))),
+        _ => Err(LispError::new(format!(
+            "length: expression of type {} can not be used with this function.",
+            exp.display_type()
+        ))),
+    };
 }
 
 fn builtin_if(
@@ -869,18 +882,20 @@ fn builtin_gensym(
     }
 }
 
-fn builtin_version(
-    _environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if args.next().is_some() {
-        Err(LispError::new("version takes no arguments"))
-    } else {
-        Ok(Expression::alloc_data(ExpEnum::String(
-            VERSION_STRING.into(),
-            None,
-        )))
-    }
+/// Usage: (version)
+///
+/// Produce executable version as string.
+///
+/// Section: shell
+///
+/// Example:
+/// (test::assert-true (string? (version)))
+#[sl_sh_fn(fn_name = "version")]
+fn version() -> LispResult<Expression> {
+    Ok(Expression::alloc_data(ExpEnum::String(
+        VERSION_STRING.into(),
+        None,
+    )))
 }
 
 // Suppress this lint because we have to return a Result here since it is a builtin...
@@ -1467,23 +1482,7 @@ Example:
 ",
         ),
     );
-    data.insert(
-        interner.intern("apply"),
-        Expression::make_function(
-            builtin_apply,
-            "Usage: (apply function arg* list)
-
-Call the provided function with the supplied arguments, last is a list that will be expanded.
-
-Section: core
-
-Example:
-(def test-apply-one (apply str '(\"O\" \"NE\")))
-(test::assert-equal \"ONE\" test-apply-one)
-(test::assert-equal 10 (apply + 1 '(2 7)))
-",
-        ),
-    );
+    intern_apply(interner, data);
     data.insert(
         interner.intern("unwind-protect"),
         Expression::make_function(
@@ -1558,31 +1557,7 @@ Example:
 ",
         ),
     );
-    data.insert(
-        interner.intern("length"),
-        Expression::make_function(
-            builtin_length,
-            "Usage: (length expression) -> int
-
-Return length of supplied expression.
-
-Section: core
-
-Example:
-(test::assert-equal 0 (length nil))
-(test::assert-equal 5 (length \"12345\"))
-; Note the unicode symbol is only one char even though it is more then one byte.
-(test::assert-equal 6 (length \"12345Σ\"))
-(test::assert-equal 3 (length '(1 2 3)))
-(test::assert-equal 3 (length '#(1 2 3)))
-(test::assert-equal 3 (length (list 1 2 3)))
-(test::assert-equal 3 (length (vec 1 2 3)))
-(test::assert-error (length 100))
-(test::assert-error (length 100.0))
-(test::assert-error (length #\\x))
-",
-        ),
-    );
+    intern_length(interner, data);
     data.insert(
         interner.intern("if"),
         Expression::make_special(
@@ -2124,21 +2099,7 @@ Example:
 ",
         ),
     );
-    data.insert(
-        interner.intern("version"),
-        Expression::make_function(
-            builtin_version,
-            "Usage: (version)
-
-Produce executable version as string.
-
-Section: shell
-
-Example:
-(test::assert-true (string? (version)))
-",
-        ),
-    );
+    intern_version(interner, data);
     data.insert(
         interner.intern("get-error"),
         Expression::make_function(
@@ -2321,7 +2282,7 @@ Example:
             builtin_meta_add_tags,
             "Usage: (meta-add-tags expression tag*)
 
-Adds multiple meta tags to an expression (see meta-add-tag).  It will work with 
+Adds multiple meta tags to an expression.  It will work with
 symbols or vectors or lists of symbols (or any combination).
 This is intended for helping with structs and interfaces in lisp, you probably
 do not want to use it.

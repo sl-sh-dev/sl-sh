@@ -1,12 +1,13 @@
 use regex::Regex;
 use std::borrow::Cow;
 use std::cell::{Ref, RefCell, RefMut};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::error::Error;
 use std::fmt;
 use std::fs::File;
 use std::io::{self, BufReader, BufWriter, Read, Write};
 use std::iter;
+use std::marker::PhantomData;
 use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
 
@@ -15,6 +16,10 @@ use crate::eval::call_lambda;
 use crate::process::*;
 use crate::symbols::*;
 use crate::unix::fd_to_file;
+use crate::{
+    try_inner_file, try_inner_float, try_inner_hash_map, try_inner_hash_map_mut, try_inner_int,
+    try_inner_string, ErrorStrings, LispResult,
+};
 
 #[derive(Clone, Debug)]
 pub struct LispError {
@@ -48,13 +53,13 @@ impl LispError {
     }
 }
 
-pub trait PeekableIterator: std::iter::Iterator {
+pub trait PeekableIterator: Iterator {
     fn peek(&mut self) -> Option<&Self::Item>;
 }
 
-impl<I: std::iter::Iterator> PeekableIterator for std::iter::Peekable<I> {
+impl<I: Iterator> PeekableIterator for std::iter::Peekable<I> {
     fn peek(&mut self) -> Option<&Self::Item> {
-        std::iter::Peekable::peek(self)
+        iter::Peekable::peek(self)
     }
 }
 
@@ -231,6 +236,12 @@ pub enum SymLoc {
     Ref(Binding),
     Namespace(Rc<RefCell<Namespace>>, usize),
     Stack(usize),
+}
+
+impl Default for SymLoc {
+    fn default() -> Self {
+        SymLoc::None
+    }
 }
 
 impl SymLoc {
@@ -1102,8 +1113,275 @@ impl From<&mut ExpEnum> for Expression {
     }
 }
 
+pub struct TypedWrapper<T: ?Sized, U>(U, PhantomData<T>);
+
+impl<T: ?Sized, U> TypedWrapper<T, U> {
+    pub fn new(src: U) -> TypedWrapper<T, U> {
+        TypedWrapper(src, PhantomData::default())
+    }
+}
+
+pub trait RustProcedure<T, F>
+where
+    Self: Sized,
+    F: FnOnce(T) -> LispResult<Expression> + ?Sized,
+{
+    fn apply(&self, fn_name: &str, fun: F) -> LispResult<Expression>;
+}
+
+pub trait RustProcedureRef<T, F>
+where
+    Self: Sized,
+    F: FnOnce(&T) -> LispResult<Expression> + ?Sized,
+{
+    fn apply_ref(&self, fn_name: &str, fun: F) -> LispResult<Expression>;
+}
+
+pub trait RustProcedureRefMut<T, F>
+where
+    Self: Sized,
+    F: FnOnce(&mut T) -> LispResult<Expression> + ?Sized,
+{
+    fn apply_ref_mut(&mut self, fn_name: &str, fun: F) -> LispResult<Expression>;
+}
+
+struct Symbol(&'static str, SymLoc);
+
+impl<F> RustProcedureRefMut<Symbol, F> for TypedWrapper<Symbol, Expression>
+where
+    F: FnOnce(&mut Symbol) -> LispResult<Expression>,
+{
+    fn apply_ref_mut(&mut self, fn_name: &str, fun: F) -> LispResult<Expression> {
+        let got = self.0.display_type();
+        match &self.0.get().data {
+            ExpEnum::Symbol(str, loc) => {
+                let mut sym = Symbol(str, loc.clone());
+                fun(&mut sym)
+            }
+            _ => Err(LispError::new(ErrorStrings::mismatched_type(
+                fn_name,
+                &ExpEnum::Symbol(Default::default(), SymLoc::None).to_string(),
+                &got,
+            ))),
+        }
+    }
+}
+
+impl<F> RustProcedureRef<Symbol, F> for TypedWrapper<Symbol, Expression>
+where
+    F: FnOnce(&Symbol) -> LispResult<Expression>,
+{
+    fn apply_ref(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
+        let got = self.0.display_type();
+        match &self.0.get().data {
+            ExpEnum::Symbol(str, loc) => {
+                let sym = Symbol(str, loc.clone());
+                fun(&sym)
+            }
+            _ => Err(LispError::new(ErrorStrings::mismatched_type(
+                fn_name,
+                &ExpEnum::Symbol(Default::default(), SymLoc::None).to_string(),
+                &got,
+            ))),
+        }
+    }
+}
+
+impl<F> RustProcedure<Symbol, F> for TypedWrapper<Symbol, Expression>
+where
+    F: FnOnce(Symbol) -> LispResult<Expression>,
+{
+    fn apply(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
+        let got = self.0.display_type();
+        match &self.0.get().data {
+            ExpEnum::Symbol(str, loc) => {
+                let sym = Symbol(str, loc.clone());
+                fun(sym)
+            }
+            _ => Err(LispError::new(ErrorStrings::mismatched_type(
+                fn_name,
+                &ExpEnum::Symbol(Default::default(), SymLoc::None).to_string(),
+                &got,
+            ))),
+        }
+    }
+}
+
+impl<F> RustProcedureRefMut<BTreeMap<&str, Expression>, F>
+    for TypedWrapper<BTreeMap<&str, Expression>, Expression>
+where
+    F: FnOnce(&mut BTreeMap<&str, Expression>) -> LispResult<Expression>,
+{
+    fn apply_ref_mut(&mut self, fn_name: &str, fun: F) -> LispResult<Expression> {
+        let got = self.0.display_type();
+        let mut btreemap = BTreeMap::new();
+        let x = match &self.0.get().data {
+            ExpEnum::HashMap(map) => {
+                map.iter().fold(&mut btreemap, |accum, (k, v)| {
+                    accum.insert(*k, v.clone());
+                    accum
+                });
+                fun(&mut btreemap)
+            }
+            _ => {
+                return Err(LispError::new(ErrorStrings::mismatched_type(
+                    fn_name,
+                    &ExpEnum::HashMap(Default::default()).to_string(),
+                    &got,
+                )))
+            }
+        };
+        let map = btreemap
+            .into_iter()
+            .fold(HashMap::new(), |mut accum, (k, v)| {
+                accum.insert(k, v);
+                accum
+            });
+        self.0.data.borrow_mut().data.replace(ExpEnum::HashMap(map));
+        x
+    }
+}
+
+impl<F> RustProcedureRefMut<HashMap<&str, Expression>, F>
+    for TypedWrapper<HashMap<&str, Expression>, Expression>
+where
+    F: FnOnce(&mut HashMap<&str, Expression>) -> LispResult<Expression>,
+{
+    fn apply_ref_mut(&mut self, fn_name: &str, fun: F) -> LispResult<Expression> {
+        try_inner_hash_map_mut!(fn_name, self.0, arg, fun(arg))
+    }
+}
+
+impl<F> RustProcedure<HashMap<&str, Expression>, F>
+    for TypedWrapper<HashMap<&str, Expression>, Expression>
+where
+    F: FnOnce(HashMap<&str, Expression>) -> LispResult<Expression>,
+{
+    fn apply(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
+        try_inner_hash_map!(fn_name, self.0, arg, fun(arg.clone()))
+    }
+}
+
+impl<F> RustProcedure<&str, F> for TypedWrapper<&str, Expression>
+where
+    F: FnOnce(&str) -> LispResult<Expression>,
+{
+    fn apply(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
+        try_inner_string!(fn_name, &self.0, arg, fun(arg))
+    }
+}
+
+impl<F> RustProcedure<String, F> for TypedWrapper<String, Expression>
+where
+    F: FnOnce(String) -> LispResult<Expression>,
+{
+    fn apply(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
+        try_inner_string!(fn_name, &self.0, arg, {
+            let arg = arg.to_string();
+            fun(arg)
+        })
+    }
+}
+
+impl<F> RustProcedureRefMut<String, F> for TypedWrapper<String, Expression>
+where
+    F: FnOnce(&mut String) -> LispResult<Expression>,
+{
+    fn apply_ref_mut(&mut self, fn_name: &str, fun: F) -> LispResult<Expression> {
+        try_inner_string!(fn_name, &self.0, arg, {
+            let arg = &mut arg.to_string();
+            fun(arg)
+        })
+    }
+}
+
+impl<F> RustProcedureRef<String, F> for TypedWrapper<String, Expression>
+where
+    F: FnOnce(&String) -> LispResult<Expression>,
+{
+    fn apply_ref(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
+        try_inner_string!(fn_name, &self.0, arg, {
+            let arg = &mut arg.to_string();
+            fun(arg)
+        })
+    }
+}
+
+impl<F> RustProcedureRef<Expression, F> for TypedWrapper<Expression, Expression>
+where
+    F: FnOnce(&Expression) -> LispResult<Expression>,
+{
+    fn apply_ref(&self, _fn_name: &str, fun: F) -> LispResult<Expression> {
+        fun(&mut self.0.clone())
+    }
+}
+
+impl<F> RustProcedureRefMut<Expression, F> for TypedWrapper<Expression, Expression>
+where
+    F: FnOnce(&mut Expression) -> LispResult<Expression>,
+{
+    fn apply_ref_mut(&mut self, _fn_name: &str, fun: F) -> LispResult<Expression> {
+        fun(&mut self.0.clone())
+    }
+}
+
+impl<F> RustProcedure<&Expression, F> for TypedWrapper<&Expression, Expression>
+where
+    F: FnOnce(&Expression) -> LispResult<Expression>,
+{
+    fn apply(&self, _fn_name: &str, fun: F) -> LispResult<Expression> {
+        fun(&self.0.clone())
+    }
+}
+
+impl<F> RustProcedure<Expression, F> for TypedWrapper<Expression, Expression>
+where
+    F: FnOnce(Expression) -> LispResult<Expression>,
+{
+    fn apply(&self, _fn_name: &str, fun: F) -> LispResult<Expression> {
+        fun(self.0.clone())
+    }
+}
+
+impl<F> RustProcedureRef<i64, F> for TypedWrapper<i64, Expression>
+where
+    F: FnOnce(&i64) -> LispResult<Expression>,
+{
+    fn apply_ref(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
+        try_inner_int!(fn_name, self.0, num, fun(&num))
+    }
+}
+
+impl<F> RustProcedure<i64, F> for TypedWrapper<i64, Expression>
+where
+    F: FnOnce(i64) -> LispResult<Expression>,
+{
+    fn apply(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
+        try_inner_int!(fn_name, self.0, num, fun(num))
+    }
+}
+
+impl<F> RustProcedure<f64, F> for TypedWrapper<f64, Expression>
+where
+    F: FnOnce(f64) -> LispResult<Expression>,
+{
+    fn apply(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
+        try_inner_float!(fn_name, self.0, num, fun(*num))
+    }
+}
+
+impl<F> RustProcedure<Rc<RefCell<FileState>>, F>
+    for TypedWrapper<Rc<RefCell<FileState>>, Expression>
+where
+    F: FnOnce(Rc<RefCell<FileState>>) -> LispResult<Expression>,
+{
+    fn apply(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
+        try_inner_file!(fn_name, self.0, file, fun(file))
+    }
+}
+
 #[cfg(test)]
-mod tests {
+mod test {
     use super::*;
 
     #[test]
