@@ -4,8 +4,9 @@ use crate::types::*;
 use std::borrow::Cow;
 
 use crate::LispResult;
+use std::cmp::Ordering;
 use std::convert::{TryFrom, TryInto};
-use std::{env, iter};
+use std::env;
 
 pub fn param_eval_optional(
     environment: &mut Environment,
@@ -761,17 +762,17 @@ fn get_args_optional_aware(
     Ok(parsed_args)
 }
 
-/// arrays may be of different sizes, but there is at least 1 param that is optional or vec.
-fn verify_args_optional_aware(
-    fn_name: &str,
-    params: &[Arg],
-    args: Vec<Expression>,
-) -> LispResult<()> {
-    // if there are more args than params for the receiving fn,
-    // the last param must be a vector.
-    Ok(())
-}
-
+///// arrays may be of different sizes, but there is at least 1 param that is optional or vec.
+//fn verify_args_optional_aware(
+//    fn_name: &str,
+//    params: &[Arg],
+//    args: Vec<Expression>,
+//) -> LispResult<()> {
+//    // if there are more args than params for the receiving fn,
+//    // the last param must be a vector.
+//    Ok(())
+//}
+//
 ///// arrays may be of different sizes, but there is at least 1 param that is optional or vec.
 //pub fn get_args_optional_aware_fast(
 //    fn_name: &str,
@@ -877,53 +878,90 @@ pub fn get_arg_types(
 
 /// convert function arguments to ArgTypes so call_expand_args gets
 /// what it expects
-pub fn validate_args(fn_name: &str, params: &[Arg], args: Vec<Expression>) -> LispResult<()> {
+pub fn validate_args(fn_name: &str, params: &[Arg], args: &[Expression]) -> LispResult<()> {
     let required_args = num_required_args(params);
     let has_optional = has_optional_params(params);
     let has_optional_str = if has_optional { "at least " } else { "" };
+    // this match is about determining how the number of provided arguments
+    // compares to the number of required arguments (ArgType::Value)  along
+    // with knowledge of whether or not optional arguments exist.
     match (
         args.len() < required_args,
         has_optional,
         args.len() == required_args,
         args.len() > required_args,
     ) {
-        (true, _, _, _) => {
-            return Err(LispError::new(format!(
-                "{} not given enough arguments, expected {}{}, got {}.",
-                fn_name,
-                has_optional_str,
-                required_args,
-                args.len()
-            )));
-        }
-        (_, true, _, _) | (_, _, true, _) => {
-            if args.len() > params.len() {
-                if let Some(param) = params.iter().rev().next() {
-                    match param.val {
-                        ArgVal::Value | ArgVal::Optional => {
-                            return Err(LispError::new(format!(
+        (true, _, _, _) => Err(LispError::new(format!(
+            "{} not given enough arguments, expected {}{}, got {}.",
+            fn_name,
+            has_optional_str,
+            required_args,
+            args.len()
+        ))),
+        (_, _, true, _) => Ok(()), // if the provided arguments == the required arguments, parsing is easy, validated.
+        (_, true, _, true) => {
+            // given there are optional parameters and the number of arguments exceeds the number
+            // of required ones, compare the arity of the target rust function with the number
+            // of provided arguments.
+            match args.len().cmp(&params.len()) {
+                Ordering::Less => Err(LispError::new(format!(
+                    "{} given too many arguments, expected {}, got {}.",
+                    fn_name,
+                    params.len(),
+                    args.len()
+                ))),
+                Ordering::Equal => Ok(()),
+                Ordering::Greater => {
+                    // this means the user passed too many arguments, unless,
+                    // the last param is a Vec type, which means args.len() > params.len()
+                    // is permitted as args can be arbitrarily large in this scenario.
+                    if let Some(param) = params.iter().rev().next() {
+                        match param.val {
+                            ArgVal::Value | ArgVal::Optional => Err(LispError::new(format!(
                                 "{} given too many arguments, expected {}, got {}.",
                                 fn_name,
                                 params.len(),
                                 args.len()
-                            )));
+                            ))),
+                            ArgVal::VarArgs => Ok(()),
                         }
-                        ArgVal::VarArgs => {}
+                    } else {
+                        Err(LispError::new(format!(
+                            "{} given too many arguments, expected {}, got {}.",
+                            fn_name,
+                            params.len(),
+                            args.len()
+                        )))
                     }
                 }
             }
-            Ok(())
         }
-        (_, _, _, true) => {
-            // if the length of the passed in args is
-            return Err(LispError::new(format!(
-                "{} given too many arguments, expected {}, got {}.",
-                fn_name,
-                required_args,
-                args.len()
-            )));
+        (_, false, _, true) => {
+            // if the length of the passed in args is greater than the number of required arguments
+            // with no optional parameters then the last argument must be a VarArgs as long as the
+            // parameter rules are being properly checked at compile time.
+            if let Some(param) = params.iter().rev().next() {
+                match param.val {
+                    ArgVal::Value | ArgVal::Optional => Err(LispError::new(format!(
+                        "{} given too many arguments, expected {}, got {}.",
+                        fn_name,
+                        params.len(),
+                        args.len()
+                    ))),
+                    ArgVal::VarArgs => Ok(()),
+                }
+            } else {
+                Err(LispError::new(format!(
+                    "{} given too many arguments, expected {}, got {}.",
+                    fn_name,
+                    params.len(),
+                    args.len()
+                )))
+            }
         }
-        (false, false, false, false) => {}
+        (false, _, false, false) => unreachable!(
+            "The args slice can't be not less than, greater than, or equal to required_args"
+        ),
     }
 }
 
