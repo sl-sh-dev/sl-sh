@@ -976,6 +976,8 @@ fn generate_parse_fn2(
             // TODO remove in slosh implementation as args will be a slice
             let args = args.into_iter().collect::<Vec<Expression>>();
             let args = args.as_slice();
+            // TODO can this call go away by validating args while walking the args slice in the
+            // retro-fitted parsing?
             crate::validate_args(fn_name, arg_types, args)?;
 
             #inner
@@ -1082,6 +1084,56 @@ fn generate_builtin_fn(
     Ok(tokens)
 }
 
+fn stuff(arg: Arg) {
+    match (arg.val, arg.passing_style) {
+        (ArgVal::Value, ArgPassingStyle::Move) => {
+            let mut i = 0;
+            if let Some(arg_0) = args.next() {
+                let arg_0 = crate::eval(environment, arg_0)?;
+                if let Some(param_0) = params.get(i) {
+                    match (param_0.val, param_0.passing_style) {
+                        (ArgVal::Value, ArgPassingStyle::Move) => {
+                            use crate::types::RustProcedure;
+                            let mut typed_data: crate::types::TypedWrapper<f64, crate::types::Expression> =
+                                crate::types::TypedWrapper::new(arg_0);
+                            let callback = |arg_0: f64| -> crate::LispResult<crate::types::Expression> {
+                                Ok()//TODO
+                            };
+                            typed_data.apply(fn_name, callback)
+                        }
+                        (_, _) => {
+                            Err(LispError::new(format!(
+                                "{} macro is unable to parse its arguments, expected specific args at idx {} but arg_types vec had types that violated the generated codes expectations.",
+                                fn_name,
+                                i,
+                            )))
+                        }
+                    }
+                } else {
+                    Err(LispError::new(format!(
+                        "{} macro is unable to parse its arguments, expected {} args but arg_types vec did not have the item.",
+                        fn_name,
+                        i + 1,
+                    )))
+                }
+            } else {
+                Err(LispError::new(format!(
+                    "{}  not given enough arguments, expected {}, got, {}.",
+                    fn_name, ARGS_LEN, i,
+                )))
+            }
+        }
+        (ArgVal::Optional, ArgPassingStyle::Move) => {}
+        (ArgVal::VarArgs, ArgPassingStyle::Move) => {}
+        (ArgVal::Value, ArgPassingStyle::Reference) => {}
+        (ArgVal::Optional, ArgPassingStyle::Reference) => {}
+        (ArgVal::VarArgs, ArgPassingStyle::Reference) => {}
+        (ArgVal::Value, ArgPassingStyle::MutReference) => {}
+        (ArgVal::Optional, ArgPassingStyle::MutReference) => {}
+        (ArgVal::VarArgs, ArgPassingStyle::MutReference) => {}
+    }
+}
+
 fn generate_builtin_fn2(
     original_item_fn: &ItemFn,
     original_fn_name_str: &str,
@@ -1112,7 +1164,7 @@ fn generate_builtin_fn2(
     for (fn_arg, arg_name) in fn_args {
         if let FnArg::Typed(ty) = fn_arg {
             // this needs to use the args.iter() pattern now.
-            prev_token_stream = parse_fn_arg_type(
+            prev_token_stream = parse_fn_arg_type2(
                 &*ty.ty,
                 fn_name,
                 fn_name_attr,
@@ -1139,6 +1191,92 @@ fn generate_builtin_fn2(
         #prev_token_stream
     };
     Ok(tokens)
+}
+
+fn parse_fn_arg_type2(
+    ty: &Type, //TODO Cow?
+    fn_name: &str,
+    fn_name_attr: &Ident,
+    prev_token_stream: TokenStream,
+    arg_name: &Ident,
+    noop_outer_parse: bool,
+) -> MacroResult<TokenStream> {
+    match <Type as Into<RustType>>::into(ty.clone()) {
+        RustType::Path(ty, _span) => {
+            let val = get_arg_val(&ty);
+            let parse_layer_1 = get_parser_for_arg_val(val, noop_outer_parse);
+            let passing_style = ArgPassingStyle::Move;
+            parse_type(
+                &ty,
+                (fn_name, fn_name_attr),
+                prev_token_stream,
+                val,
+                arg_name,
+                passing_style,
+                parse_layer_1,
+            )
+        }
+        RustType::Tuple(type_tuple, _span) => {
+            let val = ArgVal::Value;
+            let parse_layer_1 = get_parser_for_arg_val(val, noop_outer_parse);
+            parse_type_tuple(
+                &type_tuple,
+                fn_name,
+                fn_name_attr,
+                prev_token_stream,
+                arg_name,
+                parse_layer_1,
+            )
+        }
+        RustType::Reference(ty_ref, _span) => match <Type as Into<RustType>>::into(*ty_ref.elem) {
+            RustType::Path(ty, _span) => {
+                let val = get_arg_val(&ty);
+                let parse_layer_1 = get_parser_for_arg_val(val, noop_outer_parse);
+                let passing_style = if ty_ref.mutability.is_some() {
+                    ArgPassingStyle::MutReference
+                } else {
+                    ArgPassingStyle::Reference
+                };
+                parse_type(
+                    &ty,
+                    (fn_name, fn_name_attr),
+                    prev_token_stream,
+                    val,
+                    arg_name,
+                    passing_style,
+                    parse_layer_1,
+                )
+            }
+            RustType::Tuple(type_tuple, _span) => {
+                let val = ArgVal::Value;
+                let parse_layer_1 = get_parser_for_arg_val(val, noop_outer_parse);
+                parse_type_tuple(
+                    &type_tuple,
+                    fn_name,
+                    fn_name_attr,
+                    prev_token_stream,
+                    arg_name,
+                    parse_layer_1,
+                )
+            }
+            RustType::BareFn(_, _) | RustType::Unsupported(_) | RustType::Reference(_, _) => {
+                let arg_pos = get_arg_pos(arg_name)?;
+                let err_str = format!(
+                    "Error with argument at position {}, sl_sh_fn only supports Vec<T>, Option<T>, and T where T is a Type::Path or Type::Tuple and can be moved, passed by reference, or passed by mutable reference (|&|&mut )(Type Path | (Type Path,*))",
+                    arg_pos
+                );
+                Err(Error::new(ty.span(), err_str))
+            }
+        },
+        RustType::BareFn(_, _) | RustType::Unsupported(_) => {
+            let arg_pos = get_arg_pos(arg_name)?;
+            let err_str = format!(
+                "Error with argument at position {}, sl_sh_fn only supports Vec<T>, Option<T>, and T where T is a Type::Path or Type::Tuple and can be moved, passed by reference, or passed by mutable reference (|&|&mut )(Type Path | (Type Path,*))",
+                arg_pos
+            );
+            Err(Error::new(ty.span(), err_str))
+        }
+    }
 }
 
 fn parse_fn_arg_type(
