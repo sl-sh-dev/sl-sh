@@ -666,6 +666,8 @@ pub enum ArgPassingStyle {
     MutReference,
 }
 
+//TODO rename to Param!
+//TODO can we also support slices?
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Arg {
     pub val: ArgVal,
@@ -969,9 +971,251 @@ pub fn validate_args(fn_name: &str, params: &[Arg], args: &[Expression]) -> Lisp
 mod test {
     use super::*;
     use crate::LispResult;
+    use std::cmp;
     use std::collections::HashMap;
     use std::convert::TryFrom;
     use std::convert::TryInto;
+
+    fn loop_over_to_inline(fn_name: &str, params: &[Arg], args: &[Expression]) -> LispResult<()> {
+        let mut scan_vec = false;
+        let required_args = num_required_args(params);
+        for idx in 0..cmp::max(params.len(), args.len()) {
+            to_inline(fn_name, idx, required_args, scan_vec, params, args)?;
+            if let Some(param) = params.get(idx) {
+                match param.val {
+                    ArgVal::VarArgs => {
+                        scan_vec = true;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn to_inline(
+        fn_name: &str,
+        idx: usize,
+        required_args: usize,
+        scan_vec: bool,
+        params: &[Arg],
+        args: &[Expression],
+    ) -> LispResult<()> {
+        // all the FREAKING conditions
+        // Given value of idx, we need to figure out if we're in a "valid"
+        // state or if we need to throw an error.
+        // idx's state is relevant given it's relation to... the current arguments
+        // the number of required arguments, and whether  or not we've seen an
+        // optional yet.
+        match (params.get(idx), args.get(idx)) {
+            // params list and provided args are both present, so the 1-1
+            // contract is still in effect
+            (Some(param), Some(arg)) => {
+                // macro
+                println!("param: {:?}. arg: {}.", param, arg);
+            }
+            // we've exhausted the parameters list but the user provided more
+            // arguments, this is only possible if we're in scan_vec mode
+            (None, Some(arg)) => {
+                if !scan_vec {
+                    return Err(LispError::new(format!(
+                        "{} given too many arguments, expected {}, got {}.",
+                        fn_name,
+                        params.len(),
+                        args.len()
+                    )));
+                } else {
+                    // macro?
+                    println!("{}", arg);
+                }
+            }
+            // number of possible parameters exceeds the length of the provided
+            // args, this can be true if some of the parameters are optional/vec
+            // because those aren't required.
+            (Some(param), None) => match param.val {
+                ArgVal::Value => {
+                    return Err(LispError::new(format!(
+                        "{} not given enough arguments, expected at least {} arguments, got {}.",
+                        fn_name,
+                        required_args,
+                        args.len()
+                    )));
+                }
+                ArgVal::Optional => {
+                    // macro?
+                    println!("{:?}", param);
+                }
+                ArgVal::VarArgs => {
+                    // macro?
+                    println!("{:?}", param);
+                }
+            },
+            (None, None) => {
+                // execute the macro here!
+                println!("All good.");
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_params_values_only() {
+        let two_moved_values = vec![
+            Arg {
+                val: ArgVal::Value,
+                passing_style: ArgPassingStyle::Move,
+            },
+            Arg {
+                val: ArgVal::Value,
+                passing_style: ArgPassingStyle::Move,
+            },
+        ];
+
+        // if there are not enough arguments we throw an error.
+        let args = vec![Expression::make_true()];
+        let args = loop_over_to_inline("foo", two_moved_values.as_slice(), args.as_slice());
+        assert!(args
+            .unwrap_err()
+            .reason
+            .contains("not given enough arguments"));
+
+        // if there are too many arguments we throw an error.
+        let args = vec![
+            Expression::make_true(),
+            Expression::make_true(),
+            Expression::make_true(),
+        ];
+        let args = loop_over_to_inline("foo", two_moved_values.as_slice(), args.as_slice());
+        assert!(args.unwrap_err().reason.contains("given too many"));
+
+        let args = vec![Expression::make_true(), Expression::make_true()];
+        loop_over_to_inline("foo", two_moved_values.as_slice(), args.as_slice())
+            .expect("Parsing should succeed.");
+    }
+
+    #[test]
+    fn test_params_optionals() {
+        let one_val_one_opt = vec![
+            Arg {
+                val: ArgVal::Value,
+                passing_style: ArgPassingStyle::Move,
+            },
+            Arg {
+                val: ArgVal::Optional,
+                passing_style: ArgPassingStyle::Move,
+            },
+        ];
+        let args = vec![Expression::make_true(), Expression::make_true()];
+        loop_over_to_inline("foo", one_val_one_opt.as_slice(), args.as_slice())
+            .expect("Parsing should succeed.");
+
+        let args = vec![Expression::make_true()];
+        loop_over_to_inline("foo", one_val_one_opt.as_slice(), args.as_slice())
+            .expect("Parsing should succeed.");
+
+        let args = vec![];
+        let args = loop_over_to_inline("foo", one_val_one_opt.as_slice(), args.as_slice());
+        assert!(args
+            .unwrap_err()
+            .reason
+            .contains("not given enough arguments"));
+
+        let args = vec![
+            Expression::make_true(),
+            Expression::make_true(),
+            Expression::make_true(),
+        ];
+        let args = loop_over_to_inline("foo", one_val_one_opt.as_slice(), args.as_slice());
+        assert!(args.unwrap_err().reason.contains("given too many"));
+    }
+
+    #[test]
+    fn test_params_vec_with_options() {
+        let val_opt_and_vec = vec![
+            Arg {
+                val: ArgVal::Value,
+                passing_style: ArgPassingStyle::Reference,
+            },
+            Arg {
+                val: ArgVal::Optional,
+                passing_style: ArgPassingStyle::MutReference,
+            },
+            Arg {
+                val: ArgVal::VarArgs,
+                passing_style: ArgPassingStyle::Move,
+            },
+        ];
+
+        let args = vec![];
+        let args = loop_over_to_inline("foo", val_opt_and_vec.as_slice(), args.as_slice());
+        assert!(args
+            .unwrap_err()
+            .reason
+            .contains("not given enough arguments"));
+        let args = vec![Expression::make_true()];
+        loop_over_to_inline("foo", val_opt_and_vec.as_slice(), args.as_slice())
+            .expect("Parsing should succeed.");
+        let args = vec![Expression::make_true(), Expression::make_true()];
+        loop_over_to_inline("foo", val_opt_and_vec.as_slice(), args.as_slice())
+            .expect("Parsing should succeed.");
+        let args = vec![
+            Expression::make_true(),
+            Expression::make_true(),
+            Expression::make_true(),
+        ];
+        loop_over_to_inline("foo", val_opt_and_vec.as_slice(), args.as_slice())
+            .expect("Parsing should succeed.");
+        let args = vec![
+            Expression::make_true(),
+            Expression::make_true(),
+            Expression::make_true(),
+            Expression::make_true(),
+            Expression::make_true(),
+        ];
+        loop_over_to_inline("foo", val_opt_and_vec.as_slice(), args.as_slice())
+            .expect("Parsing should succeed.");
+
+        let opts_and_vec = vec![
+            Arg {
+                val: ArgVal::Optional,
+                passing_style: ArgPassingStyle::Reference,
+            },
+            Arg {
+                val: ArgVal::Optional,
+                passing_style: ArgPassingStyle::MutReference,
+            },
+            Arg {
+                val: ArgVal::VarArgs,
+                passing_style: ArgPassingStyle::Move,
+            },
+        ];
+
+        let args = vec![];
+        loop_over_to_inline("foo", opts_and_vec.as_slice(), args.as_slice())
+            .expect("Parsing should succeed.");
+        let args = vec![Expression::make_true()];
+        loop_over_to_inline("foo", opts_and_vec.as_slice(), args.as_slice())
+            .expect("Parsing should succeed.");
+        let args = vec![Expression::make_true(), Expression::make_true()];
+        loop_over_to_inline("foo", opts_and_vec.as_slice(), args.as_slice())
+            .expect("Parsing should succeed.");
+        let args = vec![
+            Expression::make_true(),
+            Expression::make_true(),
+            Expression::make_true(),
+        ];
+        loop_over_to_inline("foo", opts_and_vec.as_slice(), args.as_slice())
+            .expect("Parsing should succeed.");
+        let args = vec![
+            Expression::make_true(),
+            Expression::make_true(),
+            Expression::make_true(),
+            Expression::make_true(),
+            Expression::make_true(),
+        ];
+        loop_over_to_inline("foo", opts_and_vec.as_slice(), args.as_slice())
+            .expect("Parsing should succeed.");
+    }
 
     #[test]
     fn test_from_numerical() {
@@ -1341,6 +1585,42 @@ mod test {
     }
 
     #[test]
+    fn test_builtin_int_2_float() {
+        let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
+        let arg_1 = Expression::alloc_data(ExpEnum::Int(8));
+        let exp = sample_builtin_int_2_float(ArgType::Exp(arg_0), ArgType::Exp(arg_1)).unwrap();
+        let exp_d = exp.get();
+        match exp_d.data {
+            ExpEnum::Float(f) => {
+                assert_eq!(16.0, f);
+            }
+            _ => {
+                panic!("Should be float.");
+            }
+        }
+    }
+
+    fn sample_builtin_int_2_float(arg_0: ArgType, arg_1: ArgType) -> Result<Expression, LispError> {
+        match arg_1 {
+            ArgType::Exp (arg_1) => match arg_1.get().data {
+                ExpEnum::Int(arg_1) => {
+                    match arg_0 {
+                        ArgType::Exp(arg_0) => match arg_0.get().data {
+                            ExpEnum::Int (arg_0) => {
+                                int_2_float (arg_0 , arg_1).map(Into :: into)
+                            },
+                            _ => return Err (LispError :: new ("sl_sh_fn macro is broken, apparently ArgType::Exp can't be parsed as ArgType::Exp")) ,
+                        },
+                        _ => return Err (LispError :: new ("sl_sh_fn macro is broken, apparently ArgType::Exp can't be parsed as ArgType::Exp")) ,
+                    }
+                },
+                _ => return Err (LispError :: new ("sl_sh_fn macro is broken, apparently ArgType::Exp can't be parsed as ArgType::Exp")),
+            },
+            _ => return Err (LispError :: new ("sl_sh_fn macro is broken, apparently ArgType::Exp can't be parsed as ArgType::Exp")) ,
+        }
+    }
+
+    #[test]
     fn test_vecs() {
         let one_vec = vec![Arg {
             val: ArgVal::VarArgs,
@@ -1585,7 +1865,7 @@ mod test {
             },
         ];
 
-        // if there is not enough arguments we throw an error.
+        // if there are not enough arguments we throw an error.
         let args = vec![Expression::make_true()];
         let args = get_arg_types("foo", two_moved_values.clone(), args);
         assert!(args
@@ -1608,41 +1888,5 @@ mod test {
         assert_eq!(2, args.len());
         try_exp_enum!(args.get(0).unwrap(), ArgType::Exp(_), {}, "err").unwrap();
         try_exp_enum!(args.get(1).unwrap(), ArgType::Exp(_), {}, "err").unwrap();
-    }
-
-    #[test]
-    fn test_builtin_int_2_float() {
-        let arg_0 = Expression::alloc_data(ExpEnum::Int(8));
-        let arg_1 = Expression::alloc_data(ExpEnum::Int(8));
-        let exp = sample_builtin_int_2_float(ArgType::Exp(arg_0), ArgType::Exp(arg_1)).unwrap();
-        let exp_d = exp.get();
-        match exp_d.data {
-            ExpEnum::Float(f) => {
-                assert_eq!(16.0, f);
-            }
-            _ => {
-                panic!("Should befloat.");
-            }
-        }
-    }
-
-    fn sample_builtin_int_2_float(arg_0: ArgType, arg_1: ArgType) -> Result<Expression, LispError> {
-        match arg_1 {
-            ArgType::Exp (arg_1) => match arg_1.get().data {
-                ExpEnum::Int(arg_1) => {
-                    match arg_0 {
-                        ArgType::Exp(arg_0) => match arg_0.get().data {
-                            ExpEnum::Int (arg_0) => {
-                                int_2_float (arg_0 , arg_1).map(Into :: into)
-                            },
-                            _ => return Err (LispError :: new ("sl_sh_fn macro is broken, apparently ArgType::Exp can't be parsed as ArgType::Exp")) , 
-                        },
-                        _ => return Err (LispError :: new ("sl_sh_fn macro is broken, apparently ArgType::Exp can't be parsed as ArgType::Exp")) , 
-                    }
-                },
-                _ => return Err (LispError :: new ("sl_sh_fn macro is broken, apparently ArgType::Exp can't be parsed as ArgType::Exp")), 
-            },
-            _ => return Err (LispError :: new ("sl_sh_fn macro is broken, apparently ArgType::Exp can't be parsed as ArgType::Exp")) , 
-        }
     }
 }

@@ -585,13 +585,16 @@ fn parse_float_to_intyy(
         val: crate::builtins_util::ArgVal::Value,
         passing_style: crate::builtins_util::ArgPassingStyle::Move,
     }];
+    //TODO
+    // it is just a matter of embedding code like this over and over again.
+    // the args doesn't have to be an iter because in slosh it is
     let required_args = num_required_args(params.as_slice());
     let has_optional = has_optional_params(params.as_slice());
     let has_optional_str = if has_optional { "at least " } else { "" };
     let mut i = 0;
     if let Some(arg_0) = args.next() {
         let arg_0 = crate::eval(environment, arg_0)?;
-        if let Some(param_0) = params.get(0) {
+        if let Some(param_0) = params.get(i) {
             match (param_0.val, param_0.passing_style) {
                 (ArgVal::Value, ArgPassingStyle::Move) => {
                     use crate::types::RustProcedure;
