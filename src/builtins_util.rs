@@ -1127,6 +1127,67 @@ mod test {
         ];
         let args = loop_over_to_inline("foo", one_val_one_opt.as_slice(), args.as_slice());
         assert!(args.unwrap_err().reason.contains("given too many"));
+
+        let val_and_opt = vec![
+            Arg {
+                val: ArgVal::Value,
+                passing_style: ArgPassingStyle::Move,
+            },
+            Arg {
+                val: ArgVal::Optional,
+                passing_style: ArgPassingStyle::Move,
+            },
+        ];
+        let args = vec![Expression::make_true(), Expression::make_true()];
+        loop_over_to_inline("foo", val_and_opt.as_slice(), args.as_slice())
+            .expect("Parsing should succeed.");
+
+        let args = vec![Expression::make_true()];
+        loop_over_to_inline("foo", val_and_opt.as_slice(), args.as_slice())
+            .expect("Parsing should succeed.");
+
+        let args = vec![];
+        let args = loop_over_to_inline("foo", val_and_opt.as_slice(), args.as_slice());
+        assert!(args
+            .unwrap_err()
+            .reason
+            .contains("not given enough arguments"));
+
+        let args = vec![
+            Expression::make_true(),
+            Expression::make_true(),
+            Expression::make_true(),
+        ];
+        let args = loop_over_to_inline("foo", val_and_opt.as_slice(), args.as_slice());
+        assert!(args.unwrap_err().reason.contains("given too many"));
+    }
+
+    #[test]
+    fn test_params_vec() {
+        let one_vec = vec![Arg {
+            val: ArgVal::VarArgs,
+            passing_style: ArgPassingStyle::MutReference,
+        }];
+
+        let args = vec![];
+        loop_over_to_inline("foo", one_vec.as_slice(), args.as_slice())
+            .expect("Parsing should succeed.");
+
+        let args = vec![Expression::make_true()];
+        loop_over_to_inline("foo", one_vec.as_slice(), args.as_slice())
+            .expect("Parsing should succeed.");
+
+        let args = vec![Expression::make_true(), Expression::make_true()];
+        loop_over_to_inline("foo", one_vec.as_slice(), args.as_slice())
+            .expect("Parsing should succeed.");
+
+        let args = vec![
+            Expression::make_true(),
+            Expression::make_true(),
+            Expression::make_true(),
+        ];
+        loop_over_to_inline("foo", one_vec.as_slice(), args.as_slice())
+            .expect("Parsing should succeed.");
     }
 
     #[test]
