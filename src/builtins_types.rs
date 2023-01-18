@@ -527,7 +527,7 @@ fn parse_float_to_inty(
 ) -> crate::LispResult<crate::types::Expression> {
     let fn_name = "float->int";
     const ARGS_LEN: usize = 1usize;
-    let params = vec![crate::builtins_util::Arg {
+    let params = vec![crate::builtins_util::Param {
         val: crate::builtins_util::ArgVal::Value,
         passing_style: crate::builtins_util::ArgPassingStyle::Move,
     }];
@@ -573,7 +573,7 @@ fn parse_float_to_intyy(
 ) -> crate::LispResult<crate::types::Expression> {
     let fn_name = "float->int";
     const ARGS_LEN: usize = 1usize;
-    let params = vec![crate::builtins_util::Arg {
+    let params = vec![crate::builtins_util::Param {
         val: crate::builtins_util::ArgVal::Value,
         passing_style: crate::builtins_util::ArgPassingStyle::Move,
     }];
