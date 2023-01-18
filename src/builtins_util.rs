@@ -981,17 +981,36 @@ mod test {
         params: &[Arg; N],
         args: &[Expression],
     ) -> LispResult<()> {
-        let mut scan_vec = false;
         let required_args = num_required_args(params);
-        for idx in 0..cmp::max(params.len(), args.len()) {
-            to_inline(fn_name, idx, required_args, scan_vec, params, args)?;
-            if let Some(param) = params.get(idx) {
-                match param.val {
-                    ArgVal::VarArgs => {
-                        scan_vec = true;
-                    }
-                    _ => {}
-                }
+        for idx in 0..N {
+            to_inline(fn_name, idx, required_args, params, args)?;
+        }
+        if N > 0 {
+            too_many_args_detection(fn_name, required_args, params, args)?;
+        }
+
+        Ok(())
+    }
+
+    fn too_many_args_detection<const N: usize>(
+        fn_name: &str,
+        required_args: usize,
+        params: &[Arg; N],
+        args: &[Expression],
+    ) -> LispResult<()> {
+        let last_param = params[N - 1];
+        match args.get(N) {
+            Some(_) if last_param.val != ArgVal::VarArgs => {
+                return Err(LispError::new(format!(
+                    "{} given too many arguments, expected {}, got {}.",
+                    fn_name,
+                    params.len(),
+                    args.len()
+                )));
+            }
+            _ => {
+                //macro
+                println!("macro")
             }
         }
         Ok(())
@@ -1001,62 +1020,22 @@ mod test {
         fn_name: &str,
         idx: usize,
         required_args: usize,
-        scan_vec: bool,
         params: &[Arg; N],
         args: &[Expression],
     ) -> LispResult<()> {
-        // all the FREAKING conditions
-        // Given value of idx, we need to figure out if we're in a "valid"
-        // state or if we need to throw an error.
-        // idx's state is relevant given it's relation to... the current arguments
-        // the number of required arguments, and whether  or not we've seen an
-        // optional yet.
-        match (params.get(idx), args.get(idx)) {
-            // params list and provided args are both present, so the 1-1
-            // contract is still in effect
-            (Some(param), Some(arg)) => {
-                // macro
-                println!("param: {:?}. arg: {}.", param, arg);
+        let param = params[idx];
+        match args.get(idx) {
+            None if param.val == ArgVal::Value => {
+                return Err(LispError::new(format!(
+                    "{} not given enough arguments, expected at least {} arguments, got {}.",
+                    fn_name,
+                    required_args,
+                    args.len()
+                )));
             }
-            // we've exhausted the parameters list but the user provided more
-            // arguments, this is only possible if we're in scan_vec mode
-            (None, Some(arg)) => {
-                if !scan_vec {
-                    return Err(LispError::new(format!(
-                        "{} given too many arguments, expected {}, got {}.",
-                        fn_name,
-                        params.len(),
-                        args.len()
-                    )));
-                } else {
-                    // macro?
-                    println!("{}", arg);
-                }
-            }
-            // number of possible parameters exceeds the length of the provided
-            // args, this can be true if some of the parameters are optional/vec
-            // because those aren't required.
-            (Some(param), None) => match param.val {
-                ArgVal::Value => {
-                    return Err(LispError::new(format!(
-                        "{} not given enough arguments, expected at least {} arguments, got {}.",
-                        fn_name,
-                        required_args,
-                        args.len()
-                    )));
-                }
-                ArgVal::Optional => {
-                    // macro?
-                    println!("{:?}", param);
-                }
-                ArgVal::VarArgs => {
-                    // macro?
-                    println!("{:?}", param);
-                }
-            },
-            (None, None) => {
-                // execute the macro here!
-                println!("All good.");
+            arg => {
+                // insert
+                println!("macro");
             }
         }
         Ok(())
