@@ -652,31 +652,31 @@ pub enum ArgType {
     VarArgs(Vec<Expression>),
 }
 
+//TODO #3 can we also support slices?
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TypeHandle {
-    Value,
+    Direct,
     Optional,
     VarArgs,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum ArgPassingStyle {
+pub enum PassingStyle {
     Move,
     Reference,
     MutReference,
 }
 
-//TODO can we also support slices?
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Param {
-    pub val: TypeHandle,
-    pub passing_style: ArgPassingStyle,
+    pub handle: TypeHandle,
+    pub passing_style: PassingStyle,
 }
 
 pub fn has_optional_params(params: &[Param]) -> bool {
     for p in params {
-        match p.val {
-            TypeHandle::Value => {}
+        match p.handle {
+            TypeHandle::Direct => {}
             TypeHandle::Optional => {
                 return true;
             }
@@ -690,7 +690,7 @@ pub fn has_optional_params(params: &[Param]) -> bool {
 
 pub fn num_required_args(params: &[Param]) -> usize {
     params.iter().fold(0, |accum, nxt| {
-        if nxt.val == TypeHandle::Value {
+        if nxt.handle == TypeHandle::Direct {
             accum + 1
         } else {
             accum
@@ -708,8 +708,8 @@ fn get_args_optional_aware(
     // if they are equal it should be easy to parse regardless of the types, it's one for one.
     if args.len() == params.len() {
         for (exp, arg) in args.into_iter().zip(params.into_iter()) {
-            match arg.val {
-                TypeHandle::Value => parsed_args.push(ArgType::Exp(exp)),
+            match arg.handle {
+                TypeHandle::Direct => parsed_args.push(ArgType::Exp(exp)),
                 TypeHandle::Optional => parsed_args.push(ArgType::Opt(Some(exp))),
                 TypeHandle::VarArgs => parsed_args.push(ArgType::VarArgs(vec![exp])),
             }
@@ -719,8 +719,8 @@ fn get_args_optional_aware(
         // the last param must be a vector.
         if args.len() > params.len() {
             if let Some(param) = params.iter().rev().next() {
-                match param.val {
-                    TypeHandle::Value | TypeHandle::Optional => {
+                match param.handle {
+                    TypeHandle::Direct | TypeHandle::Optional => {
                         return Err(LispError::new(format!(
                             "{} given too many arguments, expected {}, got {}.",
                             fn_name,
@@ -735,8 +735,8 @@ fn get_args_optional_aware(
         let mut args_iter = args.into_iter();
         for param in params {
             if let Some(exp) = args_iter.next() {
-                match param.val {
-                    TypeHandle::Value => parsed_args.push(ArgType::Exp(exp)),
+                match param.handle {
+                    TypeHandle::Direct => parsed_args.push(ArgType::Exp(exp)),
                     TypeHandle::Optional => parsed_args.push(ArgType::Opt(Some(exp))),
                     // There can only be one TypeHandle::VarArgs and it's always the last one, this is
                     // enforced at compile time.
@@ -749,8 +749,8 @@ fn get_args_optional_aware(
                     }
                 }
             } else {
-                match param.val {
-                    TypeHandle::Value => {
+                match param.handle {
+                    TypeHandle::Direct => {
                         // it can't be the case that we don't have enough required arguments,
                         // we already checked for that.
                     }
@@ -786,16 +786,16 @@ fn get_args_optional_aware(
 //    let has_optional = has_optional_params(params.as_slice());
 //    let has_optional_str = if has_optional { "at least " } else { "" };
 //    let params_len = params.len();
-//    Ok(params.into_iter().enumerate().map(move |(i, arg)| {
+//    Ok(params.into_iter().enumerate().map(move |(i, param)| {
 //        if let Some((j, nxt)) = args.next() {
-//            if j > i && arg.val != TypeHandle::VarArgs {
+//            if j > i && param.handle != TypeHandle::VarArgs {
 //                return Err(LispError::new(format!(
 //                    "{} given too many arguments, expected {}, got {}.",
 //                    fn_name,
 //                    params_len,
 //                    0, //TODO fix me, need global count.
 //                )));
-//            } else if j >= i && arg.val == TypeHandle::VarArgs {
+//            } else if j >= i && param.handle == TypeHandle::VarArgs {
 //                let capacity = j - i;
 //                let mut var_args = Vec::with_capacity(capacity);
 //                let mut nxt = nxt?;
@@ -807,7 +807,7 @@ fn get_args_optional_aware(
 //                }
 //                Ok(ArgType::VarArgs(var_args))
 //            } else {
-//                match arg.val {
+//                match param.handle {
 //                    TypeHandle::Value => {
 //                        let nxt = nxt?;
 //                        Ok(ArgType::Exp(nxt))
@@ -917,8 +917,8 @@ pub fn validate_args(fn_name: &str, params: &[Param], args: &[Expression]) -> Li
                     // the last param is a Vec type, which means args.len() > params.len()
                     // is permitted as args can be arbitrarily large in this scenario.
                     if let Some(param) = params.iter().rev().next() {
-                        match param.val {
-                            TypeHandle::Value | TypeHandle::Optional => {
+                        match param.handle {
+                            TypeHandle::Direct | TypeHandle::Optional => {
                                 Err(LispError::new(format!(
                                     "{} given too many arguments, expected {}, got {}.",
                                     fn_name,
@@ -944,8 +944,8 @@ pub fn validate_args(fn_name: &str, params: &[Param], args: &[Expression]) -> Li
             // with no optional parameters then the last argument must be a VarArgs as long as the
             // parameter rules are being properly checked at compile time.
             if let Some(param) = params.iter().rev().next() {
-                match param.val {
-                    TypeHandle::Value | TypeHandle::Optional => Err(LispError::new(format!(
+                match param.handle {
+                    TypeHandle::Direct | TypeHandle::Optional => Err(LispError::new(format!(
                         "{} given too many arguments, expected {}, got {}.",
                         fn_name,
                         params.len(),
@@ -999,7 +999,7 @@ mod test {
     ) -> LispResult<()> {
         let last_param = params[N - 1];
         match args.get(N) {
-            Some(_) if last_param.val != TypeHandle::VarArgs => {
+            Some(_) if last_param.handle != TypeHandle::VarArgs => {
                 return Err(LispError::new(format!(
                     "{} given too many arguments, expected {}, got {}.",
                     fn_name,
@@ -1024,7 +1024,7 @@ mod test {
     ) -> LispResult<()> {
         let param = params[idx];
         match args.get(idx) {
-            None if param.val == TypeHandle::Value => {
+            None if param.handle == TypeHandle::Direct => {
                 return Err(LispError::new(format!(
                     "{} not given enough arguments, expected at least {} arguments, got {}.",
                     fn_name,
@@ -1044,12 +1044,12 @@ mod test {
     fn test_params_values_only() {
         let two_moved_values = vec![
             Param {
-                val: TypeHandle::Value,
-                passing_style: ArgPassingStyle::Move,
+                handle: TypeHandle::Direct,
+                passing_style: PassingStyle::Move,
             },
             Param {
-                val: TypeHandle::Value,
-                passing_style: ArgPassingStyle::Move,
+                handle: TypeHandle::Direct,
+                passing_style: PassingStyle::Move,
             },
         ];
 
@@ -1091,12 +1091,12 @@ mod test {
     fn test_params_optionals() {
         let one_val_one_opt = vec![
             Param {
-                val: TypeHandle::Value,
-                passing_style: ArgPassingStyle::Move,
+                handle: TypeHandle::Direct,
+                passing_style: PassingStyle::Move,
             },
             Param {
-                val: TypeHandle::Optional,
-                passing_style: ArgPassingStyle::Move,
+                handle: TypeHandle::Optional,
+                passing_style: PassingStyle::Move,
             },
         ];
         let args = vec![Expression::make_true(), Expression::make_true()];
@@ -1140,12 +1140,12 @@ mod test {
 
         let val_and_opt = vec![
             Param {
-                val: TypeHandle::Value,
-                passing_style: ArgPassingStyle::Move,
+                handle: TypeHandle::Direct,
+                passing_style: PassingStyle::Move,
             },
             Param {
-                val: TypeHandle::Optional,
-                passing_style: ArgPassingStyle::Move,
+                handle: TypeHandle::Optional,
+                passing_style: PassingStyle::Move,
             },
         ];
         let args = vec![Expression::make_true(), Expression::make_true()];
@@ -1191,8 +1191,8 @@ mod test {
     #[test]
     fn test_params_vec() {
         let one_vec = vec![Param {
-            val: TypeHandle::VarArgs,
-            passing_style: ArgPassingStyle::MutReference,
+            handle: TypeHandle::VarArgs,
+            passing_style: PassingStyle::MutReference,
         }];
 
         let args = vec![];
@@ -1236,16 +1236,16 @@ mod test {
     fn test_params_vec_with_options() {
         let val_opt_and_vec = vec![
             Param {
-                val: TypeHandle::Value,
-                passing_style: ArgPassingStyle::Reference,
+                handle: TypeHandle::Direct,
+                passing_style: PassingStyle::Reference,
             },
             Param {
-                val: TypeHandle::Optional,
-                passing_style: ArgPassingStyle::MutReference,
+                handle: TypeHandle::Optional,
+                passing_style: PassingStyle::MutReference,
             },
             Param {
-                val: TypeHandle::VarArgs,
-                passing_style: ArgPassingStyle::Move,
+                handle: TypeHandle::VarArgs,
+                passing_style: PassingStyle::Move,
             },
         ];
 
@@ -1300,16 +1300,16 @@ mod test {
 
         let opts_and_vec = vec![
             Param {
-                val: TypeHandle::Optional,
-                passing_style: ArgPassingStyle::Reference,
+                handle: TypeHandle::Optional,
+                passing_style: PassingStyle::Reference,
             },
             Param {
-                val: TypeHandle::Optional,
-                passing_style: ArgPassingStyle::MutReference,
+                handle: TypeHandle::Optional,
+                passing_style: PassingStyle::MutReference,
             },
             Param {
-                val: TypeHandle::VarArgs,
-                passing_style: ArgPassingStyle::Move,
+                handle: TypeHandle::VarArgs,
+                passing_style: PassingStyle::Move,
             },
         ];
 
@@ -1766,8 +1766,8 @@ mod test {
     #[test]
     fn test_vecs() {
         let one_vec = vec![Param {
-            val: TypeHandle::VarArgs,
-            passing_style: ArgPassingStyle::MutReference,
+            handle: TypeHandle::VarArgs,
+            passing_style: PassingStyle::MutReference,
         }];
         let args = vec![];
         let args = get_arg_types("foo", one_vec.clone(), args).unwrap();
@@ -1808,12 +1808,12 @@ mod test {
 
         let val_vec = vec![
             Param {
-                val: TypeHandle::Value,
-                passing_style: ArgPassingStyle::Reference,
+                handle: TypeHandle::Direct,
+                passing_style: PassingStyle::Reference,
             },
             Param {
-                val: TypeHandle::VarArgs,
-                passing_style: ArgPassingStyle::MutReference,
+                handle: TypeHandle::VarArgs,
+                passing_style: PassingStyle::MutReference,
             },
         ];
         let args = vec![
@@ -1837,16 +1837,16 @@ mod test {
     fn test_vec_with_optionals() {
         let val_opt_and_vec = vec![
             Param {
-                val: TypeHandle::Optional,
-                passing_style: ArgPassingStyle::Reference,
+                handle: TypeHandle::Optional,
+                passing_style: PassingStyle::Reference,
             },
             Param {
-                val: TypeHandle::Optional,
-                passing_style: ArgPassingStyle::MutReference,
+                handle: TypeHandle::Optional,
+                passing_style: PassingStyle::MutReference,
             },
             Param {
-                val: TypeHandle::VarArgs,
-                passing_style: ArgPassingStyle::Move,
+                handle: TypeHandle::VarArgs,
+                passing_style: PassingStyle::Move,
             },
         ];
 
@@ -1907,12 +1907,12 @@ mod test {
     fn test_all_optional() {
         let two_opts = vec![
             Param {
-                val: TypeHandle::Optional,
-                passing_style: ArgPassingStyle::Move,
+                handle: TypeHandle::Optional,
+                passing_style: PassingStyle::Move,
             },
             Param {
-                val: TypeHandle::Optional,
-                passing_style: ArgPassingStyle::Move,
+                handle: TypeHandle::Optional,
+                passing_style: PassingStyle::Move,
             },
         ];
 
@@ -1959,12 +1959,12 @@ mod test {
     fn test_optional() {
         let one_val_one_opt = vec![
             Param {
-                val: TypeHandle::Value,
-                passing_style: ArgPassingStyle::Move,
+                handle: TypeHandle::Direct,
+                passing_style: PassingStyle::Move,
             },
             Param {
-                val: TypeHandle::Optional,
-                passing_style: ArgPassingStyle::Move,
+                handle: TypeHandle::Optional,
+                passing_style: PassingStyle::Move,
             },
         ];
 
@@ -1999,12 +1999,12 @@ mod test {
     fn test_values() {
         let two_moved_values = vec![
             Param {
-                val: TypeHandle::Value,
-                passing_style: ArgPassingStyle::Move,
+                handle: TypeHandle::Direct,
+                passing_style: PassingStyle::Move,
             },
             Param {
-                val: TypeHandle::Value,
-                passing_style: ArgPassingStyle::Move,
+                handle: TypeHandle::Direct,
+                passing_style: PassingStyle::Move,
             },
         ];
 
