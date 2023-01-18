@@ -662,7 +662,7 @@ pub enum TypeHandle {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum PassingStyle {
-    Move,
+    Value,
     Reference,
     MutReference,
 }
@@ -1045,11 +1045,11 @@ mod test {
         let two_moved_values = vec![
             Param {
                 handle: TypeHandle::Direct,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
             Param {
                 handle: TypeHandle::Direct,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
         ];
 
@@ -1092,11 +1092,11 @@ mod test {
         let one_val_one_opt = vec![
             Param {
                 handle: TypeHandle::Direct,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
             Param {
                 handle: TypeHandle::Optional,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
         ];
         let args = vec![Expression::make_true(), Expression::make_true()];
@@ -1141,11 +1141,11 @@ mod test {
         let val_and_opt = vec![
             Param {
                 handle: TypeHandle::Direct,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
             Param {
                 handle: TypeHandle::Optional,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
         ];
         let args = vec![Expression::make_true(), Expression::make_true()];
@@ -1245,7 +1245,7 @@ mod test {
             },
             Param {
                 handle: TypeHandle::VarArgs,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
         ];
 
@@ -1309,7 +1309,7 @@ mod test {
             },
             Param {
                 handle: TypeHandle::VarArgs,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
         ];
 
@@ -1846,7 +1846,7 @@ mod test {
             },
             Param {
                 handle: TypeHandle::VarArgs,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
         ];
 
@@ -1908,11 +1908,11 @@ mod test {
         let two_opts = vec![
             Param {
                 handle: TypeHandle::Optional,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
             Param {
                 handle: TypeHandle::Optional,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
         ];
 
@@ -1960,11 +1960,11 @@ mod test {
         let one_val_one_opt = vec![
             Param {
                 handle: TypeHandle::Direct,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
             Param {
                 handle: TypeHandle::Optional,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
         ];
 
@@ -2000,11 +2000,11 @@ mod test {
         let two_moved_values = vec![
             Param {
                 handle: TypeHandle::Direct,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
             Param {
                 handle: TypeHandle::Direct,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
         ];
 

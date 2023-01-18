@@ -529,14 +529,14 @@ fn parse_float_to_inty(
     const ARGS_LEN: usize = 1usize;
     let params = vec![crate::builtins_util::Param {
         handle: crate::builtins_util::TypeHandle::Direct,
-        passing_style: crate::builtins_util::PassingStyle::Move,
+        passing_style: crate::builtins_util::PassingStyle::Value,
     }];
     let i = 0;
     if let Some(arg_0) = args.next() {
         let arg_0 = crate::eval(environment, arg_0)?;
         if let Some(param_0) = params.get(0) {
             match (param_0.handle, param_0.passing_style) {
-                (TypeHandle::Direct, PassingStyle::Move) => {
+                (TypeHandle::Direct, PassingStyle::Value) => {
                     let typed_data: crate::types::TypedWrapper<f64, crate::types::Expression> =
                         crate::types::TypedWrapper::new(arg_0);
                     let callback = |arg_0: f64| -> crate::LispResult<crate::types::Expression> {
@@ -575,7 +575,7 @@ fn parse_float_to_intyy(
     const ARGS_LEN: usize = 1usize;
     let params = vec![crate::builtins_util::Param {
         handle: crate::builtins_util::TypeHandle::Direct,
-        passing_style: crate::builtins_util::PassingStyle::Move,
+        passing_style: crate::builtins_util::PassingStyle::Value,
     }];
     //TODO
     // it is just a matter of embedding code like this over and over again.
@@ -585,7 +585,7 @@ fn parse_float_to_intyy(
         let arg_0 = crate::eval(environment, arg_0)?;
         if let Some(param_0) = params.get(i) {
             match (param_0.handle, param_0.passing_style) {
-                (TypeHandle::Direct, PassingStyle::Move) => {
+                (TypeHandle::Direct, PassingStyle::Value) => {
                     let typed_data: crate::types::TypedWrapper<f64, crate::types::Expression> =
                         crate::types::TypedWrapper::new(arg_0);
                     let callback = |arg_0: f64| -> crate::LispResult<crate::types::Expression> {
