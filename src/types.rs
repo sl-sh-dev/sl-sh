@@ -1373,11 +1373,11 @@ where
                 let expected = ExpEnum::Float(f64::default()).to_string()
                     + ", or "
                     + &ExpEnum::Int(i64::default()).to_string();
-                return Err(LispError::new(ErrorStrings::mismatched_type(
+                Err(LispError::new(ErrorStrings::mismatched_type(
                     fn_name,
                     &expected,
                     &self.0.to_string(),
-                )));
+                )))
             }
         }
     }

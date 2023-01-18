@@ -971,7 +971,6 @@ pub fn validate_args(fn_name: &str, params: &[Arg], args: &[Expression]) -> Lisp
 mod test {
     use super::*;
     use crate::LispResult;
-    use std::cmp;
     use std::collections::HashMap;
     use std::convert::TryFrom;
     use std::convert::TryInto;
@@ -986,7 +985,7 @@ mod test {
             to_inline(fn_name, idx, required_args, params, args)?;
         }
         if N > 0 {
-            too_many_args_detection(fn_name, required_args, params, args)?;
+            too_many_args_detection(fn_name, params, args)?;
         }
 
         Ok(())
@@ -994,7 +993,6 @@ mod test {
 
     fn too_many_args_detection<const N: usize>(
         fn_name: &str,
-        required_args: usize,
         params: &[Arg; N],
         args: &[Expression],
     ) -> LispResult<()> {
