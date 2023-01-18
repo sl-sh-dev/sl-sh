@@ -976,7 +976,11 @@ mod test {
     use std::convert::TryFrom;
     use std::convert::TryInto;
 
-    fn loop_over_to_inline(fn_name: &str, params: &[Arg], args: &[Expression]) -> LispResult<()> {
+    fn loop_over_to_inline<const N: usize>(
+        fn_name: &str,
+        params: &[Arg; N],
+        args: &[Expression],
+    ) -> LispResult<()> {
         let mut scan_vec = false;
         let required_args = num_required_args(params);
         for idx in 0..cmp::max(params.len(), args.len()) {
@@ -993,12 +997,12 @@ mod test {
         Ok(())
     }
 
-    fn to_inline(
+    fn to_inline<const N: usize>(
         fn_name: &str,
         idx: usize,
         required_args: usize,
         scan_vec: bool,
-        params: &[Arg],
+        params: &[Arg; N],
         args: &[Expression],
     ) -> LispResult<()> {
         // all the FREAKING conditions
@@ -1073,7 +1077,11 @@ mod test {
 
         // if there are not enough arguments we throw an error.
         let args = vec![Expression::make_true()];
-        let args = loop_over_to_inline("foo", two_moved_values.as_slice(), args.as_slice());
+        let args = loop_over_to_inline::<2>(
+            "foo",
+            two_moved_values.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        );
         assert!(args
             .unwrap_err()
             .reason
@@ -1085,12 +1093,20 @@ mod test {
             Expression::make_true(),
             Expression::make_true(),
         ];
-        let args = loop_over_to_inline("foo", two_moved_values.as_slice(), args.as_slice());
+        let args = loop_over_to_inline::<2>(
+            "foo",
+            two_moved_values.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        );
         assert!(args.unwrap_err().reason.contains("given too many"));
 
         let args = vec![Expression::make_true(), Expression::make_true()];
-        loop_over_to_inline("foo", two_moved_values.as_slice(), args.as_slice())
-            .expect("Parsing should succeed.");
+        loop_over_to_inline::<2>(
+            "foo",
+            two_moved_values.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
     }
 
     #[test]
@@ -1106,15 +1122,27 @@ mod test {
             },
         ];
         let args = vec![Expression::make_true(), Expression::make_true()];
-        loop_over_to_inline("foo", one_val_one_opt.as_slice(), args.as_slice())
-            .expect("Parsing should succeed.");
+        loop_over_to_inline::<2>(
+            "foo",
+            one_val_one_opt.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
 
         let args = vec![Expression::make_true()];
-        loop_over_to_inline("foo", one_val_one_opt.as_slice(), args.as_slice())
-            .expect("Parsing should succeed.");
+        loop_over_to_inline::<2>(
+            "foo",
+            one_val_one_opt.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
 
         let args = vec![];
-        let args = loop_over_to_inline("foo", one_val_one_opt.as_slice(), args.as_slice());
+        let args = loop_over_to_inline::<2>(
+            "foo",
+            one_val_one_opt.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        );
         assert!(args
             .unwrap_err()
             .reason
@@ -1125,7 +1153,11 @@ mod test {
             Expression::make_true(),
             Expression::make_true(),
         ];
-        let args = loop_over_to_inline("foo", one_val_one_opt.as_slice(), args.as_slice());
+        let args = loop_over_to_inline::<2>(
+            "foo",
+            one_val_one_opt.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        );
         assert!(args.unwrap_err().reason.contains("given too many"));
 
         let val_and_opt = vec![
@@ -1139,15 +1171,27 @@ mod test {
             },
         ];
         let args = vec![Expression::make_true(), Expression::make_true()];
-        loop_over_to_inline("foo", val_and_opt.as_slice(), args.as_slice())
-            .expect("Parsing should succeed.");
+        loop_over_to_inline::<2>(
+            "foo",
+            val_and_opt.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
 
         let args = vec![Expression::make_true()];
-        loop_over_to_inline("foo", val_and_opt.as_slice(), args.as_slice())
-            .expect("Parsing should succeed.");
+        loop_over_to_inline::<2>(
+            "foo",
+            val_and_opt.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
 
         let args = vec![];
-        let args = loop_over_to_inline("foo", val_and_opt.as_slice(), args.as_slice());
+        let args = loop_over_to_inline::<2>(
+            "foo",
+            val_and_opt.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        );
         assert!(args
             .unwrap_err()
             .reason
@@ -1158,7 +1202,11 @@ mod test {
             Expression::make_true(),
             Expression::make_true(),
         ];
-        let args = loop_over_to_inline("foo", val_and_opt.as_slice(), args.as_slice());
+        let args = loop_over_to_inline::<2>(
+            "foo",
+            val_and_opt.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        );
         assert!(args.unwrap_err().reason.contains("given too many"));
     }
 
@@ -1170,24 +1218,40 @@ mod test {
         }];
 
         let args = vec![];
-        loop_over_to_inline("foo", one_vec.as_slice(), args.as_slice())
-            .expect("Parsing should succeed.");
+        loop_over_to_inline::<1>(
+            "foo",
+            one_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
 
         let args = vec![Expression::make_true()];
-        loop_over_to_inline("foo", one_vec.as_slice(), args.as_slice())
-            .expect("Parsing should succeed.");
+        loop_over_to_inline::<1>(
+            "foo",
+            one_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
 
         let args = vec![Expression::make_true(), Expression::make_true()];
-        loop_over_to_inline("foo", one_vec.as_slice(), args.as_slice())
-            .expect("Parsing should succeed.");
+        loop_over_to_inline::<1>(
+            "foo",
+            one_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
 
         let args = vec![
             Expression::make_true(),
             Expression::make_true(),
             Expression::make_true(),
         ];
-        loop_over_to_inline("foo", one_vec.as_slice(), args.as_slice())
-            .expect("Parsing should succeed.");
+        loop_over_to_inline::<1>(
+            "foo",
+            one_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
     }
 
     #[test]
@@ -1208,24 +1272,40 @@ mod test {
         ];
 
         let args = vec![];
-        let args = loop_over_to_inline("foo", val_opt_and_vec.as_slice(), args.as_slice());
+        let args = loop_over_to_inline::<3>(
+            "foo",
+            val_opt_and_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        );
         assert!(args
             .unwrap_err()
             .reason
             .contains("not given enough arguments"));
         let args = vec![Expression::make_true()];
-        loop_over_to_inline("foo", val_opt_and_vec.as_slice(), args.as_slice())
-            .expect("Parsing should succeed.");
+        loop_over_to_inline::<3>(
+            "foo",
+            val_opt_and_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
         let args = vec![Expression::make_true(), Expression::make_true()];
-        loop_over_to_inline("foo", val_opt_and_vec.as_slice(), args.as_slice())
-            .expect("Parsing should succeed.");
+        loop_over_to_inline::<3>(
+            "foo",
+            val_opt_and_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
         let args = vec![
             Expression::make_true(),
             Expression::make_true(),
             Expression::make_true(),
         ];
-        loop_over_to_inline("foo", val_opt_and_vec.as_slice(), args.as_slice())
-            .expect("Parsing should succeed.");
+        loop_over_to_inline::<3>(
+            "foo",
+            val_opt_and_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
         let args = vec![
             Expression::make_true(),
             Expression::make_true(),
@@ -1233,8 +1313,12 @@ mod test {
             Expression::make_true(),
             Expression::make_true(),
         ];
-        loop_over_to_inline("foo", val_opt_and_vec.as_slice(), args.as_slice())
-            .expect("Parsing should succeed.");
+        loop_over_to_inline::<3>(
+            "foo",
+            val_opt_and_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
 
         let opts_and_vec = vec![
             Arg {
@@ -1252,21 +1336,37 @@ mod test {
         ];
 
         let args = vec![];
-        loop_over_to_inline("foo", opts_and_vec.as_slice(), args.as_slice())
-            .expect("Parsing should succeed.");
+        loop_over_to_inline::<3>(
+            "foo",
+            opts_and_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
         let args = vec![Expression::make_true()];
-        loop_over_to_inline("foo", opts_and_vec.as_slice(), args.as_slice())
-            .expect("Parsing should succeed.");
+        loop_over_to_inline::<3>(
+            "foo",
+            opts_and_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
         let args = vec![Expression::make_true(), Expression::make_true()];
-        loop_over_to_inline("foo", opts_and_vec.as_slice(), args.as_slice())
-            .expect("Parsing should succeed.");
+        loop_over_to_inline::<3>(
+            "foo",
+            opts_and_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
         let args = vec![
             Expression::make_true(),
             Expression::make_true(),
             Expression::make_true(),
         ];
-        loop_over_to_inline("foo", opts_and_vec.as_slice(), args.as_slice())
-            .expect("Parsing should succeed.");
+        loop_over_to_inline::<3>(
+            "foo",
+            opts_and_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
         let args = vec![
             Expression::make_true(),
             Expression::make_true(),
@@ -1274,8 +1374,12 @@ mod test {
             Expression::make_true(),
             Expression::make_true(),
         ];
-        loop_over_to_inline("foo", opts_and_vec.as_slice(), args.as_slice())
-            .expect("Parsing should succeed.");
+        loop_over_to_inline::<3>(
+            "foo",
+            opts_and_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
     }
 
     #[test]
