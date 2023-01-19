@@ -272,6 +272,31 @@ fn get_type_handle(type_path: &TypePath) -> TypeHandle {
     TypeHandle::Direct
 }
 
+fn no_parse_param(_arg_name: &Ident, inner: TokenStream, _param: Param) -> TokenStream {
+    inner
+}
+
+fn parse_param(arg_name: &Ident, inner: TokenStream, param: Param) -> TokenStream {
+    match (param.handle, param.passing_style) {
+        (TypeHandle::Direct, PassingStyle::Value) => {
+            //quote! {
+            //        #arg_name;
+            //        crate::ArgType::Exp(#arg_name);
+            //        #inner;
+            //}
+        }
+        (TypeHandle::Direct, PassingStyle::Reference) => {}
+        (TypeHandle::Direct, PassingStyle::MutReference) => {}
+        (TypeHandle::Optional, PassingStyle::Value) => {}
+        (TypeHandle::Optional, PassingStyle::Reference) => {}
+        (TypeHandle::Optional, PassingStyle::MutReference) => {}
+        (TypeHandle::VarArgs, PassingStyle::Value) => {}
+        (TypeHandle::VarArgs, PassingStyle::Reference) => {}
+        (TypeHandle::VarArgs, PassingStyle::MutReference) => {}
+    }
+    quote! {}
+}
+
 fn no_parse(_arg_name: &Ident, inner: TokenStream) -> TokenStream {
     inner
 }
@@ -319,6 +344,17 @@ fn get_parser_for_type_handle(
         (TypeHandle::Direct, false) => parse_value,
         (TypeHandle::Optional, false) => parse_optional,
         (TypeHandle::VarArgs, false) => parse_varargs,
+    }
+}
+
+//TODO PR #3 must completely remove ArgType in both repos once new sl_sh_fn2 is ready
+fn get_parser_for_type_handle2(
+    param: Param,
+    noop_outer_parse: bool,
+) -> fn(&Ident, TokenStream, Param) -> TokenStream {
+    match (param.handle, param.passing_style, noop_outer_parse) {
+        (_, _, true) => no_parse_param,
+        (_, _, false) => parse_param,
     }
 }
 
@@ -562,7 +598,7 @@ fn parse_variadic_args_type(
 /// for Option<Expression> values the ref_exp must first be parsed as an
 /// Option, and only in the case that the option is Some will it be
 /// necessary to match against every ExpEnum variant.
-fn parse_typehandle_optional_type(
+fn parse_optional_type(
     ty: &TypePath,
     fn_name: &str,
     fn_name_attr: &Ident,
@@ -579,7 +615,7 @@ fn parse_typehandle_optional_type(
     // with the caveat that after the value of inner it is handed first wraps
     // the matched ExpEnum in Some bound to the #arg_name like the
     // rust native function expects.
-    let some_arg_value_type_parsing_code = parse_typehandle_value_type(
+    let some_arg_value_type_parsing_code = parse_direct_type(
         ty,
         fn_name,
         fn_name_attr,
@@ -632,7 +668,7 @@ fn get_type_or_wrapped_type<'a>(ty: &'a TypePath, possible_types: &'a [&str]) ->
 
 /// for regular Expression values (no Optional/VarArgs) ref_exp
 /// just needs to be matched based on it's ExpEnum variant.
-fn parse_typehandle_value_type(
+fn parse_direct_type(
     ty: &TypePath,
     fn_name: &str,
     fn_name_attr: &Ident,
@@ -726,16 +762,11 @@ fn parse_type(
 ) -> MacroResult<TokenStream> {
     let tokens = match val {
         TypeHandle::Direct => {
-            parse_typehandle_value_type(ty, fn_name.0, fn_name.1, arg_name, passing_style, inner)?
+            parse_direct_type(ty, fn_name.0, fn_name.1, arg_name, passing_style, inner)?
         }
-        TypeHandle::Optional => parse_typehandle_optional_type(
-            ty,
-            fn_name.0,
-            fn_name.1,
-            arg_name,
-            passing_style,
-            inner,
-        )?,
+        TypeHandle::Optional => {
+            parse_optional_type(ty, fn_name.0, fn_name.1, arg_name, passing_style, inner)?
+        }
         TypeHandle::VarArgs => parse_variadic_args_type(
             false,
             ty,
@@ -746,6 +777,39 @@ fn parse_type(
         )?,
     };
     Ok(outer_parse(arg_name, tokens))
+}
+
+/// create the nested match statements to parse rust types into sl_sh types.
+/// the rust types will determine what sl_sh functions will be used for
+/// transformation. If this function throws errors it means that the
+/// inputs, val/passing style are wrong and aren't matching to the ArgType(s)
+/// properly, or the rust type lookup function is busted.
+fn parse_type2(
+    ty: &TypePath,
+    fn_name: (&str, &Ident),
+    inner: TokenStream,
+    param: Param,
+    arg_name: &Ident,
+    passing_style: PassingStyle,
+    outer_parse: fn(&Ident, TokenStream, Param) -> TokenStream,
+) -> MacroResult<TokenStream> {
+    let tokens = match param.handle {
+        TypeHandle::Direct => {
+            parse_direct_type(ty, fn_name.0, fn_name.1, arg_name, passing_style, inner)?
+        }
+        TypeHandle::Optional => {
+            parse_optional_type(ty, fn_name.0, fn_name.1, arg_name, passing_style, inner)?
+        }
+        TypeHandle::VarArgs => parse_variadic_args_type(
+            false,
+            ty,
+            fn_name.0,
+            arg_name,
+            inner,
+            quote! { crate::VarArgs },
+        )?,
+    };
+    Ok(outer_parse(arg_name, tokens, param))
 }
 
 /// create a vec literal of the expected Param types so code can check its arguments at runtime for
@@ -811,6 +875,7 @@ fn embed_params_vec(params: &[Param]) -> TokenStream {
             }
         });
     }
+    //TODO rename this variable to param_types or params.
     quote! {
         let arg_types = vec![ #(#tokens),* ];
     }
@@ -1208,6 +1273,8 @@ fn generate_builtin_fn2(
                 prev_token_stream,
                 arg_name,
                 false,
+                idx,
+                *param,
             )?;
         }
     }
@@ -1230,6 +1297,8 @@ fn generate_builtin_fn2(
     Ok(tokens)
 }
 
+// TODO document this new version
+#[allow(clippy::too_many_arguments)]
 fn parse_fn_arg_type2(
     ty: &Type, //TODO Cow?
     fn_name: &str,
@@ -1237,62 +1306,62 @@ fn parse_fn_arg_type2(
     prev_token_stream: TokenStream,
     arg_name: &Ident,
     noop_outer_parse: bool,
+    idx: usize,
+    param: Param,
 ) -> MacroResult<TokenStream> {
     match <Type as Into<RustType>>::into(ty.clone()) {
         RustType::Path(ty, _span) => {
-            let val = get_type_handle(&ty);
-            let parse_layer_1 = get_parser_for_type_handle(val, noop_outer_parse);
+            let parse_layer_1 = get_parser_for_type_handle2(param, noop_outer_parse);
             let passing_style = PassingStyle::Value;
-            parse_type(
+            parse_type2(
                 &ty,
                 (fn_name, fn_name_attr),
                 prev_token_stream,
-                val,
+                param,
                 arg_name,
                 passing_style,
                 parse_layer_1,
             )
         }
         RustType::Tuple(type_tuple, _span) => {
-            let val = TypeHandle::Direct;
-            let parse_layer_1 = get_parser_for_type_handle(val, noop_outer_parse);
-            parse_type_tuple(
+            let parse_layer_1 = get_parser_for_type_handle2(param, noop_outer_parse);
+            parse_type_tuple2(
                 &type_tuple,
                 fn_name,
                 fn_name_attr,
                 prev_token_stream,
                 arg_name,
+                param,
                 parse_layer_1,
             )
         }
         RustType::Reference(ty_ref, _span) => match <Type as Into<RustType>>::into(*ty_ref.elem) {
             RustType::Path(ty, _span) => {
-                let val = get_type_handle(&ty);
-                let parse_layer_1 = get_parser_for_type_handle(val, noop_outer_parse);
+                let parse_layer_1 = get_parser_for_type_handle2(param, noop_outer_parse);
                 let passing_style = if ty_ref.mutability.is_some() {
                     PassingStyle::MutReference
                 } else {
                     PassingStyle::Reference
                 };
-                parse_type(
+                parse_type2(
                     &ty,
                     (fn_name, fn_name_attr),
                     prev_token_stream,
-                    val,
+                    param,
                     arg_name,
                     passing_style,
                     parse_layer_1,
                 )
             }
             RustType::Tuple(type_tuple, _span) => {
-                let val = TypeHandle::Direct;
-                let parse_layer_1 = get_parser_for_type_handle(val, noop_outer_parse);
-                parse_type_tuple(
+                let parse_layer_1 = get_parser_for_type_handle2(param, noop_outer_parse);
+                parse_type_tuple2(
                     &type_tuple,
                     fn_name,
                     fn_name_attr,
                     prev_token_stream,
                     arg_name,
+                    param,
                     parse_layer_1,
                 )
             }
@@ -1469,6 +1538,84 @@ fn parse_type_tuple(
     Ok(outer_parse(arg_name, tokens))
 }
 
+fn parse_type_tuple2(
+    type_tuple: &TypeTuple,
+    fn_name: &str,
+    fn_name_attr: &Ident,
+    inner: TokenStream,
+    arg_name: &Ident,
+    param: Param,
+    outer_parse: fn(&Ident, TokenStream, Param) -> TokenStream,
+) -> MacroResult<TokenStream> {
+    // at the end of all the tuple parsing the inner token stream expects
+    // arg_name to be:
+    // let arg_name_N: (T, U) = (arg_name_N_0, arg_name_N_1);
+    // this means that first we must take the arg_names of what will be the
+    // tuple pair and put them back into the ident that this recursive process
+    // expects.
+    let arg_name_base = arg_name.to_string() + "_";
+    let arg_names = (0..type_tuple.elems.len())
+        .into_iter()
+        .map(|x| {
+            Ident::new(
+                &(arg_name_base.to_string() + &x.to_string()),
+                Span::call_site(),
+            )
+        })
+        .collect::<Vec<Ident>>();
+    let mut inner = quote! {
+        let #arg_name = (#(#arg_names),*);
+        #inner
+    };
+    let mut expressions = vec![];
+    let tuple_len = type_tuple.elems.len();
+    let tokens = if !type_tuple.elems.is_empty() {
+        for (i, ty) in type_tuple.elems.iter().enumerate() {
+            expressions.push(quote! { crate::types::Expression });
+            let arg_name_pair = Ident::new(
+                &(arg_name_base.to_string() + &i.to_string()),
+                Span::call_site(),
+            );
+            let param = get_param_from_type(ty.clone(), ty.span(), i)?;
+            inner = parse_fn_arg_type2(
+                ty,
+                fn_name,
+                fn_name_attr,
+                inner,
+                &arg_name_pair,
+                true,
+                i,
+                param,
+            )?;
+        }
+        inner
+    } else {
+        inner
+    };
+    let arg_pos = get_arg_pos(arg_name)?;
+    let tokens = quote! {{
+        use std::convert::TryInto;
+        if !crate::is_sequence!(#arg_name)
+        {
+            let err_str = format!("{}: Expected a vector or list for argument at position {}.", #fn_name, #arg_pos);
+            return Err(LispError::new(err_str));
+        }
+        let #arg_name = #arg_name.iter().collect::<Vec<crate::types::Expression>>();
+        match #arg_name.try_into() {
+            Ok(#arg_name) => {
+                let #arg_name: [crate::Expression; #tuple_len] = #arg_name;
+                let [#(#arg_names),*] = #arg_name;
+                #tokens
+            }
+            Err(_) => {
+                let err_str = format!("{}: Expected a sl_sh vector or list with {} elements corresponding to the tuple at argument position {}.", #fn_name, #tuple_len, #arg_pos);
+                return Err(LispError::new(err_str));
+            }
+        }
+    }};
+    Ok(outer_parse(arg_name, tokens, param))
+}
+
 /// Optional and VarArgs types are supported to create the idea of items that might be provided or
 /// for providing a list of zero or more items that can be passed in.
 /// The nature of optional and varargs are context dependent because variable numbers of
@@ -1509,6 +1656,64 @@ fn are_args_valid(original_item_fn: &ItemFn, params: &[Param], takes_env: bool) 
     }
 }
 
+fn get_param_from_type(ty: Type, span: Span, pos: usize) -> MacroResult<Param> {
+    let ty_clone = ty.clone();
+    let param = match <Type as Into<RustType>>::into(ty) {
+        RustType::Path(ty, _span) => {
+            let val = get_type_handle(&ty);
+            Param {
+                handle: val,
+                passing_style: PassingStyle::Value,
+            }
+        }
+        RustType::Tuple(_type_tuple, _span) => Param {
+            handle: TypeHandle::Direct,
+            passing_style: PassingStyle::Value,
+        },
+        RustType::Reference(ty_ref, _span) => {
+            let passing_style = if ty_ref.mutability.is_some() {
+                PassingStyle::MutReference
+            } else {
+                PassingStyle::Reference
+            };
+            match <Type as Into<RustType>>::into(*ty_ref.elem) {
+                RustType::Path(ty, _span) => {
+                    let val = get_type_handle(&ty);
+                    Param {
+                        handle: val,
+                        passing_style,
+                    }
+                }
+                RustType::Tuple(_type_tuple, _span) => Param {
+                    handle: TypeHandle::Direct,
+                    passing_style,
+                },
+                _ => {
+                    return Err(Error::new(
+                        span,
+                        &format!(
+                            "Error with argument at position {}, sl_sh_fn only supports passing Type::Path and Type::Tuple by value or ref/ref mut, no either syn::Type's are supported: {:?}.",
+                            pos,
+                            ty_clone.to_token_stream(),
+                        ),
+                    ));
+                }
+            }
+        }
+        _ => {
+            return Err(Error::new(
+                span,
+                &format!(
+                    "Error with argument at position {}, sl_sh_fn only supports passing Type::Path and Type::Tuple by value or ref/ref mut, no either syn::Type's are supported: {:?}.",
+                    pos,
+                    ty_clone.to_token_stream(),
+                ),
+            ));
+        }
+    };
+    Ok(param)
+}
+
 /// Create a Vec<Arg> from the original fn's signature. Information is needed at compile and
 /// run time to translate the list of sl_sh expressions to rust native types. This Arg types
 /// stores the information about the rust native type (Value/Option/Var) as well as whether it's moved, passed
@@ -1540,57 +1745,13 @@ fn parse_src_function_arguments(
                     "Associated functions that take the self argument are not supported.",
                 ))
             }
-            FnArg::Typed(ty) => match <Type as Into<RustType>>::into(*ty.ty.clone()) {
-                RustType::Path(ty, _span) => {
-                    let val = get_type_handle(&ty);
-                    parsed_args.push(Param {
-                        handle: val,
-                        passing_style: PassingStyle::Value,
-                    });
-                }
-                RustType::Tuple(_type_tuple, _span) => {
-                    parsed_args.push(Param {
-                        handle: TypeHandle::Direct,
-                        passing_style: PassingStyle::Value,
-                    });
-                }
-                RustType::Reference(ty_ref, _span) => {
-                    let passing_style = if ty_ref.mutability.is_some() {
-                        PassingStyle::MutReference
-                    } else {
-                        PassingStyle::Reference
-                    };
-                    match <Type as Into<RustType>>::into(*ty_ref.elem) {
-                        RustType::Path(ty, _span) => {
-                            let val = get_type_handle(&ty);
-                            parsed_args.push(Param { handle: val, passing_style });
-                        }
-                        RustType::Tuple(_type_tuple, _span) => {
-                            parsed_args.push(Param { handle: TypeHandle::Direct, passing_style})
-                        }
-                        _ => {
-                            return Err(Error::new(
-                                original_item_fn.span(),
-                                &format!(
-                                    "Error with argument at position {}, sl_sh_fn only supports passing Type::Path and Type::Tuple by value or ref/ref mut, no either syn::Type's are supported: {:?}.",
-                                    i,
-                                    ty.to_token_stream(),
-                                ),
-                            ))
-                        }
-                    }
-                }
-                _ => {
-                    return Err(Error::new(
-                        original_item_fn.span(),
-                        &format!(
-                            "Error with argument at position {}, sl_sh_fn only supports passing Type::Path and Type::Tuple by value or ref/ref mut, no either syn::Type's are supported: {:?}.",
-                            i,
-                            ty.to_token_stream(),
-                        ),
-                    ))
-                }
-            },
+            FnArg::Typed(ty) => {
+                parsed_args.push(get_param_from_type(
+                    *ty.ty.clone(),
+                    original_item_fn.span(),
+                    i,
+                )?);
+            }
         }
     }
     Ok(parsed_args)
