@@ -245,7 +245,7 @@ enum TypeHandle {
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 enum PassingStyle {
-    Move,
+    Value,
     Reference,
     MutReference,
 }
@@ -379,6 +379,27 @@ fn make_orig_fn_call(
 /// create two lists that can be joined by macro syntax to create the inner part of a function
 /// signature, e.g. (arg_0: a_type, arg_1: b_type, ...) in some existing rust function:
 /// fn myfn(arg_0: a_type, arg_1: b_type, ...) { ... }
+fn generate_inner_fn_signature_to_orig_fn_call2(
+    original_item_fn: &ItemFn,
+    takes_env: bool,
+) -> MacroResult<Vec<Ident>> {
+    let len = if takes_env {
+        original_item_fn.sig.inputs.len() - 1
+    } else {
+        original_item_fn.sig.inputs.len()
+    };
+    let mut arg_names = vec![];
+    for i in 0..len {
+        let parse_name = "arg_".to_string() + &i.to_string();
+        let parse_name = Ident::new(&parse_name, Span::call_site());
+        arg_names.push(parse_name);
+    }
+    Ok(arg_names)
+}
+
+/// create two lists that can be joined by macro syntax to create the inner part of a function
+/// signature, e.g. (arg_0: a_type, arg_1: b_type, ...) in some existing rust function:
+/// fn myfn(arg_0: a_type, arg_1: b_type, ...) { ... }
 fn generate_inner_fn_signature_to_orig_fn_call(
     original_item_fn: &ItemFn,
     takes_env: bool,
@@ -403,7 +424,7 @@ fn generate_inner_fn_signature_to_orig_fn_call(
 /// an function call.
 fn tokens_for_matching_references(passing_style: PassingStyle, ty: &TypePath) -> TokenStream {
     match passing_style {
-        PassingStyle::Move => quote! {#ty},
+        PassingStyle::Value => quote! {#ty},
         PassingStyle::Reference => quote! {&#ty},
         PassingStyle::MutReference => quote! {& mut #ty},
     }
@@ -630,7 +651,7 @@ fn parse_typehandle_value_type(
                 // w/o this special case it generate RustProcedureRefMut on a TypedWrapper<str> which is unsized.
                 let (fn_ref, passing_style, ty) =
                     if str == "str" && passing_style == PassingStyle::Reference {
-                        let passing_style = PassingStyle::Move;
+                        let passing_style = PassingStyle::Value;
                         (quote! { &#ty }, passing_style, quote! { &#ty })
                     } else {
                         (
@@ -646,7 +667,7 @@ fn parse_typehandle_value_type(
                 };
 
                 match passing_style {
-                    PassingStyle::Move => Ok(quote! {{
+                    PassingStyle::Value => Ok(quote! {{
                         use crate::types::RustProcedure;
                         let typed_data: crate::types::TypedWrapper<#ty, crate::types::Expression> =
                             crate::types::TypedWrapper::new(#arg_name);
@@ -727,9 +748,10 @@ fn parse_type(
     Ok(outer_parse(arg_name, tokens))
 }
 
-/// create a vec literal of the expected Arg types so code can check its arguments at runtime for
-/// things like correct number of args.
-fn embed_arg_vec(params: &[Param]) -> TokenStream {
+/// create a vec literal of the expected Param types so code can check its arguments at runtime for
+/// API arity/type correctness.
+/// TODO have this return a generated const array.
+fn embed_params_vec(params: &[Param]) -> TokenStream {
     let mut tokens = vec![];
     for param in params {
         tokens.push(match (param.handle, param.passing_style) {
@@ -769,22 +791,22 @@ fn embed_arg_vec(params: &[Param]) -> TokenStream {
                     passing_style: crate::builtins_util::PassingStyle::Reference
                 }}
             }
-            (TypeHandle::Direct, PassingStyle::Move) => {
+            (TypeHandle::Direct, PassingStyle::Value) => {
                 quote! { crate::builtins_util::Param {
                     handle: crate::builtins_util::TypeHandle::Direct,
-                    passing_style: crate::builtins_util::PassingStyle::Move
+                    passing_style: crate::builtins_util::PassingStyle::Value
                 }}
             }
-            (TypeHandle::Optional, PassingStyle::Move) => {
+            (TypeHandle::Optional, PassingStyle::Value) => {
                 quote! { crate::builtins_util::Param {
                     handle: crate::builtins_util::TypeHandle::Optional,
-                    passing_style: crate::builtins_util::PassingStyle::Move
+                    passing_style: crate::builtins_util::PassingStyle::Value
                 }}
             }
-            (TypeHandle::VarArgs, PassingStyle::Move) => {
+            (TypeHandle::VarArgs, PassingStyle::Value) => {
                 quote! { crate::builtins_util::Param {
                     handle: crate::builtins_util::TypeHandle::VarArgs,
-                    passing_style: crate::builtins_util::PassingStyle::Move
+                    passing_style: crate::builtins_util::PassingStyle::Value
                 }}
             }
         });
@@ -853,7 +875,7 @@ fn generate_intern_fn(
 //     // this arg_types variable is generated by the macro for use at runtime.
 //     let arg_types = vec![sl_sh::builtins_util::Arg {
 //         val: sl_sh::builtins_util::TypeHandle::Direct,
-//         passing_style: sl_sh::builtins_util::PassingStyle::Move,
+//         passing_style: sl_sh::builtins_util::PassingStyle::Value,
 //     }];
 //
 //     let args = crate::builtins_util::make_args_eval_no_values(environment, args)?;
@@ -898,7 +920,7 @@ fn generate_parse_fn(
 ) -> TokenStream {
     let parse_name = get_parse_fn_name(original_fn_name_str);
     let builtin_name = get_builtin_fn_name(original_fn_name_str);
-    let arg_types = embed_arg_vec(args);
+    let arg_types = embed_params_vec(args);
 
     let make_args = if eval_values {
         quote! {
@@ -947,11 +969,11 @@ fn generate_parse_fn2(
     fn_name_attr: &Ident,
     fn_name: &str,
     args_len: usize,
-    args: &[Param],
+    params: &[Param],
     inner: TokenStream,
 ) -> TokenStream {
     let parse_name = get_parse_fn_name(original_fn_name_str);
-    let arg_vec_literal = embed_arg_vec(args);
+    let arg_vec_literal = embed_params_vec(params);
 
     // in slosh this will change because the args are already evaluated and the macro will
     // be dealing with a slice so... keep this allocation at runtime for now because it
@@ -1144,13 +1166,12 @@ fn generate_builtin_fn2(
     original_item_fn: &ItemFn,
     original_fn_name_str: &str,
     fn_name: &str,
-    args: &[Param],
+    params: &[Param],
     fn_name_attr: &Ident,
     takes_env: bool,
 ) -> MacroResult<TokenStream> {
     let original_fn_name = Ident::new(original_fn_name_str, Span::call_site());
-    let (arg_names, arg_types) =
-        generate_inner_fn_signature_to_orig_fn_call(original_item_fn, takes_env)?;
+    let arg_names = generate_inner_fn_signature_to_orig_fn_call2(original_item_fn, takes_env)?;
 
     let orig_fn_call = make_orig_fn_call(
         takes_env,
@@ -1161,13 +1182,23 @@ fn generate_builtin_fn2(
     // initialize the innermost token stream to the code of the original_fn_call
     let mut prev_token_stream = orig_fn_call;
     let skip = usize::from(takes_env);
+    let inputs_less_env_len = original_item_fn.sig.inputs.len() - skip;
+    if inputs_less_env_len != params.len() {
+        let err_str = format!(
+            "sl_sh_fn macro is broken, signature of target function has an arity of {}, but this macro computed its arity as: {} (arity is - 1 if takes_env is true).",
+            inputs_less_env_len,
+            params.len(),
+        );
+        return Err(Error::new(original_item_fn.span(), err_str));
+    }
     let fn_args = original_item_fn
         .sig
         .inputs
         .iter()
         .skip(skip)
-        .zip(arg_names.iter());
-    for (fn_arg, arg_name) in fn_args {
+        .zip(arg_names.iter())
+        .zip(params.iter());
+    for (idx, ((fn_arg, arg_name), param)) in fn_args.enumerate() {
         if let FnArg::Typed(ty) = fn_arg {
             // this needs to use the args.iter() pattern now.
             prev_token_stream = parse_fn_arg_type2(
@@ -1211,7 +1242,7 @@ fn parse_fn_arg_type2(
         RustType::Path(ty, _span) => {
             let val = get_type_handle(&ty);
             let parse_layer_1 = get_parser_for_type_handle(val, noop_outer_parse);
-            let passing_style = PassingStyle::Move;
+            let passing_style = PassingStyle::Value;
             parse_type(
                 &ty,
                 (fn_name, fn_name_attr),
@@ -1297,7 +1328,7 @@ fn parse_fn_arg_type(
         RustType::Path(ty, _span) => {
             let val = get_type_handle(&ty);
             let parse_layer_1 = get_parser_for_type_handle(val, noop_outer_parse);
-            let passing_style = PassingStyle::Move;
+            let passing_style = PassingStyle::Value;
             parse_type(
                 &ty,
                 (fn_name, fn_name_attr),
@@ -1514,13 +1545,13 @@ fn parse_src_function_arguments(
                     let val = get_type_handle(&ty);
                     parsed_args.push(Param {
                         handle: val,
-                        passing_style: PassingStyle::Move,
+                        passing_style: PassingStyle::Value,
                     });
                 }
                 RustType::Tuple(_type_tuple, _span) => {
                     parsed_args.push(Param {
                         handle: TypeHandle::Direct,
-                        passing_style: PassingStyle::Move,
+                        passing_style: PassingStyle::Value,
                     });
                 }
                 RustType::Reference(ty_ref, _span) => {
@@ -1717,13 +1748,13 @@ fn generate_sl_sh_fn2(
     let original_fn_name_str = original_item_fn.sig.ident.to_string();
     let original_fn_name_str = original_fn_name_str.as_str();
 
-    let args = parse_src_function_arguments(original_item_fn, takes_env)?;
-    are_args_valid(original_item_fn, args.as_slice(), takes_env)?;
+    let params = parse_src_function_arguments(original_item_fn, takes_env)?;
+    are_args_valid(original_item_fn, params.as_slice(), takes_env)?;
     let builtin_fn = generate_builtin_fn2(
         original_item_fn,
         original_fn_name_str,
         fn_name.as_str(),
-        args.as_slice(),
+        params.as_slice(),
         &fn_name_attr,
         takes_env,
     )?;
@@ -1739,7 +1770,7 @@ fn generate_sl_sh_fn2(
         &fn_name_attr,
         fn_name.as_str(),
         args_len,
-        args.as_slice(),
+        params.as_slice(),
         builtin_fn,
     );
     let doc_comments = get_documentation_for_fn(original_item_fn)?;
@@ -1866,7 +1897,7 @@ mod test {
         let args = vec![
             Param {
                 handle: TypeHandle::Direct,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
             Param {
                 handle: TypeHandle::Direct,
@@ -1883,11 +1914,11 @@ mod test {
         let args = vec![
             Param {
                 handle: TypeHandle::Direct,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
             Param {
                 handle: TypeHandle::VarArgs,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
         ];
         assert!(are_args_valid(args.as_slice()));
@@ -1896,11 +1927,11 @@ mod test {
         let args = vec![
             Param {
                 handle: TypeHandle::VarArgs,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
             Param {
                 handle: TypeHandle::Direct,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
         ];
         assert!(!are_args_valid(args.as_slice()));
@@ -1909,7 +1940,7 @@ mod test {
         let args = vec![
             Param {
                 handle: TypeHandle::Optional,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
             Param {
                 handle: TypeHandle::Direct,
@@ -1917,7 +1948,7 @@ mod test {
             },
             Param {
                 handle: TypeHandle::Direct,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
         ];
         assert!(!are_args_valid(args.as_slice()));
@@ -1926,11 +1957,11 @@ mod test {
         let args = vec![
             Param {
                 handle: TypeHandle::Direct,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
             Param {
                 handle: TypeHandle::Optional,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
             Param {
                 handle: TypeHandle::Optional,
@@ -1938,7 +1969,7 @@ mod test {
             },
             Param {
                 handle: TypeHandle::Optional,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
         ];
         assert!(are_args_valid(args.as_slice()));
@@ -1947,11 +1978,11 @@ mod test {
         let args = vec![
             Param {
                 handle: TypeHandle::Direct,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
             Param {
                 handle: TypeHandle::Optional,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
             Param {
                 handle: TypeHandle::Optional,
@@ -1959,7 +1990,7 @@ mod test {
             },
             Param {
                 handle: TypeHandle::VarArgs,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
         ];
         assert!(are_args_valid(args.as_slice()));
@@ -1968,11 +1999,11 @@ mod test {
         let args = vec![
             Param {
                 handle: TypeHandle::Direct,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
             Param {
                 handle: TypeHandle::Optional,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
             Param {
                 handle: TypeHandle::VarArgs,
@@ -1980,7 +2011,7 @@ mod test {
             },
             Param {
                 handle: TypeHandle::Optional,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
         ];
         assert!(!are_args_valid(args.as_slice()));
@@ -1989,11 +2020,11 @@ mod test {
         let args = vec![
             Param {
                 handle: TypeHandle::Direct,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
             Param {
                 handle: TypeHandle::Optional,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
             Param {
                 handle: TypeHandle::Direct,
@@ -2006,11 +2037,11 @@ mod test {
         let args = vec![
             Param {
                 handle: TypeHandle::Optional,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
             Param {
                 handle: TypeHandle::Direct,
-                passing_style: PassingStyle::Move,
+                passing_style: PassingStyle::Value,
             },
             Param {
                 handle: TypeHandle::Direct,
