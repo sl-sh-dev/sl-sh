@@ -272,11 +272,11 @@ fn get_type_handle(type_path: &TypePath) -> TypeHandle {
     TypeHandle::Direct
 }
 
-fn no_parse_param(_arg_name: &Ident, inner: TokenStream, _param: Param) -> TokenStream {
+fn no_parse_param(_arg_name: &Ident, inner: TokenStream, _param: Param, idx: usize) -> TokenStream {
     inner
 }
 
-fn parse_param(arg_name: &Ident, inner: TokenStream, param: Param) -> TokenStream {
+fn parse_param(arg_name: &Ident, inner: TokenStream, param: Param, idx: usize) -> TokenStream {
     match (param.handle, param.passing_style) {
         (TypeHandle::Direct, PassingStyle::Value) => {
             //quote! {
@@ -351,7 +351,7 @@ fn get_parser_for_type_handle(
 fn get_parser_for_type_handle2(
     param: Param,
     noop_outer_parse: bool,
-) -> fn(&Ident, TokenStream, Param) -> TokenStream {
+) -> fn(&Ident, TokenStream, Param, usize) -> TokenStream {
     match (param.handle, param.passing_style, noop_outer_parse) {
         (_, _, true) => no_parse_param,
         (_, _, false) => parse_param,
@@ -409,6 +409,76 @@ fn make_orig_fn_call(
     };
     Ok(quote! {
         #original_fn_call
+    })
+}
+
+/// generate a call to the original fn with the names of all of the variables,
+/// arg_names, filled in,, e.g. `fn myfn(arg_0, arg_1, arg_2, ...) { ... }`.
+/// This function also inserts a dynamic check to throw an error if too many
+/// arguments were provided based on the signature of the target function.
+fn make_orig_fn_call2(
+    takes_env: bool,
+    original_item_fn: &ItemFn,
+    original_fn_name: &Ident,
+    arg_names: Vec<Ident>,
+) -> MacroResult<TokenStream> {
+    // the original function call must return an Expression object
+    // this means all returned rust native types must implement TryIntoExpression
+    // this is nested inside the builtin expression which must always
+    // return a LispResult.
+    let takes_env = if takes_env {
+        quote! {env, } // env is the name that is passed in to this function
+    } else {
+        quote! {}
+    };
+    let (return_type, lisp_return) = get_return_type(original_item_fn)?;
+    let returns_none = "()" == return_type.to_token_stream().to_string();
+    let original_fn_call = match (return_type, lisp_return, returns_none) {
+        (Some(_), Some(SupportedGenericReturnTypes::LispResult), true) => quote! {
+            #original_fn_name(#takes_env #(#arg_names),*)?;
+            Ok(crate::types::Expression::make_nil())
+        },
+        (Some(_), Some(SupportedGenericReturnTypes::Option), true) => quote! {
+            #original_fn_name(#takes_env #(#arg_names),*);
+            Ok(crate::types::Expression::make_nil())
+        },
+        (Some(_), Some(SupportedGenericReturnTypes::LispResult), false) => quote! {
+            #original_fn_name(#takes_env #(#arg_names),*).map(Into::into)
+        },
+        (Some(_), Some(SupportedGenericReturnTypes::Option), false) => quote! {
+            if let Some(val) = #original_fn_name(#takes_env #(#arg_names),*) {
+                Ok(val.into())
+            } else {
+                Ok(crate::types::Expression::make_nil())
+            }
+        },
+        // coerce to Expression
+        (Some(_), None, _) => quote! {
+            Ok(#original_fn_name(#takes_env #(#arg_names),*).into())
+        },
+        (None, Some(_), _) => {
+            unreachable!("If this functions returns a LispResult it must also return a value.");
+        }
+        // no return
+        (None, None, _) => quote! {
+            #original_fn_name(#takes_env #(#arg_names),*);
+            Ok(crate::types::Expression::make_nil())
+        },
+    };
+    Ok(quote! {
+        match args.get(ARGS_LEN) {
+            Some(_) if ARGS_LEN == 0 || arg_types[ARGS_LEN - 1].handle != crate::builtins_util::TypeHandle::VarArgs => {
+                return Err(crate::types::LispError::new(format!(
+                    "{} given too many arguments, expected {}, got {}.",
+                    fn_name,
+                    arg_types.len(),
+                    args.len()
+                )));
+            }
+            _ => {
+                #original_fn_call
+            }
+        }
     })
 }
 
@@ -601,7 +671,7 @@ fn parse_variadic_args_type(
 fn parse_optional_type(
     ty: &TypePath,
     fn_name: &str,
-    fn_name_attr: &Ident,
+    fn_name_ident: &Ident,
     arg_name: &Ident,
     passing_style: PassingStyle,
     inner: TokenStream,
@@ -618,7 +688,7 @@ fn parse_optional_type(
     let some_arg_value_type_parsing_code = parse_direct_type(
         ty,
         fn_name,
-        fn_name_attr,
+        fn_name_ident,
         arg_name,
         passing_style,
         some_inner,
@@ -671,7 +741,7 @@ fn get_type_or_wrapped_type<'a>(ty: &'a TypePath, possible_types: &'a [&str]) ->
 fn parse_direct_type(
     ty: &TypePath,
     fn_name: &str,
-    fn_name_attr: &Ident,
+    fn_name_ident: &Ident,
     arg_name: &Ident,
     passing_style: PassingStyle,
     inner: TokenStream,
@@ -708,28 +778,28 @@ fn parse_direct_type(
                         let typed_data: crate::types::TypedWrapper<#ty, crate::types::Expression> =
                             crate::types::TypedWrapper::new(#arg_name);
                         #callback_declaration
-                        typed_data.apply(#fn_name_attr, callback)
+                        typed_data.apply(#fn_name_ident, callback)
                     }}),
                     PassingStyle::Reference => Ok(quote! {{
                         use crate::types::RustProcedureRef;
                         let typed_data: crate::types::TypedWrapper<#ty, crate::types::Expression> =
                             crate::types::TypedWrapper::new(#arg_name);
                         #callback_declaration
-                        typed_data.apply_ref(#fn_name_attr, callback)
+                        typed_data.apply_ref(#fn_name_ident, callback)
                     }}),
                     PassingStyle::MutReference => Ok(quote! {{
                         use crate::types::RustProcedureRefMut;
                         let mut typed_data: crate::types::TypedWrapper<#ty, crate::types::Expression> =
                             crate::types::TypedWrapper::new(#arg_name);
                         #callback_declaration
-                        typed_data.apply_ref_mut(#fn_name_attr, callback)
+                        typed_data.apply_ref_mut(#fn_name_ident, callback)
                     }}),
                 }
             }
             RustType::Tuple(type_tuple, _span) => parse_type_tuple(
                 &type_tuple,
                 fn_name,
-                fn_name_attr,
+                fn_name_ident,
                 inner,
                 arg_name,
                 no_parse,
@@ -784,6 +854,7 @@ fn parse_type(
 /// transformation. If this function throws errors it means that the
 /// inputs, val/passing style are wrong and aren't matching to the ArgType(s)
 /// properly, or the rust type lookup function is busted.
+#[allow(clippy::too_many_arguments)]
 fn parse_type2(
     ty: &TypePath,
     fn_name: (&str, &Ident),
@@ -791,7 +862,8 @@ fn parse_type2(
     param: Param,
     arg_name: &Ident,
     passing_style: PassingStyle,
-    outer_parse: fn(&Ident, TokenStream, Param) -> TokenStream,
+    idx: usize,
+    outer_parse: fn(&Ident, TokenStream, Param, usize) -> TokenStream,
 ) -> MacroResult<TokenStream> {
     let tokens = match param.handle {
         TypeHandle::Direct => {
@@ -809,7 +881,7 @@ fn parse_type2(
             quote! { crate::VarArgs },
         )?,
     };
-    Ok(outer_parse(arg_name, tokens, param))
+    Ok(outer_parse(arg_name, tokens, param, idx))
 }
 
 /// create a vec literal of the expected Param types so code can check its arguments at runtime for
@@ -900,7 +972,7 @@ fn embed_params_vec(params: &[Param]) -> TokenStream {
 // ```
 fn generate_intern_fn(
     original_fn_name_str: &str,
-    fn_name_attr: &Ident,
+    fn_name_ident: &Ident,
     fn_name: &str,
     doc_comments: String,
 ) -> TokenStream {
@@ -911,9 +983,9 @@ fn generate_intern_fn(
             interner: &mut crate::Interner,
             data: &mut std::collections::HashMap<&'static str, (crate::types::Expression, String), S>,
         ) {
-            let #fn_name_attr = #fn_name;
+            let #fn_name_ident = #fn_name;
             data.insert(
-                interner.intern(#fn_name_attr),
+                interner.intern(#fn_name_ident),
                 crate::types::Expression::make_function(#parse_name, #doc_comments),
             );
         }
@@ -978,7 +1050,7 @@ fn generate_intern_fn(
 fn generate_parse_fn(
     original_fn_name_str: &str,
     eval_values: bool,
-    fn_name_attr: &Ident,
+    fn_name_ident: &Ident,
     fn_name: &str,
     args_len: usize,
     args: &[Param],
@@ -1005,7 +1077,7 @@ fn generate_parse_fn(
             use std::convert::TryInto;
             use crate::builtins_util::ExpandVecToArgs;
             #make_args
-            let #fn_name_attr = #fn_name;
+            let #fn_name_ident = #fn_name;
             const ARGS_LEN: usize = #args_len;
             #arg_types
             let args = crate::get_arg_types(fn_name, arg_types, args)?;
@@ -1031,7 +1103,7 @@ fn generate_parse_fn(
 fn generate_parse_fn2(
     original_fn_name_str: &str,
     eval_values: bool,
-    fn_name_attr: &Ident,
+    fn_name_ident: &Ident,
     fn_name: &str,
     args_len: usize,
     params: &[Param],
@@ -1062,16 +1134,13 @@ fn generate_parse_fn2(
             use std::convert::TryInto;
             use crate::builtins_util::ExpandVecToArgs;
             #make_args
-            let #fn_name_attr = #fn_name;
+            let #fn_name_ident = #fn_name;
             const ARGS_LEN: usize = #args_len;
             #arg_vec_literal
 
             // TODO remove in slosh implementation as args will be a slice
             let args = args.into_iter().collect::<Vec<Expression>>();
             let args = args.as_slice();
-            // TODO can this call go away by validating args while walking the args slice in the
-            // retro-fitted parsing?
-            crate::validate_args(fn_name, arg_types, args)?;
 
             #inner
         }
@@ -1125,7 +1194,7 @@ fn generate_builtin_fn(
     original_item_fn: &ItemFn,
     original_fn_name_str: &str,
     fn_name: &str,
-    fn_name_attr: &Ident,
+    fn_name_ident: &Ident,
     takes_env: bool,
 ) -> MacroResult<TokenStream> {
     let original_fn_name = Ident::new(original_fn_name_str, Span::call_site());
@@ -1153,7 +1222,7 @@ fn generate_builtin_fn(
             prev_token_stream = parse_fn_arg_type(
                 &ty.ty,
                 fn_name,
-                fn_name_attr,
+                fn_name_ident,
                 prev_token_stream,
                 arg_name,
                 false,
@@ -1170,7 +1239,7 @@ fn generate_builtin_fn(
     let tokens = quote! {
         fn #builtin_name(env: &mut crate::environment::Environment, #(#arg_names: #arg_types),*) -> crate::LispResult<crate::types::Expression> {
             #(#conversions_assertions_code)*
-            let #fn_name_attr = #fn_name;
+            let #fn_name_ident = #fn_name;
             #prev_token_stream
         }
     };
@@ -1232,13 +1301,13 @@ fn generate_builtin_fn2(
     original_fn_name_str: &str,
     fn_name: &str,
     params: &[Param],
-    fn_name_attr: &Ident,
+    fn_name_ident: &Ident,
     takes_env: bool,
 ) -> MacroResult<TokenStream> {
     let original_fn_name = Ident::new(original_fn_name_str, Span::call_site());
     let arg_names = generate_inner_fn_signature_to_orig_fn_call2(original_item_fn, takes_env)?;
 
-    let orig_fn_call = make_orig_fn_call(
+    let orig_fn_call = make_orig_fn_call2(
         takes_env,
         original_item_fn,
         &original_fn_name,
@@ -1269,7 +1338,7 @@ fn generate_builtin_fn2(
             prev_token_stream = parse_fn_arg_type2(
                 &ty.ty,
                 fn_name,
-                fn_name_attr,
+                fn_name_ident,
                 prev_token_stream,
                 arg_name,
                 false,
@@ -1287,9 +1356,9 @@ fn generate_builtin_fn2(
     }
     let tokens = quote! {
         #(#conversions_assertions_code)*
-        // let #fn_name_attr = #fn_name; already included in parse function
+        // let #fn_name_ident = #fn_name; already included in parse function
         // as well as `args`, a vec of expression,
-        // `fn_name_attr` the ident of the fn_name
+        // `fn_name_ident` the ident of the fn_name
         // `ARGS_LEN` constant representing arity of original fn
         // and `arg_types` the embedded vec of Arg's available at runtime.
         #prev_token_stream
@@ -1302,7 +1371,7 @@ fn generate_builtin_fn2(
 fn parse_fn_arg_type2(
     ty: &Type, //TODO Cow?
     fn_name: &str,
-    fn_name_attr: &Ident,
+    fn_name_ident: &Ident,
     prev_token_stream: TokenStream,
     arg_name: &Ident,
     noop_outer_parse: bool,
@@ -1315,11 +1384,12 @@ fn parse_fn_arg_type2(
             let passing_style = PassingStyle::Value;
             parse_type2(
                 &ty,
-                (fn_name, fn_name_attr),
+                (fn_name, fn_name_ident),
                 prev_token_stream,
                 param,
                 arg_name,
                 passing_style,
+                idx,
                 parse_layer_1,
             )
         }
@@ -1328,10 +1398,11 @@ fn parse_fn_arg_type2(
             parse_type_tuple2(
                 &type_tuple,
                 fn_name,
-                fn_name_attr,
+                fn_name_ident,
                 prev_token_stream,
                 arg_name,
                 param,
+                idx,
                 parse_layer_1,
             )
         }
@@ -1345,11 +1416,12 @@ fn parse_fn_arg_type2(
                 };
                 parse_type2(
                     &ty,
-                    (fn_name, fn_name_attr),
+                    (fn_name, fn_name_ident),
                     prev_token_stream,
                     param,
                     arg_name,
                     passing_style,
+                    idx,
                     parse_layer_1,
                 )
             }
@@ -1358,10 +1430,11 @@ fn parse_fn_arg_type2(
                 parse_type_tuple2(
                     &type_tuple,
                     fn_name,
-                    fn_name_attr,
+                    fn_name_ident,
                     prev_token_stream,
                     arg_name,
                     param,
+                    idx,
                     parse_layer_1,
                 )
             }
@@ -1388,7 +1461,7 @@ fn parse_fn_arg_type2(
 fn parse_fn_arg_type(
     ty: &Type, //TODO Cow?
     fn_name: &str,
-    fn_name_attr: &Ident,
+    fn_name_ident: &Ident,
     prev_token_stream: TokenStream,
     arg_name: &Ident,
     noop_outer_parse: bool,
@@ -1400,7 +1473,7 @@ fn parse_fn_arg_type(
             let passing_style = PassingStyle::Value;
             parse_type(
                 &ty,
-                (fn_name, fn_name_attr),
+                (fn_name, fn_name_ident),
                 prev_token_stream,
                 val,
                 arg_name,
@@ -1414,7 +1487,7 @@ fn parse_fn_arg_type(
             parse_type_tuple(
                 &type_tuple,
                 fn_name,
-                fn_name_attr,
+                fn_name_ident,
                 prev_token_stream,
                 arg_name,
                 parse_layer_1,
@@ -1431,7 +1504,7 @@ fn parse_fn_arg_type(
                 };
                 parse_type(
                     &ty,
-                    (fn_name, fn_name_attr),
+                    (fn_name, fn_name_ident),
                     prev_token_stream,
                     val,
                     arg_name,
@@ -1445,7 +1518,7 @@ fn parse_fn_arg_type(
                 parse_type_tuple(
                     &type_tuple,
                     fn_name,
-                    fn_name_attr,
+                    fn_name_ident,
                     prev_token_stream,
                     arg_name,
                     parse_layer_1,
@@ -1474,7 +1547,7 @@ fn parse_fn_arg_type(
 fn parse_type_tuple(
     type_tuple: &TypeTuple,
     fn_name: &str,
-    fn_name_attr: &Ident,
+    fn_name_ident: &Ident,
     inner: TokenStream,
     arg_name: &Ident,
     outer_parse: fn(&Ident, TokenStream) -> TokenStream,
@@ -1508,7 +1581,7 @@ fn parse_type_tuple(
                 &(arg_name_base.to_string() + &i.to_string()),
                 Span::call_site(),
             );
-            inner = parse_fn_arg_type(ty, fn_name, fn_name_attr, inner, &arg_name_pair, true)?;
+            inner = parse_fn_arg_type(ty, fn_name, fn_name_ident, inner, &arg_name_pair, true)?;
         }
         inner
     } else {
@@ -1538,14 +1611,16 @@ fn parse_type_tuple(
     Ok(outer_parse(arg_name, tokens))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn parse_type_tuple2(
     type_tuple: &TypeTuple,
     fn_name: &str,
-    fn_name_attr: &Ident,
+    fn_name_ident: &Ident,
     inner: TokenStream,
     arg_name: &Ident,
     param: Param,
-    outer_parse: fn(&Ident, TokenStream, Param) -> TokenStream,
+    idx: usize,
+    outer_parse: fn(&Ident, TokenStream, Param, usize) -> TokenStream,
 ) -> MacroResult<TokenStream> {
     // at the end of all the tuple parsing the inner token stream expects
     // arg_name to be:
@@ -1580,7 +1655,7 @@ fn parse_type_tuple2(
             inner = parse_fn_arg_type2(
                 ty,
                 fn_name,
-                fn_name_attr,
+                fn_name_ident,
                 inner,
                 &arg_name_pair,
                 true,
@@ -1613,7 +1688,7 @@ fn parse_type_tuple2(
             }
         }
     }};
-    Ok(outer_parse(arg_name, tokens, param))
+    Ok(outer_parse(arg_name, tokens, param, idx))
 }
 
 /// Optional and VarArgs types are supported to create the idea of items that might be provided or
@@ -1812,15 +1887,15 @@ fn parse_attributes(
         .iter()
         .map(get_attribute_name_value)
         .collect::<MacroResult<Vec<(String, String)>>>()?;
-    let fn_name_attr = "fn_name".to_string();
-    let fn_name = get_attribute_value_with_key(original_item_fn, &fn_name_attr, vals.as_slice())?
+    let fn_name_ident = "fn_name".to_string();
+    let fn_name = get_attribute_value_with_key(original_item_fn, &fn_name_ident, vals.as_slice())?
         .ok_or_else(|| {
-        Error::new(
-            original_item_fn.span(),
-            "sl_sh_fn requires name-value pair, 'fn_name'",
-        )
-    })?;
-    let fn_name_attr = Ident::new(&fn_name_attr, Span::call_site());
+            Error::new(
+                original_item_fn.span(),
+                "sl_sh_fn requires name-value pair, 'fn_name'",
+            )
+        })?;
+    let fn_name_ident = Ident::new(&fn_name_ident, Span::call_site());
 
     let eval_values = if let Some(value) =
         get_attribute_value_with_key(original_item_fn, "eval_values", vals.as_slice())?
@@ -1836,7 +1911,7 @@ fn parse_attributes(
     } else {
         false
     };
-    Ok((fn_name, fn_name_attr, eval_values, takes_env))
+    Ok((fn_name, fn_name_ident, eval_values, takes_env))
 }
 
 /// this function outputs all of the generated code, it is composed into three different functions:
@@ -1854,7 +1929,7 @@ fn generate_sl_sh_fn(
     original_item_fn: &ItemFn,
     attr_args: AttributeArgs,
 ) -> MacroResult<TokenStream> {
-    let (fn_name, fn_name_attr, eval_values, takes_env) =
+    let (fn_name, fn_name_ident, eval_values, takes_env) =
         parse_attributes(original_item_fn, attr_args)?;
     let original_fn_name_str = original_item_fn.sig.ident.to_string();
     let original_fn_name_str = original_fn_name_str.as_str();
@@ -1865,7 +1940,7 @@ fn generate_sl_sh_fn(
         original_item_fn,
         original_fn_name_str,
         fn_name.as_str(),
-        &fn_name_attr,
+        &fn_name_ident,
         takes_env,
     )?;
 
@@ -1877,7 +1952,7 @@ fn generate_sl_sh_fn(
     let parse_fn = generate_parse_fn(
         original_fn_name_str,
         eval_values,
-        &fn_name_attr,
+        &fn_name_ident,
         fn_name.as_str(),
         args_len,
         args.as_slice(),
@@ -1885,7 +1960,7 @@ fn generate_sl_sh_fn(
     let doc_comments = get_documentation_for_fn(original_item_fn)?;
     let intern_fn = generate_intern_fn(
         original_fn_name_str,
-        &fn_name_attr,
+        &fn_name_ident,
         fn_name.as_str(),
         doc_comments,
     );
@@ -1904,7 +1979,7 @@ fn generate_sl_sh_fn2(
     original_item_fn: &ItemFn,
     attr_args: AttributeArgs,
 ) -> MacroResult<TokenStream> {
-    let (fn_name, fn_name_attr, eval_values, takes_env) =
+    let (fn_name, fn_name_ident, eval_values, takes_env) =
         parse_attributes(original_item_fn, attr_args)?;
     let original_fn_name_str = original_item_fn.sig.ident.to_string();
     let original_fn_name_str = original_fn_name_str.as_str();
@@ -1916,7 +1991,7 @@ fn generate_sl_sh_fn2(
         original_fn_name_str,
         fn_name.as_str(),
         params.as_slice(),
-        &fn_name_attr,
+        &fn_name_ident,
         takes_env,
     )?;
 
@@ -1928,7 +2003,7 @@ fn generate_sl_sh_fn2(
     let parse_fn = generate_parse_fn2(
         original_fn_name_str,
         eval_values,
-        &fn_name_attr,
+        &fn_name_ident,
         fn_name.as_str(),
         args_len,
         params.as_slice(),
@@ -1937,7 +2012,7 @@ fn generate_sl_sh_fn2(
     let doc_comments = get_documentation_for_fn(original_item_fn)?;
     let intern_fn = generate_intern_fn(
         original_fn_name_str,
-        &fn_name_attr,
+        &fn_name_ident,
         fn_name.as_str(),
         doc_comments,
     );
