@@ -855,7 +855,7 @@ fn generate_intern_fn(
 ///     if args.len() == ARGS_LEN {
 ///         match args.try_into() {
 ///             Ok(params) => {
-///                 // use const generics and blanket implementation of ExpandvecToArgs over
+///                 // use const generics and blanket implementation of ExpandVecToArgs over
 ///                 // function calls to map vector to function call.
 ///                 let params: [sl_sh::ArgType; ARGS_LEN] = params;
 ///                 builtin_one_int_to_float.call_expand_args(params)
@@ -1048,7 +1048,7 @@ fn generate_builtin_fn(
     )?;
     // initialize the innermost token stream to the code of the original_fn_call
     let mut prev_token_stream = orig_fn_call;
-    let skip = if takes_env { 1 } else { 0 };
+    let skip = usize::from(takes_env);
     let fn_args = original_item_fn
         .sig
         .inputs
@@ -1058,7 +1058,7 @@ fn generate_builtin_fn(
     for (fn_arg, arg_name) in fn_args {
         if let FnArg::Typed(ty) = fn_arg {
             prev_token_stream = parse_fn_arg_type(
-                &*ty.ty,
+                &ty.ty,
                 fn_name,
                 fn_name_attr,
                 prev_token_stream,
@@ -1154,7 +1154,7 @@ fn generate_builtin_fn2(
     )?;
     // initialize the innermost token stream to the code of the original_fn_call
     let mut prev_token_stream = orig_fn_call;
-    let skip = if takes_env { 1 } else { 0 };
+    let skip = usize::from(takes_env);
     let fn_args = original_item_fn
         .sig
         .inputs
@@ -1165,7 +1165,7 @@ fn generate_builtin_fn2(
         if let FnArg::Typed(ty) = fn_arg {
             // this needs to use the args.iter() pattern now.
             prev_token_stream = parse_fn_arg_type2(
-                &*ty.ty,
+                &ty.ty,
                 fn_name,
                 fn_name_attr,
                 prev_token_stream,
@@ -1493,7 +1493,7 @@ fn parse_src_function_arguments(
         arg_names.push(parse_name);
     }
 
-    let skip = if takes_env { 1 } else { 0 };
+    let skip = usize::from(takes_env);
 
     for (i, fn_arg) in original_item_fn.sig.inputs.iter().enumerate().skip(skip) {
         match fn_arg {
@@ -1799,7 +1799,7 @@ pub fn sl_sh_fn2(
     let tokens = match parse::<Item>(input) {
         Ok(item) => match &item {
             Item::Fn(original_item_fn) => {
-                let generated_code = match generate_sl_sh_fn(original_item_fn, attr_args) {
+                let generated_code = match generate_sl_sh_fn2(original_item_fn, attr_args) {
                     Ok(generated_code) => generated_code,
                     Err(e) => e.to_compile_error(),
                 };
