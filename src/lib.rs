@@ -251,7 +251,7 @@ enum ArgPassingStyle {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-struct Arg {
+struct Param {
     val: ArgVal,
     passing_style: ArgPassingStyle,
 }
@@ -723,60 +723,60 @@ fn parse_type(
 
 /// create a vec literal of the expected Arg types so code can check its arguments at runtime for
 /// things like correct number of args.
-fn embed_arg_vec(args: &[Arg]) -> TokenStream {
+fn embed_arg_vec(args: &[Param]) -> TokenStream {
     let mut tokens = vec![];
     for arg in args {
         tokens.push(match (arg.val, arg.passing_style) {
             (ArgVal::Value, ArgPassingStyle::MutReference) => {
-                quote! { crate::builtins_util::Arg {
+                quote! { crate::builtins_util::Param {
                     val: crate::builtins_util::ArgVal::Value,
                     passing_style: crate::builtins_util::ArgPassingStyle::MutReference
                 }}
             }
             (ArgVal::Optional, ArgPassingStyle::MutReference) => {
-                quote! { crate::builtins_util::Arg {
+                quote! { crate::builtins_util::Param {
                     val: crate::builtins_util::ArgVal::Optional,
                     passing_style: crate::builtins_util::ArgPassingStyle::MutReference
                 }}
             }
             (ArgVal::VarArgs, ArgPassingStyle::MutReference) => {
-                quote! { crate::builtins_util::Arg {
+                quote! { crate::builtins_util::Param {
                     val: crate::builtins_util::ArgVal::VarArgs,
                     passing_style: crate::builtins_util::ArgPassingStyle::MutReference
                 }}
             }
             (ArgVal::Value, ArgPassingStyle::Reference) => {
-                quote! {crate::builtins_util::Arg {
+                quote! {crate::builtins_util::Param {
                     val: crate::builtins_util::ArgVal::Value,
                     passing_style: crate::builtins_util::ArgPassingStyle::Reference
                 }}
             }
             (ArgVal::Optional, ArgPassingStyle::Reference) => {
-                quote! { crate::builtins_util::Arg {
+                quote! { crate::builtins_util::Param {
                     val: crate::builtins_util::ArgVal::Optional,
                     passing_style: crate::builtins_util::ArgPassingStyle::Reference
                 }}
             }
             (ArgVal::VarArgs, ArgPassingStyle::Reference) => {
-                quote! { crate::builtins_util::Arg {
+                quote! { crate::builtins_util::Param {
                     val: crate::builtins_util::ArgVal::VarArgs,
                     passing_style: crate::builtins_util::ArgPassingStyle::Reference
                 }}
             }
             (ArgVal::Value, ArgPassingStyle::Move) => {
-                quote! { crate::builtins_util::Arg {
+                quote! { crate::builtins_util::Param {
                     val: crate::builtins_util::ArgVal::Value,
                     passing_style: crate::builtins_util::ArgPassingStyle::Move
                 }}
             }
             (ArgVal::Optional, ArgPassingStyle::Move) => {
-                quote! { crate::builtins_util::Arg {
+                quote! { crate::builtins_util::Param {
                     val: crate::builtins_util::ArgVal::Optional,
                     passing_style: crate::builtins_util::ArgPassingStyle::Move
                 }}
             }
             (ArgVal::VarArgs, ArgPassingStyle::Move) => {
-                quote! { crate::builtins_util::Arg {
+                quote! { crate::builtins_util::Param {
                     val: crate::builtins_util::ArgVal::VarArgs,
                     passing_style: crate::builtins_util::ArgPassingStyle::Move
                 }}
@@ -888,7 +888,7 @@ fn generate_parse_fn(
     fn_name_attr: &Ident,
     fn_name: &str,
     args_len: usize,
-    args: &[Arg],
+    args: &[Param],
 ) -> TokenStream {
     let parse_name = get_parse_fn_name(original_fn_name_str);
     let builtin_name = get_builtin_fn_name(original_fn_name_str);
@@ -941,7 +941,7 @@ fn generate_parse_fn2(
     fn_name_attr: &Ident,
     fn_name: &str,
     args_len: usize,
-    args: &[Arg],
+    args: &[Param],
     inner: TokenStream,
 ) -> TokenStream {
     let parse_name = get_parse_fn_name(original_fn_name_str);
@@ -1138,7 +1138,7 @@ fn generate_builtin_fn2(
     original_item_fn: &ItemFn,
     original_fn_name_str: &str,
     fn_name: &str,
-    args: &[Arg],
+    args: &[Param],
     fn_name_attr: &Ident,
     takes_env: bool,
 ) -> MacroResult<TokenStream> {
@@ -1439,7 +1439,7 @@ fn parse_type_tuple(
 /// marked as Optional are last, and VarArgs is supported but only in the last position, which can
 /// be after any number of Optional arguments. This means non Optional/VarArgs types must
 /// come before all Optional and VarArgs types.
-fn are_args_valid(original_item_fn: &ItemFn, args: &[Arg], takes_env: bool) -> MacroResult<()> {
+fn are_args_valid(original_item_fn: &ItemFn, args: &[Param], takes_env: bool) -> MacroResult<()> {
     if args.is_empty() || (!takes_env && args.len() == 1 || takes_env && args.len() == 2) {
         Ok(())
     } else {
@@ -1479,7 +1479,7 @@ fn are_args_valid(original_item_fn: &ItemFn, args: &[Arg], takes_env: bool) -> M
 fn parse_src_function_arguments(
     original_item_fn: &ItemFn,
     takes_env: bool,
-) -> MacroResult<Vec<Arg>> {
+) -> MacroResult<Vec<Param>> {
     let mut parsed_args = vec![];
     let len = if takes_env {
         original_item_fn.sig.inputs.len() - 1
@@ -1506,13 +1506,13 @@ fn parse_src_function_arguments(
             FnArg::Typed(ty) => match <Type as Into<RustType>>::into(*ty.ty.clone()) {
                 RustType::Path(ty, _span) => {
                     let val = get_arg_val(&ty);
-                    parsed_args.push(Arg {
+                    parsed_args.push(Param {
                         val,
                         passing_style: ArgPassingStyle::Move,
                     });
                 }
                 RustType::Tuple(_type_tuple, _span) => {
-                    parsed_args.push(Arg {
+                    parsed_args.push(Param {
                         val: ArgVal::Value,
                         passing_style: ArgPassingStyle::Move,
                     });
@@ -1526,10 +1526,10 @@ fn parse_src_function_arguments(
                     match <Type as Into<RustType>>::into(*ty_ref.elem) {
                         RustType::Path(ty, _span) => {
                             let val = get_arg_val(&ty);
-                            parsed_args.push(Arg { val, passing_style });
+                            parsed_args.push(Param { val, passing_style });
                         }
                         RustType::Tuple(_type_tuple, _span) => {
-                            parsed_args.push(Arg { val: ArgVal::Value, passing_style})
+                            parsed_args.push(Param { val: ArgVal::Value, passing_style})
                         }
                         _ => {
                             return Err(Error::new(
@@ -1823,7 +1823,7 @@ pub fn sl_sh_fn2(
 mod test {
     use super::*;
 
-    fn are_args_valid(args: &[Arg]) -> bool {
+    fn are_args_valid(args: &[Param]) -> bool {
         if args.is_empty() || args.len() == 1 {
             true
         } else {
@@ -1858,15 +1858,15 @@ mod test {
         assert!(are_args_valid(args.as_slice()));
         // values are always valid
         let args = vec![
-            Arg {
+            Param {
                 val: ArgVal::Value,
                 passing_style: ArgPassingStyle::Move,
             },
-            Arg {
+            Param {
                 val: ArgVal::Value,
                 passing_style: ArgPassingStyle::Reference,
             },
-            Arg {
+            Param {
                 val: ArgVal::Value,
                 passing_style: ArgPassingStyle::MutReference,
             },
@@ -1875,11 +1875,11 @@ mod test {
 
         // vec must be last argument
         let args = vec![
-            Arg {
+            Param {
                 val: ArgVal::Value,
                 passing_style: ArgPassingStyle::Move,
             },
-            Arg {
+            Param {
                 val: ArgVal::VarArgs,
                 passing_style: ArgPassingStyle::Move,
             },
@@ -1888,11 +1888,11 @@ mod test {
 
         // vec must be last argument
         let args = vec![
-            Arg {
+            Param {
                 val: ArgVal::VarArgs,
                 passing_style: ArgPassingStyle::Move,
             },
-            Arg {
+            Param {
                 val: ArgVal::Value,
                 passing_style: ArgPassingStyle::Move,
             },
@@ -1901,15 +1901,15 @@ mod test {
 
         // opt must be last argument
         let args = vec![
-            Arg {
+            Param {
                 val: ArgVal::Optional,
                 passing_style: ArgPassingStyle::Move,
             },
-            Arg {
+            Param {
                 val: ArgVal::Value,
                 passing_style: ArgPassingStyle::Reference,
             },
-            Arg {
+            Param {
                 val: ArgVal::Value,
                 passing_style: ArgPassingStyle::Move,
             },
@@ -1918,19 +1918,19 @@ mod test {
 
         // opt must be last argument(s)
         let args = vec![
-            Arg {
+            Param {
                 val: ArgVal::Value,
                 passing_style: ArgPassingStyle::Move,
             },
-            Arg {
+            Param {
                 val: ArgVal::Optional,
                 passing_style: ArgPassingStyle::Move,
             },
-            Arg {
+            Param {
                 val: ArgVal::Optional,
                 passing_style: ArgPassingStyle::Reference,
             },
-            Arg {
+            Param {
                 val: ArgVal::Optional,
                 passing_style: ArgPassingStyle::Move,
             },
@@ -1939,19 +1939,19 @@ mod test {
 
         // opt must be last argument(s), unless it's one vec in the last slot
         let args = vec![
-            Arg {
+            Param {
                 val: ArgVal::Value,
                 passing_style: ArgPassingStyle::Move,
             },
-            Arg {
+            Param {
                 val: ArgVal::Optional,
                 passing_style: ArgPassingStyle::Move,
             },
-            Arg {
+            Param {
                 val: ArgVal::Optional,
                 passing_style: ArgPassingStyle::Reference,
             },
-            Arg {
+            Param {
                 val: ArgVal::VarArgs,
                 passing_style: ArgPassingStyle::Move,
             },
@@ -1960,19 +1960,19 @@ mod test {
 
         // vec must always be last
         let args = vec![
-            Arg {
+            Param {
                 val: ArgVal::Value,
                 passing_style: ArgPassingStyle::Move,
             },
-            Arg {
+            Param {
                 val: ArgVal::Optional,
                 passing_style: ArgPassingStyle::Move,
             },
-            Arg {
+            Param {
                 val: ArgVal::VarArgs,
                 passing_style: ArgPassingStyle::Reference,
             },
-            Arg {
+            Param {
                 val: ArgVal::Optional,
                 passing_style: ArgPassingStyle::Move,
             },
@@ -1981,15 +1981,15 @@ mod test {
 
         // opt must always be last argument(s)
         let args = vec![
-            Arg {
+            Param {
                 val: ArgVal::Value,
                 passing_style: ArgPassingStyle::Move,
             },
-            Arg {
+            Param {
                 val: ArgVal::Optional,
                 passing_style: ArgPassingStyle::Move,
             },
-            Arg {
+            Param {
                 val: ArgVal::Value,
                 passing_style: ArgPassingStyle::Reference,
             },
@@ -1998,15 +1998,15 @@ mod test {
 
         // opt must always be last argument(s)
         let args = vec![
-            Arg {
+            Param {
                 val: ArgVal::Optional,
                 passing_style: ArgPassingStyle::Move,
             },
-            Arg {
+            Param {
                 val: ArgVal::Value,
                 passing_style: ArgPassingStyle::Move,
             },
-            Arg {
+            Param {
                 val: ArgVal::Value,
                 passing_style: ArgPassingStyle::Reference,
             },
