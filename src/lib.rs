@@ -272,29 +272,41 @@ fn get_type_handle(type_path: &TypePath) -> TypeHandle {
     TypeHandle::Direct
 }
 
-fn no_parse_param(_arg_name: &Ident, inner: TokenStream, _param: Param, idx: usize) -> TokenStream {
+fn no_parse_param(
+    _arg_name: &Ident,
+    inner: TokenStream,
+    _required_args: usize,
+    _idx: usize,
+) -> TokenStream {
     inner
 }
 
-fn parse_param(arg_name: &Ident, inner: TokenStream, param: Param, idx: usize) -> TokenStream {
-    match (param.handle, param.passing_style) {
-        (TypeHandle::Direct, PassingStyle::Value) => {
-            //quote! {
-            //        #arg_name;
-            //        crate::ArgType::Exp(#arg_name);
-            //        #inner;
-            //}
-        }
-        (TypeHandle::Direct, PassingStyle::Reference) => {}
-        (TypeHandle::Direct, PassingStyle::MutReference) => {}
-        (TypeHandle::Optional, PassingStyle::Value) => {}
-        (TypeHandle::Optional, PassingStyle::Reference) => {}
-        (TypeHandle::Optional, PassingStyle::MutReference) => {}
-        (TypeHandle::VarArgs, PassingStyle::Value) => {}
-        (TypeHandle::VarArgs, PassingStyle::Reference) => {}
-        (TypeHandle::VarArgs, PassingStyle::MutReference) => {}
+fn parse_param(
+    arg_name: &Ident,
+    inner: TokenStream,
+    required_args: usize,
+    idx: usize,
+) -> TokenStream {
+    quote! {
+        let param = arg_types[#idx];
+        let arg = args.get(#idx);
+        let #arg_name = match param.handle {
+            TypeHandle::Direct => match arg {
+                None => {
+                    return Err(crate::types::LispError::new(format!(
+                        "{} not given enough arguments, expected at least {} arguments, got {}.",
+                        fn_name,
+                        #required_args,
+                        args.len()
+                    )));
+                }
+                Some(arg) => arg,
+            },
+            TypeHandle::Optional => arg,
+            TypeHandle::VarArgs => args[#idx..].collect::<Vec<crate::types::Expression>>(),
+        };
+        #inner
     }
-    quote! {}
 }
 
 fn no_parse(_arg_name: &Ident, inner: TokenStream) -> TokenStream {
@@ -351,7 +363,7 @@ fn get_parser_for_type_handle(
 fn get_parser_for_type_handle2(
     param: Param,
     noop_outer_parse: bool,
-) -> fn(&Ident, TokenStream, Param, usize) -> TokenStream {
+) -> fn(&Ident, TokenStream, usize, usize) -> TokenStream {
     match (param.handle, param.passing_style, noop_outer_parse) {
         (_, _, true) => no_parse_param,
         (_, _, false) => parse_param,
@@ -420,6 +432,7 @@ fn make_orig_fn_call2(
     takes_env: bool,
     original_item_fn: &ItemFn,
     original_fn_name: &Ident,
+    required_args: usize,
     arg_names: Vec<Ident>,
 ) -> MacroResult<TokenStream> {
     // the original function call must return an Expression object
@@ -469,9 +482,9 @@ fn make_orig_fn_call2(
         match args.get(ARGS_LEN) {
             Some(_) if ARGS_LEN == 0 || arg_types[ARGS_LEN - 1].handle != crate::builtins_util::TypeHandle::VarArgs => {
                 return Err(crate::types::LispError::new(format!(
-                    "{} given too many arguments, expected {}, got {}.",
+                    "{} given too many arguments, expected at least {} arguments, got {}.",
                     fn_name,
-                    arg_types.len(),
+                    #required_args,
                     args.len()
                 )));
             }
@@ -863,7 +876,8 @@ fn parse_type2(
     arg_name: &Ident,
     passing_style: PassingStyle,
     idx: usize,
-    outer_parse: fn(&Ident, TokenStream, Param, usize) -> TokenStream,
+    required_args: usize,
+    outer_parse: fn(&Ident, TokenStream, usize, usize) -> TokenStream,
 ) -> MacroResult<TokenStream> {
     let tokens = match param.handle {
         TypeHandle::Direct => {
@@ -881,7 +895,7 @@ fn parse_type2(
             quote! { crate::VarArgs },
         )?,
     };
-    Ok(outer_parse(arg_name, tokens, param, idx))
+    Ok(outer_parse(arg_name, tokens, required_args, idx))
 }
 
 /// create a vec literal of the expected Param types so code can check its arguments at runtime for
@@ -1246,54 +1260,14 @@ fn generate_builtin_fn(
     Ok(tokens)
 }
 
-fn stuff(arg: Arg) {
-    match (arg.val, arg.passing_style) {
-        (ArgVal::Value, ArgPassingStyle::Move) => {
-            let mut i = 0;
-            if let Some(arg_0) = args.next() {
-                let arg_0 = crate::eval(environment, arg_0)?;
-                if let Some(param_0) = params.get(i) {
-                    match (param_0.val, param_0.passing_style) {
-                        (ArgVal::Value, ArgPassingStyle::Move) => {
-                            use crate::types::RustProcedure;
-                            let mut typed_data: crate::types::TypedWrapper<f64, crate::types::Expression> =
-                                crate::types::TypedWrapper::new(arg_0);
-                            let callback = |arg_0: f64| -> crate::LispResult<crate::types::Expression> {
-                                Ok()//TODO
-                            };
-                            typed_data.apply(fn_name, callback)
-                        }
-                        (_, _) => {
-                            Err(LispError::new(format!(
-                                "{} macro is unable to parse its arguments, expected specific args at idx {} but arg_types vec had types that violated the generated codes expectations.",
-                                fn_name,
-                                i,
-                            )))
-                        }
-                    }
-                } else {
-                    Err(LispError::new(format!(
-                        "{} macro is unable to parse its arguments, expected {} args but arg_types vec did not have the item.",
-                        fn_name,
-                        i + 1,
-                    )))
-                }
-            } else {
-                Err(LispError::new(format!(
-                    "{}  not given enough arguments, expected {}, got, {}.",
-                    fn_name, ARGS_LEN, i,
-                )))
-            }
+fn num_required_args(params: &[Param]) -> usize {
+    params.iter().fold(0, |accum, nxt| {
+        if nxt.handle == TypeHandle::Direct {
+            accum + 1
+        } else {
+            accum
         }
-        (ArgVal::Optional, ArgPassingStyle::Move) => {}
-        (ArgVal::VarArgs, ArgPassingStyle::Move) => {}
-        (ArgVal::Value, ArgPassingStyle::Reference) => {}
-        (ArgVal::Optional, ArgPassingStyle::Reference) => {}
-        (ArgVal::VarArgs, ArgPassingStyle::Reference) => {}
-        (ArgVal::Value, ArgPassingStyle::MutReference) => {}
-        (ArgVal::Optional, ArgPassingStyle::MutReference) => {}
-        (ArgVal::VarArgs, ArgPassingStyle::MutReference) => {}
-    }
+    })
 }
 
 fn generate_builtin_fn2(
@@ -1306,11 +1280,13 @@ fn generate_builtin_fn2(
 ) -> MacroResult<TokenStream> {
     let original_fn_name = Ident::new(original_fn_name_str, Span::call_site());
     let arg_names = generate_inner_fn_signature_to_orig_fn_call2(original_item_fn, takes_env)?;
+    let required_args = num_required_args(params);
 
     let orig_fn_call = make_orig_fn_call2(
         takes_env,
         original_item_fn,
         &original_fn_name,
+        required_args,
         arg_names.clone(),
     )?;
     // initialize the innermost token stream to the code of the original_fn_call
@@ -1344,6 +1320,7 @@ fn generate_builtin_fn2(
                 false,
                 idx,
                 *param,
+                required_args,
             )?;
         }
     }
@@ -1377,6 +1354,7 @@ fn parse_fn_arg_type2(
     noop_outer_parse: bool,
     idx: usize,
     param: Param,
+    required_args: usize,
 ) -> MacroResult<TokenStream> {
     match <Type as Into<RustType>>::into(ty.clone()) {
         RustType::Path(ty, _span) => {
@@ -1390,6 +1368,7 @@ fn parse_fn_arg_type2(
                 arg_name,
                 passing_style,
                 idx,
+                required_args,
                 parse_layer_1,
             )
         }
@@ -1401,8 +1380,8 @@ fn parse_fn_arg_type2(
                 fn_name_ident,
                 prev_token_stream,
                 arg_name,
-                param,
                 idx,
+                required_args,
                 parse_layer_1,
             )
         }
@@ -1422,6 +1401,7 @@ fn parse_fn_arg_type2(
                     arg_name,
                     passing_style,
                     idx,
+                    required_args,
                     parse_layer_1,
                 )
             }
@@ -1433,8 +1413,8 @@ fn parse_fn_arg_type2(
                     fn_name_ident,
                     prev_token_stream,
                     arg_name,
-                    param,
                     idx,
+                    required_args,
                     parse_layer_1,
                 )
             }
@@ -1618,9 +1598,9 @@ fn parse_type_tuple2(
     fn_name_ident: &Ident,
     inner: TokenStream,
     arg_name: &Ident,
-    param: Param,
     idx: usize,
-    outer_parse: fn(&Ident, TokenStream, Param, usize) -> TokenStream,
+    required_args: usize,
+    outer_parse: fn(&Ident, TokenStream, usize, usize) -> TokenStream,
 ) -> MacroResult<TokenStream> {
     // at the end of all the tuple parsing the inner token stream expects
     // arg_name to be:
@@ -1661,6 +1641,7 @@ fn parse_type_tuple2(
                 true,
                 i,
                 param,
+                required_args,
             )?;
         }
         inner
@@ -1688,7 +1669,7 @@ fn parse_type_tuple2(
             }
         }
     }};
-    Ok(outer_parse(arg_name, tokens, param, idx))
+    Ok(outer_parse(arg_name, tokens, required_args, idx))
 }
 
 /// Optional and VarArgs types are supported to create the idea of items that might be provided or
