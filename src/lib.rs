@@ -1194,8 +1194,6 @@ fn generate_parse_fn2(
             environment: &mut crate::environment::Environment,
             args: &mut dyn Iterator<Item = crate::types::Expression>,
         ) -> crate::LispResult<crate::types::Expression> {
-            use std::convert::TryInto;
-            use crate::builtins_util::ExpandVecToArgs;
             #make_args
             let #fn_name_ident = #fn_name;
             const ARGS_LEN: usize = #args_len;
