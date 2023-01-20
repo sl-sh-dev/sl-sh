@@ -691,6 +691,54 @@ fn parse_optional_type(
     })
 }
 
+/// for Option<Expression> values the ref_exp must first be parsed as an
+/// Option, and only in the case that the option is Some will it be
+/// necessary to match against every ExpEnum variant.
+#[allow(clippy::too_many_arguments)]
+fn parse_optional_type2(
+    ty: &TypePath,
+    fn_name: &str,
+    fn_name_ident: &Ident,
+    arg_name: &Ident,
+    passing_style: PassingStyle,
+    inner: TokenStream,
+    idx: usize,
+    required_args: usize,
+    param: Param,
+) -> MacroResult<TokenStream> {
+    let some_inner = quote! {
+        let #arg_name = Some(#arg_name);
+        #inner
+    };
+    // in the case that the value is some, which means the Expression is no longer
+    // wrapped in Option, the parse_typehandle_value_type can be repurposed but
+    // with the caveat that after the value of inner it is handed first wraps
+    // the matched ExpEnum in Some bound to the #arg_name like the
+    // rust native function expects.
+    let some_arg_value_type_parsing_code = parse_direct_type2(
+        ty,
+        fn_name,
+        fn_name_ident,
+        arg_name,
+        passing_style,
+        some_inner,
+        idx,
+        required_args,
+        param,
+    )?;
+    Ok(quote! {
+        match #arg_name {
+            None => {
+                let #arg_name = None;
+                #inner
+            }
+            Some(#arg_name) => {
+               #some_arg_value_type_parsing_code
+            }
+        }
+    })
+}
+
 /// None if not Rust type vec
 fn is_vec(ty: &TypePath) -> Option<Type> {
     if let Some((ty, type_path)) = get_generic_argument_from_type_path(ty) {
@@ -950,9 +998,17 @@ fn parse_type2(
             required_args,
             param,
         )?,
-        TypeHandle::Optional => {
-            parse_optional_type(ty, fn_name.0, fn_name.1, arg_name, passing_style, inner)?
-        }
+        TypeHandle::Optional => parse_optional_type2(
+            ty,
+            fn_name.0,
+            fn_name.1,
+            arg_name,
+            passing_style,
+            inner,
+            idx,
+            required_args,
+            param,
+        )?,
         TypeHandle::VarArgs => parse_variadic_args_type(
             false,
             ty,
