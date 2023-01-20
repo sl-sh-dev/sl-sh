@@ -11,6 +11,26 @@ use syn::{
 };
 extern crate static_assertions;
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+enum TypeHandle {
+    Direct,
+    Optional,
+    VarArgs,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+enum PassingStyle {
+    Value,
+    Reference,
+    MutReference,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+struct Param {
+    handle: TypeHandle,
+    passing_style: PassingStyle,
+}
+
 type MacroResult<T> = Result<T, Error>;
 
 const POSSIBLE_RETURN_TYPES: [&str; 2] = ["LispResult", "Option"];
@@ -236,26 +256,6 @@ fn get_attribute_name_value(nested_meta: &NestedMeta) -> MacroResult<(String, St
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
-enum TypeHandle {
-    Direct,
-    Optional,
-    VarArgs,
-}
-
-#[derive(Copy, Clone, Debug, PartialEq)]
-enum PassingStyle {
-    Value,
-    Reference,
-    MutReference,
-}
-
-#[derive(Copy, Clone, Debug, PartialEq)]
-struct Param {
-    handle: TypeHandle,
-    passing_style: PassingStyle,
-}
-
 fn get_type_handle(type_path: &TypePath) -> TypeHandle {
     if let Some((_generic, type_path)) = get_generic_argument_from_type_path(type_path) {
         let wrapper = opt_is_valid_generic_type(type_path, SPECIAL_ARG_TYPES.as_slice());
@@ -357,58 +357,8 @@ fn parse_param(
     }
 }
 
-fn no_parse(_arg_name: &Ident, inner: TokenStream) -> TokenStream {
-    inner
-}
-
-fn parse_value(arg_name: &Ident, inner: TokenStream) -> TokenStream {
-    quote! {
-        crate::ret_err_exp_enum!(
-                #arg_name,
-                crate::ArgType::Exp(#arg_name),
-                #inner,
-                "sl_sh_fn macro is broken. ArgType::Exp can't be parsed as ArgType::Exp"
-            )
-    }
-}
-
-fn parse_optional(arg_name: &Ident, inner: TokenStream) -> TokenStream {
-    quote! {
-        crate::ret_err_exp_enum!(
-                #arg_name,
-                crate::ArgType::Opt(#arg_name),
-                #inner,
-                "sl_sh_fn macro is broken. Alleged ArgType::Opt can't be parsed as ArgType::Opt"
-            )
-    }
-}
-
-fn parse_varargs(arg_name: &Ident, inner: TokenStream) -> TokenStream {
-    quote! {
-        crate::ret_err_exp_enum!(
-                #arg_name,
-                crate::ArgType::VarArgs(#arg_name),
-                #inner,
-                "sl_sh_fn macro is broken. Alleged ArgType::Vargs can't be parsed as ArgType::Vargs"
-            )
-    }
-}
-
 //TODO PR #3 must completely remove ArgType in both repos once new sl_sh_fn2 is ready
 fn get_parser_for_type_handle(
-    val: TypeHandle,
-    noop_outer_parse: bool,
-) -> fn(&Ident, TokenStream) -> TokenStream {
-    match (val, noop_outer_parse) {
-        (_, true) => no_parse,
-        (TypeHandle::Direct, false) => parse_value,
-        (TypeHandle::Optional, false) => parse_optional,
-        (TypeHandle::VarArgs, false) => parse_varargs,
-    }
-}
-
-//TODO PR #3 must completely remove ArgType in both repos once new sl_sh_fn2 is ready
-fn get_parser_for_type_handle2(
     noop_outer_parse: bool,
 ) -> fn(&Ident, TokenStream, Param, usize, usize) -> TokenStream {
     match noop_outer_parse {
@@ -653,49 +603,8 @@ fn parse_variadic_args_type(
 /// for Option<Expression> values the ref_exp must first be parsed as an
 /// Option, and only in the case that the option is Some will it be
 /// necessary to match against every ExpEnum variant.
-fn parse_optional_type(
-    ty: &TypePath,
-    fn_name: &str,
-    fn_name_ident: &Ident,
-    arg_name: &Ident,
-    passing_style: PassingStyle,
-    inner: TokenStream,
-) -> MacroResult<TokenStream> {
-    let some_inner = quote! {
-        let #arg_name = Some(#arg_name);
-        #inner
-    };
-    // in the case that the value is some, which means the Expression is no longer
-    // wrapped in Option, the parse_typehandle_value_type can be repurposed but
-    // with the caveat that after the value of inner it is handed first wraps
-    // the matched ExpEnum in Some bound to the #arg_name like the
-    // rust native function expects.
-    let some_arg_value_type_parsing_code = parse_direct_type(
-        ty,
-        fn_name,
-        fn_name_ident,
-        arg_name,
-        passing_style,
-        some_inner,
-    )?;
-    Ok(quote! {
-        match #arg_name {
-            None => {
-                let #arg_name = None;
-                #inner
-            }
-            Some(#arg_name) => {
-               #some_arg_value_type_parsing_code
-            }
-        }
-    })
-}
-
-/// for Option<Expression> values the ref_exp must first be parsed as an
-/// Option, and only in the case that the option is Some will it be
-/// necessary to match against every ExpEnum variant.
 #[allow(clippy::too_many_arguments)]
-fn parse_optional_type2(
+fn parse_optional_type(
     ty: &TypePath,
     fn_name: &str,
     fn_name_ident: &Ident,
@@ -715,7 +624,7 @@ fn parse_optional_type2(
     // with the caveat that after the value of inner it is handed first wraps
     // the matched ExpEnum in Some bound to the #arg_name like the
     // rust native function expects.
-    let some_arg_value_type_parsing_code = parse_direct_type2(
+    let some_arg_value_type_parsing_code = parse_direct_type(
         ty,
         fn_name,
         fn_name_ident,
@@ -771,6 +680,7 @@ fn get_type_or_wrapped_type<'a>(ty: &'a TypePath, possible_types: &'a [&str]) ->
 
 /// for regular Expression values (no Optional/VarArgs) ref_exp
 /// just needs to be matched based on it's ExpEnum variant.
+#[allow(clippy::too_many_arguments)]
 fn parse_direct_type(
     ty: &TypePath,
     fn_name: &str,
@@ -778,6 +688,9 @@ fn parse_direct_type(
     arg_name: &Ident,
     passing_style: PassingStyle,
     inner: TokenStream,
+    idx: usize,
+    required_args: usize,
+    param: Param,
 ) -> MacroResult<TokenStream> {
     if is_vec(ty).is_some() {
         parse_variadic_args_type(true, ty, fn_name, arg_name, inner, quote! { Vec })
@@ -835,90 +748,6 @@ fn parse_direct_type(
                 fn_name_ident,
                 inner,
                 arg_name,
-                no_parse,
-            ),
-            RustType::BareFn(_, _) | RustType::Reference(_, _) | RustType::Unsupported(_) => {
-                let arg_pos = get_arg_pos(arg_name)?;
-                let err_str = format!(
-                    "Error with argument at position {}, sl_sh_fn only supports Vec<T>, Option<T>, and T where T is a Type::Path or Type::Tuple and can be moved, passed by reference, or passed by mutable reference (|&|&mut )(Type Path | (Type Path,*))",
-                    arg_pos
-                );
-                Err(Error::new(ty.span(), err_str))
-            }
-        }
-    }
-}
-
-/// for regular Expression values (no Optional/VarArgs) ref_exp
-/// just needs to be matched based on it's ExpEnum variant.
-#[allow(clippy::too_many_arguments)]
-fn parse_direct_type2(
-    ty: &TypePath,
-    fn_name: &str,
-    fn_name_ident: &Ident,
-    arg_name: &Ident,
-    passing_style: PassingStyle,
-    inner: TokenStream,
-    idx: usize,
-    required_args: usize,
-    param: Param,
-) -> MacroResult<TokenStream> {
-    if is_vec(ty).is_some() {
-        parse_variadic_args_type(true, ty, fn_name, arg_name, inner, quote! { Vec })
-    } else {
-        let ty = get_type_or_wrapped_type(ty, SPECIAL_ARG_TYPES.as_slice());
-        match ty {
-            RustType::Path(ty, _span) => {
-                let str = ty.to_token_stream().to_string();
-                // handle &str differently, want impl RustProcedure<F> for TypedWrapper<&str>
-                // w/o this special case it generate RustProcedureRefMut on a TypedWrapper<str> which is unsized.
-                let (fn_ref, passing_style, ty) =
-                    if str == "str" && passing_style == PassingStyle::Reference {
-                        let passing_style = PassingStyle::Value;
-                        (quote! { &#ty }, passing_style, quote! { &#ty })
-                    } else {
-                        (
-                            tokens_for_matching_references(passing_style, &ty),
-                            passing_style,
-                            quote! { #ty },
-                        )
-                    };
-                let callback_declaration = quote! {
-                    let callback = |#arg_name: #fn_ref| -> crate::LispResult<crate::types::Expression> {
-                        #inner
-                    };
-                };
-
-                match passing_style {
-                    PassingStyle::Value => Ok(quote! {{
-                        use crate::types::RustProcedure;
-                        let typed_data: crate::types::TypedWrapper<#ty, crate::types::Expression> =
-                            crate::types::TypedWrapper::new(#arg_name);
-                        #callback_declaration
-                        typed_data.apply(#fn_name_ident, callback)
-                    }}),
-                    PassingStyle::Reference => Ok(quote! {{
-                        use crate::types::RustProcedureRef;
-                        let typed_data: crate::types::TypedWrapper<#ty, crate::types::Expression> =
-                            crate::types::TypedWrapper::new(#arg_name);
-                        #callback_declaration
-                        typed_data.apply_ref(#fn_name_ident, callback)
-                    }}),
-                    PassingStyle::MutReference => Ok(quote! {{
-                        use crate::types::RustProcedureRefMut;
-                        let mut typed_data: crate::types::TypedWrapper<#ty, crate::types::Expression> =
-                            crate::types::TypedWrapper::new(#arg_name);
-                        #callback_declaration
-                        typed_data.apply_ref_mut(#fn_name_ident, callback)
-                    }}),
-                }
-            }
-            RustType::Tuple(type_tuple, _span) => parse_type_tuple2(
-                &type_tuple,
-                fn_name,
-                fn_name_ident,
-                inner,
-                arg_name,
                 idx,
                 required_args,
                 param,
@@ -941,41 +770,8 @@ fn parse_direct_type2(
 /// transformation. If this function throws errors it means that the
 /// inputs, val/passing style are wrong and aren't matching to the ArgType(s)
 /// properly, or the rust type lookup function is busted.
-fn parse_type(
-    ty: &TypePath,
-    fn_name: (&str, &Ident),
-    inner: TokenStream,
-    val: TypeHandle,
-    arg_name: &Ident,
-    passing_style: PassingStyle,
-    outer_parse: fn(&Ident, TokenStream) -> TokenStream,
-) -> MacroResult<TokenStream> {
-    let tokens = match val {
-        TypeHandle::Direct => {
-            parse_direct_type(ty, fn_name.0, fn_name.1, arg_name, passing_style, inner)?
-        }
-        TypeHandle::Optional => {
-            parse_optional_type(ty, fn_name.0, fn_name.1, arg_name, passing_style, inner)?
-        }
-        TypeHandle::VarArgs => parse_variadic_args_type(
-            false,
-            ty,
-            fn_name.0,
-            arg_name,
-            inner,
-            quote! { crate::VarArgs },
-        )?,
-    };
-    Ok(outer_parse(arg_name, tokens))
-}
-
-/// create the nested match statements to parse rust types into sl_sh types.
-/// the rust types will determine what sl_sh functions will be used for
-/// transformation. If this function throws errors it means that the
-/// inputs, val/passing style are wrong and aren't matching to the ArgType(s)
-/// properly, or the rust type lookup function is busted.
 #[allow(clippy::too_many_arguments)]
-fn parse_type2(
+fn parse_type(
     ty: &TypePath,
     fn_name: (&str, &Ident),
     inner: TokenStream,
@@ -987,7 +783,7 @@ fn parse_type2(
     outer_parse: fn(&Ident, TokenStream, Param, usize, usize) -> TokenStream,
 ) -> MacroResult<TokenStream> {
     let tokens = match param.handle {
-        TypeHandle::Direct => parse_direct_type2(
+        TypeHandle::Direct => parse_direct_type(
             ty,
             fn_name.0,
             fn_name.1,
@@ -998,7 +794,7 @@ fn parse_type2(
             required_args,
             param,
         )?,
-        TypeHandle::Optional => parse_optional_type2(
+        TypeHandle::Optional => parse_optional_type(
             ty,
             fn_name.0,
             fn_name.1,
@@ -1247,7 +1043,7 @@ fn generate_builtin_fn(
     for (idx, ((fn_arg, arg_name), param)) in fn_args.enumerate() {
         if let FnArg::Typed(ty) = fn_arg {
             // this needs to use the args.iter() pattern now.
-            prev_token_stream = parse_fn_arg_type2(
+            prev_token_stream = parse_fn_arg_type(
                 &ty.ty,
                 fn_name,
                 fn_name_ident,
@@ -1281,7 +1077,7 @@ fn generate_builtin_fn(
 
 // TODO document this new version
 #[allow(clippy::too_many_arguments)]
-fn parse_fn_arg_type2(
+fn parse_fn_arg_type(
     ty: &Type, //TODO Cow?
     fn_name: &str,
     fn_name_ident: &Ident,
@@ -1294,127 +1090,37 @@ fn parse_fn_arg_type2(
 ) -> MacroResult<TokenStream> {
     match <Type as Into<RustType>>::into(ty.clone()) {
         RustType::Path(ty, _span) => {
-            let parse_layer_1 = get_parser_for_type_handle2(noop_outer_parse);
-            let passing_style = PassingStyle::Value;
-            parse_type2(
-                &ty,
-                (fn_name, fn_name_ident),
-                prev_token_stream,
-                param,
-                arg_name,
-                passing_style,
-                idx,
-                required_args,
-                parse_layer_1,
-            )
-        }
-        RustType::Tuple(type_tuple, _span) => {
-            let parse_layer_1 = get_parser_for_type_handle2(noop_outer_parse);
-            parse_type_tuple2(
-                &type_tuple,
-                fn_name,
-                fn_name_ident,
-                prev_token_stream,
-                arg_name,
-                idx,
-                required_args,
-                param,
-                parse_layer_1,
-            )
-        }
-        RustType::Reference(ty_ref, _span) => match <Type as Into<RustType>>::into(*ty_ref.elem) {
-            RustType::Path(ty, _span) => {
-                let parse_layer_1 = get_parser_for_type_handle2(noop_outer_parse);
-                let passing_style = if ty_ref.mutability.is_some() {
-                    PassingStyle::MutReference
-                } else {
-                    PassingStyle::Reference
-                };
-                parse_type2(
-                    &ty,
-                    (fn_name, fn_name_ident),
-                    prev_token_stream,
-                    param,
-                    arg_name,
-                    passing_style,
-                    idx,
-                    required_args,
-                    parse_layer_1,
-                )
-            }
-            RustType::Tuple(type_tuple, _span) => {
-                let parse_layer_1 = get_parser_for_type_handle2(noop_outer_parse);
-                parse_type_tuple2(
-                    &type_tuple,
-                    fn_name,
-                    fn_name_ident,
-                    prev_token_stream,
-                    arg_name,
-                    idx,
-                    required_args,
-                    param,
-                    parse_layer_1,
-                )
-            }
-            RustType::BareFn(_, _) | RustType::Unsupported(_) | RustType::Reference(_, _) => {
-                let arg_pos = get_arg_pos(arg_name)?;
-                let err_str = format!(
-                    "Error with argument at position {}, sl_sh_fn only supports Vec<T>, Option<T>, and T where T is a Type::Path or Type::Tuple and can be moved, passed by reference, or passed by mutable reference (|&|&mut )(Type Path | (Type Path,*))",
-                    arg_pos
-                );
-                Err(Error::new(ty.span(), err_str))
-            }
-        },
-        RustType::BareFn(_, _) | RustType::Unsupported(_) => {
-            let arg_pos = get_arg_pos(arg_name)?;
-            let err_str = format!(
-                "Error with argument at position {}, sl_sh_fn only supports Vec<T>, Option<T>, and T where T is a Type::Path or Type::Tuple and can be moved, passed by reference, or passed by mutable reference (|&|&mut )(Type Path | (Type Path,*))",
-                arg_pos
-            );
-            Err(Error::new(ty.span(), err_str))
-        }
-    }
-}
-
-fn parse_fn_arg_type(
-    ty: &Type, //TODO Cow?
-    fn_name: &str,
-    fn_name_ident: &Ident,
-    prev_token_stream: TokenStream,
-    arg_name: &Ident,
-    noop_outer_parse: bool,
-) -> MacroResult<TokenStream> {
-    match <Type as Into<RustType>>::into(ty.clone()) {
-        RustType::Path(ty, _span) => {
-            let val = get_type_handle(&ty);
-            let parse_layer_1 = get_parser_for_type_handle(val, noop_outer_parse);
+            let parse_layer_1 = get_parser_for_type_handle(noop_outer_parse);
             let passing_style = PassingStyle::Value;
             parse_type(
                 &ty,
                 (fn_name, fn_name_ident),
                 prev_token_stream,
-                val,
+                param,
                 arg_name,
                 passing_style,
+                idx,
+                required_args,
                 parse_layer_1,
             )
         }
         RustType::Tuple(type_tuple, _span) => {
-            let val = TypeHandle::Direct;
-            let parse_layer_1 = get_parser_for_type_handle(val, noop_outer_parse);
+            let parse_layer_1 = get_parser_for_type_handle(noop_outer_parse);
             parse_type_tuple(
                 &type_tuple,
                 fn_name,
                 fn_name_ident,
                 prev_token_stream,
                 arg_name,
+                idx,
+                required_args,
+                param,
                 parse_layer_1,
             )
         }
         RustType::Reference(ty_ref, _span) => match <Type as Into<RustType>>::into(*ty_ref.elem) {
             RustType::Path(ty, _span) => {
-                let val = get_type_handle(&ty);
-                let parse_layer_1 = get_parser_for_type_handle(val, noop_outer_parse);
+                let parse_layer_1 = get_parser_for_type_handle(noop_outer_parse);
                 let passing_style = if ty_ref.mutability.is_some() {
                     PassingStyle::MutReference
                 } else {
@@ -1424,21 +1130,25 @@ fn parse_fn_arg_type(
                     &ty,
                     (fn_name, fn_name_ident),
                     prev_token_stream,
-                    val,
+                    param,
                     arg_name,
                     passing_style,
+                    idx,
+                    required_args,
                     parse_layer_1,
                 )
             }
             RustType::Tuple(type_tuple, _span) => {
-                let val = TypeHandle::Direct;
-                let parse_layer_1 = get_parser_for_type_handle(val, noop_outer_parse);
+                let parse_layer_1 = get_parser_for_type_handle(noop_outer_parse);
                 parse_type_tuple(
                     &type_tuple,
                     fn_name,
                     fn_name_ident,
                     prev_token_stream,
                     arg_name,
+                    idx,
+                    required_args,
+                    param,
                     parse_layer_1,
                 )
             }
@@ -1462,75 +1172,8 @@ fn parse_fn_arg_type(
     }
 }
 
-fn parse_type_tuple(
-    type_tuple: &TypeTuple,
-    fn_name: &str,
-    fn_name_ident: &Ident,
-    inner: TokenStream,
-    arg_name: &Ident,
-    outer_parse: fn(&Ident, TokenStream) -> TokenStream,
-) -> MacroResult<TokenStream> {
-    // at the end of all the tuple parsing the inner token stream expects
-    // arg_name to be:
-    // let arg_name_N: (T, U) = (arg_name_N_0, arg_name_N_1);
-    // this means that first we must take the arg_names of what will be the
-    // tuple pair and put them back into the ident that this recursive process
-    // expects.
-    let arg_name_base = arg_name.to_string() + "_";
-    let arg_names = (0..type_tuple.elems.len())
-        .into_iter()
-        .map(|x| {
-            Ident::new(
-                &(arg_name_base.to_string() + &x.to_string()),
-                Span::call_site(),
-            )
-        })
-        .collect::<Vec<Ident>>();
-    let mut inner = quote! {
-        let #arg_name = (#(#arg_names),*);
-        #inner
-    };
-    let mut expressions = vec![];
-    let tuple_len = type_tuple.elems.len();
-    let tokens = if !type_tuple.elems.is_empty() {
-        for (i, ty) in type_tuple.elems.iter().enumerate() {
-            expressions.push(quote! { crate::types::Expression });
-            let arg_name_pair = Ident::new(
-                &(arg_name_base.to_string() + &i.to_string()),
-                Span::call_site(),
-            );
-            inner = parse_fn_arg_type(ty, fn_name, fn_name_ident, inner, &arg_name_pair, true)?;
-        }
-        inner
-    } else {
-        inner
-    };
-    let arg_pos = get_arg_pos(arg_name)?;
-    let tokens = quote! {{
-        use std::convert::TryInto;
-        if !crate::is_sequence!(#arg_name)
-        {
-            let err_str = format!("{}: Expected a vector or list for argument at position {}.", #fn_name, #arg_pos);
-            return Err(LispError::new(err_str));
-        }
-        let #arg_name = #arg_name.iter().collect::<Vec<crate::types::Expression>>();
-        match #arg_name.try_into() {
-            Ok(#arg_name) => {
-                let #arg_name: [crate::Expression; #tuple_len] = #arg_name;
-                let [#(#arg_names),*] = #arg_name;
-                #tokens
-            }
-            Err(_) => {
-                let err_str = format!("{}: Expected a sl_sh vector or list with {} elements corresponding to the tuple at argument position {}.", #fn_name, #tuple_len, #arg_pos);
-                return Err(LispError::new(err_str));
-            }
-        }
-    }};
-    Ok(outer_parse(arg_name, tokens))
-}
-
 #[allow(clippy::too_many_arguments)]
-fn parse_type_tuple2(
+fn parse_type_tuple(
     type_tuple: &TypeTuple,
     fn_name: &str,
     fn_name_ident: &Ident,
@@ -1571,7 +1214,7 @@ fn parse_type_tuple2(
                 Span::call_site(),
             );
             let param = get_param_from_type(ty.clone(), ty.span(), i)?;
-            inner = parse_fn_arg_type2(
+            inner = parse_fn_arg_type(
                 ty,
                 fn_name,
                 fn_name_ident,
