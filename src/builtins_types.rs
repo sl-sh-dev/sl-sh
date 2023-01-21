@@ -532,8 +532,10 @@ fn parse_float_to_inty(
         passing_style: crate::builtins_util::PassingStyle::Value,
     }];
     let i = 0;
-    if let Some(arg_0) = args.next() {
-        let arg_0 = crate::eval(environment, arg_0)?;
+    let args = crate::builtins_util::make_args_eval_no_values(environment, args)?;
+    let args = args.into_iter().collect::<Vec<Expression>>();
+    let args = args.as_slice();
+    if let Some(arg_0) = args.get(0usize).cloned() {
         if let Some(param_0) = params.get(0) {
             match (param_0.handle, param_0.passing_style) {
                 (TypeHandle::Direct, PassingStyle::Value) => {
@@ -581,8 +583,10 @@ fn parse_float_to_intyy(
     // it is just a matter of embedding code like this over and over again.
     // the args doesn't have to be an iter because in slosh it is
     let i = 0;
-    if let Some(arg_0) = args.next() {
-        let arg_0 = crate::eval(environment, arg_0)?;
+    let args = crate::builtins_util::make_args_eval_no_values(environment, args)?;
+    let args = args.into_iter().collect::<Vec<Expression>>();
+    let args = args.as_slice();
+    if let Some(arg_0) = args.get(0usize).cloned() {
         if let Some(param_0) = params.get(i) {
             match (param_0.handle, param_0.passing_style) {
                 (TypeHandle::Direct, PassingStyle::Value) => {
@@ -752,6 +756,43 @@ pub fn add_type_builtins<S: BuildHasher>(
 #[cfg(test)]
 mod test {
     use super::*;
+
+    impl PartialEq<Self> for Expression {
+        fn eq(&self, other: &Self) -> bool {
+            match (&self.get().data, &other.get().data) {
+                (ExpEnum::True, ExpEnum::True) => true,
+                (ExpEnum::False, ExpEnum::False) => true,
+                (ExpEnum::Nil, ExpEnum::Nil) => true,
+                (ExpEnum::Float(lf), ExpEnum::Float(rt)) => lf == rt,
+                (ExpEnum::Int(lf), ExpEnum::Int(rt)) => lf == rt,
+                (ExpEnum::Char(lf), ExpEnum::Char(rt)) => lf == rt,
+                (ExpEnum::CodePoint(lf), ExpEnum::CodePoint(rt)) => lf == rt,
+                (_, _) => false,
+            }
+            //(ExpEnum::String(lf_s, lf_i), ExpEnum::String(rt_s, rt_i) => {}
+            //(ExpEnum::Symbol(_, _), ExpEnum::Symbol(_, _)) => {}
+            //(ExpEnum::Regex(_), ExpEnum::Regex(_)) => {}
+            //ExpEnum::Symbol(_, _) => {}
+            //ExpEnum::Lambda(_) => {}
+            //ExpEnum::Macro(_) => {}
+            //ExpEnum::Function(_) => {}
+            //ExpEnum::LazyFn(_, _) => {}
+            //ExpEnum::Vector(_) => {}
+            //ExpEnum::Values(_) => {}
+            //ExpEnum::Pair(_, _) => {}
+            //ExpEnum::HashMap(_) => {}
+            //ExpEnum::Process(_) => {}
+            //ExpEnum::File(_) => {}
+            //ExpEnum::Wrapper(_) => {}
+            //ExpEnum::DeclareDef => {}
+            //ExpEnum::DeclareVar => {}
+            //ExpEnum::DeclareFn => {}
+            //ExpEnum::DeclareMacro => {}
+            //ExpEnum::Quote => {}
+            //ExpEnum::BackQuote => {}
+            //ExpEnum::Undefined => {}
+        }
+    }
 
     /// Usage: (tuple-vec-to-float int) -> float
     ///     Cast an int as a float.
