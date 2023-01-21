@@ -420,11 +420,10 @@ fn make_orig_fn_call(
             Ok(crate::types::Expression::make_nil())
         },
     };
-    //TODO would rather pass around ARGS_LEN_CONST_IDENT than rely on
-    // hardcoded values?
+    let const_params_len = get_const_params_len_ident();
     Ok(quote! {
-        match args.get(ARGS_LEN) {
-            Some(_) if ARGS_LEN == 0 || arg_types[ARGS_LEN - 1].handle != crate::builtins_util::TypeHandle::VarArgs => {
+        match args.get(#const_params_len) {
+            Some(_) if #const_params_len == 0 || arg_types[#const_params_len - 1].handle != crate::builtins_util::TypeHandle::VarArgs => {
                 return Err(crate::types::LispError::new(format!(
                     "{} given too many arguments, expected at least {} arguments, got {}.",
                     fn_name,
@@ -818,7 +817,6 @@ fn parse_type(
 
 /// create a vec literal of the expected Param types so code can check its arguments at runtime for
 /// API arity/type correctness.
-/// TODO have this return a generated const array.
 fn embed_params_vec(params: &[Param]) -> TokenStream {
     let mut tokens = vec![];
     for param in params {
@@ -879,9 +877,9 @@ fn embed_params_vec(params: &[Param]) -> TokenStream {
             }
         });
     }
-    //TODO rename this variable to param_types or params and... make const generic!
+    let const_params_len = get_const_params_len_ident();
     quote! {
-        let arg_types: Vec<crate::builtins_util::Param> = vec![ #(#tokens),* ];
+        let arg_types: [crate::builtins_util::Param; #const_params_len] = [ #(#tokens),* ];
     }
 }
 
@@ -951,13 +949,19 @@ fn generate_parse_fn(
     let make_args = if eval_values {
         quote! {
             let args = crate::builtins_util::make_args(environment, args)?;
+            let args = args.into_iter().collect::<Vec<Expression>>();
+            let args = args.as_slice();
+
         }
     } else {
         quote! {
             let args = crate::builtins_util::make_args_eval_no_values(environment, args)?;
+            let args = args.into_iter().collect::<Vec<Expression>>();
+            let args = args.as_slice();
         }
     };
 
+    let const_params_len = get_const_params_len_ident();
     quote! {
         fn #parse_name(
             environment: &mut crate::environment::Environment,
@@ -965,12 +969,8 @@ fn generate_parse_fn(
         ) -> crate::LispResult<crate::types::Expression> {
             #make_args
             let #fn_name_ident = #fn_name;
-            const ARGS_LEN: usize = #args_len;
+            const #const_params_len: usize = #args_len;
             #arg_vec_literal
-
-            // TODO remove in slosh implementation as args will be a slice
-            let args = args.into_iter().collect::<Vec<Expression>>();
-            let args = args.as_slice();
 
             #inner
         }
@@ -1235,7 +1235,7 @@ fn parse_type_tuple(
         if !crate::is_sequence!(#arg_name)
         {
             let err_str = format!("{}: Expected a vector or list for argument at position {}.", #fn_name, #arg_pos);
-            return Err(LispError::new(err_str));
+            return Err(crate::types::LispError::new(err_str));
         }
         let #arg_name = #arg_name.iter().collect::<Vec<crate::types::Expression>>();
         match #arg_name.try_into() {
@@ -1246,7 +1246,7 @@ fn parse_type_tuple(
             }
             Err(_) => {
                 let err_str = format!("{}: Expected a sl_sh vector or list with {} elements corresponding to the tuple at argument position {}.", #fn_name, #tuple_len, #arg_pos);
-                return Err(LispError::new(err_str));
+                return Err(crate::types::LispError::new(err_str));
             }
         }
     }};
@@ -1434,6 +1434,10 @@ fn get_documentation_for_fn(original_item_fn: &ItemFn) -> MacroResult<String> {
     }
 }
 
+fn get_const_params_len_ident() -> Ident {
+    Ident::new("PARAMS_LEN", Span::call_site())
+}
+
 fn parse_attributes(
     original_item_fn: &ItemFn,
     attr_args: AttributeArgs,
@@ -1561,8 +1565,405 @@ pub fn sl_sh_fn(
 }
 
 //TODO
-//  - functions that return Values.
-//  - tuple return types?
-//  - avoid allocations by using iter instead of vec.
-//  - fcns that accept iter.
-//  - then... compare against inline the function being called... randomize variable names.
+//  - functions that return Values, tuple return types?
+//  - fcns that accept iter or slices/arrays
+//  - then... compare against inline the function being called... randomize variable names...
+//      and fn names too? could pick some random string and prefix all generated idents.
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::convert::TryInto;
+
+    // serves as a model for what it's like at runtime to iterate over the parameters of a function,
+    // T serves as a generic so these tests can run with some data, but in practice T is some
+    // type from the consuming library.
+    fn loop_over_to_inline<T, const N: usize>(
+        fn_name: &str,
+        params: &[Param; N],
+        args: &[T],
+    ) -> Result<(), String> {
+        let required_args = num_required_args(params);
+        for idx in 0..N {
+            to_inline_slice(fn_name, idx, required_args, params, args)?;
+        }
+        if N > 0 {
+            too_many_args_detection_slice(fn_name, params, N, args)?;
+        }
+
+        Ok(())
+    }
+
+    // run last to see if the number of received arguments has exceeded the number expected based
+    // on the arity of the rust function, and whether or not it ends in a varargs/array.
+    fn too_many_args_detection<const N: usize, T>(
+        fn_name: &str,
+        params: &[Param; N],
+        args: &[T],
+    ) -> Result<(), String> {
+        let last_param = params[N - 1];
+        match args.get(N) {
+            Some(_) if last_param.handle != TypeHandle::VarArgs => {
+                return Err(format!(
+                    "{} given too many arguments, expected {}, got {}.",
+                    fn_name,
+                    params.len(),
+                    args.len()
+                ));
+            }
+            _ => {
+                //macro
+                println!("macro")
+            }
+        }
+        Ok(())
+    }
+
+    fn too_many_args_detection_slice<T>(
+        fn_name: &str,
+        arg_types: &[Param],
+        len: usize,
+        args: &[T],
+    ) -> Result<(), String> {
+        match args.get(len) {
+            Some(_) if arg_types[len - 1].handle != TypeHandle::VarArgs => {
+                return Err(format!(
+                    "{} given too many arguments, expected {}, got {}.",
+                    fn_name,
+                    arg_types.len(),
+                    args.len()
+                ));
+            }
+            _ => {
+                //macro
+                println!("macro")
+            }
+        }
+        Ok(())
+    }
+
+    // loop over each input and check based on current idx and presence of Arg or not
+    // whether the args received is lower than needed based on the arity of the rust function.
+    fn to_inline<const N: usize, T>(
+        fn_name: &str,
+        idx: usize,
+        required_args: usize,
+        params: &[Param; N],
+        args: &[T],
+    ) -> Result<(), String> {
+        let param = params[idx];
+        match args.get(idx) {
+            None if param.handle == TypeHandle::Direct => {
+                return Err(format!(
+                    "{} not given enough arguments, expected at least {} arguments, got {}.",
+                    fn_name,
+                    required_args,
+                    args.len()
+                ));
+            }
+            _arg => {
+                // insert
+                println!("macro");
+            }
+        }
+        Ok(())
+    }
+
+    fn to_inline_slice<T>(
+        fn_name: &str,
+        idx: usize,
+        required_args: usize,
+        params: &[Param],
+        args: &[T],
+    ) -> Result<(), String> {
+        let param = params[idx];
+        match args.get(idx) {
+            None if param.handle == TypeHandle::Direct => {
+                return Err(format!(
+                    "{} not given enough arguments, expected at least {} arguments, got {}.",
+                    fn_name,
+                    required_args,
+                    args.len()
+                ));
+            }
+            _arg => {
+                // insert
+                println!("macro");
+            }
+        }
+        Ok(())
+    }
+    struct Foo {}
+
+    #[test]
+    fn test_params_values_only() {
+        let two_moved_values = vec![
+            Param {
+                handle: TypeHandle::Direct,
+                passing_style: PassingStyle::Value,
+            },
+            Param {
+                handle: TypeHandle::Direct,
+                passing_style: PassingStyle::Value,
+            },
+        ];
+
+        // if there are not enough arguments we throw an error.
+        let args = vec![Foo {}];
+        let args = loop_over_to_inline::<Foo, 2>(
+            "foo",
+            two_moved_values.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        );
+        assert!(args.unwrap_err().contains("not given enough arguments"));
+
+        // if there are too many arguments we throw an error.
+        let args = vec![Foo {}, Foo {}, Foo {}];
+        let args = loop_over_to_inline::<Foo, 2>(
+            "foo",
+            two_moved_values.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        );
+        assert!(args.unwrap_err().contains("given too many"));
+
+        let args = vec![Foo {}, Foo {}];
+        loop_over_to_inline::<Foo, 2>(
+            "foo",
+            two_moved_values.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
+    }
+
+    #[test]
+    fn test_params_optionals() {
+        let one_val_one_opt = vec![
+            Param {
+                handle: TypeHandle::Direct,
+                passing_style: PassingStyle::Value,
+            },
+            Param {
+                handle: TypeHandle::Optional,
+                passing_style: PassingStyle::Value,
+            },
+        ];
+        let args = vec![Foo {}, Foo {}];
+        loop_over_to_inline::<Foo, 2>(
+            "foo",
+            one_val_one_opt.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
+
+        let args = vec![Foo {}];
+        loop_over_to_inline::<Foo, 2>(
+            "foo",
+            one_val_one_opt.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
+
+        let args = vec![];
+        let args = loop_over_to_inline::<Foo, 2>(
+            "foo",
+            one_val_one_opt.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        );
+        assert!(args.unwrap_err().contains("not given enough arguments"));
+
+        let args = vec![Foo {}, Foo {}, Foo {}];
+        let args = loop_over_to_inline::<Foo, 2>(
+            "foo",
+            one_val_one_opt.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        );
+        assert!(args.unwrap_err().contains("given too many"));
+
+        let val_and_opt = vec![
+            Param {
+                handle: TypeHandle::Direct,
+                passing_style: PassingStyle::Value,
+            },
+            Param {
+                handle: TypeHandle::Optional,
+                passing_style: PassingStyle::Value,
+            },
+        ];
+        let args = vec![Foo {}, Foo {}];
+        loop_over_to_inline::<Foo, 2>(
+            "foo",
+            val_and_opt.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
+
+        let args = vec![Foo {}];
+        loop_over_to_inline::<Foo, 2>(
+            "foo",
+            val_and_opt.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
+
+        let args = vec![];
+        let args = loop_over_to_inline::<Foo, 2>(
+            "foo",
+            val_and_opt.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        );
+        assert!(args.unwrap_err().contains("not given enough arguments"));
+
+        let args = vec![Foo {}, Foo {}, Foo {}];
+        let args = loop_over_to_inline::<Foo, 2>(
+            "foo",
+            val_and_opt.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        );
+        assert!(args.unwrap_err().contains("given too many"));
+    }
+
+    #[test]
+    fn test_params_vec() {
+        let one_vec = vec![Param {
+            handle: TypeHandle::VarArgs,
+            passing_style: PassingStyle::MutReference,
+        }];
+
+        let args = vec![];
+        loop_over_to_inline::<Foo, 1>(
+            "foo",
+            one_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
+
+        let args = vec![Foo {}];
+        loop_over_to_inline::<Foo, 1>(
+            "foo",
+            one_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
+
+        let args = vec![Foo {}, Foo {}];
+        loop_over_to_inline::<Foo, 1>(
+            "foo",
+            one_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
+
+        let args = vec![Foo {}, Foo {}, Foo {}];
+        loop_over_to_inline::<Foo, 1>(
+            "foo",
+            one_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
+    }
+
+    #[test]
+    fn test_params_vec_with_options() {
+        let val_opt_and_vec = vec![
+            Param {
+                handle: TypeHandle::Direct,
+                passing_style: PassingStyle::Reference,
+            },
+            Param {
+                handle: TypeHandle::Optional,
+                passing_style: PassingStyle::MutReference,
+            },
+            Param {
+                handle: TypeHandle::VarArgs,
+                passing_style: PassingStyle::Value,
+            },
+        ];
+
+        let args = vec![];
+        let args = loop_over_to_inline::<Foo, 3>(
+            "foo",
+            val_opt_and_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        );
+        assert!(args.unwrap_err().contains("not given enough arguments"));
+        let args = vec![Foo {}];
+        loop_over_to_inline::<Foo, 3>(
+            "foo",
+            val_opt_and_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
+        let args = vec![Foo {}, Foo {}];
+        loop_over_to_inline::<Foo, 3>(
+            "foo",
+            val_opt_and_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
+        let args = vec![Foo {}, Foo {}, Foo {}];
+        loop_over_to_inline::<Foo, 3>(
+            "foo",
+            val_opt_and_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
+        let args = vec![Foo {}, Foo {}, Foo {}, Foo {}, Foo {}];
+        loop_over_to_inline::<Foo, 3>(
+            "foo",
+            val_opt_and_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
+
+        let opts_and_vec = vec![
+            Param {
+                handle: TypeHandle::Optional,
+                passing_style: PassingStyle::Reference,
+            },
+            Param {
+                handle: TypeHandle::Optional,
+                passing_style: PassingStyle::MutReference,
+            },
+            Param {
+                handle: TypeHandle::VarArgs,
+                passing_style: PassingStyle::Value,
+            },
+        ];
+
+        let args = vec![];
+        loop_over_to_inline::<Foo, 3>(
+            "foo",
+            opts_and_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
+        let args = vec![Foo {}];
+        loop_over_to_inline::<Foo, 3>(
+            "foo",
+            opts_and_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
+        let args = vec![Foo {}, Foo {}];
+        loop_over_to_inline::<Foo, 3>(
+            "foo",
+            opts_and_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
+        let args = vec![Foo {}, Foo {}, Foo {}];
+        loop_over_to_inline::<Foo, 3>(
+            "foo",
+            opts_and_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
+        let args = vec![Foo {}, Foo {}, Foo {}, Foo {}, Foo {}];
+        loop_over_to_inline::<Foo, 3>(
+            "foo",
+            opts_and_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
+    }
+}
