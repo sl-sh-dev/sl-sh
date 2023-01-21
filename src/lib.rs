@@ -357,7 +357,6 @@ fn parse_param(
     }
 }
 
-//TODO PR #3 must completely remove ArgType in both repos once new sl_sh_fn2 is ready
 fn get_parser_for_type_handle(
     noop_outer_parse: bool,
 ) -> fn(&Ident, TokenStream, Param, usize, usize) -> TokenStream {
