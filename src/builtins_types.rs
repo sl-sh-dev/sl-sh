@@ -254,7 +254,7 @@ fn is_symbol(exp: Expression) -> bool {
 /// (test::assert-true (string? "string"))
 /// (test::assert-false (string? 1))
 #[sl_sh_fn(fn_name = "string?")]
-fn is_string(exp: Expression) -> bool {
+fn is_string(exp: &Expression) -> bool {
     matches!(exp.get().data, ExpEnum::String(_, _))
 }
 
