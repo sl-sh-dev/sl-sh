@@ -261,8 +261,8 @@ Example:
 
 (defmacro dotimes-i
 "
-Evaluate body a number of times equal to times' numnrical value. Includes an
-incrementing reference binding, idx-bind, accesible in body.
+Evaluate body a number of times equal to times' numerical value. Includes an
+incrementing reference binding, idx-bind, accessible in body.
 
 Section: core
 

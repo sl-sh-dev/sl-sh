@@ -521,133 +521,6 @@ fn float_to_int(float: f64) -> i64 {
     }
 }
 
-fn parse_float_to_inty(
-    environment: &mut crate::environment::Environment,
-    args: &mut dyn Iterator<Item = crate::types::Expression>,
-) -> crate::LispResult<crate::types::Expression> {
-    let fn_name = "float->int";
-    const ARGS_LEN: usize = 1usize;
-    let params = vec![crate::builtins_util::Param {
-        handle: crate::builtins_util::TypeHandle::Direct,
-        passing_style: crate::builtins_util::PassingStyle::Value,
-    }];
-    let i = 0;
-    let args = crate::builtins_util::make_args_eval_no_values(environment, args)?;
-    let args = args.into_iter().collect::<Vec<Expression>>();
-    let args = args.as_slice();
-    if let Some(arg_0) = args.get(0usize).cloned() {
-        if let Some(param_0) = params.get(0) {
-            match (param_0.handle, param_0.passing_style) {
-                (TypeHandle::Direct, PassingStyle::Value) => {
-                    let typed_data: crate::types::TypedWrapper<f64, crate::types::Expression> =
-                        crate::types::TypedWrapper::new(arg_0);
-                    let callback = |arg_0: f64| -> crate::LispResult<crate::types::Expression> {
-                        Ok(float_to_int(arg_0).into())
-                    };
-                    typed_data.apply(fn_name, callback)
-                }
-                (_, _) => {
-                    Err(LispError::new(format!(
-                        "{} macro is unable to parse its arguments, expected specific args at idx {} but arg_types vec had types that violated the generated codes expectations.",
-                        fn_name,
-                        i,
-                    )))
-                }
-            }
-        } else {
-            Err(LispError::new(format!(
-                "{} macro is unable to parse its arguments, expected {} args but arg_types vec did not have the item.",
-                fn_name,
-                i + 1,
-            )))
-        }
-    } else {
-        Err(LispError::new(format!(
-            "{}  not given enough arguments, expected {}, got, {}.",
-            fn_name, ARGS_LEN, i,
-        )))
-    }
-}
-
-fn parse_float_to_intyy(
-    environment: &mut crate::environment::Environment,
-    args: &mut dyn Iterator<Item = crate::types::Expression>,
-) -> crate::LispResult<crate::types::Expression> {
-    let fn_name = "float->int";
-    const ARGS_LEN: usize = 1usize;
-    let params = vec![crate::builtins_util::Param {
-        handle: crate::builtins_util::TypeHandle::Direct,
-        passing_style: crate::builtins_util::PassingStyle::Value,
-    }];
-    //TODO
-    // it is just a matter of embedding code like this over and over again.
-    // the args doesn't have to be an iter because in slosh it is
-    let i = 0;
-    let args = crate::builtins_util::make_args_eval_no_values(environment, args)?;
-    let args = args.into_iter().collect::<Vec<Expression>>();
-    let args = args.as_slice();
-    if let Some(arg_0) = args.get(0usize).cloned() {
-        if let Some(param_0) = params.get(i) {
-            match (param_0.handle, param_0.passing_style) {
-                (TypeHandle::Direct, PassingStyle::Value) => {
-                    let typed_data: crate::types::TypedWrapper<f64, crate::types::Expression> =
-                        crate::types::TypedWrapper::new(arg_0);
-                    let callback = |arg_0: f64| -> crate::LispResult<crate::types::Expression> {
-                        Ok(match arg_0 {
-                            float if float.is_nan() => 0,
-                            float if float > i64::MAX as f64 || float == f64::INFINITY => i64::MAX,
-                            float if float < i64::MIN as f64 || float == f64::NEG_INFINITY => i64::MIN,
-                            float => float as i64,
-                        }
-                            .into())
-                    };
-                    typed_data.apply(fn_name, callback)
-                }
-                (_, _) => {
-                    Err(LispError::new(format!(
-                        "{} macro is unable to parse its arguments, expected specific args at idx {} but arg_types vec had types that violated the generated codes expectations.",
-                        fn_name,
-                        i,
-                    )))
-                }
-            }
-        } else {
-            Err(LispError::new(format!(
-                "{} macro is unable to parse its arguments, expected {} args but arg_types vec did not have the item.",
-                fn_name,
-                i + 1,
-            )))
-        }
-    } else {
-        Err(LispError::new(format!(
-            "{}  not given enough arguments, expected {}, got, {}.",
-            fn_name, ARGS_LEN, i,
-        )))
-    }
-}
-
-fn intern_float_to_inty<S: std::hash::BuildHasher>(
-    interner: &mut crate::Interner,
-    data: &mut std::collections::HashMap<&'static str, (crate::types::Expression, String), S>,
-) {
-    let fn_name = "float->inty";
-    data.insert(
-        interner.intern(fn_name),
-        crate::types::Expression::make_function(parse_float_to_inty, "Inlined!"),
-    );
-}
-
-fn intern_float_to_intyy<S: std::hash::BuildHasher>(
-    interner: &mut crate::Interner,
-    data: &mut std::collections::HashMap<&'static str, (crate::types::Expression, String), S>,
-) {
-    let fn_name = "float->intyy";
-    data.insert(
-        interner.intern(fn_name),
-        crate::types::Expression::make_function(parse_float_to_intyy, "Inlined!"),
-    );
-}
-
 /// Usage: (sym expression+) -> symbol
 ///
 /// Takes one or more forms, converts them to strings, concatenates them and returns
@@ -690,7 +563,7 @@ fn sym(environment: &mut Environment, args: VarArgs<Expression>) -> LispResult<E
 /// (test::assert-true (string? (sym->str 'test-sym->str-sym)))
 /// (test::assert-equal "test-sym->str-sym" (sym->str 'test-sym->str-sym))
 #[sl_sh_fn(fn_name = "sym->str")]
-fn symbol_to_str(exp: Expression) -> LispResult<String> {
+fn symbol_to_str(exp: &Expression) -> LispResult<String> {
     match exp.get().data {
         ExpEnum::Symbol(s, _) => Ok(s.to_string()),
         _ => Err(LispError::new(
@@ -746,8 +619,6 @@ pub fn add_type_builtins<S: BuildHasher>(
     intern_str_to_float(interner, data);
     intern_int_to_float(interner, data);
     intern_float_to_int(interner, data);
-    intern_float_to_inty(interner, data);
-    intern_float_to_intyy(interner, data);
     intern_sym(interner, data);
     intern_symbol_to_str(interner, data);
     intern_is_falsey(interner, data);

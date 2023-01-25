@@ -1129,14 +1129,6 @@ where
     fn apply(&self, fn_name: &str, fun: F) -> LispResult<Expression>;
 }
 
-pub trait RustProcedureRef<T, F>
-where
-    Self: Sized,
-    F: FnOnce(&T) -> LispResult<Expression> + ?Sized,
-{
-    fn apply_ref(&self, fn_name: &str, fun: F) -> LispResult<Expression>;
-}
-
 pub trait RustProcedureRefMut<T, F>
 where
     Self: Sized,
@@ -1167,11 +1159,11 @@ where
     }
 }
 
-impl<F> RustProcedureRef<Symbol, F> for TypedWrapper<Symbol, Expression>
+impl<F> RustProcedure<&Symbol, F> for TypedWrapper<Symbol, Expression>
 where
     F: FnOnce(&Symbol) -> LispResult<Expression>,
 {
-    fn apply_ref(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
+    fn apply(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
         let got = self.0.display_type();
         match &self.0.get().data {
             ExpEnum::Symbol(str, loc) => {
@@ -1295,23 +1287,11 @@ where
     }
 }
 
-impl<F> RustProcedureRef<String, F> for TypedWrapper<String, Expression>
-where
-    F: FnOnce(&String) -> LispResult<Expression>,
-{
-    fn apply_ref(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
-        try_inner_string!(fn_name, &self.0, arg, {
-            let arg = &mut arg.to_string();
-            fun(arg)
-        })
-    }
-}
-
-impl<F> RustProcedureRef<Expression, F> for TypedWrapper<Expression, Expression>
+impl<F> RustProcedure<&Expression, F> for TypedWrapper<Expression, Expression>
 where
     F: FnOnce(&Expression) -> LispResult<Expression>,
 {
-    fn apply_ref(&self, _fn_name: &str, fun: F) -> LispResult<Expression> {
+    fn apply(&self, _fn_name: &str, fun: F) -> LispResult<Expression> {
         fun(&mut self.0.clone())
     }
 }
@@ -1325,30 +1305,12 @@ where
     }
 }
 
-impl<F> RustProcedure<&Expression, F> for TypedWrapper<&Expression, Expression>
-where
-    F: FnOnce(&Expression) -> LispResult<Expression>,
-{
-    fn apply(&self, _fn_name: &str, fun: F) -> LispResult<Expression> {
-        fun(&self.0.clone())
-    }
-}
-
 impl<F> RustProcedure<Expression, F> for TypedWrapper<Expression, Expression>
 where
     F: FnOnce(Expression) -> LispResult<Expression>,
 {
     fn apply(&self, _fn_name: &str, fun: F) -> LispResult<Expression> {
         fun(self.0.clone())
-    }
-}
-
-impl<F> RustProcedureRef<i64, F> for TypedWrapper<i64, Expression>
-where
-    F: FnOnce(&i64) -> LispResult<Expression>,
-{
-    fn apply_ref(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
-        try_inner_int!(fn_name, self.0, num, fun(&num))
     }
 }
 

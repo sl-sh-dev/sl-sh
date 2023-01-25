@@ -348,7 +348,7 @@ fn builtin_load(
 /// (test::assert-error (length #\\x))
 #[sl_sh_fn(fn_name = "length")]
 fn length(exp: Expression) -> LispResult<Expression> {
-    return match &exp.get().data {
+    match &exp.get().data {
         ExpEnum::String(s, _) => {
             let mut i = 0;
             // Need to walk the chars to get the length in utf8 chars not bytes.
@@ -386,7 +386,7 @@ fn length(exp: Expression) -> LispResult<Expression> {
             "length: expression of type {} can not be used with this function.",
             exp.display_type()
         ))),
-    };
+    }
 }
 
 fn builtin_if(
