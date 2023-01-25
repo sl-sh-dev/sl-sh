@@ -66,8 +66,6 @@ impl RustType {
 impl From<Type> for RustType {
     fn from(ty: Type) -> Self {
         match ty {
-            // Type::Array(_) => {} // TODO
-            // Type::Slice(_) => {} // TODO
             Type::BareFn(x) => {
                 let span = x.span();
                 RustType::BareFn(x, span)
@@ -225,6 +223,26 @@ fn get_attribute_value_with_key(
     }
 }
 
+fn get_bool_attribute_value_with_key(
+    original_item_fn: &ItemFn,
+    key: &str,
+    values: &[(String, String)],
+) -> MacroResult<bool> {
+    if values.is_empty() {
+        Err(Error::new(
+            original_item_fn.span(),
+            "sl_sh_fn requires at least one name-value pair, 'fn_name = \"<name-of-sl-sh-fun>\"'.",
+        ))
+    } else {
+        for name_value in values {
+            if name_value.0 == key {
+                return Ok(name_value.1 == "true");
+            }
+        }
+        Ok(false)
+    }
+}
+
 fn get_attribute_name_value(nested_meta: &NestedMeta) -> MacroResult<(String, String)> {
     match nested_meta {
         NestedMeta::Meta(meta) => match meta {
@@ -289,6 +307,7 @@ fn parse_param(
     required_args: usize,
     idx: usize,
 ) -> TokenStream {
+    //TODO can some of these clones go away?
     match param.handle {
         TypeHandle::Direct => {
             quote! {
@@ -366,11 +385,12 @@ fn get_parser_for_type_handle(
     }
 }
 
-/// generate a call to the original fn with the names of all of the variables,
+/// generate an (optionally inlined) call to the original fn with the names of all of the variables,
 /// arg_names, filled in,, e.g. `fn myfn(arg_0, arg_1, arg_2, ...) { ... }`.
 /// This function also inserts a dynamic check to throw an error if too many
 /// arguments were provided based on the signature of the target function.
 fn make_orig_fn_call(
+    inline: bool,
     takes_env: bool,
     original_item_fn: &ItemFn,
     original_fn_name: &Ident,
@@ -381,43 +401,94 @@ fn make_orig_fn_call(
     // this means all returned rust native types must implement TryIntoExpression
     // this is nested inside the builtin expression which must always
     // return a LispResult.
+    let skip = usize::from(takes_env);
     let takes_env = if takes_env {
         quote! {environment, } // environment is the name that is passed in to this function
     } else {
         quote! {}
     };
+
     let (return_type, lisp_return) = get_return_type(original_item_fn)?;
     let returns_none = "()" == return_type.to_token_stream().to_string();
+    let fn_body = if inline {
+        let mut inline_toks = vec![];
+        for (fn_arg, arg_name) in original_item_fn
+            .sig
+            .inputs
+            .iter()
+            .skip(skip)
+            .zip(arg_names.iter())
+        {
+            match fn_arg {
+                FnArg::Receiver(_) => {}
+                FnArg::Typed(typed) => {
+                    let pat = typed.pat.clone();
+                    let ty = typed.ty.clone();
+                    let binding = quote! {
+                        let #pat: #ty = #arg_name;
+                    };
+                    inline_toks.push(binding);
+                }
+            }
+        }
+
+        let block = original_item_fn.block.clone();
+        match &original_item_fn.sig.output {
+            ReturnType::Default => {
+                quote! {{
+                    #(#inline_toks)*
+                    let res = {
+                        #block
+                    };
+                    res
+                }}
+            }
+            ReturnType::Type(_ra_arrow, ty) => {
+                quote! {{
+                    #(#inline_toks)*
+                    let res: #ty = {
+                        #block
+                    };
+                    res
+                }}
+            }
+        }
+    } else {
+        quote! {
+            #original_fn_name(#takes_env #(#arg_names),*)
+        }
+    };
+
     let original_fn_call = match (return_type, lisp_return, returns_none) {
         (Some(_), Some(SupportedGenericReturnTypes::LispResult), true) => quote! {
-            #original_fn_name(#takes_env #(#arg_names),*)?;
-            Ok(crate::types::Expression::make_nil())
+            #fn_body?;
+            return Ok(crate::types::Expression::make_nil());
         },
         (Some(_), Some(SupportedGenericReturnTypes::Option), true) => quote! {
-            #original_fn_name(#takes_env #(#arg_names),*);
-            Ok(crate::types::Expression::make_nil())
+            #fn_body;
+            return Ok(crate::types::Expression::make_nil());
         },
         (Some(_), Some(SupportedGenericReturnTypes::LispResult), false) => quote! {
-            #original_fn_name(#takes_env #(#arg_names),*).map(Into::into)
+            return #fn_body.map(Into::into);
         },
         (Some(_), Some(SupportedGenericReturnTypes::Option), false) => quote! {
-            if let Some(val) = #original_fn_name(#takes_env #(#arg_names),*) {
-                Ok(val.into())
+            if let Some(val) = #fn_body {
+                return Ok(val.into());
             } else {
-                Ok(crate::types::Expression::make_nil())
+                return Ok(crate::types::Expression::make_nil());
             }
         },
         // coerce to Expression
         (Some(_), None, _) => quote! {
-            Ok(#original_fn_name(#takes_env #(#arg_names),*).into())
+            return Ok(#fn_body.into());
         },
         (None, Some(_), _) => {
             unreachable!("If this functions returns a LispResult it must also return a value.");
         }
         // no return
         (None, None, _) => quote! {
-            #original_fn_name(#takes_env #(#arg_names),*);
-            Ok(crate::types::Expression::make_nil())
+            #fn_body;
+            return Ok(crate::types::Expression::make_nil());
         },
     };
     let const_params_len = get_const_params_len_ident();
@@ -717,19 +788,12 @@ fn parse_direct_type(
                 };
 
                 match passing_style {
-                    PassingStyle::Value => Ok(quote! {{
+                    PassingStyle::Value | PassingStyle::Reference => Ok(quote! {{
                         use crate::types::RustProcedure;
                         let typed_data: crate::types::TypedWrapper<#ty, crate::types::Expression> =
                             crate::types::TypedWrapper::new(#arg_name);
                         #callback_declaration
                         typed_data.apply(#fn_name_ident, callback)
-                    }}),
-                    PassingStyle::Reference => Ok(quote! {{
-                        use crate::types::RustProcedureRef;
-                        let typed_data: crate::types::TypedWrapper<#ty, crate::types::Expression> =
-                            crate::types::TypedWrapper::new(#arg_name);
-                        #callback_declaration
-                        typed_data.apply_ref(#fn_name_ident, callback)
                     }}),
                     PassingStyle::MutReference => Ok(quote! {{
                         use crate::types::RustProcedureRefMut;
@@ -1008,12 +1072,14 @@ fn generate_builtin_fn(
     params: &[Param],
     fn_name_ident: &Ident,
     takes_env: bool,
+    inline: bool,
 ) -> MacroResult<TokenStream> {
     let original_fn_name = Ident::new(original_fn_name_str, Span::call_site());
     let arg_names = generate_inner_fn_signature_to_orig_fn_call(original_item_fn, takes_env)?;
     let required_args = num_required_args(params);
 
     let orig_fn_call = make_orig_fn_call(
+        inline,
         takes_env,
         original_item_fn,
         &original_fn_name,
@@ -1074,10 +1140,12 @@ fn generate_builtin_fn(
     Ok(tokens)
 }
 
-// TODO document this new version
+/// recursively wrap the received sl_sh args at the given idx in callback functions that parse the Expressions
+/// into the a variable with a predefined  name with the same type as the corresponding parameter
+/// in the rust native function.
 #[allow(clippy::too_many_arguments)]
 fn parse_fn_arg_type(
-    ty: &Type, //TODO Cow?
+    ty: &Type,
     fn_name: &str,
     fn_name_ident: &Ident,
     prev_token_stream: TokenStream,
@@ -1441,7 +1509,7 @@ fn get_const_params_len_ident() -> Ident {
 fn parse_attributes(
     original_item_fn: &ItemFn,
     attr_args: AttributeArgs,
-) -> MacroResult<(String, Ident, bool, bool)> {
+) -> MacroResult<(String, Ident, bool, bool, bool)> {
     let vals = attr_args
         .iter()
         .map(get_attribute_name_value)
@@ -1456,21 +1524,16 @@ fn parse_attributes(
         })?;
     let fn_name_ident = Ident::new(&fn_name_ident, Span::call_site());
 
-    let eval_values = if let Some(value) =
-        get_attribute_value_with_key(original_item_fn, "eval_values", vals.as_slice())?
-    {
-        value == "true"
-    } else {
-        false
-    };
-    let takes_env = if let Some(value) =
-        get_attribute_value_with_key(original_item_fn, "takes_env", vals.as_slice())?
-    {
-        value == "true"
-    } else {
-        false
-    };
-    Ok((fn_name, fn_name_ident, eval_values, takes_env))
+    let eval_values =
+        get_bool_attribute_value_with_key(original_item_fn, "eval_values", vals.as_slice())?;
+    let takes_env =
+        get_bool_attribute_value_with_key(original_item_fn, "takes_env", vals.as_slice())?;
+
+    // all functions default to inlining unless explicitly overriden.
+    let inline =
+        !get_bool_attribute_value_with_key(original_item_fn, "do_not_inline", vals.as_slice())?;
+
+    Ok((fn_name, fn_name_ident, eval_values, takes_env, inline))
 }
 
 /// this function outputs all of the generated code, it is composed into two different functions:
@@ -1485,7 +1548,7 @@ fn generate_sl_sh_fn(
     original_item_fn: &ItemFn,
     attr_args: AttributeArgs,
 ) -> MacroResult<TokenStream> {
-    let (fn_name, fn_name_ident, eval_values, takes_env) =
+    let (fn_name, fn_name_ident, eval_values, takes_env, inline) =
         parse_attributes(original_item_fn, attr_args)?;
     let original_fn_name_str = original_item_fn.sig.ident.to_string();
     let original_fn_name_str = original_fn_name_str.as_str();
@@ -1499,6 +1562,7 @@ fn generate_sl_sh_fn(
         params.as_slice(),
         &fn_name_ident,
         takes_env,
+        inline,
     )?;
 
     let args_len = if takes_env {
@@ -1552,6 +1616,7 @@ pub fn sl_sh_fn(
                 quote! {
                     #generated_code
 
+                    #[allow(dead_code)]
                     #original_fn_code
                 }
             }
@@ -1566,7 +1631,7 @@ pub fn sl_sh_fn(
 
 //TODO
 //  - functions that return Values, tuple return types?
-//  - fcns that accept iter or slices/arrays
+//  - fcns that accept iters?
 //  - then... compare against inline the function being called... randomize variable names...
 //      and fn names too? could pick some random string and prefix all generated idents.
 
