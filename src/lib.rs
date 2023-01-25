@@ -307,7 +307,6 @@ fn parse_param(
     required_args: usize,
     idx: usize,
 ) -> TokenStream {
-    //TODO can some of the clones in Optional and VarArgs go away?
     match param.handle {
         TypeHandle::Direct => {
             quote! {
