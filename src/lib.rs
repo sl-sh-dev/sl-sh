@@ -307,14 +307,13 @@ fn parse_param(
     required_args: usize,
     idx: usize,
 ) -> TokenStream {
-    //TODO can some of these clones go away?
+    //TODO can some of the clones in Optional and VarArgs go away?
     match param.handle {
         TypeHandle::Direct => {
             quote! {
                 let param = arg_types[#idx];
-                let arg = args.get(#idx);
                 match param.handle {
-                    crate::builtins_util::TypeHandle::Direct => match arg {
+                    crate::builtins_util::TypeHandle::Direct => match args.get(#idx) {
                         None => {
                             return Err(crate::types::LispError::new(format!(
                                 "{} not given enough arguments, expected at least {} arguments, got {}.",
@@ -323,8 +322,7 @@ fn parse_param(
                                 args.len()
                             )));
                         }
-                        Some(arg) => {
-                            let #arg_name = arg.clone();
+                        Some(#arg_name) => {
                             #inner
                         },
                     },
@@ -791,14 +789,14 @@ fn parse_direct_type(
                     PassingStyle::Value | PassingStyle::Reference => Ok(quote! {{
                         use crate::types::RustProcedure;
                         let typed_data: crate::types::TypedWrapper<#ty, crate::types::Expression> =
-                            crate::types::TypedWrapper::new(#arg_name);
+                            crate::types::TypedWrapper::new(&#arg_name);
                         #callback_declaration
                         typed_data.apply(#fn_name_ident, callback)
                     }}),
                     PassingStyle::MutReference => Ok(quote! {{
                         use crate::types::RustProcedureRefMut;
                         let mut typed_data: crate::types::TypedWrapper<#ty, crate::types::Expression> =
-                            crate::types::TypedWrapper::new(#arg_name);
+                            crate::types::TypedWrapper::new(&#arg_name);
                         #callback_declaration
                         typed_data.apply_ref_mut(#fn_name_ident, callback)
                     }}),
@@ -1650,10 +1648,10 @@ mod test {
     ) -> Result<(), String> {
         let required_args = num_required_args(params);
         for idx in 0..N {
-            to_inline_slice(fn_name, idx, required_args, params, args)?;
+            to_inline(fn_name, idx, required_args, params, args)?;
         }
         if N > 0 {
-            too_many_args_detection_slice(fn_name, params, N, args)?;
+            too_many_args_detection(fn_name, params, N, args)?;
         }
 
         Ok(())
@@ -1661,30 +1659,7 @@ mod test {
 
     // run last to see if the number of received arguments has exceeded the number expected based
     // on the arity of the rust function, and whether or not it ends in a varargs/array.
-    fn too_many_args_detection<const N: usize, T>(
-        fn_name: &str,
-        params: &[Param; N],
-        args: &[T],
-    ) -> Result<(), String> {
-        let last_param = params[N - 1];
-        match args.get(N) {
-            Some(_) if last_param.handle != TypeHandle::VarArgs => {
-                return Err(format!(
-                    "{} given too many arguments, expected {}, got {}.",
-                    fn_name,
-                    params.len(),
-                    args.len()
-                ));
-            }
-            _ => {
-                //macro
-                println!("macro")
-            }
-        }
-        Ok(())
-    }
-
-    fn too_many_args_detection_slice<T>(
+    fn too_many_args_detection<T>(
         fn_name: &str,
         arg_types: &[Param],
         len: usize,
@@ -1709,32 +1684,7 @@ mod test {
 
     // loop over each input and check based on current idx and presence of Arg or not
     // whether the args received is lower than needed based on the arity of the rust function.
-    fn to_inline<const N: usize, T>(
-        fn_name: &str,
-        idx: usize,
-        required_args: usize,
-        params: &[Param; N],
-        args: &[T],
-    ) -> Result<(), String> {
-        let param = params[idx];
-        match args.get(idx) {
-            None if param.handle == TypeHandle::Direct => {
-                return Err(format!(
-                    "{} not given enough arguments, expected at least {} arguments, got {}.",
-                    fn_name,
-                    required_args,
-                    args.len()
-                ));
-            }
-            _arg => {
-                // insert
-                println!("macro");
-            }
-        }
-        Ok(())
-    }
-
-    fn to_inline_slice<T>(
+    fn to_inline<T>(
         fn_name: &str,
         idx: usize,
         required_args: usize,
