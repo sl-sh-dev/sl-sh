@@ -11,6 +11,26 @@ use syn::{
 };
 extern crate static_assertions;
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+enum TypeHandle {
+    Direct,
+    Optional,
+    VarArgs,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+enum PassingStyle {
+    Value,
+    Reference,
+    MutReference,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+struct Param {
+    handle: TypeHandle,
+    passing_style: PassingStyle,
+}
+
 type MacroResult<T> = Result<T, Error>;
 
 const POSSIBLE_RETURN_TYPES: [&str; 2] = ["LispResult", "Option"];
@@ -46,8 +66,6 @@ impl RustType {
 impl From<Type> for RustType {
     fn from(ty: Type) -> Self {
         match ty {
-            // Type::Array(_) => {} // TODO
-            // Type::Slice(_) => {} // TODO
             Type::BareFn(x) => {
                 let span = x.span();
                 RustType::BareFn(x, span)
@@ -205,6 +223,26 @@ fn get_attribute_value_with_key(
     }
 }
 
+fn get_bool_attribute_value_with_key(
+    original_item_fn: &ItemFn,
+    key: &str,
+    values: &[(String, String)],
+) -> MacroResult<bool> {
+    if values.is_empty() {
+        Err(Error::new(
+            original_item_fn.span(),
+            "sl_sh_fn requires at least one name-value pair, 'fn_name = \"<name-of-sl-sh-fun>\"'.",
+        ))
+    } else {
+        for name_value in values {
+            if name_value.0 == key {
+                return Ok(name_value.1 == "true");
+            }
+        }
+        Ok(false)
+    }
+}
+
 fn get_attribute_name_value(nested_meta: &NestedMeta) -> MacroResult<(String, String)> {
     match nested_meta {
         NestedMeta::Meta(meta) => match meta {
@@ -236,172 +274,267 @@ fn get_attribute_name_value(nested_meta: &NestedMeta) -> MacroResult<(String, St
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
-enum ArgVal {
-    Value,
-    Optional,
-    VarArgs,
-}
-
-#[derive(Copy, Clone, Debug, PartialEq)]
-enum ArgPassingStyle {
-    Move,
-    Reference,
-    MutReference,
-}
-
-#[derive(Copy, Clone, Debug, PartialEq)]
-struct Arg {
-    val: ArgVal,
-    passing_style: ArgPassingStyle,
-}
-
-fn get_arg_val(type_path: &TypePath) -> ArgVal {
+fn get_type_handle(type_path: &TypePath) -> TypeHandle {
     if let Some((_generic, type_path)) = get_generic_argument_from_type_path(type_path) {
         let wrapper = opt_is_valid_generic_type(type_path, SPECIAL_ARG_TYPES.as_slice());
         match wrapper {
             Some(wrapper) if wrapper == "Option" => {
-                return ArgVal::Optional;
+                return TypeHandle::Optional;
             }
             Some(wrapper) if wrapper == "VarArgs" => {
-                return ArgVal::VarArgs;
+                return TypeHandle::VarArgs;
             }
             _ => {}
         }
     }
-    ArgVal::Value
+    TypeHandle::Direct
 }
 
-fn no_parse(_arg_name: &Ident, inner: TokenStream) -> TokenStream {
+fn no_parse_param(
+    _arg_name: &Ident,
+    inner: TokenStream,
+    _param: Param,
+    _required_args: usize,
+    _idx: usize,
+) -> TokenStream {
     inner
 }
 
-fn parse_value(arg_name: &Ident, inner: TokenStream) -> TokenStream {
-    quote! {
-        crate::ret_err_exp_enum!(
-                #arg_name,
-                crate::ArgType::Exp(#arg_name),
-                #inner,
-                "sl_sh_fn macro is broken. ArgType::Exp can't be parsed as ArgType::Exp"
-            )
+fn parse_param(
+    arg_name: &Ident,
+    inner: TokenStream,
+    param: Param,
+    required_args: usize,
+    idx: usize,
+) -> TokenStream {
+    //TODO can some of the clones in Optional and VarArgs go away?
+    match param.handle {
+        TypeHandle::Direct => {
+            quote! {
+                let param = arg_types[#idx];
+                match param.handle {
+                    crate::builtins_util::TypeHandle::Direct => match args.get(#idx) {
+                        None => {
+                            return Err(crate::types::LispError::new(format!(
+                                "{} not given enough arguments, expected at least {} arguments, got {}.",
+                                fn_name,
+                                #required_args,
+                                args.len()
+                            )));
+                        }
+                        Some(#arg_name) => {
+                            #inner
+                        },
+                    },
+                    _ => {
+                        return Err(crate::types::LispError::new(format!(
+                            "{} failed to parse its arguments, internal error.",
+                            fn_name,
+                        )));
+                    },
+                }
+            }
+        }
+        TypeHandle::Optional => {
+            quote! {
+                let param = arg_types[#idx];
+                let arg = args.get(#idx);
+                match param.handle {
+                    crate::builtins_util::TypeHandle::Optional => {
+                        let #arg_name = arg.map(|x| x.to_owned());
+                        #inner
+                    },
+                    _ => {
+                        return Err(crate::types::LispError::new(format!(
+                            "{} failed to parse its arguments, internal error.",
+                            fn_name,
+                        )));
+                    },
+                }
+            }
+        }
+        TypeHandle::VarArgs => {
+            quote! {
+                let param = arg_types[#idx];
+                let arg = args.get(#idx);
+                match param.handle {
+                    crate::builtins_util::TypeHandle::VarArgs => {
+                        let #arg_name = args[#idx..].iter().map(|x| x.clone()).collect::<Vec<crate::types::Expression>>();
+                        #inner
+                    },
+                    _ => {
+                        return Err(crate::types::LispError::new(format!(
+                            "{} failed to parse its arguments, internal error.",
+                            fn_name,
+                        )));
+                    }
+                }
+            }
+        }
     }
 }
 
-fn parse_optional(arg_name: &Ident, inner: TokenStream) -> TokenStream {
-    quote! {
-        crate::ret_err_exp_enum!(
-                #arg_name,
-                crate::ArgType::Opt(#arg_name),
-                #inner,
-                "sl_sh_fn macro is broken. Alleged ArgType::Opt can't be parsed as ArgType::Opt"
-            )
-    }
-}
-
-fn parse_varargs(arg_name: &Ident, inner: TokenStream) -> TokenStream {
-    quote! {
-        crate::ret_err_exp_enum!(
-                #arg_name,
-                crate::ArgType::VarArgs(#arg_name),
-                #inner,
-                "sl_sh_fn macro is broken. Alleged ArgType::Vargs can't be parsed as ArgType::Vargs"
-            )
-    }
-}
-
-fn get_parser_for_arg_val(
-    val: ArgVal,
+fn get_parser_for_type_handle(
     noop_outer_parse: bool,
-) -> fn(&Ident, TokenStream) -> TokenStream {
-    match (val, noop_outer_parse) {
-        (_, true) => no_parse,
-        (ArgVal::Value, false) => parse_value,
-        (ArgVal::Optional, false) => parse_optional,
-        (ArgVal::VarArgs, false) => parse_varargs,
+) -> fn(&Ident, TokenStream, Param, usize, usize) -> TokenStream {
+    match noop_outer_parse {
+        true => no_parse_param,
+        false => parse_param,
     }
 }
 
+/// generate an (optionally inlined) call to the original fn with the names of all of the variables,
+/// arg_names, filled in,, e.g. `fn myfn(arg_0, arg_1, arg_2, ...) { ... }`.
+/// This function also inserts a dynamic check to throw an error if too many
+/// arguments were provided based on the signature of the target function.
 fn make_orig_fn_call(
+    inline: bool,
     takes_env: bool,
     original_item_fn: &ItemFn,
     original_fn_name: &Ident,
+    required_args: usize,
     arg_names: Vec<Ident>,
 ) -> MacroResult<TokenStream> {
     // the original function call must return an Expression object
     // this means all returned rust native types must implement TryIntoExpression
     // this is nested inside the builtin expression which must always
     // return a LispResult.
+    let skip = usize::from(takes_env);
     let takes_env = if takes_env {
-        quote! {env, } // env is the name that is passed in to this function
+        quote! {environment, } // environment is the name that is passed in to this function
     } else {
         quote! {}
     };
+
     let (return_type, lisp_return) = get_return_type(original_item_fn)?;
     let returns_none = "()" == return_type.to_token_stream().to_string();
+    let fn_body = if inline {
+        let mut inline_toks = vec![];
+        for (fn_arg, arg_name) in original_item_fn
+            .sig
+            .inputs
+            .iter()
+            .skip(skip)
+            .zip(arg_names.iter())
+        {
+            match fn_arg {
+                FnArg::Receiver(_) => {}
+                FnArg::Typed(typed) => {
+                    let pat = typed.pat.clone();
+                    let ty = typed.ty.clone();
+                    let binding = quote! {
+                        let #pat: #ty = #arg_name;
+                    };
+                    inline_toks.push(binding);
+                }
+            }
+        }
+
+        let block = original_item_fn.block.clone();
+        match &original_item_fn.sig.output {
+            ReturnType::Default => {
+                quote! {{
+                    #(#inline_toks)*
+                    let res = {
+                        #block
+                    };
+                    res
+                }}
+            }
+            ReturnType::Type(_ra_arrow, ty) => {
+                quote! {{
+                    #(#inline_toks)*
+                    let res: #ty = {
+                        #block
+                    };
+                    res
+                }}
+            }
+        }
+    } else {
+        quote! {
+            #original_fn_name(#takes_env #(#arg_names),*)
+        }
+    };
+
     let original_fn_call = match (return_type, lisp_return, returns_none) {
         (Some(_), Some(SupportedGenericReturnTypes::LispResult), true) => quote! {
-            #original_fn_name(#takes_env #(#arg_names),*)?;
-            Ok(crate::types::Expression::make_nil())
+            #fn_body?;
+            return Ok(crate::types::Expression::make_nil());
         },
         (Some(_), Some(SupportedGenericReturnTypes::Option), true) => quote! {
-            #original_fn_name(#takes_env #(#arg_names),*);
-            Ok(crate::types::Expression::make_nil())
+            #fn_body;
+            return Ok(crate::types::Expression::make_nil());
         },
         (Some(_), Some(SupportedGenericReturnTypes::LispResult), false) => quote! {
-            #original_fn_name(#takes_env #(#arg_names),*).map(Into::into)
+            return #fn_body.map(Into::into);
         },
         (Some(_), Some(SupportedGenericReturnTypes::Option), false) => quote! {
-            if let Some(val) = #original_fn_name(#takes_env #(#arg_names),*) {
-                Ok(val.into())
+            if let Some(val) = #fn_body {
+                return Ok(val.into());
             } else {
-                Ok(crate::types::Expression::make_nil())
+                return Ok(crate::types::Expression::make_nil());
             }
         },
         // coerce to Expression
         (Some(_), None, _) => quote! {
-            Ok(#original_fn_name(#takes_env #(#arg_names),*).into())
+            return Ok(#fn_body.into());
         },
         (None, Some(_), _) => {
             unreachable!("If this functions returns a LispResult it must also return a value.");
         }
         // no return
         (None, None, _) => quote! {
-            #original_fn_name(#takes_env #(#arg_names),*);
-            Ok(crate::types::Expression::make_nil())
+            #fn_body;
+            return Ok(crate::types::Expression::make_nil());
         },
     };
+    let const_params_len = get_const_params_len_ident();
     Ok(quote! {
-        #original_fn_call
+        match args.get(#const_params_len) {
+            Some(_) if #const_params_len == 0 || arg_types[#const_params_len - 1].handle != crate::builtins_util::TypeHandle::VarArgs => {
+                return Err(crate::types::LispError::new(format!(
+                    "{} given too many arguments, expected at least {} arguments, got {}.",
+                    fn_name,
+                    #required_args,
+                    args.len()
+                )));
+            }
+            _ => {
+                #original_fn_call
+            }
+        }
     })
 }
 
-fn make_arg_types(
+/// create two lists that can be joined by macro syntax to create the inner part of a function
+/// signature, e.g. (arg_0: a_type, arg_1: b_type, ...) in some existing rust function:
+/// fn myfn(arg_0: a_type, arg_1: b_type, ...) { ... }
+fn generate_inner_fn_signature_to_orig_fn_call(
     original_item_fn: &ItemFn,
     takes_env: bool,
-) -> MacroResult<(Vec<Ident>, Vec<TokenStream>)> {
+) -> MacroResult<Vec<Ident>> {
     let len = if takes_env {
         original_item_fn.sig.inputs.len() - 1
     } else {
         original_item_fn.sig.inputs.len()
     };
     let mut arg_names = vec![];
-    let mut arg_types = vec![];
     for i in 0..len {
         let parse_name = "arg_".to_string() + &i.to_string();
         let parse_name = Ident::new(&parse_name, Span::call_site());
         arg_names.push(parse_name);
-        arg_types.push(quote! { crate::ArgType })
     }
-    Ok((arg_names, arg_types))
+    Ok(arg_names)
 }
 
 /// return a code for how to refer to the inner exp enum referent type in
 /// an function call.
-fn tokens_for_matching_references(passing_style: ArgPassingStyle, ty: &TypePath) -> TokenStream {
+fn tokens_for_matching_references(passing_style: PassingStyle, ty: &TypePath) -> TokenStream {
     match passing_style {
-        ArgPassingStyle::Move => quote! {#ty},
-        ArgPassingStyle::Reference => quote! {&#ty},
-        ArgPassingStyle::MutReference => quote! {& mut #ty},
+        PassingStyle::Value => quote! {#ty},
+        PassingStyle::Reference => quote! {&#ty},
+        PassingStyle::MutReference => quote! {& mut #ty},
     }
 }
 
@@ -537,30 +670,37 @@ fn parse_variadic_args_type(
 /// for Option<Expression> values the ref_exp must first be parsed as an
 /// Option, and only in the case that the option is Some will it be
 /// necessary to match against every ExpEnum variant.
-fn parse_argval_optional_type(
+#[allow(clippy::too_many_arguments)]
+fn parse_optional_type(
     ty: &TypePath,
     fn_name: &str,
-    fn_name_attr: &Ident,
+    fn_name_ident: &Ident,
     arg_name: &Ident,
-    passing_style: ArgPassingStyle,
+    passing_style: PassingStyle,
     inner: TokenStream,
+    idx: usize,
+    required_args: usize,
+    param: Param,
 ) -> MacroResult<TokenStream> {
     let some_inner = quote! {
         let #arg_name = Some(#arg_name);
         #inner
     };
     // in the case that the value is some, which means the Expression is no longer
-    // wrapped in Option, the parse_argval_value_type can be repurposed but
+    // wrapped in Option, the parse_typehandle_value_type can be repurposed but
     // with the caveat that after the value of inner it is handed first wraps
     // the matched ExpEnum in Some bound to the #arg_name like the
     // rust native function expects.
-    let some_arg_value_type_parsing_code = parse_argval_value_type(
+    let some_arg_value_type_parsing_code = parse_direct_type(
         ty,
         fn_name,
-        fn_name_attr,
+        fn_name_ident,
         arg_name,
         passing_style,
         some_inner,
+        idx,
+        required_args,
+        param,
     )?;
     Ok(quote! {
         match #arg_name {
@@ -607,13 +747,17 @@ fn get_type_or_wrapped_type<'a>(ty: &'a TypePath, possible_types: &'a [&str]) ->
 
 /// for regular Expression values (no Optional/VarArgs) ref_exp
 /// just needs to be matched based on it's ExpEnum variant.
-fn parse_argval_value_type(
+#[allow(clippy::too_many_arguments)]
+fn parse_direct_type(
     ty: &TypePath,
     fn_name: &str,
-    fn_name_attr: &Ident,
+    fn_name_ident: &Ident,
     arg_name: &Ident,
-    passing_style: ArgPassingStyle,
+    passing_style: PassingStyle,
     inner: TokenStream,
+    idx: usize,
+    required_args: usize,
+    param: Param,
 ) -> MacroResult<TokenStream> {
     if is_vec(ty).is_some() {
         parse_variadic_args_type(true, ty, fn_name, arg_name, inner, quote! { Vec })
@@ -625,8 +769,8 @@ fn parse_argval_value_type(
                 // handle &str differently, want impl RustProcedure<F> for TypedWrapper<&str>
                 // w/o this special case it generate RustProcedureRefMut on a TypedWrapper<str> which is unsized.
                 let (fn_ref, passing_style, ty) =
-                    if str == "str" && passing_style == ArgPassingStyle::Reference {
-                        let passing_style = ArgPassingStyle::Move;
+                    if str == "str" && passing_style == PassingStyle::Reference {
+                        let passing_style = PassingStyle::Value;
                         (quote! { &#ty }, passing_style, quote! { &#ty })
                     } else {
                         (
@@ -635,39 +779,39 @@ fn parse_argval_value_type(
                             quote! { #ty },
                         )
                     };
-                let inner = quote! {
-                    let mut typed_data: crate::types::TypedWrapper<#ty, crate::types::Expression> =
-                        crate::types::TypedWrapper::new(#arg_name);
+                let callback_declaration = quote! {
                     let callback = |#arg_name: #fn_ref| -> crate::LispResult<crate::types::Expression> {
                         #inner
                     };
                 };
 
                 match passing_style {
-                    ArgPassingStyle::Move => Ok(quote! {{
+                    PassingStyle::Value | PassingStyle::Reference => Ok(quote! {{
                         use crate::types::RustProcedure;
-                        #inner
-                        typed_data.apply(#fn_name_attr, callback)
+                        let typed_data: crate::types::TypedWrapper<#ty, crate::types::Expression> =
+                            crate::types::TypedWrapper::new(&#arg_name);
+                        #callback_declaration
+                        typed_data.apply(#fn_name_ident, callback)
                     }}),
-                    ArgPassingStyle::Reference => Ok(quote! {{
-                        use crate::types::RustProcedureRef;
-                        #inner
-                        typed_data.apply_ref(#fn_name_attr, callback)
-                    }}),
-                    ArgPassingStyle::MutReference => Ok(quote! {{
+                    PassingStyle::MutReference => Ok(quote! {{
                         use crate::types::RustProcedureRefMut;
-                        #inner
-                        typed_data.apply_ref_mut(#fn_name_attr, callback)
+                        let mut typed_data: crate::types::TypedWrapper<#ty, crate::types::Expression> =
+                            crate::types::TypedWrapper::new(&#arg_name);
+                        #callback_declaration
+                        typed_data.apply_ref_mut(#fn_name_ident, callback)
                     }}),
                 }
             }
             RustType::Tuple(type_tuple, _span) => parse_type_tuple(
                 &type_tuple,
                 fn_name,
-                fn_name_attr,
+                fn_name_ident,
                 inner,
                 arg_name,
-                no_parse,
+                idx,
+                required_args,
+                param,
+                no_parse_param,
             ),
             RustType::BareFn(_, _) | RustType::Reference(_, _) | RustType::Unsupported(_) => {
                 let arg_pos = get_arg_pos(arg_name)?;
@@ -686,23 +830,42 @@ fn parse_argval_value_type(
 /// transformation. If this function throws errors it means that the
 /// inputs, val/passing style are wrong and aren't matching to the ArgType(s)
 /// properly, or the rust type lookup function is busted.
+#[allow(clippy::too_many_arguments)]
 fn parse_type(
     ty: &TypePath,
     fn_name: (&str, &Ident),
     inner: TokenStream,
-    val: ArgVal,
+    param: Param,
     arg_name: &Ident,
-    passing_style: ArgPassingStyle,
-    outer_parse: fn(&Ident, TokenStream) -> TokenStream,
+    passing_style: PassingStyle,
+    idx: usize,
+    required_args: usize,
+    outer_parse: fn(&Ident, TokenStream, Param, usize, usize) -> TokenStream,
 ) -> MacroResult<TokenStream> {
-    let tokens = match val {
-        ArgVal::Value => {
-            parse_argval_value_type(ty, fn_name.0, fn_name.1, arg_name, passing_style, inner)?
-        }
-        ArgVal::Optional => {
-            parse_argval_optional_type(ty, fn_name.0, fn_name.1, arg_name, passing_style, inner)?
-        }
-        ArgVal::VarArgs => parse_variadic_args_type(
+    let tokens = match param.handle {
+        TypeHandle::Direct => parse_direct_type(
+            ty,
+            fn_name.0,
+            fn_name.1,
+            arg_name,
+            passing_style,
+            inner,
+            idx,
+            required_args,
+            param,
+        )?,
+        TypeHandle::Optional => parse_optional_type(
+            ty,
+            fn_name.0,
+            fn_name.1,
+            arg_name,
+            passing_style,
+            inner,
+            idx,
+            required_args,
+            param,
+        )?,
+        TypeHandle::VarArgs => parse_variadic_args_type(
             false,
             ty,
             fn_name.0,
@@ -711,71 +874,74 @@ fn parse_type(
             quote! { crate::VarArgs },
         )?,
     };
-    Ok(outer_parse(arg_name, tokens))
+    Ok(outer_parse(arg_name, tokens, param, required_args, idx))
 }
 
-fn to_arg_types(args: &[Arg]) -> TokenStream {
+/// create a vec literal of the expected Param types so code can check its arguments at runtime for
+/// API arity/type correctness.
+fn embed_params_vec(params: &[Param]) -> TokenStream {
     let mut tokens = vec![];
-    for arg in args {
-        tokens.push(match (arg.val, arg.passing_style) {
-            (ArgVal::Value, ArgPassingStyle::MutReference) => {
-                quote! { crate::builtins_util::Arg {
-                    val: crate::builtins_util::ArgVal::Value,
-                    passing_style: crate::builtins_util::ArgPassingStyle::MutReference
+    for param in params {
+        tokens.push(match (param.handle, param.passing_style) {
+            (TypeHandle::Direct, PassingStyle::MutReference) => {
+                quote! { crate::builtins_util::Param {
+                    handle: crate::builtins_util::TypeHandle::Direct,
+                    passing_style: crate::builtins_util::PassingStyle::MutReference
                 }}
             }
-            (ArgVal::Optional, ArgPassingStyle::MutReference) => {
-                quote! { crate::builtins_util::Arg {
-                    val: crate::builtins_util::ArgVal::Optional,
-                    passing_style: crate::builtins_util::ArgPassingStyle::MutReference
+            (TypeHandle::Optional, PassingStyle::MutReference) => {
+                quote! { crate::builtins_util::Param {
+                    handle: crate::builtins_util::TypeHandle::Optional,
+                    passing_style: crate::builtins_util::PassingStyle::MutReference
                 }}
             }
-            (ArgVal::VarArgs, ArgPassingStyle::MutReference) => {
-                quote! { crate::builtins_util::Arg {
-                    val: crate::builtins_util::ArgVal::VarArgs,
-                    passing_style: crate::builtins_util::ArgPassingStyle::MutReference
+            (TypeHandle::VarArgs, PassingStyle::MutReference) => {
+                quote! { crate::builtins_util::Param {
+                    handle: crate::builtins_util::TypeHandle::VarArgs,
+                    passing_style: crate::builtins_util::PassingStyle::MutReference
                 }}
             }
-            (ArgVal::Value, ArgPassingStyle::Reference) => {
-                quote! {crate::builtins_util::Arg {
-                    val: crate::builtins_util::ArgVal::Value,
-                    passing_style: crate::builtins_util::ArgPassingStyle::Reference
+            (TypeHandle::Direct, PassingStyle::Reference) => {
+                quote! {crate::builtins_util::Param {
+                    handle: crate::builtins_util::TypeHandle::Direct,
+                    passing_style: crate::builtins_util::PassingStyle::Reference
                 }}
             }
-            (ArgVal::Optional, ArgPassingStyle::Reference) => {
-                quote! { crate::builtins_util::Arg {
-                    val: crate::builtins_util::ArgVal::Optional,
-                    passing_style: crate::builtins_util::ArgPassingStyle::Reference
+            (TypeHandle::Optional, PassingStyle::Reference) => {
+                quote! { crate::builtins_util::Param {
+                    handle: crate::builtins_util::TypeHandle::Optional,
+                    passing_style: crate::builtins_util::PassingStyle::Reference
                 }}
             }
-            (ArgVal::VarArgs, ArgPassingStyle::Reference) => {
-                quote! { crate::builtins_util::Arg {
-                    val: crate::builtins_util::ArgVal::VarArgs,
-                    passing_style: crate::builtins_util::ArgPassingStyle::Reference
+            (TypeHandle::VarArgs, PassingStyle::Reference) => {
+                quote! { crate::builtins_util::Param {
+                    handle: crate::builtins_util::TypeHandle::VarArgs,
+                    passing_style: crate::builtins_util::PassingStyle::Reference
                 }}
             }
-            (ArgVal::Value, ArgPassingStyle::Move) => {
-                quote! { crate::builtins_util::Arg {
-                    val: crate::builtins_util::ArgVal::Value,
-                    passing_style: crate::builtins_util::ArgPassingStyle::Move
+            (TypeHandle::Direct, PassingStyle::Value) => {
+                quote! { crate::builtins_util::Param {
+                    handle: crate::builtins_util::TypeHandle::Direct,
+                    passing_style: crate::builtins_util::PassingStyle::Value
                 }}
             }
-            (ArgVal::Optional, ArgPassingStyle::Move) => {
-                quote! { crate::builtins_util::Arg {
-                    val: crate::builtins_util::ArgVal::Optional,
-                    passing_style: crate::builtins_util::ArgPassingStyle::Move
+            (TypeHandle::Optional, PassingStyle::Value) => {
+                quote! { crate::builtins_util::Param {
+                    handle: crate::builtins_util::TypeHandle::Optional,
+                    passing_style: crate::builtins_util::PassingStyle::Value
                 }}
             }
-            (ArgVal::VarArgs, ArgPassingStyle::Move) => {
-                quote! { crate::builtins_util::Arg {
-                    val: crate::builtins_util::ArgVal::VarArgs,
-                    passing_style: crate::builtins_util::ArgPassingStyle::Move
+            (TypeHandle::VarArgs, PassingStyle::Value) => {
+                quote! { crate::builtins_util::Param {
+                    handle: crate::builtins_util::TypeHandle::VarArgs,
+                    passing_style: crate::builtins_util::PassingStyle::Value
                 }}
             }
         });
     }
+    let const_params_len = get_const_params_len_ident();
     quote! {
-        let arg_types = vec![ #(#tokens),* ];
+        let arg_types: [crate::builtins_util::Param; #const_params_len] = [ #(#tokens),* ];
     }
 }
 
@@ -784,21 +950,21 @@ fn to_arg_types(args: &[Arg]) -> TokenStream {
 /// function must be inserted into a hashmap where the key is the name of the function and the value
 /// is a function expression that stores the name of the rust function to call and its documentation.
 /// It looks like the following in all cases:
-/// ```
-/// fn intern_one_int_to_float<S: std::hash::BuildHasher>(
-///    interner: &mut sl_sh::Interner,
-///    data: &mut std::collections::HashMap<&'static str, (sl_sh::types::Expression, String), S>,
-///) {
-///    let fn_name = "oneintofloat";
-///    data.insert(
-///        interner.intern(fn_name),
-///        sl_sh::types::Expression::make_function(parse_one_int_to_float, " my docs\n"),
-///    );
-///}
-/// ```
+// ```
+// fn intern_one_int_to_float<S: std::hash::BuildHasher>(
+//    interner: &mut sl_sh::Interner,
+//    data: &mut std::collections::HashMap<&'static str, (sl_sh::types::Expression, String), S>,
+//) {
+//    let fn_name = "oneintofloat";
+//    data.insert(
+//        interner.intern(fn_name),
+//        sl_sh::types::Expression::make_function(parse_one_int_to_float, " my docs\n"),
+//    );
+//}
+// ```
 fn generate_intern_fn(
     original_fn_name_str: &str,
-    fn_name_attr: &Ident,
+    fn_name_ident: &Ident,
     fn_name: &str,
     doc_comments: String,
 ) -> TokenStream {
@@ -809,9 +975,9 @@ fn generate_intern_fn(
             interner: &mut crate::Interner,
             data: &mut std::collections::HashMap<&'static str, (crate::types::Expression, String), S>,
         ) {
-            let #fn_name_attr = #fn_name;
+            let #fn_name_ident = #fn_name;
             data.insert(
-                interner.intern(#fn_name_attr),
+                interner.intern(#fn_name_ident),
                 crate::types::Expression::make_function(#parse_name, #doc_comments),
             );
         }
@@ -826,105 +992,61 @@ fn generate_intern_fn(
 /// passed to the builtin function. To map a vector of ArgType structs to an actual function
 /// call the ExpandVecToArgs trait is used. A sample parse_ function for a function that takes
 /// one argument is shown below.
-/// ```
-/// fn parse_one_int_to_float(
-///     environment: &mut sl_sh::environment::Environment,
-///     args: &mut dyn Iterator<Item = sl_sh::types::Expression>,
-/// ) -> sl_sh::LispResult<sl_sh::types::Expression> {
-///     use sl_sh::builtins_util::ExpandVecToArgs;
-///     use std::convert::TryInto;
-///     let args = sl_sh::builtins_util::make_args_eval_no_values(environment, args)?;
-///     let fn_name = "one-in-to-float";
-///     const args_len: usize = 1usize;
-///     // this arg_types variable is generated by the macro for use at runtime.
-///     let arg_types = vec![sl_sh::builtins_util::Arg {
-///         val: sl_sh::builtins_util::ArgVal::Value,
-///         passing_style: sl_sh::builtins_util::ArgPassingStyle::Move,
-///     }];
-///
-///     let args = crate::builtins_util::make_args_eval_no_values(environment, args)?;
-///     let args = sl_sh::get_arg_types(fn_name, arg_types, args)?;
-///     if args.len() == args_len {
-///         match args.try_into() {
-///             Ok(params) => {
-///                 // use const generics and blanket implementation of ExpandvecToArgs over
-///                 // function calls to map vector to function call.
-///                 let params: [sl_sh::ArgType; args_len] = params;
-///                 builtin_one_int_to_float.call_expand_args(params)
-///             }
-///             Err(e) => Err(sl_sh::types::LispError::new(format!(
-///                 "{} is broken and can't parse its arguments.",
-///                 fn_name
-///             ))),
-///         }
-///     } else if args.len() > args_len {
-///         Err(sl_sh::types::LispError::new(format!(
-///             "{}  given too many arguments, expected {}, got, {}.",
-///             fn_name,
-///             args_len,
-///             args.len()
-///         )))
-///     } else {
-///         Err(sl_sh::types::LispError::new(format!(
-///             "{}  not given enough arguments, expected {}, got, {}.",
-///             fn_name,
-///             args_len,
-///             args.len()
-///         )))
-///     }
-/// }
-/// ```
 fn generate_parse_fn(
     original_fn_name_str: &str,
     eval_values: bool,
-    fn_name_attr: &Ident,
+    fn_name_ident: &Ident,
     fn_name: &str,
     args_len: usize,
-    args: &[Arg],
+    params: &[Param],
+    inner: TokenStream,
 ) -> TokenStream {
     let parse_name = get_parse_fn_name(original_fn_name_str);
-    let builtin_name = get_builtin_fn_name(original_fn_name_str);
-    let arg_types = to_arg_types(args);
+    let arg_vec_literal = embed_params_vec(params);
 
+    // in slosh this will change because the args are already evaluated and the macro will
+    // be dealing with a slice so... keep this allocation at runtime for now because it
+    // simplified the implementation and is more realistic long-term even though it's
+    // suboptimal in this case.
     let make_args = if eval_values {
         quote! {
             let args = crate::builtins_util::make_args(environment, args)?;
+            let args = args.into_iter().collect::<Vec<Expression>>();
+            let args = args.as_slice();
+
         }
     } else {
         quote! {
             let args = crate::builtins_util::make_args_eval_no_values(environment, args)?;
+            let args = args.into_iter().collect::<Vec<Expression>>();
+            let args = args.as_slice();
         }
     };
 
+    let const_params_len = get_const_params_len_ident();
     quote! {
         fn #parse_name(
             environment: &mut crate::environment::Environment,
             args: &mut dyn Iterator<Item = crate::types::Expression>,
         ) -> crate::LispResult<crate::types::Expression> {
-            use std::convert::TryInto;
-            use crate::builtins_util::ExpandVecToArgs;
             #make_args
-            let #fn_name_attr = #fn_name;
-            const args_len: usize = #args_len;
-            #arg_types
-            let args = crate::get_arg_types(fn_name, arg_types, args)?;
-            if args.len() == args_len {
-                match args.try_into() {
-                    Ok(params) => {
-                        let params: [crate::ArgType; args_len] = params;
-                        #builtin_name.call_expand_args(environment, params)
-                    },
-                    Err(e) => {
-                        Err(crate::types::LispError::new(format!("{} is broken and can't parse its arguments.", #fn_name)))
-                    }
-                }
-            } else if args.len() > args_len {
-                Err(crate::types::LispError::new(format!("{} given too many arguments, expected {}, got {}.", #fn_name, args_len, args.len())))
-            } else {
-                Err(crate::types::LispError::new(format!("{} not given enough arguments, expected {}, got {}.", #fn_name, args_len, args.len())))
-            }
+            let #fn_name_ident = #fn_name;
+            const #const_params_len: usize = #args_len;
+            #arg_vec_literal
+
+            #inner
         }
     }
+}
+
+fn num_required_args(params: &[Param]) -> usize {
+    params.iter().fold(0, |accum, nxt| {
+        if nxt.handle == TypeHandle::Direct {
+            accum + 1
+        } else {
+            accum
+        }
+    })
 }
 
 /// write the builtin_ version of the provided function. This function is the function taht makes
@@ -941,71 +1063,59 @@ fn generate_parse_fn(
 /// uses that as it's innermost scope. Thus the original function call is at the core of a series
 /// of scopes that create all the necessary arguments with the proper types that were specified on
 /// initialization. For a function of one argument that means the code would look something like:
-/// ```
-/// use sl_sh_proc_macros::sl_sh_fn;
-/// fn builtin_one_int_to_float(arg_0: crate::ArgType) -> crate::LispResult<crate::types::Expression> {
-///    const _: fn() = || {
-///        fn assert_impl_all<T: ?Sized + std::convert::Into<crate::Expression>>() {}
-///        assert_impl_all::<f64>();
-///    };
-///    let fn_name = "one-int-to-float";
-///    match arg_0 {
-///        crate::ArgType::Exp(arg_0) => {
-///            use crate::types::RustProcedure;
-///            let mut typed_data: crate::types::TypedWrapper<i64, crate::types::Expression> =
-///                crate::types::TypedWrapper::new(arg_0);
-///            let callback = |arg_0: i64| -> crate::LispResult<crate::types::Expression> {
-///                one_int_to_float(arg_0).map(Into::into)
-///            };
-///            typed_data.apply(fn_name, callback)
-///        }
-///        _ => {
-///            return Err(LispError::new(
-///                "sl_sh_fn macro is broken. ArgType::Exp can't be parsed as ArgType::Exp",
-///            ));
-///        }
-///    }
-///}
-/// #[sl_sh_fn(fn_name = "one-int-to-float")]
-/// fn one_int_to_float(int: i64) -> LispResult<f64> {
-///    Ok(int as f64)
-/// }
-/// ```
 fn generate_builtin_fn(
     original_item_fn: &ItemFn,
     original_fn_name_str: &str,
     fn_name: &str,
-    fn_name_attr: &Ident,
+    params: &[Param],
+    fn_name_ident: &Ident,
     takes_env: bool,
+    inline: bool,
 ) -> MacroResult<TokenStream> {
     let original_fn_name = Ident::new(original_fn_name_str, Span::call_site());
-    let builtin_name = get_builtin_fn_name(original_fn_name_str);
-    let (arg_names, arg_types) = make_arg_types(original_item_fn, takes_env)?;
+    let arg_names = generate_inner_fn_signature_to_orig_fn_call(original_item_fn, takes_env)?;
+    let required_args = num_required_args(params);
 
     let orig_fn_call = make_orig_fn_call(
+        inline,
         takes_env,
         original_item_fn,
         &original_fn_name,
+        required_args,
         arg_names.clone(),
     )?;
     // initialize the innermost token stream to the code of the original_fn_call
     let mut prev_token_stream = orig_fn_call;
-    let skip = if takes_env { 1 } else { 0 };
+    let skip = usize::from(takes_env);
+    let inputs_less_env_len = original_item_fn.sig.inputs.len() - skip;
+    if inputs_less_env_len != params.len() {
+        let err_str = format!(
+            "sl_sh_fn macro is broken, signature of target function has an arity of {}, but this macro computed its arity as: {} (arity is - 1 if takes_env is true).",
+            inputs_less_env_len,
+            params.len(),
+        );
+        return Err(Error::new(original_item_fn.span(), err_str));
+    }
     let fn_args = original_item_fn
         .sig
         .inputs
         .iter()
         .skip(skip)
-        .zip(arg_names.iter());
-    for (fn_arg, arg_name) in fn_args {
+        .zip(arg_names.iter())
+        .zip(params.iter());
+    for (idx, ((fn_arg, arg_name), param)) in fn_args.enumerate() {
         if let FnArg::Typed(ty) = fn_arg {
+            // this needs to use the args.iter() pattern now.
             prev_token_stream = parse_fn_arg_type(
-                &*ty.ty,
+                &ty.ty,
                 fn_name,
-                fn_name_attr,
+                fn_name_ident,
                 prev_token_stream,
                 arg_name,
                 false,
+                idx,
+                *param,
+                required_args,
             )?;
         }
     }
@@ -1017,78 +1127,93 @@ fn generate_builtin_fn(
         ));
     }
     let tokens = quote! {
-        fn #builtin_name(env: &mut crate::environment::Environment, #(#arg_names: #arg_types),*) -> crate::LispResult<crate::types::Expression> {
-            #(#conversions_assertions_code)*
-            let #fn_name_attr = #fn_name;
-            #prev_token_stream
-        }
+        #(#conversions_assertions_code)*
+        // let #fn_name_ident = #fn_name; already included in parse function
+        // as well as `args`, a vec of expression,
+        // `fn_name_ident` the ident of the fn_name
+        // `ARGS_LEN` constant representing arity of original fn
+        // and `arg_types` the embedded vec of Arg's available at runtime.
+        #prev_token_stream
     };
     Ok(tokens)
 }
 
+/// recursively wrap the received sl_sh args at the given idx in callback functions that parse the Expressions
+/// into the a variable with a predefined  name with the same type as the corresponding parameter
+/// in the rust native function.
+#[allow(clippy::too_many_arguments)]
 fn parse_fn_arg_type(
-    ty: &Type, //TODO Cow?
+    ty: &Type,
     fn_name: &str,
-    fn_name_attr: &Ident,
+    fn_name_ident: &Ident,
     prev_token_stream: TokenStream,
     arg_name: &Ident,
     noop_outer_parse: bool,
+    idx: usize,
+    param: Param,
+    required_args: usize,
 ) -> MacroResult<TokenStream> {
     match <Type as Into<RustType>>::into(ty.clone()) {
         RustType::Path(ty, _span) => {
-            let val = get_arg_val(&ty);
-            let parse_layer_1 = get_parser_for_arg_val(val, noop_outer_parse);
-            let passing_style = ArgPassingStyle::Move;
+            let parse_layer_1 = get_parser_for_type_handle(noop_outer_parse);
+            let passing_style = PassingStyle::Value;
             parse_type(
                 &ty,
-                (fn_name, fn_name_attr),
+                (fn_name, fn_name_ident),
                 prev_token_stream,
-                val,
+                param,
                 arg_name,
                 passing_style,
+                idx,
+                required_args,
                 parse_layer_1,
             )
         }
         RustType::Tuple(type_tuple, _span) => {
-            let val = ArgVal::Value;
-            let parse_layer_1 = get_parser_for_arg_val(val, noop_outer_parse);
+            let parse_layer_1 = get_parser_for_type_handle(noop_outer_parse);
             parse_type_tuple(
                 &type_tuple,
                 fn_name,
-                fn_name_attr,
+                fn_name_ident,
                 prev_token_stream,
                 arg_name,
+                idx,
+                required_args,
+                param,
                 parse_layer_1,
             )
         }
         RustType::Reference(ty_ref, _span) => match <Type as Into<RustType>>::into(*ty_ref.elem) {
             RustType::Path(ty, _span) => {
-                let val = get_arg_val(&ty);
-                let parse_layer_1 = get_parser_for_arg_val(val, noop_outer_parse);
+                let parse_layer_1 = get_parser_for_type_handle(noop_outer_parse);
                 let passing_style = if ty_ref.mutability.is_some() {
-                    ArgPassingStyle::MutReference
+                    PassingStyle::MutReference
                 } else {
-                    ArgPassingStyle::Reference
+                    PassingStyle::Reference
                 };
                 parse_type(
                     &ty,
-                    (fn_name, fn_name_attr),
+                    (fn_name, fn_name_ident),
                     prev_token_stream,
-                    val,
+                    param,
                     arg_name,
                     passing_style,
+                    idx,
+                    required_args,
                     parse_layer_1,
                 )
             }
             RustType::Tuple(type_tuple, _span) => {
-                let val = ArgVal::Value;
-                let parse_layer_1 = get_parser_for_arg_val(val, noop_outer_parse);
+                let parse_layer_1 = get_parser_for_type_handle(noop_outer_parse);
                 parse_type_tuple(
                     &type_tuple,
                     fn_name,
-                    fn_name_attr,
+                    fn_name_ident,
                     prev_token_stream,
                     arg_name,
+                    idx,
+                    required_args,
+                    param,
                     parse_layer_1,
                 )
             }
@@ -1112,13 +1237,17 @@ fn parse_fn_arg_type(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn parse_type_tuple(
     type_tuple: &TypeTuple,
     fn_name: &str,
-    fn_name_attr: &Ident,
+    fn_name_ident: &Ident,
     inner: TokenStream,
     arg_name: &Ident,
-    outer_parse: fn(&Ident, TokenStream) -> TokenStream,
+    idx: usize,
+    required_args: usize,
+    param: Param,
+    outer_parse: fn(&Ident, TokenStream, Param, usize, usize) -> TokenStream,
 ) -> MacroResult<TokenStream> {
     // at the end of all the tuple parsing the inner token stream expects
     // arg_name to be:
@@ -1149,7 +1278,18 @@ fn parse_type_tuple(
                 &(arg_name_base.to_string() + &i.to_string()),
                 Span::call_site(),
             );
-            inner = parse_fn_arg_type(ty, fn_name, fn_name_attr, inner, &arg_name_pair, true)?;
+            let param = get_param_from_type(ty.clone(), ty.span(), i)?;
+            inner = parse_fn_arg_type(
+                ty,
+                fn_name,
+                fn_name_ident,
+                inner,
+                &arg_name_pair,
+                true,
+                i,
+                param,
+                required_args,
+            )?;
         }
         inner
     } else {
@@ -1161,7 +1301,7 @@ fn parse_type_tuple(
         if !crate::is_sequence!(#arg_name)
         {
             let err_str = format!("{}: Expected a vector or list for argument at position {}.", #fn_name, #arg_pos);
-            return Err(LispError::new(err_str));
+            return Err(crate::types::LispError::new(err_str));
         }
         let #arg_name = #arg_name.iter().collect::<Vec<crate::types::Expression>>();
         match #arg_name.try_into() {
@@ -1172,42 +1312,44 @@ fn parse_type_tuple(
             }
             Err(_) => {
                 let err_str = format!("{}: Expected a sl_sh vector or list with {} elements corresponding to the tuple at argument position {}.", #fn_name, #tuple_len, #arg_pos);
-                return Err(LispError::new(err_str));
+                return Err(crate::types::LispError::new(err_str));
             }
         }
     }};
-    Ok(outer_parse(arg_name, tokens))
+    Ok(outer_parse(arg_name, tokens, param, required_args, idx))
 }
 
-/// Optional and Vec types are supported to create the idea of items that might be provided or
-/// for providing a list of zero or more items that can be passed in, a varargs type, or both.
-/// Because the nature of optional and varargs are context dependent, e.g. variable numbers of
-/// arguments would have to be at the end of the function signature, otherwise, it's much harder
-/// to specify which arguments are required.
-fn are_args_valid(original_item_fn: &ItemFn, args: &[Arg], takes_env: bool) -> MacroResult<()> {
-    if args.is_empty() || (!takes_env && args.len() == 1 || takes_env && args.len() == 2) {
+/// Optional and VarArgs types are supported to create the idea of items that might be provided or
+/// for providing a list of zero or more items that can be passed in.
+/// The nature of optional and varargs are context dependent because variable numbers of
+/// arguments have to be at the end of the function signature. This method verifies that items
+/// marked as Optional are last, and VarArgs is supported but only in the last position, which can
+/// be after any number of Optional arguments. This means non Optional/VarArgs types must
+/// come before all Optional and VarArgs types.
+fn are_args_valid(original_item_fn: &ItemFn, params: &[Param], takes_env: bool) -> MacroResult<()> {
+    if params.is_empty() || (!takes_env && params.len() == 1 || takes_env && params.len() == 2) {
         Ok(())
     } else {
         let mut found_opt = false;
         let mut found_value = false;
-        for (i, arg) in args.iter().rev().enumerate() {
-            match (i, arg.val, found_opt, found_value) {
-                (i, ArgVal::VarArgs, _, _) if i > 0 => {
+        for (i, param) in params.iter().rev().enumerate() {
+            match (i, param.handle, found_opt, found_value) {
+                (i, TypeHandle::VarArgs, _, _) if i > 0 => {
                     return Err(Error::new(
                         original_item_fn.span(),
                         "Only one Vec argument is supported and it must be the last argument.",
                     ));
                 }
-                (_, ArgVal::Optional, _, true) => {
+                (_, TypeHandle::Optional, _, true) => {
                     return Err(Error::new(
                         original_item_fn.span(),
                         "Optional argument(s) must be placed last.",
                     ));
                 }
-                (_, ArgVal::Optional, _, _) => {
+                (_, TypeHandle::Optional, _, _) => {
                     found_opt = true;
                 }
-                (_, ArgVal::Value, _, _) => {
+                (_, TypeHandle::Direct, _, _) => {
                     found_value = true;
                 }
                 (_, _, _, _) => {}
@@ -1217,6 +1359,64 @@ fn are_args_valid(original_item_fn: &ItemFn, args: &[Arg], takes_env: bool) -> M
     }
 }
 
+fn get_param_from_type(ty: Type, span: Span, pos: usize) -> MacroResult<Param> {
+    let ty_clone = ty.clone();
+    let param = match <Type as Into<RustType>>::into(ty) {
+        RustType::Path(ty, _span) => {
+            let val = get_type_handle(&ty);
+            Param {
+                handle: val,
+                passing_style: PassingStyle::Value,
+            }
+        }
+        RustType::Tuple(_type_tuple, _span) => Param {
+            handle: TypeHandle::Direct,
+            passing_style: PassingStyle::Value,
+        },
+        RustType::Reference(ty_ref, _span) => {
+            let passing_style = if ty_ref.mutability.is_some() {
+                PassingStyle::MutReference
+            } else {
+                PassingStyle::Reference
+            };
+            match <Type as Into<RustType>>::into(*ty_ref.elem) {
+                RustType::Path(ty, _span) => {
+                    let val = get_type_handle(&ty);
+                    Param {
+                        handle: val,
+                        passing_style,
+                    }
+                }
+                RustType::Tuple(_type_tuple, _span) => Param {
+                    handle: TypeHandle::Direct,
+                    passing_style,
+                },
+                _ => {
+                    return Err(Error::new(
+                        span,
+                        format!(
+                            "Error with argument at position {}, sl_sh_fn only supports passing Type::Path and Type::Tuple by value or ref/ref mut, no either syn::Type's are supported: {:?}.",
+                            pos,
+                            ty_clone.to_token_stream(),
+                        ),
+                    ));
+                }
+            }
+        }
+        _ => {
+            return Err(Error::new(
+                span,
+                format!(
+                    "Error with argument at position {}, sl_sh_fn only supports passing Type::Path and Type::Tuple by value or ref/ref mut, no either syn::Type's are supported: {:?}.",
+                    pos,
+                    ty_clone.to_token_stream(),
+                ),
+            ));
+        }
+    };
+    Ok(param)
+}
+
 /// Create a Vec<Arg> from the original fn's signature. Information is needed at compile and
 /// run time to translate the list of sl_sh expressions to rust native types. This Arg types
 /// stores the information about the rust native type (Value/Option/Var) as well as whether it's moved, passed
@@ -1224,7 +1424,7 @@ fn are_args_valid(original_item_fn: &ItemFn, args: &[Arg], takes_env: bool) -> M
 fn parse_src_function_arguments(
     original_item_fn: &ItemFn,
     takes_env: bool,
-) -> MacroResult<Vec<Arg>> {
+) -> MacroResult<Vec<Param>> {
     let mut parsed_args = vec![];
     let len = if takes_env {
         original_item_fn.sig.inputs.len() - 1
@@ -1238,7 +1438,7 @@ fn parse_src_function_arguments(
         arg_names.push(parse_name);
     }
 
-    let skip = if takes_env { 1 } else { 0 };
+    let skip = usize::from(takes_env);
 
     for (i, fn_arg) in original_item_fn.sig.inputs.iter().enumerate().skip(skip) {
         match fn_arg {
@@ -1248,57 +1448,13 @@ fn parse_src_function_arguments(
                     "Associated functions that take the self argument are not supported.",
                 ))
             }
-            FnArg::Typed(ty) => match <Type as Into<RustType>>::into(*ty.ty.clone()) {
-                RustType::Path(ty, _span) => {
-                    let val = get_arg_val(&ty);
-                    parsed_args.push(Arg {
-                        val,
-                        passing_style: ArgPassingStyle::Move,
-                    });
-                }
-                RustType::Tuple(_type_tuple, _span) => {
-                    parsed_args.push(Arg {
-                        val: ArgVal::Value,
-                        passing_style: ArgPassingStyle::Move,
-                    });
-                }
-                RustType::Reference(ty_ref, _span) => {
-                    let passing_style = if ty_ref.mutability.is_some() {
-                        ArgPassingStyle::MutReference
-                    } else {
-                        ArgPassingStyle::Reference
-                    };
-                    match <Type as Into<RustType>>::into(*ty_ref.elem) {
-                        RustType::Path(ty, _span) => {
-                            let val = get_arg_val(&ty);
-                            parsed_args.push(Arg { val, passing_style });
-                        }
-                        RustType::Tuple(_type_tuple, _span) => {
-                            parsed_args.push(Arg { val: ArgVal::Value, passing_style})
-                        }
-                        _ => {
-                            return Err(Error::new(
-                                original_item_fn.span(),
-                                &format!(
-                                    "Error with argument at position {}, sl_sh_fn only supports passing Type::Path and Type::Tuple by value or ref/ref mut, no either syn::Type's are supported: {:?}.",
-                                    i,
-                                    ty.to_token_stream(),
-                                ),
-                            ))
-                        }
-                    }
-                }
-                _ => {
-                    return Err(Error::new(
-                        original_item_fn.span(),
-                        &format!(
-                            "Error with argument at position {}, sl_sh_fn only supports passing Type::Path and Type::Tuple by value or ref/ref mut, no either syn::Type's are supported: {:?}.",
-                            i,
-                            ty.to_token_stream(),
-                        ),
-                    ))
-                }
-            },
+            FnArg::Typed(ty) => {
+                parsed_args.push(get_param_from_type(
+                    *ty.ty.clone(),
+                    original_item_fn.span(),
+                    i,
+                )?);
+            }
         }
     }
     Ok(parsed_args)
@@ -1315,13 +1471,6 @@ fn get_intern_fn_name(original_fn_name: &str) -> Ident {
 /// return parse_<base> Ident to be used as function name
 fn get_parse_fn_name(original_fn_name: &str) -> Ident {
     let builtin_name = "parse_".to_string() + original_fn_name;
-    Ident::new(&builtin_name, Span::call_site())
-}
-
-/// return the function names the macro will create. Given a base name, <base>
-/// return builtin_<base> Ident to be used as function name
-fn get_builtin_fn_name(original_fn_name: &str) -> Ident {
-    let builtin_name = "builtin_".to_string() + original_fn_name;
     Ident::new(&builtin_name, Span::call_site())
 }
 
@@ -1351,69 +1500,67 @@ fn get_documentation_for_fn(original_item_fn: &ItemFn) -> MacroResult<String> {
     }
 }
 
+fn get_const_params_len_ident() -> Ident {
+    Ident::new("PARAMS_LEN", Span::call_site())
+}
+
 fn parse_attributes(
     original_item_fn: &ItemFn,
     attr_args: AttributeArgs,
-) -> MacroResult<(String, Ident, bool, bool)> {
+) -> MacroResult<(String, Ident, bool, bool, bool)> {
     let vals = attr_args
         .iter()
         .map(get_attribute_name_value)
         .collect::<MacroResult<Vec<(String, String)>>>()?;
-    let fn_name_attr = "fn_name".to_string();
-    let fn_name = get_attribute_value_with_key(original_item_fn, &fn_name_attr, vals.as_slice())?
+    let fn_name_ident = "fn_name".to_string();
+    let fn_name = get_attribute_value_with_key(original_item_fn, &fn_name_ident, vals.as_slice())?
         .ok_or_else(|| {
-        Error::new(
-            original_item_fn.span(),
-            "sl_sh_fn requires name-value pair, 'fn_name'",
-        )
-    })?;
-    let fn_name_attr = Ident::new(&fn_name_attr, Span::call_site());
+            Error::new(
+                original_item_fn.span(),
+                "sl_sh_fn requires name-value pair, 'fn_name'",
+            )
+        })?;
+    let fn_name_ident = Ident::new(&fn_name_ident, Span::call_site());
 
-    let eval_values = if let Some(value) =
-        get_attribute_value_with_key(original_item_fn, "eval_values", vals.as_slice())?
-    {
-        value == "true"
-    } else {
-        false
-    };
-    let takes_env = if let Some(value) =
-        get_attribute_value_with_key(original_item_fn, "takes_env", vals.as_slice())?
-    {
-        value == "true"
-    } else {
-        false
-    };
-    Ok((fn_name, fn_name_attr, eval_values, takes_env))
+    let eval_values =
+        get_bool_attribute_value_with_key(original_item_fn, "eval_values", vals.as_slice())?;
+    let takes_env =
+        get_bool_attribute_value_with_key(original_item_fn, "takes_env", vals.as_slice())?;
+
+    // all functions default to inlining unless explicitly overriden.
+    let inline =
+        !get_bool_attribute_value_with_key(original_item_fn, "do_not_inline", vals.as_slice())?;
+
+    Ok((fn_name, fn_name_ident, eval_values, takes_env, inline))
 }
 
-/// this function outputs all of the generated code, it is composed into three different functions:
+/// this function outputs all of the generated code, it is composed into two different functions:
 /// intern_<original_fn_name>
 /// parse_<original_fn_name>
-/// builtin_<original_fn_name>
 /// - intern_ is the simplest function, it is generated to be called within sl-sh to avoid writing
 /// boilerplate code to submit a function symbol and the associated code to the runtime.
 /// - parse_ has the same function signature as all rust native functions, it takes the environment
-/// and a list of evalable args. It evals those arguments at runtime so the resultant expressions
-/// can be consumed by the builtin code.
-/// - builtin_ is the core of the macro, it takes some number of wrapped expression types prepared by
-/// parse and translates those to the appropriate rust types and calls the rust native function.
+/// and a list of args. It evals those arguments at runtime and converts them to rust types
+/// they can be consumed by the target rust function.
 fn generate_sl_sh_fn(
     original_item_fn: &ItemFn,
     attr_args: AttributeArgs,
 ) -> MacroResult<TokenStream> {
-    let (fn_name, fn_name_attr, eval_values, takes_env) =
+    let (fn_name, fn_name_ident, eval_values, takes_env, inline) =
         parse_attributes(original_item_fn, attr_args)?;
     let original_fn_name_str = original_item_fn.sig.ident.to_string();
     let original_fn_name_str = original_fn_name_str.as_str();
 
-    let args = parse_src_function_arguments(original_item_fn, takes_env)?;
-    are_args_valid(original_item_fn, args.as_slice(), takes_env)?;
+    let params = parse_src_function_arguments(original_item_fn, takes_env)?;
+    are_args_valid(original_item_fn, params.as_slice(), takes_env)?;
     let builtin_fn = generate_builtin_fn(
         original_item_fn,
         original_fn_name_str,
         fn_name.as_str(),
-        &fn_name_attr,
+        params.as_slice(),
+        &fn_name_ident,
         takes_env,
+        inline,
     )?;
 
     let args_len = if takes_env {
@@ -1424,21 +1571,20 @@ fn generate_sl_sh_fn(
     let parse_fn = generate_parse_fn(
         original_fn_name_str,
         eval_values,
-        &fn_name_attr,
+        &fn_name_ident,
         fn_name.as_str(),
         args_len,
-        args.as_slice(),
+        params.as_slice(),
+        builtin_fn,
     );
     let doc_comments = get_documentation_for_fn(original_item_fn)?;
     let intern_fn = generate_intern_fn(
         original_fn_name_str,
-        &fn_name_attr,
+        &fn_name_ident,
         fn_name.as_str(),
         doc_comments,
     );
     let tokens = quote! {
-        #builtin_fn
-
         #parse_fn
 
         #intern_fn
@@ -1468,6 +1614,7 @@ pub fn sl_sh_fn(
                 quote! {
                     #generated_code
 
+                    #[allow(dead_code)]
                     #original_fn_code
                 }
             }
@@ -1480,203 +1627,358 @@ pub fn sl_sh_fn(
     proc_macro::TokenStream::from(tokens)
 }
 
+//TODO
+//  - functions that return Values, tuple return types?
+//  - fcns that accept iters?
+//  - then... compare against inline the function being called... randomize variable names...
+//      and fn names too? could pick some random string and prefix all generated idents.
+
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::convert::TryInto;
 
-    fn are_args_valid(args: &[Arg]) -> bool {
-        if args.is_empty() || args.len() == 1 {
-            true
-        } else {
-            let mut found_opt = false;
-            let mut found_value = false;
-            for (i, arg) in args.iter().rev().enumerate() {
-                match (i, arg.val, found_opt, found_value) {
-                    (i, ArgVal::VarArgs, _, _) if i > 0 => {
-                        // vec can only be last argument
-                        return false;
-                    }
-                    (_, ArgVal::Optional, _, true) => {
-                        // optionals all must be last
-                        return false;
-                    }
-                    (_, ArgVal::Optional, _, _) => {
-                        found_opt = true;
-                    }
-                    (_, ArgVal::Value, _, _) => {
-                        found_value = true;
-                    }
-                    (_, _, _, _) => {}
-                }
-            }
-            true
+    // serves as a model for what it's like at runtime to iterate over the parameters of a function,
+    // T serves as a generic so these tests can run with some data, but in practice T is some
+    // type from the consuming library.
+    fn loop_over_to_inline<T, const N: usize>(
+        fn_name: &str,
+        params: &[Param; N],
+        args: &[T],
+    ) -> Result<(), String> {
+        let required_args = num_required_args(params);
+        for idx in 0..N {
+            to_inline(fn_name, idx, required_args, params, args)?;
         }
+        if N > 0 {
+            too_many_args_detection(fn_name, params, N, args)?;
+        }
+
+        Ok(())
+    }
+
+    // run last to see if the number of received arguments has exceeded the number expected based
+    // on the arity of the rust function, and whether or not it ends in a varargs/array.
+    fn too_many_args_detection<T>(
+        fn_name: &str,
+        arg_types: &[Param],
+        len: usize,
+        args: &[T],
+    ) -> Result<(), String> {
+        match args.get(len) {
+            Some(_) if arg_types[len - 1].handle != TypeHandle::VarArgs => {
+                return Err(format!(
+                    "{} given too many arguments, expected {}, got {}.",
+                    fn_name,
+                    arg_types.len(),
+                    args.len()
+                ));
+            }
+            _ => {
+                //macro
+                println!("macro")
+            }
+        }
+        Ok(())
+    }
+
+    // loop over each input and check based on current idx and presence of Arg or not
+    // whether the args received is lower than needed based on the arity of the rust function.
+    fn to_inline<T>(
+        fn_name: &str,
+        idx: usize,
+        required_args: usize,
+        params: &[Param],
+        args: &[T],
+    ) -> Result<(), String> {
+        let param = params[idx];
+        match args.get(idx) {
+            None if param.handle == TypeHandle::Direct => {
+                return Err(format!(
+                    "{} not given enough arguments, expected at least {} arguments, got {}.",
+                    fn_name,
+                    required_args,
+                    args.len()
+                ));
+            }
+            _arg => {
+                // insert
+                println!("macro");
+            }
+        }
+        Ok(())
+    }
+    struct Foo {}
+
+    #[test]
+    fn test_params_values_only() {
+        let two_moved_values = vec![
+            Param {
+                handle: TypeHandle::Direct,
+                passing_style: PassingStyle::Value,
+            },
+            Param {
+                handle: TypeHandle::Direct,
+                passing_style: PassingStyle::Value,
+            },
+        ];
+
+        // if there are not enough arguments we throw an error.
+        let args = vec![Foo {}];
+        let args = loop_over_to_inline::<Foo, 2>(
+            "foo",
+            two_moved_values.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        );
+        assert!(args.unwrap_err().contains("not given enough arguments"));
+
+        // if there are too many arguments we throw an error.
+        let args = vec![Foo {}, Foo {}, Foo {}];
+        let args = loop_over_to_inline::<Foo, 2>(
+            "foo",
+            two_moved_values.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        );
+        assert!(args.unwrap_err().contains("given too many"));
+
+        let args = vec![Foo {}, Foo {}];
+        loop_over_to_inline::<Foo, 2>(
+            "foo",
+            two_moved_values.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
     }
 
     #[test]
-    fn test_args() {
+    fn test_params_optionals() {
+        let one_val_one_opt = vec![
+            Param {
+                handle: TypeHandle::Direct,
+                passing_style: PassingStyle::Value,
+            },
+            Param {
+                handle: TypeHandle::Optional,
+                passing_style: PassingStyle::Value,
+            },
+        ];
+        let args = vec![Foo {}, Foo {}];
+        loop_over_to_inline::<Foo, 2>(
+            "foo",
+            one_val_one_opt.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
+
+        let args = vec![Foo {}];
+        loop_over_to_inline::<Foo, 2>(
+            "foo",
+            one_val_one_opt.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
+
         let args = vec![];
-        assert!(are_args_valid(args.as_slice()));
-        // values are always valid
-        let args = vec![
-            Arg {
-                val: ArgVal::Value,
-                passing_style: ArgPassingStyle::Move,
-            },
-            Arg {
-                val: ArgVal::Value,
-                passing_style: ArgPassingStyle::Reference,
-            },
-            Arg {
-                val: ArgVal::Value,
-                passing_style: ArgPassingStyle::MutReference,
-            },
-        ];
-        assert!(are_args_valid(args.as_slice()));
+        let args = loop_over_to_inline::<Foo, 2>(
+            "foo",
+            one_val_one_opt.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        );
+        assert!(args.unwrap_err().contains("not given enough arguments"));
 
-        // vec must be last argument
-        let args = vec![
-            Arg {
-                val: ArgVal::Value,
-                passing_style: ArgPassingStyle::Move,
-            },
-            Arg {
-                val: ArgVal::VarArgs,
-                passing_style: ArgPassingStyle::Move,
-            },
-        ];
-        assert!(are_args_valid(args.as_slice()));
+        let args = vec![Foo {}, Foo {}, Foo {}];
+        let args = loop_over_to_inline::<Foo, 2>(
+            "foo",
+            one_val_one_opt.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        );
+        assert!(args.unwrap_err().contains("given too many"));
 
-        // vec must be last argument
-        let args = vec![
-            Arg {
-                val: ArgVal::VarArgs,
-                passing_style: ArgPassingStyle::Move,
+        let val_and_opt = vec![
+            Param {
+                handle: TypeHandle::Direct,
+                passing_style: PassingStyle::Value,
             },
-            Arg {
-                val: ArgVal::Value,
-                passing_style: ArgPassingStyle::Move,
+            Param {
+                handle: TypeHandle::Optional,
+                passing_style: PassingStyle::Value,
             },
         ];
-        assert!(!are_args_valid(args.as_slice()));
+        let args = vec![Foo {}, Foo {}];
+        loop_over_to_inline::<Foo, 2>(
+            "foo",
+            val_and_opt.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
 
-        // opt must be last argument
-        let args = vec![
-            Arg {
-                val: ArgVal::Optional,
-                passing_style: ArgPassingStyle::Move,
-            },
-            Arg {
-                val: ArgVal::Value,
-                passing_style: ArgPassingStyle::Reference,
-            },
-            Arg {
-                val: ArgVal::Value,
-                passing_style: ArgPassingStyle::Move,
-            },
-        ];
-        assert!(!are_args_valid(args.as_slice()));
+        let args = vec![Foo {}];
+        loop_over_to_inline::<Foo, 2>(
+            "foo",
+            val_and_opt.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
 
-        // opt must be last argument(s)
-        let args = vec![
-            Arg {
-                val: ArgVal::Value,
-                passing_style: ArgPassingStyle::Move,
-            },
-            Arg {
-                val: ArgVal::Optional,
-                passing_style: ArgPassingStyle::Move,
-            },
-            Arg {
-                val: ArgVal::Optional,
-                passing_style: ArgPassingStyle::Reference,
-            },
-            Arg {
-                val: ArgVal::Optional,
-                passing_style: ArgPassingStyle::Move,
-            },
-        ];
-        assert!(are_args_valid(args.as_slice()));
+        let args = vec![];
+        let args = loop_over_to_inline::<Foo, 2>(
+            "foo",
+            val_and_opt.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        );
+        assert!(args.unwrap_err().contains("not given enough arguments"));
 
-        // opt must be last argument(s), unless it's one vec in the last slot
-        let args = vec![
-            Arg {
-                val: ArgVal::Value,
-                passing_style: ArgPassingStyle::Move,
-            },
-            Arg {
-                val: ArgVal::Optional,
-                passing_style: ArgPassingStyle::Move,
-            },
-            Arg {
-                val: ArgVal::Optional,
-                passing_style: ArgPassingStyle::Reference,
-            },
-            Arg {
-                val: ArgVal::VarArgs,
-                passing_style: ArgPassingStyle::Move,
-            },
-        ];
-        assert!(are_args_valid(args.as_slice()));
+        let args = vec![Foo {}, Foo {}, Foo {}];
+        let args = loop_over_to_inline::<Foo, 2>(
+            "foo",
+            val_and_opt.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        );
+        assert!(args.unwrap_err().contains("given too many"));
+    }
 
-        // vec must always be last
-        let args = vec![
-            Arg {
-                val: ArgVal::Value,
-                passing_style: ArgPassingStyle::Move,
-            },
-            Arg {
-                val: ArgVal::Optional,
-                passing_style: ArgPassingStyle::Move,
-            },
-            Arg {
-                val: ArgVal::VarArgs,
-                passing_style: ArgPassingStyle::Reference,
-            },
-            Arg {
-                val: ArgVal::Optional,
-                passing_style: ArgPassingStyle::Move,
-            },
-        ];
-        assert!(!are_args_valid(args.as_slice()));
+    #[test]
+    fn test_params_vec() {
+        let one_vec = vec![Param {
+            handle: TypeHandle::VarArgs,
+            passing_style: PassingStyle::MutReference,
+        }];
 
-        // opt must always be last argument(s)
-        let args = vec![
-            Arg {
-                val: ArgVal::Value,
-                passing_style: ArgPassingStyle::Move,
-            },
-            Arg {
-                val: ArgVal::Optional,
-                passing_style: ArgPassingStyle::Move,
-            },
-            Arg {
-                val: ArgVal::Value,
-                passing_style: ArgPassingStyle::Reference,
-            },
-        ];
-        assert!(!are_args_valid(args.as_slice()));
+        let args = vec![];
+        loop_over_to_inline::<Foo, 1>(
+            "foo",
+            one_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
 
-        // opt must always be last argument(s)
-        let args = vec![
-            Arg {
-                val: ArgVal::Optional,
-                passing_style: ArgPassingStyle::Move,
+        let args = vec![Foo {}];
+        loop_over_to_inline::<Foo, 1>(
+            "foo",
+            one_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
+
+        let args = vec![Foo {}, Foo {}];
+        loop_over_to_inline::<Foo, 1>(
+            "foo",
+            one_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
+
+        let args = vec![Foo {}, Foo {}, Foo {}];
+        loop_over_to_inline::<Foo, 1>(
+            "foo",
+            one_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
+    }
+
+    #[test]
+    fn test_params_vec_with_options() {
+        let val_opt_and_vec = vec![
+            Param {
+                handle: TypeHandle::Direct,
+                passing_style: PassingStyle::Reference,
             },
-            Arg {
-                val: ArgVal::Value,
-                passing_style: ArgPassingStyle::Move,
+            Param {
+                handle: TypeHandle::Optional,
+                passing_style: PassingStyle::MutReference,
             },
-            Arg {
-                val: ArgVal::Value,
-                passing_style: ArgPassingStyle::Reference,
+            Param {
+                handle: TypeHandle::VarArgs,
+                passing_style: PassingStyle::Value,
             },
         ];
-        assert!(!are_args_valid(args.as_slice()));
+
+        let args = vec![];
+        let args = loop_over_to_inline::<Foo, 3>(
+            "foo",
+            val_opt_and_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        );
+        assert!(args.unwrap_err().contains("not given enough arguments"));
+        let args = vec![Foo {}];
+        loop_over_to_inline::<Foo, 3>(
+            "foo",
+            val_opt_and_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
+        let args = vec![Foo {}, Foo {}];
+        loop_over_to_inline::<Foo, 3>(
+            "foo",
+            val_opt_and_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
+        let args = vec![Foo {}, Foo {}, Foo {}];
+        loop_over_to_inline::<Foo, 3>(
+            "foo",
+            val_opt_and_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
+        let args = vec![Foo {}, Foo {}, Foo {}, Foo {}, Foo {}];
+        loop_over_to_inline::<Foo, 3>(
+            "foo",
+            val_opt_and_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
+
+        let opts_and_vec = vec![
+            Param {
+                handle: TypeHandle::Optional,
+                passing_style: PassingStyle::Reference,
+            },
+            Param {
+                handle: TypeHandle::Optional,
+                passing_style: PassingStyle::MutReference,
+            },
+            Param {
+                handle: TypeHandle::VarArgs,
+                passing_style: PassingStyle::Value,
+            },
+        ];
+
+        let args = vec![];
+        loop_over_to_inline::<Foo, 3>(
+            "foo",
+            opts_and_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
+        let args = vec![Foo {}];
+        loop_over_to_inline::<Foo, 3>(
+            "foo",
+            opts_and_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
+        let args = vec![Foo {}, Foo {}];
+        loop_over_to_inline::<Foo, 3>(
+            "foo",
+            opts_and_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
+        let args = vec![Foo {}, Foo {}, Foo {}];
+        loop_over_to_inline::<Foo, 3>(
+            "foo",
+            opts_and_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
+        let args = vec![Foo {}, Foo {}, Foo {}, Foo {}, Foo {}];
+        loop_over_to_inline::<Foo, 3>(
+            "foo",
+            opts_and_vec.as_slice().try_into().unwrap(),
+            args.as_slice(),
+        )
+        .expect("Parsing should succeed.");
     }
 }
-
-//TODO
-//  - functions that return Values.
-// tuple return types?
-// test cases
