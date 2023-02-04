@@ -1318,6 +1318,34 @@ where
     }
 }
 
+impl<F> RustProcedure<usize, F> for TypedWrapper<'_, usize, Expression>
+where
+    F: FnOnce(usize) -> LispResult<Expression>,
+{
+    fn apply(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
+        match self.0.get().data {
+            ExpEnum::Int(name) => {
+                if name < 0 {
+                    return Err(LispError::new(ErrorStrings::positive_integer(
+                        fn_name,
+                        &ExpEnum::Int(Default::default()).to_string(),
+                        &self.0.to_string(),
+                    )));
+                } else {
+                    fun(name as usize)
+                }
+            }
+            _ => {
+                return Err(LispError::new(ErrorStrings::mismatched_type(
+                    fn_name,
+                    &ExpEnum::Int(Default::default()).to_string(),
+                    &self.0.to_string(),
+                )))
+            }
+        }
+    }
+}
+
 impl<F> RustProcedure<f64, F> for TypedWrapper<'_, f64, Expression>
 where
     F: FnOnce(f64) -> LispResult<Expression>,

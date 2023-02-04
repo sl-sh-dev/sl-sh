@@ -96,137 +96,122 @@ fn str_replace(source: String, old_pattern: &str, new_pattern: &str) -> LispResu
     )))
 }
 
-fn builtin_str_split(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(pat) = args.next() {
-        if let Some(text) = args.next() {
-            if args.next().is_none() {
-                let pat = eval(environment, pat)?;
-                let pat = as_string(environment, &pat)?;
-                let text = eval(environment, text)?;
-                let text = as_string(environment, &text)?;
-                let mut split_list: Vec<Expression> = Vec::new();
-                if pat == ":whitespace" {
-                    for s in text.split_whitespace() {
-                        split_list.push(Expression::alloc_data(ExpEnum::String(
-                            s.to_string().into(),
-                            None,
-                        )));
-                    }
-                } else {
-                    for s in text.split(&pat) {
-                        split_list.push(Expression::alloc_data(ExpEnum::String(
-                            s.to_string().into(),
-                            None,
-                        )));
-                    }
-                }
-                return Ok(Expression::with_list(split_list));
-            }
+/// Usage: (str-split split-pattern string) -> vector
+///
+/// Use a pattern to split a string (:whitespace to split on whitespace).
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-equal '("some" "yyy" "string") (str-split "xxx" "somexxxyyyxxxstring"))
+/// (test::assert-equal '("some" "yyy" "string" "") (str-split "xxx" "somexxxyyyxxxstringxxx"))
+/// (test::assert-equal '("" "some" "yyy" "string" "") (str-split "xxx" "xxxsomexxxyyyxxxstringxxx"))
+/// (test::assert-equal '("some" "yyy" "string") (str-split :whitespace "some yyy string"))
+/// (test::assert-equal '("somexxxyyyxxxstring") (str-split :whitespace "somexxxyyyxxxstring"))
+/// (test::assert-equal '("somexxxyyyxxxstring") (str-split "zzz" "somexxxyyyxxxstring"))
+#[sl_sh_fn(fn_name = "str-split")]
+fn str_split(pat: &str, text: &str) -> LispResult<Expression> {
+    let mut split_list: Vec<Expression> = Vec::new();
+    if pat == ":whitespace" {
+        for s in text.split_whitespace() {
+            split_list.push(Expression::alloc_data(ExpEnum::String(
+                s.to_string().into(),
+                None,
+            )));
+        }
+    } else {
+        for s in text.split(&pat) {
+            split_list.push(Expression::alloc_data(ExpEnum::String(
+                s.to_string().into(),
+                None,
+            )));
         }
     }
-    Err(LispError::new("str-split takes two forms"))
+    Ok(Expression::with_list(split_list))
 }
 
-fn builtin_str_rsplit(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(pat) = args.next() {
-        if let Some(text) = args.next() {
-            if args.next().is_none() {
-                let pat = eval(environment, pat)?;
-                let pat = as_string(environment, &pat)?;
-                let text = eval(environment, text)?;
-                let text = as_string(environment, &text)?;
-                let mut split_list: Vec<Expression> = Vec::new();
-                for s in text.rsplit(&pat) {
-                    split_list.push(Expression::alloc_data(ExpEnum::String(
-                        s.to_string().into(),
-                        None,
-                    )));
-                }
-                return Ok(Expression::with_list(split_list));
-            }
-        }
+/// Usage: (str-rsplit split-pattern string) -> vector
+///
+/// Use a pattern to split a string into reverse order.
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-equal '(\"some\" \"yyy\" \"string\") (str-rsplit \"xxx\" \"stringxxxyyyxxxsome\"))
+/// (test::assert-equal '(\"\" \"some\" \"yyy\" \"string\") (str-rsplit \"xxx\" \"stringxxxyyyxxxsomexxx\"))
+/// (test::assert-equal '(\"some\" \"yyy\" \"string\") (str-rsplit \" \" \"string yyy some\"))
+/// (test::assert-equal '(\"somexxxyyyxxxstring\") (str-rsplit :whitespace \"somexxxyyyxxxstring\"))
+/// (test::assert-equal '(\"somexxxyyyxxxstring\") (str-rsplit \"zzz\" \"somexxxyyyxxxstring\"))
+#[sl_sh_fn(fn_name = "str-rsplit")]
+fn str_rsplit(pat: &str, text: &str) -> LispResult<Expression> {
+    let mut split_list: Vec<Expression> = Vec::new();
+    for s in text.rsplit(&pat) {
+        split_list.push(Expression::alloc_data(ExpEnum::String(
+            s.to_string().into(),
+            None,
+        )));
     }
-    Err(LispError::new("str-rsplit takes two forms"))
+    Ok(Expression::with_list(split_list))
 }
 
-fn builtin_str_splitn(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(n) = args.next() {
-        if let Some(pat) = args.next() {
-            if let Some(text) = args.next() {
-                if args.next().is_none() {
-                    let n = if let ExpEnum::Int(n) = eval(environment, n)?.get().data {
-                        if n < 0 {
-                            return Err(LispError::new(
-                                "str-splitn first form must be a positive integer",
-                            ));
-                        }
-                        n
-                    } else {
-                        return Err(LispError::new("str-splitn first form must be an integer"));
-                    };
-                    let pat = eval(environment, pat)?;
-                    let pat = as_string(environment, &pat)?;
-                    let text = eval(environment, text)?;
-                    let text = as_string(environment, &text)?;
-                    let mut split_list: Vec<Expression> = Vec::new();
-                    for s in text.splitn(n as usize, &pat) {
-                        split_list.push(Expression::alloc_data(ExpEnum::String(
-                            s.to_string().into(),
-                            None,
-                        )));
-                    }
-                    return Ok(Expression::with_list(split_list));
-                }
-            }
+/// Usage: (str-splitn n split-pattern string) -> vector
+///
+/// Use a pattern to split a string with at most n items.
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-equal '("some" "yyy" "string") (str-splitn 3 "xxx" "somexxxyyyxxxstring"))
+/// (test::assert-equal '("some" "yyy" "string") (str-splitn 4 "xxx" "somexxxyyyxxxstring"))
+/// (test::assert-equal '("some" "yyy" "stringxxxother") (str-splitn 3 "xxx" "somexxxyyyxxxstringxxxother"))
+/// (test::assert-equal '("somexxxyyyxxxstringxxxother") (str-splitn 1 "xxx" "somexxxyyyxxxstringxxxother"))
+/// (test::assert-equal '() (str-splitn 0 "xxx" "somexxxyyyxxxstringxxxzero"))
+#[sl_sh_fn(fn_name = "str-splitn")]
+fn str_splitn(n: i64, pat: &str, text: &str) -> LispResult<Expression> {
+    if n < 0 {
+        Err(LispError::new(
+            "str-splitn first form must be a positive integer",
+        ))
+    } else {
+        let mut split_list: Vec<Expression> = Vec::new();
+        for s in text.splitn(n as usize, &pat) {
+            split_list.push(Expression::alloc_data(ExpEnum::String(
+                s.to_string().into(),
+                None,
+            )));
         }
+        Ok(Expression::with_list(split_list))
     }
-    Err(LispError::new("str-splitn takes three forms"))
 }
 
-fn builtin_str_rsplitn(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(n) = args.next() {
-        if let Some(pat) = args.next() {
-            if let Some(text) = args.next() {
-                if args.next().is_none() {
-                    let n = if let ExpEnum::Int(n) = eval(environment, n)?.get().data {
-                        if n < 0 {
-                            return Err(LispError::new(
-                                "str-splitn first form must be a positive integer",
-                            ));
-                        }
-                        n
-                    } else {
-                        return Err(LispError::new("str-rsplitn first form must be an integer"));
-                    };
-                    let pat = eval(environment, pat)?;
-                    let pat = as_string(environment, &pat)?;
-                    let text = eval(environment, text)?;
-                    let text = as_string(environment, &text)?;
-                    let mut split_list: Vec<Expression> = Vec::new();
-                    for s in text.rsplitn(n as usize, &pat) {
-                        split_list.push(Expression::alloc_data(ExpEnum::String(
-                            s.to_string().into(),
-                            None,
-                        )));
-                    }
-                    return Ok(Expression::with_list(split_list));
-                }
-            }
+/// Usage: (str-rsplitn n split-pattern string) -> vector
+///
+/// Use a pattern to split a string with at most n items returned in reverse order.
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-equal '("some" "yyy" "string") (str-rsplitn 3 "xxx" "stringxxxyyyxxxsome"))
+/// (test::assert-equal '("some" "yyy" "string") (str-rsplitn 4 "xxx" "stringxxxyyyxxxsome"))
+/// (test::assert-equal '("other" "string" "somexxxyyy") (str-rsplitn 3 "xxx" "somexxxyyyxxxstringxxxother"))
+/// (test::assert-equal '("somexxxyyyxxxstringxxxother") (str-rsplitn 1 "xxx" "somexxxyyyxxxstringxxxother"))
+/// (test::assert-equal '() (str-rsplitn 0 "xxx" "somexxxyyyxxxstringxxxzero"))
+#[sl_sh_fn(fn_name = "str-rsplitn")]
+fn str_rsplitn(n: i64, pat: &str, text: &str) -> LispResult<Expression> {
+    if n < 0 {
+        Err(LispError::new(
+            "str-splitn first form must be a positive integer",
+        ))
+    } else {
+        let mut split_list: Vec<Expression> = Vec::new();
+        for s in text.rsplitn(n as usize, &pat) {
+            split_list.push(Expression::alloc_data(ExpEnum::String(
+                s.to_string().into(),
+                None,
+            )));
         }
+        Ok(Expression::with_list(split_list))
     }
-    Err(LispError::new("str-rsplitn takes three forms"))
 }
 
 fn builtin_str_cat_list(
@@ -277,63 +262,41 @@ fn builtin_str_cat_list(
     Err(LispError::new("str-cat-list takes two forms"))
 }
 
-fn builtin_str_sub(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(string) = args.next() {
-        if let Some(start) = args.next() {
-            let length = args.next();
-            if args.next().is_none() {
-                let string = eval(environment, string)?;
-                let start = eval(environment, start)?;
-                let length = if let Some(length) = length {
-                    Some(eval(environment, length)?)
-                } else {
-                    None
-                };
-                let start = if let ExpEnum::Int(i) = start.get().data {
-                    i as usize
-                } else {
-                    return Err(LispError::new("str-sub second form (start) must be an int"));
-                };
-                let len = if let Some(length) = length {
-                    if let ExpEnum::Int(i) = length.get().data {
-                        i as usize
-                    } else {
-                        return Err(LispError::new(
-                            "str-sub third form (length) must be an int if provided",
-                        ));
-                    }
-                } else {
-                    0
-                };
-                let string_d = string.get();
-                if let ExpEnum::String(s, _) = &string_d.data {
-                    if (start + len) <= s.len() {
-                        if len > 0 {
-                            return Ok(Expression::alloc_data(ExpEnum::String(
-                                s[start..(start + len)].to_string().into(),
-                                None,
-                            )));
-                        } else {
-                            return Ok(Expression::alloc_data(ExpEnum::String(
-                                s[start..].to_string().into(),
-                                None,
-                            )));
-                        }
-                    } else {
-                        return Err(LispError::new("str-sub index out of range"));
-                    }
-                } else {
-                    return Err(LispError::new("str-sub first form must be an String"));
-                }
-            }
+/// Usage: (str-sub string start [length]) -> string
+///
+/// Return a substring from a string given start (0 based) and optional length.
+/// If length is 0 or not provided produces the rest of the string from start to
+/// string end.
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-equal "string" (str-sub "stringxxxyyyxxxsome" 0 6))
+/// (test::assert-equal "some" (str-sub "stringxxxyyyxxxsome" 15 4))
+/// (test::assert-equal "yyy" (str-sub "stringxxxyyyxxxsome" 9 3))
+/// (test::assert-equal "some" (str-sub "stringxxxyyyxxxsome" 15))
+#[sl_sh_fn(fn_name = "str-sub")]
+fn str_sub(s: &str, start: usize, length: Option<usize>) -> LispResult<Expression> {
+    let len = if let Some(length) = length {
+        length as usize
+    } else {
+        0usize
+    };
+    if (start + len) <= s.len() {
+        if len > 0 {
+            Ok(Expression::alloc_data(ExpEnum::String(
+                s[start..(start + len)].to_string().into(),
+                None,
+            )))
+        } else {
+            Ok(Expression::alloc_data(ExpEnum::String(
+                s[start..].to_string().into(),
+                None,
+            )))
         }
+    } else {
+        Err(LispError::new("str-sub index out of range"))
     }
-    Err(LispError::new(
-        "str-sub takes three forms (String start-index [length])",
-    ))
 }
 
 fn builtin_str_append(
@@ -893,83 +856,10 @@ pub fn add_str_builtins<S: BuildHasher>(
     intern_str_ltrim(interner, data);
     intern_str_rtrim(interner, data);
     intern_str_replace(interner, data);
-    data.insert(
-        interner.intern("str-split"),
-        Expression::make_function(
-            builtin_str_split,
-            r#"Usage: (str-split split-pattern string) -> vector
-
-Use a pattern to split a string (:whitespace to split on whitespace).
-
-Section: string
-
-Example:
-(test::assert-equal '("some" "yyy" "string") (str-split "xxx" "somexxxyyyxxxstring"))
-(test::assert-equal '("some" "yyy" "string" "") (str-split "xxx" "somexxxyyyxxxstringxxx"))
-(test::assert-equal '("" "some" "yyy" "string" "") (str-split "xxx" "xxxsomexxxyyyxxxstringxxx"))
-(test::assert-equal '("some" "yyy" "string") (str-split :whitespace "some yyy string"))
-(test::assert-equal '("somexxxyyyxxxstring") (str-split :whitespace "somexxxyyyxxxstring"))
-(test::assert-equal '("somexxxyyyxxxstring") (str-split "zzz" "somexxxyyyxxxstring"))
-"#,
-        ),
-    );
-    data.insert(
-        interner.intern("str-rsplit"),
-        Expression::make_function(
-            builtin_str_rsplit,
-            "Usage: (str-rsplit split-pattern string) -> vector
- 
-Use a pattern to split a string into reverse order.
-
-Section: string
-
-Example:
-(test::assert-equal '(\"some\" \"yyy\" \"string\") (str-rsplit \"xxx\" \"stringxxxyyyxxxsome\"))
-(test::assert-equal '(\"\" \"some\" \"yyy\" \"string\") (str-rsplit \"xxx\" \"stringxxxyyyxxxsomexxx\"))
-(test::assert-equal '(\"some\" \"yyy\" \"string\") (str-rsplit \" \" \"string yyy some\"))
-(test::assert-equal '(\"somexxxyyyxxxstring\") (str-rsplit :whitespace \"somexxxyyyxxxstring\"))
-(test::assert-equal '(\"somexxxyyyxxxstring\") (str-rsplit \"zzz\" \"somexxxyyyxxxstring\"))
-"
-        ),
-    );
-    data.insert(
-        interner.intern("str-splitn"),
-        Expression::make_function(
-            builtin_str_splitn,
-            r#"Usage: (str-splitn n split-pattern string) -> vector
-
-Use a pattern to split a string with at most n items.
-
-Section: string
-
-Example:
-(test::assert-equal '("some" "yyy" "string") (str-splitn 3 "xxx" "somexxxyyyxxxstring"))
-(test::assert-equal '("some" "yyy" "string") (str-splitn 4 "xxx" "somexxxyyyxxxstring"))
-(test::assert-equal '("some" "yyy" "stringxxxother") (str-splitn 3 "xxx" "somexxxyyyxxxstringxxxother"))
-(test::assert-equal '("somexxxyyyxxxstringxxxother") (str-splitn 1 "xxx" "somexxxyyyxxxstringxxxother"))
-(test::assert-equal '() (str-splitn 0 "xxx" "somexxxyyyxxxstringxxxzero"))
-"#
-        ),
-    );
-    data.insert(
-        interner.intern("str-rsplitn"),
-        Expression::make_function(
-            builtin_str_rsplitn,
-            r#"Usage: (str-rsplitn n split-pattern string) -> vector
-
-Use a pattern to split a string with at most n items returned in reverse order.
-
-Section: string
-
-Example:
-(test::assert-equal '("some" "yyy" "string") (str-rsplitn 3 "xxx" "stringxxxyyyxxxsome"))
-(test::assert-equal '("some" "yyy" "string") (str-rsplitn 4 "xxx" "stringxxxyyyxxxsome"))
-(test::assert-equal '("other" "string" "somexxxyyy") (str-rsplitn 3 "xxx" "somexxxyyyxxxstringxxxother"))
-(test::assert-equal '("somexxxyyyxxxstringxxxother") (str-rsplitn 1 "xxx" "somexxxyyyxxxstringxxxother"))
-(test::assert-equal '() (str-rsplitn 0 "xxx" "somexxxyyyxxxstringxxxzero"))
-"#
-        ),
-    );
+    intern_str_split(interner, data);
+    intern_str_rsplit(interner, data);
+    intern_str_splitn(interner, data);
+    intern_str_rsplitn(interner, data);
     data.insert(
         interner.intern("str-cat-list"),
         Expression::make_function(
@@ -987,26 +877,7 @@ Example:
 "#,
         ),
     );
-    data.insert(
-        interner.intern("str-sub"),
-        Expression::make_function(
-            builtin_str_sub,
-            r#"Usage: (str-sub string start [length]) -> string
-
-Return a substring from a string given start (0 based) and optional length.
-If length is 0 or not provided produces the rest of the string from start to
-string end.
-
-Section: string
-
-Example:
-(test::assert-equal "string" (str-sub "stringxxxyyyxxxsome" 0 6))
-(test::assert-equal "some" (str-sub "stringxxxyyyxxxsome" 15 4))
-(test::assert-equal "yyy" (str-sub "stringxxxyyyxxxsome" 9 3))
-(test::assert-equal "some" (str-sub "stringxxxyyyxxxsome" 15))
-"#,
-        ),
-    );
+    intern_str_sub(interner, data);
     data.insert(
         interner.intern("str-append"),
         Expression::make_function(

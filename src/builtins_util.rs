@@ -191,6 +191,10 @@ impl ErrorStrings {
     pub fn mismatched_type(fn_name: &str, expected: &str, got: &str) -> String {
         format!("{fn_name}: mismatched type input, expected {expected}, got {got}.")
     }
+
+    pub fn positive_integer(fn_name: &str, expected: &str, got: &str) -> String {
+        format!("{fn_name}: expected positive {expected}, got {got}.")
+    }
 }
 
 pub trait TryIntoExpression<T>: Sized
