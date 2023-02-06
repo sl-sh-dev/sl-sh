@@ -232,11 +232,12 @@ fn str_cat_list(
 ) -> LispResult<Expression> {
     let mut new_str = String::new();
     let mut first = true;
-    for s in list {
+    for exp in list {
         if !first {
             new_str.push_str(&join_str);
         }
-        new_str.push_str(&as_string(environment, &s)?);
+        // relies on as_string as it can turn any expression into a string
+        new_str.push_str(&as_string(environment, &exp)?);
         first = false;
     }
     Ok(Expression::alloc_data(ExpEnum::String(
@@ -282,35 +283,25 @@ fn str_sub(s: &str, start: usize, length: Option<usize>) -> LispResult<Expressio
     }
 }
 
-fn builtin_str_append(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(start) = args.next() {
-        if let Some(end) = args.next() {
-            if args.next().is_none() {
-                let start = eval(environment, start)?;
-                let end = eval(environment, end)?;
-                let end_d = end.get();
-                if let ExpEnum::String(end, _) = &end_d.data {
-                    if let ExpEnum::String(start, _) = &start.get().data {
-                        let mut new_string = String::with_capacity(start.len() + end.len());
-                        new_string.push_str(start);
-                        new_string.push_str(end);
-                        return Ok(Expression::alloc_data(ExpEnum::String(
-                            new_string.into(),
-                            None,
-                        )));
-                    } else {
-                        return Err(LispError::new("str-append forms must both be strings"));
-                    }
-                } else {
-                    return Err(LispError::new("str-append forms must both be strings"));
-                }
-            }
-        }
-    }
-    Err(LispError::new("str-append takes two strings"))
+/// Usage: (str-append string string) -> string
+///
+/// Make a new string by appending two strings.
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-equal "stringsome" (str-append "string" "some"))
+/// (test::assert-equal "string" (str-append "string" ""))
+/// (test::assert-equal "string " (str-append "string" " "))
+#[sl_sh_fn(fn_name = "str-append")]
+fn str_append(start: &str, end: &str) -> LispResult<Expression> {
+    let mut new_string = String::with_capacity(start.len() + end.len());
+    new_string.push_str(start);
+    new_string.push_str(end);
+    Ok(Expression::alloc_data(ExpEnum::String(
+        new_string.into(),
+        None,
+    )))
 }
 
 fn builtin_str(
@@ -335,101 +326,97 @@ pub fn builtin_do_unstr(
     crate::builtins::builtin_do(gpo.environment, args)
 }
 
-fn builtin_str_empty(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(string) = args.next() {
-        if args.next().is_none() {
-            let empty = match &eval(environment, string)?.get().data {
-                ExpEnum::String(string, _) => string.is_empty(),
-                _ => true,
-            };
-            return if empty {
-                Ok(Expression::make_true())
-            } else {
-                Ok(Expression::make_nil())
-            };
-        }
+/// Usage: (str-empty? string) -> t/nil
+///
+/// Is a string empty?  Let's find out...
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-true (str-empty? ""))
+/// (test::assert-true (str-empty? (str-trim "   ")))
+/// (test::assert-false (str-empty? " "))
+/// (test::assert-false (str-empty? "string"))
+#[sl_sh_fn(fn_name = "str-empty?")]
+fn str_empty(string: &str) -> LispResult<Expression> {
+    if string.is_empty() {
+        Ok(Expression::make_true())
+    } else {
+        Ok(Expression::make_nil())
     }
-    Err(LispError::new("str-empty? takes a string"))
 }
 
-fn builtin_str_nth(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(idx) = args.next() {
-        if let Some(string) = args.next() {
-            if args.next().is_none() {
-                if let ExpEnum::Int(idx) = eval(environment, idx)?.get().data {
-                    if let ExpEnum::String(string, _) = &eval(environment, string)?.get().data {
-                        for (i, ch) in
-                            UnicodeSegmentation::graphemes(string.as_ref(), true).enumerate()
-                        {
-                            if i as i64 == idx {
-                                return Ok(Expression::alloc_data(ExpEnum::Char(
-                                    ch.to_string().into(),
-                                )));
-                            }
-                        }
-                    } else {
-                        return Err(LispError::new("str-nth second argument not a string"));
-                    }
-                    return Err(LispError::new("str-nth index out of range"));
-                }
-            }
+/// Usage: (str-nth n string) -> char
+///
+/// Get the nth char of a string or nil if not found.
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-equal #\a (str-nth 2 "stau"))
+/// (test::assert-equal #\s (str-nth 0 "stau"))
+/// (test::assert-equal #\u (str-nth 3 "stau"))
+/// (test::assert-equal nil (str-nth 9 "stau"))
+#[sl_sh_fn(fn_name = "str-nth")]
+fn str_nth(idx: i64, string: &str) -> LispResult<Expression> {
+    for (i, ch) in UnicodeSegmentation::graphemes(string, true).enumerate() {
+        if i as i64 == idx {
+            return Ok(Expression::alloc_data(ExpEnum::Char(ch.to_string().into())));
         }
     }
-    Err(LispError::new("str-nth takes two forms (int and string)"))
+    Ok(Expression::make_nil())
 }
 
-fn builtin_str_lower(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(string) = args.next() {
-        if args.next().is_none() {
-            if let ExpEnum::String(string, _) = &eval(environment, string)?.get().data {
-                return Ok(Expression::alloc_data(ExpEnum::String(
-                    string.to_ascii_lowercase().into(),
-                    None,
-                )));
-            }
-        }
-    }
-    Err(LispError::new("str-lower takes a string"))
+/// Usage: (str-lower string) -> string
+///
+/// Get all lower case string from a string.
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-equal "stau" (str-lower "STAU"))
+/// (test::assert-equal "stau" (str-lower "stau"))
+/// (test::assert-equal "stau" (str-lower "Stau"))
+/// (test::assert-equal "stau" (str-lower "StaU"))
+/// (test::assert-equal "stau" (str-lower "sTaU"))
+#[sl_sh_fn(fn_name = "str-lower")]
+fn str_lower(string: String) -> String {
+    string.to_ascii_lowercase()
 }
 
-fn builtin_str_upper(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(string) = args.next() {
-        if args.next().is_none() {
-            if let ExpEnum::String(string, _) = &eval(environment, string)?.get().data {
-                return Ok(Expression::alloc_data(ExpEnum::String(
-                    string.to_ascii_uppercase().into(),
-                    None,
-                )));
-            }
-        }
-    }
-    Err(LispError::new("str-upper takes a string"))
+/// Usage: (str-upper string) -> string
+///
+/// Get all upper case string from a string.
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-equal "STAU" (str-upper "STAU"))
+/// (test::assert-equal "STAU" (str-upper "stau"))
+/// (test::assert-equal "STAU" (str-upper "Stau"))
+/// (test::assert-equal "STAU" (str-upper "StaU"))
+/// (test::assert-equal "STAU" (str-upper "sTaU"))
+#[sl_sh_fn(fn_name = "str-upper")]
+fn str_upper(string: String) -> String {
+    string.to_ascii_uppercase()
 }
 
-fn builtin_str_bytes(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(arg) = args.next() {
-        if args.next().is_none() {
-            if let ExpEnum::String(string, _) = &eval(environment, arg)?.get().data {
-                return Ok(Expression::alloc_data(ExpEnum::Int(string.len() as i64)));
-            };
-        }
-    }
-    Err(LispError::new("str-bytes takes a string"))
+/// Usage: (str-bytes string) -> int
+///
+/// Return number of bytes in a string (may be more then length).
+///
+/// Strings are utf8 so it chars and bytes may not be a one to one match.
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-equal 4 (str-bytes "Stau"))
+/// (test::assert-equal 0 (str-bytes ""))
+/// ; Note 5 chars and 6 bytes because of the final char.
+/// (test::assert-equal 6 (str-bytes "StauΣ"))
+#[sl_sh_fn(fn_name = "str-bytes")]
+fn str_bytes(string: &str) -> usize {
+    string.len()
 }
 
 fn builtin_str_starts_with(
@@ -845,23 +832,7 @@ pub fn add_str_builtins<S: BuildHasher>(
     intern_str_rsplitn(interner, data);
     intern_str_cat_list(interner, data);
     intern_str_sub(interner, data);
-    data.insert(
-        interner.intern("str-append"),
-        Expression::make_function(
-            builtin_str_append,
-            r#"Usage: (str-append string string) -> string
-
-Make a new string by appending two strings.
-
-Section: string
-
-Example:
-(test::assert-equal "stringsome" (str-append "string" "some"))
-(test::assert-equal "string" (str-append "string" ""))
-(test::assert-equal "string " (str-append "string" " "))
-"#,
-        ),
-    );
+    intern_str_append(interner, data);
     data.insert(
         interner.intern("do-unstr"),
         Expression::make_special(
@@ -908,99 +879,11 @@ Example:
 "#,
         ),
     );
-    data.insert(
-        interner.intern("str-empty?"),
-        Expression::make_function(
-            builtin_str_empty,
-            r#"Usage: (str-empty? string) -> t/nil
-
-Is a string empty?  Let's find out...
-
-Section: string
-
-Example:
-(test::assert-true (str-empty? ""))
-(test::assert-true (str-empty? (str-trim "   ")))
-(test::assert-false (str-empty? " "))
-(test::assert-false (str-empty? "string"))
-"#,
-        ),
-    );
-    data.insert(
-        interner.intern("str-nth"),
-        Expression::make_function(
-            builtin_str_nth,
-            r#"Usage: (str-nth n string) -> char
-
-Get the nth char of a string.
-
-Section: string
-
-Example:
-(test::assert-equal #\a (str-nth 2 "stau"))
-(test::assert-equal #\s (str-nth 0 "stau"))
-(test::assert-equal #\u (str-nth 3 "stau"))
-"#,
-        ),
-    );
-    data.insert(
-        interner.intern("str-lower"),
-        Expression::make_function(
-            builtin_str_lower,
-            r#"Usage: (str-lower string) -> string
-
-Get all lower case string from a string.
-
-Section: string
-
-Example:
-(test::assert-equal "stau" (str-lower "STAU"))
-(test::assert-equal "stau" (str-lower "stau"))
-(test::assert-equal "stau" (str-lower "Stau"))
-(test::assert-equal "stau" (str-lower "StaU"))
-(test::assert-equal "stau" (str-lower "sTaU"))
-"#,
-        ),
-    );
-    data.insert(
-        interner.intern("str-upper"),
-        Expression::make_function(
-            builtin_str_upper,
-            r#"Usage: (str-upper string) -> string
-
-Get all upper case string from a string.
-
-Section: string
-
-Example:
-(test::assert-equal "STAU" (str-upper "STAU"))
-(test::assert-equal "STAU" (str-upper "stau"))
-(test::assert-equal "STAU" (str-upper "Stau"))
-(test::assert-equal "STAU" (str-upper "StaU"))
-(test::assert-equal "STAU" (str-upper "sTaU"))
-"#,
-        ),
-    );
-    data.insert(
-        interner.intern("str-bytes"),
-        Expression::make_function(
-            builtin_str_bytes,
-            r#"Usage: (str-bytes string) -> int
-
-Return number of bytes in a string (may be more then length).
-
-Strings are utf8 so it chars and bytes may not be a one to one match.
-
-Section: string
-
-Example:
-(test::assert-equal 4 (str-bytes "Stau"))
-(test::assert-equal 0 (str-bytes ""))
-; Note 5 chars and 6 bytes because of the final char.
-(test::assert-equal 6 (str-bytes "StauΣ"))
-"#,
-        ),
-    );
+    intern_str_empty(interner, data);
+    intern_str_nth(interner, data);
+    intern_str_lower(interner, data);
+    intern_str_upper(interner, data);
+    intern_str_bytes(interner, data);
     data.insert(
         interner.intern("str-starts-with"),
         Expression::make_function(

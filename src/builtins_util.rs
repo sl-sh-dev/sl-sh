@@ -195,6 +195,10 @@ impl ErrorStrings {
     pub fn positive_integer(fn_name: &str, expected: &str, got: &str) -> String {
         format!("{fn_name}: expected positive {expected}, got {got}.")
     }
+
+    pub fn positive_integer_no_fn_name(expected: &str, got: &str) -> String {
+        format!("Expected positive {expected}, got {got}.")
+    }
 }
 
 pub trait TryIntoExpression<T>: Sized
@@ -341,6 +345,51 @@ impl TryFrom<Expression> for i64 {
 }
 
 impl TryIntoExpression<i64> for Expression {
+    type Error = LispError;
+
+    fn human_readable_dest_type(&self) -> String {
+        ExpEnum::Int(Default::default()).to_string()
+    }
+}
+
+impl From<usize> for Expression {
+    fn from(num: usize) -> Self {
+        Expression::alloc_data(ExpEnum::Int(num as i64))
+    }
+}
+
+impl TryFrom<Expression> for usize {
+    type Error = LispError;
+    fn try_from(num: Expression) -> Result<Self, Self::Error> {
+        match num.get().data {
+            ExpEnum::Float(num) => {
+                if num >= 0.0 {
+                    Ok(num as usize)
+                } else {
+                    Err(LispError::new(ErrorStrings::positive_integer_no_fn_name(
+                        "Number",
+                        &num.to_string(),
+                    )))
+                }
+            }
+            ExpEnum::Int(num) => {
+                if num >= 0 {
+                    Ok(num as usize)
+                } else {
+                    Err(LispError::new(ErrorStrings::positive_integer_no_fn_name(
+                        "Number",
+                        &num.to_string(),
+                    )))
+                }
+            }
+            _ => Err(LispError::new(
+                "Can only convert usize from positive ExpEnum::Float or ExpEnum::Int.",
+            )),
+        }
+    }
+}
+
+impl TryIntoExpression<usize> for Expression {
     type Error = LispError;
 
     fn human_readable_dest_type(&self) -> String {
