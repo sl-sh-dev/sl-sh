@@ -439,9 +439,9 @@ Example:
                     "[" logger-name "]"
                     " " to-log)))
   (:fn log-it (self calling-log-level to-log)
-       (let ((log-str (self :get-log calling-log-level (str-cat-list " " to-log))))
-        (when (not (falsey? log-str))
-          (println log-str))))
+      (let ((log-str (self :get-log calling-log-level (str-cat-list " " to-log))))
+          (when (not (falsey? log-str))
+              (println log-str))))
   (:fn trace (self &rest to-log)
        (self :log-it :trace to-log))
   (:fn debug (self &rest to-log)

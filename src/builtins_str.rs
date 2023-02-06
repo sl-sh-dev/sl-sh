@@ -79,7 +79,7 @@ fn str_rtrim(arg: String) -> LispResult<Expression> {
 
 /// Usage: (str-replace string old-pattern new-pattern) -> string
 ///
-/// Replace occurances of second string with third in the first string.
+/// Replace occurrences of second string with third in the first string.
 ///
 /// Section: string
 ///
@@ -214,52 +214,35 @@ fn str_rsplitn(n: i64, pat: &str, text: &str) -> LispResult<Expression> {
     }
 }
 
-fn builtin_str_cat_list(
+/// Usage: (str-cat-list join-str sequence) -> string
+///
+/// Build a string by concatenating a sequence of strings by join-str.
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-equal "stringxxxyyyxxxsome" (str-cat-list "xxx" '("string" "yyy" "some")))
+/// (test::assert-equal "string yyy some" (str-cat-list " " '("string" "yyy" "some")))
+/// (test::assert-equal "stringyyysome" (str-cat-list "" '("string" "yyy" "some")))
+#[sl_sh_fn(fn_name = "str-cat-list", takes_env = true)]
+fn str_cat_list(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(join_str) = args.next() {
-        let join_str = eval(environment, join_str)?;
-        let join_str = as_string(environment, &join_str)?;
-        if let Some(list) = args.next() {
-            if args.next().is_none() {
-                let mut new_str = String::new();
-                let list = eval(environment, list)?;
-                match &list.get().data {
-                    ExpEnum::Vector(list) => {
-                        let mut first = true;
-                        for s in list {
-                            if !first {
-                                new_str.push_str(&join_str);
-                            }
-                            new_str.push_str(&as_string(environment, s)?);
-                            first = false;
-                        }
-                    }
-                    ExpEnum::Pair(_, _) => {
-                        // Includes nil
-                        let list = list.iter();
-                        let mut first = true;
-                        for s in list {
-                            if !first {
-                                new_str.push_str(&join_str);
-                            }
-                            new_str.push_str(&as_string(environment, &s)?);
-                            first = false;
-                        }
-                    }
-                    _ => {
-                        return Err(LispError::new("str-cat-list second form must be a list"));
-                    }
-                }
-                return Ok(Expression::alloc_data(ExpEnum::String(
-                    new_str.into(),
-                    None,
-                )));
-            }
+    join_str: String,
+    list: Vec<Expression>,
+) -> LispResult<Expression> {
+    let mut new_str = String::new();
+    let mut first = true;
+    for s in list {
+        if !first {
+            new_str.push_str(&join_str);
         }
+        new_str.push_str(&as_string(environment, &s)?);
+        first = false;
     }
-    Err(LispError::new("str-cat-list takes two forms"))
+    Ok(Expression::alloc_data(ExpEnum::String(
+        new_str.into(),
+        None,
+    )))
 }
 
 /// Usage: (str-sub string start [length]) -> string
@@ -860,23 +843,7 @@ pub fn add_str_builtins<S: BuildHasher>(
     intern_str_rsplit(interner, data);
     intern_str_splitn(interner, data);
     intern_str_rsplitn(interner, data);
-    data.insert(
-        interner.intern("str-cat-list"),
-        Expression::make_function(
-            builtin_str_cat_list,
-            r#"Usage: (str-cat-list join-pattern sequence) -> string
-
-Build a string by concatting a sequence with a join string.
-
-Section: string
-
-Example:
-(test::assert-equal "stringxxxyyyxxxsome" (str-cat-list "xxx" '("string" "yyy" "some")))
-(test::assert-equal "string yyy some" (str-cat-list " " '("string" "yyy" "some")))
-(test::assert-equal "stringyyysome" (str-cat-list "" '("string" "yyy" "some")))
-"#,
-        ),
-    );
+    intern_str_cat_list(interner, data);
     intern_str_sub(interner, data);
     data.insert(
         interner.intern("str-append"),
