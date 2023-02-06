@@ -20,7 +20,7 @@ impl<ENV> GVm<ENV> {
             match val {
                 Value::Map(handle) => {
                     let map = self.get_map(handle);
-                    for i in 0..len as usize {
+                    for i in 0..len {
                         let key = get_reg!(registers, dest + i);
                         if let Some(item) = map.get(&key) {
                             registers[dest + i] = *item;
@@ -31,7 +31,7 @@ impl<ENV> GVm<ENV> {
                 }
                 Value::Vector(handle) => {
                     let vector = self.get_vector(handle);
-                    for i in 0..len as usize {
+                    for i in 0..len {
                         let key = get_reg!(registers, dest + i);
                         if key.is_int() {
                             let key = key.get_int(self)?;
@@ -56,7 +56,7 @@ impl<ENV> GVm<ENV> {
                 }
                 Value::List(handle, idx) => {
                     let vector = &self.get_vector(handle)[idx as usize..];
-                    for i in 0..len as usize {
+                    for i in 0..len {
                         let key = get_reg!(registers, dest + i);
                         if key.is_int() {
                             let key = key.get_int(self)?;
@@ -80,7 +80,7 @@ impl<ENV> GVm<ENV> {
                     }
                 }
                 Value::Pair(_) => {
-                    for i in 0..len as usize {
+                    for i in 0..len {
                         let key = get_reg!(registers, dest + i);
                         if key.is_int() {
                             let key = key.get_int(self)?;
@@ -109,7 +109,7 @@ impl<ENV> GVm<ENV> {
                     }
                 }
                 Value::Nil => {
-                    for i in 0..len as usize {
+                    for i in 0..len {
                         registers[dest + i] = Value::Undefined;
                     }
                 }
@@ -256,7 +256,7 @@ impl<ENV> GVm<ENV> {
                         match val {
                             Value::Vector(_) | Value::Pair(_) | Value::List(_, _) => {
                                 let mut iter = val.iter(self);
-                                for i in 0..len as usize {
+                                for i in 0..len {
                                     if let Some(item) = iter.next() {
                                         registers[dest + i] = item;
                                     } else {
@@ -414,7 +414,7 @@ impl<ENV> GVm<ENV> {
                         (l.clone(), caps)
                     } else {
                         return Err((
-                            VMError::new_vm(format!("CLOSE: requires a lambda, got {:?}.", lambda)),
+                            VMError::new_vm(format!("CLOSE: requires a lambda, got {lambda:?}.")),
                             chunk,
                         ));
                     };
@@ -587,7 +587,7 @@ impl<ENV> GVm<ENV> {
                 }
                 JMPNU => {
                     let test = decode1!(code, &mut self.ip, wide);
-                    let ipoff = decode_i24!(code, &mut self.ip) as isize;
+                    let ipoff = decode_i24!(code, &mut self.ip);
                     if !get_reg!(registers, test).is_undef() {
                         self.ip = (self.ip as isize + ipoff) as usize;
                     }
@@ -598,7 +598,7 @@ impl<ENV> GVm<ENV> {
                     if len > 0 {
                         let test = test as usize;
                         let len = len as usize;
-                        for i in 0..len as usize {
+                        for i in 0..len {
                             if get_reg!(registers, test + i).is_undef() {
                                 self.ip = (self.ip as isize + ipoff) as usize;
                                 break;
@@ -613,7 +613,7 @@ impl<ENV> GVm<ENV> {
                         let len = len as usize;
                         let test = test as usize;
                         let mut jump = true;
-                        for i in 0..len as usize {
+                        for i in 0..len {
                             if get_reg!(registers, test + i).is_undef() {
                                 jump = false;
                                 break;
@@ -656,7 +656,7 @@ impl<ENV> GVm<ENV> {
                         self.get_interned(i)
                     } else {
                         return Err((
-                            VMError::new_vm(format!("ERR: key must be a keyword, got {:?}.", key)),
+                            VMError::new_vm(format!("ERR: key must be a keyword, got {key:?}.")),
                             chunk,
                         ));
                     };
@@ -702,7 +702,7 @@ impl<ENV> GVm<ENV> {
                     };
                     let k_obj = self.alloc_continuation(k);
                     mov_register!(registers, (first_reg + 1) as usize, k_obj);
-                    chunk = self.make_call(lambda, chunk, registers, first_reg as u16, 1, false)?;
+                    chunk = self.make_call(lambda, chunk, registers, first_reg, 1, false)?;
                     code = get_code!(chunk);
                     registers = self.make_registers();
                 }
@@ -1113,7 +1113,7 @@ impl<ENV> GVm<ENV> {
                     set_register!(self, registers, dest as usize, t);
                 }
                 _ => {
-                    return Err((VMError::new_vm(format!("Invalid opcode {}", opcode)), chunk));
+                    return Err((VMError::new_vm(format!("Invalid opcode {opcode}")), chunk));
                 }
             }
             // Don't do stuff after match, do it at the top of the loop to avoid extra JMPs.

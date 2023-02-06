@@ -32,11 +32,11 @@ ARGS:
     <args>...      Script to run with arguments."#;
 
 fn help(_name: &str) {
-    println!("{}", HELP);
+    println!("{HELP}");
 }
 
 fn version() {
-    println!("{}", VERSION_STRING);
+    println!("{VERSION_STRING}");
 }
 
 fn get_arg(exe_name: &str, args: &mut Vec<OsString>) -> Option<String> {

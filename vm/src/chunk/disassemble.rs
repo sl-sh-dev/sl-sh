@@ -115,11 +115,11 @@ macro_rules! disassemble_immediate_global {
         if $wide {
             let idx = decode_u32_enum!($code)?;
             //print!("{:#010x}:{}", idx, $vm.global_name(idx as usize));
-            print!("{:#010x}", idx);
+            print!("{idx:#010x}");
         } else {
             let idx = decode_u16_enum!($code)?;
             //print!("{:#06x}:{}", idx, $vm.global_name(idx as usize));
-            print!("{:#06x}", idx);
+            print!("{idx:#06x}");
         }
     }};
 }
@@ -127,7 +127,7 @@ macro_rules! disassemble_immediate_global {
 macro_rules! disassemble_jump_offset {
     ($code:expr) => {{
         let (offset, nip) = decode_i24_enum!($code)?;
-        print!("{} -> {:#010x}", offset, nip + offset);
+        print!("{offset} -> {:#010x}", nip + offset);
     }};
 }
 
@@ -144,29 +144,29 @@ impl Chunk {
         let mut code = chunk.into_iter();
         match op {
             NOP => {
-                println!("NOP({:#04x})", NOP);
+                println!("NOP({NOP:#04x})");
                 Ok(false)
             }
             HALT => {
-                println!("HALT({:#04x})", HALT);
+                println!("HALT({HALT:#04x})");
                 Ok(false)
             }
             RET => {
-                println!("RET({:#04x})", RET);
+                println!("RET({RET:#04x})");
                 Ok(false)
             }
             SRET => {
-                print!("SRET({:#04x})   \t", SRET);
+                print!("SRET({SRET:#04x})   \t");
                 disassemble_operand!(code, true, wide);
                 println!();
                 Ok(false)
             }
             WIDE => {
-                println!("WIDE({:#04x})", WIDE);
+                println!("WIDE({WIDE:#04x})");
                 Ok(true)
             }
             MOV => {
-                print!("MOV({:#04x})    \t", MOV);
+                print!("MOV({MOV:#04x})    \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_operand!(code, true, wide);
@@ -174,7 +174,7 @@ impl Chunk {
                 Ok(false)
             }
             MOVI => {
-                print!("MOVI({:#04x})   \t", MOVI);
+                print!("MOVI({MOVI:#04x})   \t");
                 print!("R[");
                 disassemble_operand!(code, true, wide);
                 print!("]");
@@ -184,7 +184,7 @@ impl Chunk {
                 Ok(false)
             }
             MOVII => {
-                print!("MOVII({:#04x})  \t", MOVII);
+                print!("MOVII({MOVII:#04x})  \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 print!("R[");
@@ -194,7 +194,7 @@ impl Chunk {
                 Ok(false)
             }
             SET => {
-                print!("SET({:#04x})    \t", SET);
+                print!("SET({SET:#04x})    \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_operand!(code, true, wide);
@@ -202,7 +202,7 @@ impl Chunk {
                 Ok(false)
             }
             CONST => {
-                print!("CONST({:#04x})  \t", CONST);
+                print!("CONST({CONST:#04x})  \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_operand!(code, false, wide);
@@ -210,7 +210,7 @@ impl Chunk {
                 Ok(false)
             }
             DEF => {
-                print!("DEF({:#04x})    \t", DEF);
+                print!("DEF({DEF:#04x})    \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 print!("G[");
@@ -219,7 +219,7 @@ impl Chunk {
                 Ok(false)
             }
             DEFV => {
-                print!("DEFV({:#04x})   \t", DEFV);
+                print!("DEFV({DEFV:#04x})   \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 print!("G[");
@@ -228,7 +228,7 @@ impl Chunk {
                 Ok(false)
             }
             REFI => {
-                print!("REFI({:#04x})   \t", REFI);
+                print!("REFI({REFI:#04x})   \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 print!("G[");
@@ -237,37 +237,37 @@ impl Chunk {
                 Ok(false)
             }
             CLRREG => {
-                print!("CLRREG({:#04x}) \t", CLRREG);
+                print!("CLRREG({CLRREG:#04x}) \t");
                 disassemble_operand!(code, true, wide);
                 println!();
                 Ok(false)
             }
             REGT => {
-                print!("REGT({:#04x})   \t", REGT);
+                print!("REGT({REGT:#04x})   \t");
                 disassemble_operand!(code, true, wide);
                 println!();
                 Ok(false)
             }
             REGF => {
-                print!("REGF({:#04x})   \t", REGF);
+                print!("REGF({REGF:#04x})   \t");
                 disassemble_operand!(code, true, wide);
                 println!();
                 Ok(false)
             }
             REGN => {
-                print!("REGN({:#04x})   \t", REGN);
+                print!("REGN({REGN:#04x})   \t");
                 disassemble_operand!(code, true, wide);
                 println!();
                 Ok(false)
             }
             REGC => {
-                print!("REGC({:#04x})   \t", REGC);
+                print!("REGC({REGC:#04x})   \t");
                 disassemble_operand!(code, true, wide);
                 println!();
                 Ok(false)
             }
             REGB => {
-                print!("REGB({:#04x})   \t", REGB);
+                print!("REGB({REGB:#04x})   \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_immediate!(code, wide);
@@ -275,7 +275,7 @@ impl Chunk {
                 Ok(false)
             }
             REGI => {
-                print!("REGI({:#04x})   \t", REGI);
+                print!("REGI({REGI:#04x})   \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_immediate!(code, wide);
@@ -283,7 +283,7 @@ impl Chunk {
                 Ok(false)
             }
             REGU => {
-                print!("REGU({:#04x})   \t", REGU);
+                print!("REGU({REGU:#04x})   \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_immediate!(code, wide);
@@ -291,7 +291,7 @@ impl Chunk {
                 Ok(false)
             }
             CLOSE => {
-                print!("CLOSE({:#04x})  \t", CLOSE);
+                print!("CLOSE({CLOSE:#04x})  \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_operand!(code, true, wide);
@@ -299,7 +299,7 @@ impl Chunk {
                 Ok(false)
             }
             BMOV => {
-                print!("BMOV({:#04x})   \t", BMOV);
+                print!("BMOV({BMOV:#04x})   \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_operand!(code, true, wide);
@@ -309,7 +309,7 @@ impl Chunk {
                 Ok(false)
             }
             LDSC => {
-                print!("LDSC({:#04x})   \t", LDSC);
+                print!("LDSC({LDSC:#04x})   \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_immediate!(code, wide);
@@ -319,7 +319,7 @@ impl Chunk {
                 Ok(false)
             }
             LDSCR => {
-                print!("LDSCR({:#04x})  \t", LDSCR);
+                print!("LDSCR({LDSCR:#04x})  \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_immediate!(code, wide);
@@ -329,7 +329,7 @@ impl Chunk {
                 Ok(false)
             }
             MDSC => {
-                print!("MDSC({:#04x})   \t", MDSC);
+                print!("MDSC({MDSC:#04x})   \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_immediate!(code, wide);
@@ -339,7 +339,7 @@ impl Chunk {
                 Ok(false)
             }
             COPY => {
-                print!("COPY({:#04x})   \t", COPY);
+                print!("COPY({COPY:#04x})   \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_operand!(code, true, wide);
@@ -347,13 +347,13 @@ impl Chunk {
                 Ok(false)
             }
             FRZ => {
-                print!("FRZ({:#04x})    \t", FRZ);
+                print!("FRZ({FRZ:#04x})    \t");
                 disassemble_operand!(code, true, wide);
                 println!();
                 Ok(false)
             }
             CALL => {
-                print!("CALL({:#04x})   \t", CALL);
+                print!("CALL({CALL:#04x})   \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_immediate!(code, wide);
@@ -363,7 +363,7 @@ impl Chunk {
                 Ok(false)
             }
             CALLG => {
-                print!("CALLG({:#04x})  \t", CALLG);
+                print!("CALLG({CALLG:#04x})  \t");
                 print!("G[");
                 disassemble_immediate_global!(code, wide, _vm);
                 print!("]");
@@ -375,7 +375,7 @@ impl Chunk {
                 Ok(false)
             }
             TCALL => {
-                print!("TCALL({:#04x})  \t", TCALL);
+                print!("TCALL({TCALL:#04x})  \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_immediate!(code, wide);
@@ -383,7 +383,7 @@ impl Chunk {
                 Ok(false)
             }
             TCALLG => {
-                print!("TCALLG({:#04x}) \t", TCALLG);
+                print!("TCALLG({TCALLG:#04x}) \t");
                 print!("G[");
                 disassemble_immediate_global!(code, wide, _vm);
                 print!("]");
@@ -393,7 +393,7 @@ impl Chunk {
                 Ok(false)
             }
             CALLM => {
-                print!("CALLM({:#04x})  \t", CALLM);
+                print!("CALLM({CALLM:#04x})  \t");
                 disassemble_immediate!(code, wide);
                 print!("\t");
                 disassemble_operand!(code, true, wide);
@@ -401,7 +401,7 @@ impl Chunk {
                 Ok(false)
             }
             TCALLM => {
-                print!("TCALLM({:#04x}) \t", TCALLM);
+                print!("TCALLM({TCALLM:#04x}) \t");
                 disassemble_immediate!(code, wide);
                 println!();
                 Ok(false)
@@ -467,13 +467,13 @@ impl Chunk {
                 Ok(false)
             }
             JMP => {
-                print!("JMP({:#04x})    \t", JMP);
+                print!("JMP({JMP:#04x})    \t");
                 disassemble_jump_offset!(code);
                 println!();
                 Ok(false)
             }
             JMPT => {
-                print!("JMPT({:#04x})   \t", JMPT);
+                print!("JMPT({JMPT:#04x})   \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_jump_offset!(code);
@@ -481,7 +481,7 @@ impl Chunk {
                 Ok(false)
             }
             JMPF => {
-                print!("JMPF({:#04x})   \t", JMPF);
+                print!("JMPF({JMPF:#04x})   \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_jump_offset!(code);
@@ -489,7 +489,7 @@ impl Chunk {
                 Ok(false)
             }
             JMPEQ => {
-                print!("JMPEQ({:#04x})  \t", JMPEQ);
+                print!("JMPEQ({JMPEQ:#04x})  \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_operand!(code, true, wide);
@@ -499,7 +499,7 @@ impl Chunk {
                 Ok(false)
             }
             JMPLT => {
-                print!("JMPLT({:#04x})  \t", JMPLT);
+                print!("JMPLT({JMPLT:#04x})  \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_operand!(code, true, wide);
@@ -509,7 +509,7 @@ impl Chunk {
                 Ok(false)
             }
             JMPGT => {
-                print!("JMPGT({:#04x})  \t", JMPGT);
+                print!("JMPGT({JMPGT:#04x})  \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_operand!(code, true, wide);
@@ -519,7 +519,7 @@ impl Chunk {
                 Ok(false)
             }
             JMPU => {
-                print!("JMPU({:#04x})   \t", JMPU);
+                print!("JMPU({JMPU:#04x})   \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_jump_offset!(code);
@@ -527,7 +527,7 @@ impl Chunk {
                 Ok(false)
             }
             JMPNU => {
-                print!("JMPNU({:#04x})  \t", JMPNU);
+                print!("JMPNU({JMPNU:#04x})  \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_jump_offset!(code);
@@ -535,7 +535,7 @@ impl Chunk {
                 Ok(false)
             }
             JMPRU => {
-                print!("JMPRU({:#04x})  \t", JMPRU);
+                print!("JMPRU({JMPRU:#04x})  \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_immediate!(code, wide);
@@ -545,7 +545,7 @@ impl Chunk {
                 Ok(false)
             }
             JMPRNU => {
-                print!("JMPRNU({:#04x}) \t", JMPRNU);
+                print!("JMPRNU({JMPRNU:#04x}) \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_immediate!(code, wide);
@@ -834,7 +834,7 @@ impl Chunk {
                 println!();
                 Ok(false)
             }
-            _ => Err(VMError::new_chunk(format!("ERROR: unknown opcode {}", op))),
+            _ => Err(VMError::new_chunk(format!("ERROR: unknown opcode {op}"))),
         }
     }
 
@@ -865,7 +865,7 @@ impl Chunk {
         println!();
         if let Some(caps) = &self.captures {
             indent(indent_level);
-            println!("Captures: {:?}", caps);
+            println!("Captures: {caps:?}");
         }
         let mut code = self.code.iter().cloned().enumerate();
         let mut op = code.next();
@@ -873,10 +873,10 @@ impl Chunk {
         let mut wide = false;
         while let Some((idx, curr_op)) = op {
             indent(indent_level);
-            print!("{:#010x} ", idx);
+            print!("{idx:#010x} ");
             if let Some(line_number) = self.offset_to_line(idx) {
                 if last_line != line_number {
-                    print!("{:>6} ", line_number);
+                    print!("{line_number:>6} ");
                     last_line = line_number;
                 } else {
                     print!("     | ");

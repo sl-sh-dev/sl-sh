@@ -562,7 +562,7 @@ mod tests {
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
         for i in 0..257 {
-            chunk.add_constant(Value::Int32(i as i32));
+            chunk.add_constant(Value::Int32(i));
         }
         chunk.encode2(CONST, 0, 0, Some(line)).unwrap();
         chunk.encode2(CONST, 1, 255, Some(line)).unwrap();
@@ -1240,7 +1240,7 @@ mod tests {
 
         let mut chunk = Chunk::new("no_file", 1);
         for i in 0..501 {
-            chunk.add_constant(Value::Int32(i as i32));
+            chunk.add_constant(Value::Int32(i));
         }
         chunk.encode2(CONST, 1, 1, Some(line))?;
         chunk.encode2(CONST, 2, 2, Some(line))?;
@@ -1299,7 +1299,7 @@ mod tests {
 
         let mut chunk = Chunk::new("no_file", 1);
         for i in 0..501 {
-            chunk.add_constant(Value::Int32(i as i32));
+            chunk.add_constant(Value::Int32(i));
         }
         chunk.encode2(CONST, 1, 1, Some(line))?;
         chunk.encode2(CONST, 2, 2, Some(line))?;
@@ -1358,7 +1358,7 @@ mod tests {
 
         let mut chunk = Chunk::new("no_file", 1);
         for i in 0..501 {
-            chunk.add_constant(Value::Int32(i as i32));
+            chunk.add_constant(Value::Int32(i));
         }
         chunk.encode2(CONST, 1, 1, Some(line))?;
         chunk.encode2(CONST, 2, 2, Some(line))?;
@@ -1419,7 +1419,7 @@ mod tests {
 
         let mut chunk = Chunk::new("no_file", 1);
         for i in 0..501 {
-            chunk.add_constant(Value::Int32(i as i32));
+            chunk.add_constant(Value::Int32(i));
         }
         chunk.encode2(CONST, 1, 1, Some(line))?;
         chunk.encode2(CONST, 2, 2, Some(line))?;

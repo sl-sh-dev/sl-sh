@@ -342,7 +342,7 @@ fn main() {
     let mut con = Context::new();
 
     if let Err(e) = con.history.set_file_name_and_load_history("history") {
-        println!("Error loading history: {}", e);
+        println!("Error loading history: {e}");
     }
     let mut env = new_slosh_vm();
     setup_vecs(&mut env);
@@ -367,7 +367,7 @@ fn main() {
                     continue;
                 }
                 _ => {
-                    eprintln!("Error on input: {}", err);
+                    eprintln!("Error on input: {err}");
                     continue;
                 }
             },
@@ -412,7 +412,7 @@ fn main() {
                     }
                 }
             }
-            Err(err) => println!("Reader error: {}", err),
+            Err(err) => println!("Reader error: {err}"),
         }
     }
 }

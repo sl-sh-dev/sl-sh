@@ -180,8 +180,7 @@ fn qq_expand(vm: &mut SloshVm, exp: Value, line: u32, depth: u32) -> VMResult<Va
     } else if tag.is_splice(vm, exp) {
         if depth == 0 {
             Err(VMError::new_compile(format!(
-                ",@ not valid here: line {}",
-                line
+                ",@ not valid here: line {line}"
             )))
         } else {
             let expand = qq_expand(vm, Tag::data(vm, exp)?, line, depth - 1)?;
@@ -190,8 +189,7 @@ fn qq_expand(vm: &mut SloshVm, exp: Value, line: u32, depth: u32) -> VMResult<Va
     } else if tag.is_splice_bang(vm, exp) {
         if depth == 0 {
             Err(VMError::new_compile(format!(
-                ",. not valid here: line {}",
-                line
+                ",. not valid here: line {line}"
             )))
         } else {
             let expand = qq_expand(vm, Tag::data(vm, exp)?, line, depth - 1)?;
@@ -332,7 +330,7 @@ mod tests {
             vm.execute(Arc::new(state.chunk))?;
             Ok(vm.stack()[0])
         } else {
-            panic!("Got unexpected token error: {:?}", exp);
+            panic!("Got unexpected token error: {exp:?}");
         }
     }
 

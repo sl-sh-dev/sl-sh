@@ -111,7 +111,7 @@ fn char_to_hex_num(ch: &str) -> Result<u8, ReadError> {
             "f" => Ok(15),
             "F" => Ok(15),
             _ => Err(ReadError {
-                reason: format!("Invalid hex digit {}, expected 0-9 or A-F.", ch),
+                reason: format!("Invalid hex digit {ch}, expected 0-9 or A-F."),
             }),
         }
     }
@@ -247,7 +247,7 @@ impl<'vm> Reader<'vm> {
 
     fn escape_to_char(&mut self) -> Result<char, ReadError> {
         if let (Some(ch1), Some(ch2)) = (self.chars().next(), self.chars().next()) {
-            let ch_n: u8 = (char_to_hex_num(&*ch1)? * 16) + (char_to_hex_num(&*ch2)?);
+            let ch_n: u8 = (char_to_hex_num(&ch1)? * 16) + (char_to_hex_num(&ch2)?);
             if ch_n > 0x7f {
                 Err(ReadError {
                     reason: "Invalid hex ascii code, must be less then \\x7f.".to_string(),
@@ -368,10 +368,7 @@ impl<'vm> Reader<'vm> {
                 Ok(val)
             } else {
                 Err(ReadError {
-                    reason: format!(
-                        "Invalid unicode scalar, {:x} not a valid utf scalar.",
-                        char_u32
-                    ),
+                    reason: format!("Invalid unicode scalar, {char_u32:x} not a valid utf scalar.",),
                 })
             }
         }
@@ -1288,7 +1285,7 @@ mod tests {
         if let Ok(exp) = exp {
             to_strs(vm, &mut tokens, exp);
         } else {
-            panic!("Got unexpected token error: {:?}", exp);
+            panic!("Got unexpected token error: {exp:?}");
         }
         tokens
     }
@@ -1557,7 +1554,7 @@ mod tests {
     fn test_wrap() {
         let mut vm = build_def_vm();
         let tokens = tokenize(&mut vm, "(1 2 3)");
-        println!("XXXX toks {:?}", tokens);
+        println!("XXXX toks {tokens:?}");
         assert!(tokens.len() == 5);
         assert!(tokens[0] == "(");
         assert!(tokens[1] == "UInt:1");

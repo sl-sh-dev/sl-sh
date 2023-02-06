@@ -424,7 +424,7 @@ impl Heap {
             if let Some(Numeric64 { int }) = self.numerics.get(handle.as_usize()) {
                 *int
             } else {
-                panic!("Handle {} is not a valid int!", handle);
+                panic!("Handle {handle} is not a valid int!");
             }
         }
     }
@@ -434,7 +434,7 @@ impl Heap {
             if let Some(Numeric64 { uint }) = self.numerics.get(handle.as_usize()) {
                 *uint
             } else {
-                panic!("Handle {} is not a valid uint!", handle);
+                panic!("Handle {handle} is not a valid uint!");
             }
         }
     }
@@ -444,7 +444,7 @@ impl Heap {
             if let Some(Numeric64 { float }) = self.numerics.get(handle.as_usize()) {
                 *float
             } else {
-                panic!("Handle {} is not a valid float!", handle);
+                panic!("Handle {handle} is not a valid float!");
             }
         }
     }
@@ -454,7 +454,7 @@ impl Heap {
             if let Some(Numeric64 { float }) = self.numerics.get_mut(handle.as_usize()) {
                 float
             } else {
-                panic!("Handle {} is not a valid float!", handle);
+                panic!("Handle {handle} is not a valid float!");
             }
         }
     }

@@ -122,7 +122,7 @@ impl Symbols {
         data.syms.insert(key, register);
     }
 
-    pub fn insert_capture(&self, vm: &mut SloshVm, key: Interned) -> Option<usize> {
+    pub fn insert_capture(&self, _vm: &mut SloshVm, key: Interned) -> Option<usize> {
         let data_d = self.data.borrow();
         if let Some(idx) = data_d.syms.get(&key) {
             Some(*idx)
@@ -130,7 +130,7 @@ impl Symbols {
             if let Some(outer) = &self.outer {
                 drop(data_d);
                 // Also capture in outer lexical scope or bad things can happen.
-                if let Some(outer_idx) = outer.borrow().insert_capture(vm, key) {
+                if let Some(outer_idx) = outer.borrow().insert_capture(_vm, key) {
                     let mut data = self.data.borrow_mut();
                     let count = data.count;
                     data.syms.insert(key, count);
@@ -386,8 +386,8 @@ impl SloshVmTrait for SloshVm {
             self.get_heap_property(val, "dbg-file"),
         ) {
             let file_name = self.get_interned(file_intern);
-            if file_name == state.chunk.file_name && dline as u32 > self.env().line {
-                self.env_mut().line = dline as u32;
+            if file_name == state.chunk.file_name && dline > self.env().line {
+                self.env_mut().line = dline;
             }
         }
     }

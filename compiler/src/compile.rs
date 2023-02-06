@@ -278,7 +278,7 @@ fn compile_list(
                         pass1(env, state, exp)?;
                         compile(env, state, exp, result)?
                     } else {
-                        compile_callg(env, state, slot as u32, cdr, result)?
+                        compile_callg(env, state, slot, cdr, result)?
                     }
                 } else {
                     let sym = env.get_interned(i);

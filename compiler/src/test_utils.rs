@@ -134,7 +134,7 @@ pub fn assert_vals(vm: &SloshVm, val1: Value, val2: Value) {
             val1.display_value(vm),
             val2.display_value(vm)
         );
-        println!("Debug {:?} / {:?}", val1, val2);
+        println!("Debug {val1:?} / {val2:?}");
     }
     assert!(res);
 }

@@ -116,7 +116,7 @@ pub fn debug(env: &mut SloshVm) {
     let mut con = Context::new();
 
     if let Err(e) = con.history.set_file_name_and_load_history("history_debug") {
-        println!("Error loading history: {}", e);
+        println!("Error loading history: {e}");
     }
     loop {
         let res = match con.read_line(Prompt::from("DEBUG> "), None) {
@@ -130,7 +130,7 @@ pub fn debug(env: &mut SloshVm) {
                     continue;
                 }
                 _ => {
-                    eprintln!("Error on input: {}", err);
+                    eprintln!("Error on input: {err}");
                     continue;
                 }
             },
@@ -165,7 +165,7 @@ pub fn debug(env: &mut SloshVm) {
                         for (i, frame) in env.get_call_stack().enumerate() {
                             if i + 1 == stk_idx {
                                 if let Err(e) = frame.chunk.disassemble_chunk(env, 0) {
-                                    println!("Error in disassembly: {}", e);
+                                    println!("Error in disassembly: {e}");
                                 }
                                 break;
                             }
@@ -175,7 +175,7 @@ pub fn debug(env: &mut SloshVm) {
                     }
                 } else if let Some(err_frame) = env.err_frame() {
                     if let Err(e) = err_frame.chunk.disassemble_chunk(env, 0) {
-                        println!("Error in disassembly: {}", e);
+                        println!("Error in disassembly: {e}");
                     }
                 } else {
                     println!("Nothing to disassemble.");
@@ -221,7 +221,7 @@ pub fn debug(env: &mut SloshVm) {
                     );
                 }
             }
-            Some(Err(err)) => println!("Reader error: {}", err),
+            Some(Err(err)) => println!("Reader error: {err}"),
             _ => {}
         }
         //}

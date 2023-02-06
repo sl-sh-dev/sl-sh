@@ -30,7 +30,7 @@ fn main() -> Result<(), VMError> {
         std::mem::size_of::<std::borrow::Cow<'static, str>>()
     );
     println!("Arc<usize> size: {}", std::mem::size_of::<Arc<usize>>());
-    println!("Max opcode: {}", MAX_OP_CODE);
+    println!("Max opcode: {MAX_OP_CODE}");
     /*    chunk.push_simple(RET, 1)?;
     chunk.push_const(0, 2)?;
     chunk.push_const(128, 2)?;
@@ -65,7 +65,7 @@ fn main() -> Result<(), VMError> {
         fx.write_u64(i);
         let finish = fx.finish();
         if set.contains(&finish) {
-            println!("Collision: {:#016x}", finish);
+            println!("Collision: {finish:#016x}");
         } else {
             set.insert(finish);
         }

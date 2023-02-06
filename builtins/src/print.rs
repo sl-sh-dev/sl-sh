@@ -78,16 +78,16 @@ pub fn display_value(vm: &SloshVm, val: Value) -> String {
     match &val {
         Value::True => "true".to_string(),
         Value::False => "false".to_string(),
-        Value::Int32(i) => format!("{}", i),
-        Value::UInt32(i) => format!("{}", i),
+        Value::Int32(i) => format!("{i}"),
+        Value::UInt32(i) => format!("{i}"),
         Value::Float64(handle) => format!("{}", vm.get_float(*handle)),
         Value::Int64(handle) => format!("{}", vm.get_int(*handle)),
         Value::UInt64(handle) => format!("{}", vm.get_uint(*handle)),
-        Value::Byte(b) => format!("{}", b),
+        Value::Byte(b) => format!("{b}"),
         Value::Symbol(i) => vm.get_interned(*i).to_string(),
         Value::Keyword(i) => format!(":{}", vm.get_interned(*i)),
         Value::StringConst(i) => format!("\"{}\"", vm.get_interned(*i)),
-        Value::CodePoint(ch) => format!("\\{}", ch),
+        Value::CodePoint(ch) => format!("\\{ch}"),
         Value::CharCluster(l, c) => {
             format!("\\{}", String::from_utf8_lossy(&c[0..*l as usize]))
         }
@@ -164,7 +164,7 @@ pub fn display_value(vm: &SloshVm, val: Value) -> String {
 pub fn pretty_value(vm: &SloshVm, val: Value) -> String {
     match &val {
         Value::StringConst(i) => vm.get_interned(*i).to_string(),
-        Value::CodePoint(ch) => format!("{}", ch),
+        Value::CodePoint(ch) => format!("{ch}"),
         Value::CharCluster(l, c) => {
             format!("{}", String::from_utf8_lossy(&c[0..*l as usize]))
         }

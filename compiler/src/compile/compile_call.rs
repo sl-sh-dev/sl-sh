@@ -89,7 +89,7 @@ pub(crate) fn compile_call_reg(
         }
         state
             .chunk
-            .encode2(MOV, b_reg as u16, reg as u16, env.own_line())?;
+            .encode2(MOV, b_reg as u16, reg, env.own_line())?;
         b_reg
     } else {
         0

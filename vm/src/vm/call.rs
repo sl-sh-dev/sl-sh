@@ -267,7 +267,7 @@ impl<ENV> GVm<ENV> {
                 )
             }
             _ => Err((
-                VMError::new_vm(format!("CALL: Not a callable {:?}.", lambda)),
+                VMError::new_vm(format!("CALL: Not a callable {lambda:?}.")),
                 chunk,
             )),
         };

@@ -103,7 +103,7 @@ fn main() -> Result<(), VMError> {
     let chunk = Arc::new(chunk);
     vm.execute(chunk)?;
     let result = vm.get_stack(5).get_float(&vm)?;
-    println!("{}", result);
+    println!("{result}");
 
     Ok(())
 }

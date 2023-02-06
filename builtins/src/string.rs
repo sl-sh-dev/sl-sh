@@ -50,7 +50,7 @@ pub fn str_contains(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if let (Some(string), Some(pat), None) = (i.next(), i.next(), i.next()) {
         let string = string.get_string(vm)?;
         let pat = pat.get_string(vm)?;
-        if string.contains(&pat) {
+        if string.contains(pat) {
             Ok(Value::True)
         } else {
             Ok(Value::False)

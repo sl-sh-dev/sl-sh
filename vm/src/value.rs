@@ -273,7 +273,7 @@ impl Value {
             Value::UInt32(i) => Ok(*i as i64),
             Value::Int64(handle) => Ok(vm.get_int(*handle)),
             Value::UInt64(handle) => Ok(vm.get_uint(*handle) as i64), // XXX TODO- overflow.
-            _ => Err(VMError::new_value(format!("Not an integer: {:?}", self))),
+            _ => Err(VMError::new_value(format!("Not an integer: {self:?}"))),
         }
     }
 
@@ -285,7 +285,7 @@ impl Value {
             Value::Float64(handle) => Ok(vm.get_float(*handle)),
             Value::Int64(handle) => Ok(vm.get_int(*handle) as f64),
             Value::UInt64(handle) => Ok(vm.get_uint(*handle) as f64),
-            _ => Err(VMError::new_value(format!("Not a float: {:?}", self))),
+            _ => Err(VMError::new_value(format!("Not a float: {self:?}"))),
         }
     }
 
@@ -294,7 +294,7 @@ impl Value {
             Value::String(h) => Ok(vm.get_string(*h)),
             Value::StringConst(i) => Ok(vm.get_interned(*i)),
             // TODO- handle chars/codepoints...
-            _ => Err(VMError::new_value(format!("Not a string: {:?}", self))),
+            _ => Err(VMError::new_value(format!("Not a string: {self:?}"))),
         }
     }
 
@@ -421,16 +421,16 @@ impl Value {
         match self {
             Value::True => "true".to_string(),
             Value::False => "false".to_string(),
-            Value::Int32(i) => format!("{}", i),
-            Value::UInt32(i) => format!("{}", i),
+            Value::Int32(i) => format!("{i}"),
+            Value::UInt32(i) => format!("{i}"),
             Value::Float64(handle) => format!("{}", vm.get_float(*handle)),
             Value::Int64(handle) => format!("{}", vm.get_int(*handle)),
             Value::UInt64(handle) => format!("{}", vm.get_uint(*handle)),
-            Value::Byte(b) => format!("{}", b),
+            Value::Byte(b) => format!("{b}"),
             Value::Symbol(i) => vm.get_interned(*i).to_string(),
             Value::Keyword(i) => format!(":{}", vm.get_interned(*i)),
             Value::StringConst(i) => format!("\"{}\"", vm.get_interned(*i)),
-            Value::CodePoint(ch) => format!("\\{}", ch),
+            Value::CodePoint(ch) => format!("\\{ch}"),
             Value::CharCluster(l, c) => {
                 format!("\\{}", String::from_utf8_lossy(&c[0..*l as usize]))
             }
@@ -506,7 +506,7 @@ impl Value {
     pub fn pretty_value<ENV>(&self, vm: &GVm<ENV>) -> String {
         match self {
             Value::StringConst(i) => vm.get_interned(*i).to_string(),
-            Value::CodePoint(ch) => format!("{}", ch),
+            Value::CodePoint(ch) => format!("{ch}"),
             Value::CharCluster(l, c) => {
                 format!("{}", String::from_utf8_lossy(&c[0..*l as usize]))
             }

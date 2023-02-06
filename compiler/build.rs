@@ -11,32 +11,26 @@ const BUILD_TYPE: &str = "release";
 fn main() {
     let version_string = if have_git() {
         format!(
-            "{} {} ({}:{}{}, {} build, {} [{}], {} UTC [{}])",
+            "{} {} ({}:{}{}, {BUILD_TYPE} build, {OS} [{ARCH}], {} UTC [{}])",
             env!("CARGO_PKG_NAME"),
             env!("CARGO_PKG_VERSION"),
             get_branch_name(),
             get_commit_hash(),
             if is_working_tree_clean() { "" } else { "+" },
-            BUILD_TYPE,
-            OS,
-            ARCH,
             Utc::now().format("%b %d %Y, %T"),
             get_rustc_version(),
         )
     } else {
         format!(
-            "{} {} ({} build, {} [{}], {} UTC [{}])",
+            "{} {} ({BUILD_TYPE} build, {OS} [{ARCH}], {} UTC [{}])",
             env!("CARGO_PKG_NAME"),
             env!("CARGO_PKG_VERSION"),
-            BUILD_TYPE,
-            OS,
-            ARCH,
             Utc::now().format("%b %d %Y, %T"),
             get_rustc_version(),
         )
     };
 
-    println!("cargo:rustc-env=VERSION_STRING={}", version_string);
+    println!("cargo:rustc-env=VERSION_STRING={version_string}");
 }
 
 fn have_git() -> bool {
