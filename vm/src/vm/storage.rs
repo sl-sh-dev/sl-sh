@@ -343,6 +343,10 @@ impl<ENV> GVm<ENV> {
         self.heap.get_float(handle)
     }
 
+    pub fn get_float_mut(&mut self, handle: Numeric64Handle) -> &mut f64 {
+        self.heap.get_float_mut(handle)
+    }
+
     pub fn get_string(&self, handle: Handle) -> &str {
         self.heap.get_string(handle)
     }
@@ -367,8 +371,8 @@ impl<ENV> GVm<ENV> {
         self.heap.get_vecnode(handle)
     }
 
-    pub(crate) fn get_persistent_map(&self, handle: Handle) -> &PersistentMap {
-        self.heap.get_persistent_map(handle)
+    pub(crate) fn _get_persistent_map(&self, handle: Handle) -> &PersistentMap {
+        self.heap._get_persistent_map(handle)
     }
 
     pub fn get_mapnode(&self, handle: Handle) -> &MapNode {

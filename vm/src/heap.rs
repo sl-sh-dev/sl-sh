@@ -449,6 +449,16 @@ impl Heap {
         }
     }
 
+    pub fn get_float_mut(&mut self, handle: Numeric64Handle) -> &mut f64 {
+        unsafe {
+            if let Some(Numeric64 { float }) = self.numerics.get_mut(handle.as_usize()) {
+                float
+            } else {
+                panic!("Handle {} is not a valid float!", handle);
+            }
+        }
+    }
+
     pub fn get_string(&self, handle: Handle) -> &str {
         if let Some(Object::String(ptr)) = self.objects.get(handle.idx()) {
             ptr
@@ -511,7 +521,7 @@ impl Heap {
         }
     }*/
 
-    pub(crate) fn get_persistent_map(&self, handle: Handle) -> &PersistentMap {
+    pub(crate) fn _get_persistent_map(&self, handle: Handle) -> &PersistentMap {
         if let Some(Object::PersistentMap(map)) = self.objects.get(handle.idx()) {
             map
         } else {

@@ -2,44 +2,26 @@ use std::fmt::{Display, Formatter};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Handle {
-    valid: bool,
     idx: u32,
 }
 
 impl Handle {
-    pub fn invalid() -> Self {
-        Self {
-            valid: false,
-            idx: 0,
-        }
-    }
-
     pub fn new(idx: usize) -> Self {
-        Self {
-            valid: true,
-            idx: idx as u32,
-        }
+        Self { idx: idx as u32 }
     }
 
     pub fn new32(idx: u32) -> Self {
-        Self {
-            valid: true,
-            idx,
-        }
+        Self { idx }
     }
 
     pub fn idx(&self) -> usize {
         self.idx as usize
     }
-
-    pub fn valid(&self) -> bool {
-        self.valid
-    }
 }
 
 impl From<u32> for Handle {
     fn from(idx: u32) -> Self {
-        Self { valid: true, idx }
+        Self { idx }
     }
 }
 

@@ -156,7 +156,8 @@ impl<ENV> GVm<ENV> {
                 check_num_args(&l, num_args).map_err(|e| (e, chunk.clone()))?;
                 if !tail_call {
                     let frame = self.make_call_frame(chunk, lambda, true);
-                    mov_register!(registers, first_reg as usize, self.alloc_callframe(frame));
+                    let aframe = self.alloc_callframe(frame);
+                    mov_register!(registers, first_reg as usize, aframe);
                     self.stack_top += first_reg as usize;
                 }
                 self.stack_max = self.stack_top + l.input_regs + l.extra_regs;
@@ -201,7 +202,8 @@ impl<ENV> GVm<ENV> {
                     }
                 }
                 if let Some(frame) = frame {
-                    mov_register!(registers, first_reg as usize, self.alloc_callframe(frame));
+                    let aframe = self.alloc_callframe(frame);
+                    mov_register!(registers, first_reg as usize, aframe);
                 }
                 clear_opts::<ENV>(&l, registers, first_reg, num_args);
                 Ok(l)

@@ -26,7 +26,7 @@ fn main() -> Result<(), VMError> {
         (println pu)))
              */
     let mut vm = Vm::new();
-    vm.pause_gc();
+    //vm.pause_gc();
     let mut chunk = Chunk::new("no_file", 1);
     chunk.extra_regs = 150;
     let n = chunk.add_constant(Value::Int32(500_000)) as u16;

@@ -251,6 +251,7 @@ macro_rules! get_reg_unref_int {
             Value::Byte(b) => Ok(b as i64),
             Value::Int(i) => Ok(i),
             Value::UInt(i) => Ok(i as i64),
+            // XXX TODO int 64s
             _ => Err(VMError::new_value(format!("Not an integer: {:?}", reg))),
         }
     }};
@@ -352,10 +353,18 @@ macro_rules! binary_math {
         let op1 = get_reg!($registers, dest);
         let op2 = get_reg!($registers, op2);
         let val = if matches!(op1, Value::Float64(_)) || matches!(op2, Value::Float64(_)) {
-            $vm.alloc_f64($bin_fn(
-                get_float!($vm, op1).map_err(|e| (e, $chunk.clone()))?,
-                get_float!($vm, op2).map_err(|e| (e, $chunk.clone()))?,
-            ))
+            if let Value::Float64(handle) = op1 {
+                *$vm.get_float_mut(handle) = $bin_fn(
+                    get_float!($vm, op1).map_err(|e| (e, $chunk.clone()))?,
+                    get_float!($vm, op2).map_err(|e| (e, $chunk.clone()))?,
+                );
+                op1
+            } else {
+                $vm.alloc_f64($bin_fn(
+                    get_float!($vm, op1).map_err(|e| (e, $chunk.clone()))?,
+                    get_float!($vm, op2).map_err(|e| (e, $chunk.clone()))?,
+                ))
+            }
         } else {
             // XXX TODO- overflow
             Value::Int32($bin_fn(
@@ -377,7 +386,13 @@ macro_rules! div_math {
             if op2 == 0.0 {
                 return Err((VMError::new_vm("Divide by zero error."), $chunk));
             }
-            $vm.alloc_f64(get_float!($vm, op1).map_err(|e| (e, $chunk.clone()))? / op2)
+            if let Value::Float64(handle) = op1 {
+                *$vm.get_float_mut(handle) =
+                    get_float!($vm, op1).map_err(|e| (e, $chunk.clone()))? / op2;
+                op1
+            } else {
+                $vm.alloc_f64(get_float!($vm, op1).map_err(|e| (e, $chunk.clone()))? / op2)
+            }
         } else {
             // XXX TODO- overflow
             let op2 = get_int!($vm, op2).map_err(|e| (e, $chunk.clone()))? as i32;
@@ -390,12 +405,31 @@ macro_rules! div_math {
     }};
 }
 
-#[macro_export]
+/*#[macro_export]
 macro_rules! set_register {
     ($vm:expr, $registers:expr, $idx:expr, $val:expr) => {{
         match &get_reg!($registers, $idx) {
             Value::Value(handle) => {
                 *($vm.heap.get_value_mut(*handle)) = $val;
+            }
+            _ => $registers[$idx] = $val,
+        }
+    }};
+}*/
+
+#[macro_export]
+macro_rules! set_register {
+    ($vm:expr, $registers:expr, $idx:expr, $val:expr) => {{
+        match (&get_reg!($registers, $idx), $val) {
+            (Value::Value(handle), _) => {
+                *($vm.heap.get_value_mut(*handle)) = $val;
+            }
+            (Value::Float64(handle_to), Value::Float64(handle_from)) => {
+                *$vm.get_float_mut(*handle_to) = $vm.get_float(handle_from);
+            }
+            (_, Value::Float64(handle_from)) => {
+                let f = $vm.get_float(handle_from);
+                $registers[$idx] = $vm.alloc_f64(f);
             }
             _ => $registers[$idx] = $val,
         }
@@ -406,5 +440,44 @@ macro_rules! set_register {
 macro_rules! mov_register {
     ($registers:expr, $idx:expr, $val:expr) => {{
         $registers[$idx] = $val;
+    }};
+}
+
+#[macro_export]
+macro_rules! mov_register_num {
+    ($vm:expr, $registers:expr, $idx:expr, $val:expr) => {{
+        match (&get_reg!($registers, $idx), $val) {
+            (Value::Float64(handle_to), Value::Float64(handle_from)) => {
+                *$vm.get_float_mut(*handle_to) = $vm.get_float(handle_from);
+            }
+            (_, Value::Float64(handle_from)) => {
+                let f = $vm.get_float(handle_from);
+                $registers[$idx] = $vm.alloc_f64(f);
+            }
+            _ => $registers[$idx] = $val,
+        }
+        /*match $val {
+            Value::Float64(handle_from) => {
+                let f = $vm.get_float(handle_from);
+                $registers[$idx] = $vm.alloc_f64(f);
+            }
+            _ => $registers[$idx] = $val,
+        }*/
+    }};
+}
+
+#[macro_export]
+macro_rules! set_value {
+    ($vm:expr, $left:expr, $right:expr) => {{
+        match ($left, $right) {
+            (Value::Float64(handle_to), Value::Float64(handle_from)) => {
+                *$vm.get_float_mut(handle_to) = $vm.get_float(handle_from);
+            }
+            (_, Value::Float64(handle_from)) => {
+                let f = $vm.get_float(handle_from);
+                $left = $vm.alloc_f64(f);
+            }
+            _ => $left = $right,
+        }
     }};
 }

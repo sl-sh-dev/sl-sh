@@ -7,12 +7,14 @@ use slvm::opcodes::*;
 use slvm::value::*;
 use slvm::vm::*;
 use slvm::FxHasher;
+use slvm::Handle;
 use std::collections::HashSet;
 use std::hash::Hasher;
 use std::sync::Arc;
 
 fn main() -> Result<(), VMError> {
     let mut chunk = Chunk::new("no_file", 1);
+    println!("Handle size: {}", std::mem::size_of::<Handle>());
     println!("Value size: {}", std::mem::size_of::<Value>());
     println!("Value2 size: {}", std::mem::size_of::<Value2>());
     println!("usize: {}", std::mem::size_of::<usize>());

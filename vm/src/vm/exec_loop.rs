@@ -218,7 +218,7 @@ impl<ENV> GVm<ENV> {
                     // XXX TODO- figure out proper mov symantics...
                     let val = get_reg_unref!(registers, src, self);
                     //let val = get_reg!(registers, src);
-                    mov_register!(registers, dest as usize, val);
+                    mov_register_num!(self, registers, dest as usize, val);
                 }
                 MOVI => {
                     let (dest, src) = decode2!(code, &mut self.ip, wide);
@@ -226,19 +226,25 @@ impl<ENV> GVm<ENV> {
                     let dest =
                         get_reg_int!(self, registers, dest).map_err(|e| (e, chunk.clone()))?;
                     //let val = get_reg!(registers, src);
-                    mov_register!(registers, dest as usize, val);
+                    mov_register_num!(self, registers, dest as usize, val);
                 }
                 MOVII => {
                     let (dest, src) = decode2!(code, &mut self.ip, wide);
                     let src = get_reg_int!(self, registers, src).map_err(|e| (e, chunk.clone()))?;
                     let val = get_reg_unref!(registers, src, self);
                     //let val = get_reg!(registers, src);
-                    mov_register!(registers, dest as usize, val);
+                    mov_register_num!(self, registers, dest as usize, val);
                 }
                 BMOV => {
                     let (dest, src, len) = decode3!(code, &mut self.ip, wide);
                     for i in 0..len as usize {
-                        registers[dest as usize + i] = registers[src as usize + i];
+                        //registers[dest as usize + i] = registers[src as usize + i];
+                        mov_register_num!(
+                            self,
+                            registers,
+                            dest as usize + i,
+                            registers[src as usize + i]
+                        );
                     }
                 }
                 LDSC => {
@@ -1036,7 +1042,13 @@ impl<ENV> GVm<ENV> {
                         if i >= v.len() {
                             return Err((VMError::new_vm("VECSTH: Index out of range."), chunk));
                         }
-                        v[i] = val;
+                        // Break off v's lifetime so we can use the macro below.  We are not making
+                        // any other changes to v during this (just updating an element in place) so
+                        // should be safe.
+                        let v: &mut Vec<Value> =
+                            unsafe { (v as *mut Vec<Value>).as_mut().unwrap() };
+                        set_value!(self, v[i], val);
+                        //v[i] = val;
                     } else {
                         return Err((VMError::new_vm("VECSTH: Not a vector."), chunk));
                     };
@@ -1049,7 +1061,14 @@ impl<ENV> GVm<ENV> {
                     let dfn = get_reg!(registers, dfn);
                     let mut v = Vec::with_capacity(len as usize);
                     for _ in 0..len {
-                        v.push(dfn);
+                        let dfn2 = match dfn {
+                            Value::Float64(handle) => {
+                                let f = self.get_float(handle);
+                                self.alloc_f64(f)
+                            }
+                            _ => dfn,
+                        };
+                        v.push(dfn2);
                     }
                     let val = self.alloc_vector(v);
                     set_register!(self, registers, dest as usize, val);
