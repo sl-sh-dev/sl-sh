@@ -1,4 +1,5 @@
 use crate::LispResult;
+use crate::VarArgs;
 use sl_sh_proc_macros::sl_sh_fn;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -419,82 +420,77 @@ fn str_bytes(string: &str) -> usize {
     string.len()
 }
 
-fn builtin_str_starts_with(
+/// Usage: (str-starts-with pattern string) -> t/nil
+///
+/// True if string start with pattern (both strings).
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-true (str-starts-with "Stau" "Stausomething"))
+/// (test::assert-false (str-starts-with "StaU" "Stausomething"))
+#[sl_sh_fn(fn_name = "str-starts-with", takes_env = true)]
+fn str_starts_with(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(pat) = args.next() {
-        if let Some(text) = args.next() {
-            if args.next().is_none() {
-                let pat = eval(environment, pat)?;
-                let pat = as_string(environment, &pat)?;
-                let text = eval(environment, text)?;
-                let text = as_string(environment, &text)?;
-                return if text.starts_with(&pat) {
-                    Ok(Expression::alloc_data(ExpEnum::True))
-                } else {
-                    Ok(Expression::make_nil())
-                };
-            }
-        }
-    }
-    Err(LispError::new(
-        "str-start-with takes two forms (pattern string)",
-    ))
-}
-
-fn builtin_str_contains(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(pat) = args.next() {
-        if let Some(text) = args.next() {
-            if args.next().is_none() {
-                let pat = eval(environment, pat)?;
-                let pat = as_string(environment, &pat)?;
-                let text = eval(environment, text)?;
-                let text = as_string(environment, &text)?;
-                return if text.contains(&pat) {
-                    Ok(Expression::alloc_data(ExpEnum::True))
-                } else {
-                    Ok(Expression::make_nil())
-                };
-            }
-        }
-    }
-    Err(LispError::new(
-        "str-contains takes two forms (pattern string)",
-    ))
-}
-
-fn builtin_str_push(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(arg0) = args.next() {
-        let s = eval(environment, arg0)?;
-        let mut evalled_args = Vec::new();
-        if let ExpEnum::String(_, _) = &s.get().data {
-            // Do this otherwise the get_mut on s can lead to hard to track panics in some code.
-            for a in args {
-                evalled_args.push(eval(environment, a)?);
-            }
-        }
-        let mut s_d = s.get_mut();
-        if let ExpEnum::String(res, chars) = &mut s_d.data {
-            for a in evalled_args {
-                res.to_mut().push_str(&as_string(environment, &a)?);
-            }
-            *chars = None; // maintian the iterator invariant.
-            drop(s_d);
-            Ok(s)
-        } else {
-            Err(LispError::new(
-                "str-push! takes a string buffer as first form",
-            ))
-        }
+    pat: Expression,
+    text: Expression,
+) -> LispResult<Expression> {
+    let pat = as_string(environment, &pat)?;
+    let text = as_string(environment, &text)?;
+    if text.starts_with(&pat) {
+        Ok(Expression::alloc_data(ExpEnum::True))
     } else {
-        Err(LispError::new("str-push! takes at least one form"))
+        Ok(Expression::make_nil())
+    }
+}
+
+/// Usage: (str-contains pattern string) -> t/nil
+///
+/// True if string contains pattern (both strings).
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-true (str-contains "Stau" "Stausomething"))
+/// (test::assert-false (str-contains "StaU" "Stausomething"))
+/// (test::assert-true (str-contains "some" "Stausomething"))
+/// (test::assert-false (str-contains "Some" "Stausomething"))
+/// (test::assert-true (str-contains "thing" "Stausomething"))
+/// (test::assert-false (str-contains "Thing" "Stausomething"))
+/// (test::assert-true (str-contains "someΣ" "StausomeΣthing"))
+#[sl_sh_fn(fn_name = "str-contains")]
+fn str_contains(pat: &str, text: &str) -> bool {
+    text.contains(&pat)
+}
+
+/// Usage: (str-push! string arg0 ... argN) -> string
+///
+/// Push the args (as strings) onto the string.  This is a destructive form.
+///
+/// Arguments will be turned into strings.  Returns the string it was given.
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-equal "stringsome" (str-push! (str "string") "some"))
+/// (def test-str-push (str "def-string"))
+/// (test::assert-equal "def-stringsome" (str-push! test-str-push "some"))
+/// (test::assert-equal "def-stringsome" test-str-push)
+#[sl_sh_fn(fn_name = "str-push!")]
+//TODO VarArgs<&str>?
+fn str_push(target: Expression, strings: VarArgs<String>) -> LispResult<Expression> {
+    let mut target_d = target.get_mut();
+    if let ExpEnum::String(res, chars) = &mut target_d.data {
+        for a in strings {
+            res.to_mut().push_str(&a);
+        }
+        *chars = None; // maintain the iterator invariant.
+        drop(target_d);
+        Ok(target)
+    } else {
+        Err(LispError::new(
+            "str-push! takes a string buffer as first form",
+        ))
     }
 }
 
@@ -884,63 +880,9 @@ Example:
     intern_str_lower(interner, data);
     intern_str_upper(interner, data);
     intern_str_bytes(interner, data);
-    data.insert(
-        interner.intern("str-starts-with"),
-        Expression::make_function(
-            builtin_str_starts_with,
-            r#"Usage: (str-starts-with pattern string) -> t/nil
-
-True if string start with pattern (both strings).
-
-Section: string
-
-Example:
-(test::assert-true (str-starts-with "Stau" "Stausomething"))
-(test::assert-false (str-starts-with "StaU" "Stausomething"))
-"#,
-        ),
-    );
-    data.insert(
-        interner.intern("str-contains"),
-        Expression::make_function(
-            builtin_str_contains,
-            r#"Usage: (str-contains pattern string) -> t/nil
-
-True if string contains pattern (both strings).
-
-Section: string
-
-Example:
-(test::assert-true (str-contains "Stau" "Stausomething"))
-(test::assert-false (str-contains "StaU" "Stausomething"))
-(test::assert-true (str-contains "some" "Stausomething"))
-(test::assert-false (str-contains "Some" "Stausomething"))
-(test::assert-true (str-contains "thing" "Stausomething"))
-(test::assert-false (str-contains "Thing" "Stausomething"))
-(test::assert-true (str-contains "someΣ" "StausomeΣthing"))
-"#,
-        ),
-    );
-    data.insert(
-        interner.intern("str-push!"),
-        Expression::make_function(
-            builtin_str_push,
-            r#"Usage: (str-push! string arg0 ... argN) -> string
-
-Push the args (as strings) onto the string.  This is a destructive form.
-
-Arguments will be turned into strings.  Returns the string it was given.
-
-Section: string
-
-Example:
-(test::assert-equal "stringsome" (str-push! (str "string") "some"))
-(def test-str-push (str "def-string"))
-(test::assert-equal "def-stringsome" (str-push! test-str-push "some"))
-(test::assert-equal "def-stringsome" test-str-push)
-"#,
-        ),
-    );
+    intern_str_starts_with(interner, data);
+    intern_str_contains(interner, data);
+    intern_str_push(interner, data);
     data.insert(
         interner.intern("str-clear!"),
         Expression::make_function(
