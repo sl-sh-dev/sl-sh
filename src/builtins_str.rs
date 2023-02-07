@@ -198,21 +198,12 @@ fn str_splitn(n: i64, pat: &str, text: &str) -> LispResult<Expression> {
 /// (test::assert-equal '("somexxxyyyxxxstringxxxother") (str-rsplitn 1 "xxx" "somexxxyyyxxxstringxxxother"))
 /// (test::assert-equal '() (str-rsplitn 0 "xxx" "somexxxyyyxxxstringxxxzero"))
 #[sl_sh_fn(fn_name = "str-rsplitn")]
-fn str_rsplitn(n: i64, pat: &str, text: &str) -> LispResult<Expression> {
-    if n < 0 {
-        Err(LispError::new(
-            "str-splitn first form must be a positive integer",
-        ))
-    } else {
-        let mut split_list: Vec<Expression> = Vec::new();
-        for s in text.rsplitn(n as usize, &pat) {
-            split_list.push(Expression::alloc_data(ExpEnum::String(
-                s.to_string().into(),
-                None,
-            )));
-        }
-        Ok(Expression::with_list(split_list))
+fn str_rsplitn(n: usize, pat: &str, text: &str) -> LispResult<Vec<String>> {
+    let mut split_list = Vec::new();
+    for s in text.rsplitn(n, &pat) {
+        split_list.push(s.to_string());
     }
+    Ok(split_list)
 }
 
 /// Usage: (str-cat-list join-str sequence) -> string
@@ -225,15 +216,14 @@ fn str_rsplitn(n: i64, pat: &str, text: &str) -> LispResult<Expression> {
 /// (test::assert-equal "stringxxxyyyxxxsome" (str-cat-list "xxx" '("string" "yyy" "some")))
 /// (test::assert-equal "string yyy some" (str-cat-list " " '("string" "yyy" "some")))
 /// (test::assert-equal "stringyyysome" (str-cat-list "" '("string" "yyy" "some")))
-#[sl_sh_fn(fn_name = "str-cat-list", takes_env = true)]
-fn str_cat_list(environment: &mut Environment, join_str: String, list: Vec<String>) -> String {
+#[sl_sh_fn(fn_name = "str-cat-list")]
+fn str_cat_list(join_str: String, list: Vec<String>) -> String {
     let mut new_str = String::new();
     let mut first = true;
     for exp in list {
         if !first {
             new_str.push_str(&join_str);
         }
-        // TODO nope? relies on as_string as it can turn any expression into a string
         new_str.push_str(&exp);
         first = false;
     }

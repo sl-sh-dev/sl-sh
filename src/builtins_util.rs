@@ -352,6 +352,19 @@ impl TryIntoExpression<i64> for Expression {
     }
 }
 
+impl<T> From<Vec<T>> for Expression
+where
+    T: Into<Expression>,
+{
+    fn from(values: Vec<T>) -> Self {
+        let mut vec = vec![];
+        for value in values {
+            vec.push(value.into())
+        }
+        Expression::with_list(vec)
+    }
+}
+
 impl From<usize> for Expression {
     fn from(num: usize) -> Self {
         Expression::alloc_data(ExpEnum::Int(num as i64))
