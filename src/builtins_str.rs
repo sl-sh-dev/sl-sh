@@ -31,11 +31,8 @@ fn as_string(environment: &mut Environment, exp: &Expression) -> Result<String, 
 /// (test::assert-equal "some string" (str-trim "some string   "))
 /// (test::assert-equal "some string" (str-trim "some string"))
 #[sl_sh_fn(fn_name = "str-trim")]
-fn str_trim(arg: String) -> LispResult<Expression> {
-    Ok(Expression::alloc_data(ExpEnum::String(
-        arg.trim().to_string().into(),
-        None,
-    )))
+fn str_trim(arg: String) -> LispResult<String> {
+    Ok(arg.trim().to_string())
 }
 
 /// Usage: (str-ltrim string) -> string
@@ -51,11 +48,8 @@ fn str_trim(arg: String) -> LispResult<Expression> {
 /// (test::assert-equal "some string   " (str-ltrim "some string   "))
 /// (test::assert-equal "some string" (str-ltrim "some string"))
 #[sl_sh_fn(fn_name = "str-ltrim")]
-fn str_ltrim(arg: String) -> LispResult<Expression> {
-    Ok(Expression::alloc_data(ExpEnum::String(
-        arg.trim_start().to_string().into(),
-        None,
-    )))
+fn str_ltrim(arg: String) -> LispResult<String> {
+    Ok(arg.trim_start().to_string())
 }
 
 /// Usage: (str-rtrim string) -> string
@@ -71,11 +65,8 @@ fn str_ltrim(arg: String) -> LispResult<Expression> {
 /// (test::assert-equal "some string" (str-rtrim "some string   "))
 /// (test::assert-equal "some string" (str-rtrim "some string"))
 #[sl_sh_fn(fn_name = "str-rtrim")]
-fn str_rtrim(arg: String) -> LispResult<Expression> {
-    Ok(Expression::alloc_data(ExpEnum::String(
-        arg.trim_end().to_string().into(),
-        None,
-    )))
+fn str_rtrim(arg: String) -> LispResult<String> {
+    Ok(arg.trim_end().to_string())
 }
 
 /// Usage: (str-replace string old-pattern new-pattern) -> string
@@ -89,12 +80,8 @@ fn str_rtrim(arg: String) -> LispResult<Expression> {
 /// (test::assert-equal "some yyy string yyy" (str-replace "some xxx string xxx" "xxx" "yyy"))
 /// (test::assert-equal "yyy some yyy string yyy" (str-replace "xxx some xxx string xxx" "xxx" "yyy"))
 #[sl_sh_fn(fn_name = "str-replace")]
-fn str_replace(source: String, old_pattern: &str, new_pattern: &str) -> LispResult<Expression> {
-    let new_str = source.replace(old_pattern, new_pattern);
-    Ok(Expression::alloc_data(ExpEnum::String(
-        new_str.into(),
-        None,
-    )))
+fn str_replace(source: String, old_pattern: &str, new_pattern: &str) -> LispResult<String> {
+    Ok(source.replace(old_pattern, new_pattern))
 }
 
 /// Usage: (str-split split-pattern string) -> vector
@@ -111,24 +98,18 @@ fn str_replace(source: String, old_pattern: &str, new_pattern: &str) -> LispResu
 /// (test::assert-equal '("somexxxyyyxxxstring") (str-split :whitespace "somexxxyyyxxxstring"))
 /// (test::assert-equal '("somexxxyyyxxxstring") (str-split "zzz" "somexxxyyyxxxstring"))
 #[sl_sh_fn(fn_name = "str-split")]
-fn str_split(pat: &str, text: &str) -> LispResult<Expression> {
-    let mut split_list: Vec<Expression> = Vec::new();
+fn str_split(pat: &str, text: &str) -> LispResult<Vec<String>> {
+    let mut split_list = Vec::new();
     if pat == ":whitespace" {
         for s in text.split_whitespace() {
-            split_list.push(Expression::alloc_data(ExpEnum::String(
-                s.to_string().into(),
-                None,
-            )));
+            split_list.push(s.to_string());
         }
     } else {
         for s in text.split(&pat) {
-            split_list.push(Expression::alloc_data(ExpEnum::String(
-                s.to_string().into(),
-                None,
-            )));
+            split_list.push(s.to_string());
         }
     }
-    Ok(Expression::with_list(split_list))
+    Ok(split_list)
 }
 
 /// Usage: (str-rsplit split-pattern string) -> vector
@@ -144,15 +125,12 @@ fn str_split(pat: &str, text: &str) -> LispResult<Expression> {
 /// (test::assert-equal '(\"somexxxyyyxxxstring\") (str-rsplit :whitespace \"somexxxyyyxxxstring\"))
 /// (test::assert-equal '(\"somexxxyyyxxxstring\") (str-rsplit \"zzz\" \"somexxxyyyxxxstring\"))
 #[sl_sh_fn(fn_name = "str-rsplit")]
-fn str_rsplit(pat: &str, text: &str) -> LispResult<Expression> {
-    let mut split_list: Vec<Expression> = Vec::new();
+fn str_rsplit(pat: &str, text: &str) -> LispResult<Vec<String>> {
+    let mut split_list = Vec::new();
     for s in text.rsplit(&pat) {
-        split_list.push(Expression::alloc_data(ExpEnum::String(
-            s.to_string().into(),
-            None,
-        )));
+        split_list.push(s.to_string());
     }
-    Ok(Expression::with_list(split_list))
+    Ok(split_list)
 }
 
 /// Usage: (str-splitn n split-pattern string) -> vector
@@ -168,21 +146,12 @@ fn str_rsplit(pat: &str, text: &str) -> LispResult<Expression> {
 /// (test::assert-equal '("somexxxyyyxxxstringxxxother") (str-splitn 1 "xxx" "somexxxyyyxxxstringxxxother"))
 /// (test::assert-equal '() (str-splitn 0 "xxx" "somexxxyyyxxxstringxxxzero"))
 #[sl_sh_fn(fn_name = "str-splitn")]
-fn str_splitn(n: i64, pat: &str, text: &str) -> LispResult<Expression> {
-    if n < 0 {
-        Err(LispError::new(
-            "str-splitn first form must be a positive integer",
-        ))
-    } else {
-        let mut split_list: Vec<Expression> = Vec::new();
-        for s in text.splitn(n as usize, &pat) {
-            split_list.push(Expression::alloc_data(ExpEnum::String(
-                s.to_string().into(),
-                None,
-            )));
-        }
-        Ok(Expression::with_list(split_list))
+fn str_splitn(n: usize, pat: &str, text: &str) -> LispResult<Vec<String>> {
+    let mut split_list = Vec::new();
+    for s in text.splitn(n, &pat) {
+        split_list.push(s.to_string());
     }
+    Ok(split_list)
 }
 
 /// Usage: (str-rsplitn n split-pattern string) -> vector
