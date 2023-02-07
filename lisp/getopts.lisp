@@ -28,13 +28,13 @@
     (str "Illegal option " key ", not in allowable arguments provided to getopts."))
 
 (defn is-single-char-arg (token)
-    (and (not (or (char? token) (macro? token) (lambda? token))) (= 2 (length token)) (str-starts-with token-delim token)))
+    (and (not (or (char? token) (macro? token) (lambda? token))) (= 2 (length token)) (str-starts-with token-delim (str token))))
 
 (defn is-multi-char-arg (token)
-    (str-starts-with (str token-delim token-delim) token))
+    (str-starts-with (str token-delim token-delim) (str token)))
 
 (defn is-multi-single-char-args (token)
-    (str-starts-with token-delim token))
+    (str-starts-with token-delim (str token)))
 
 (defn get-next-params
 "this function looks through the vec-args and returns only those vec-args that
@@ -55,7 +55,7 @@ up until the next token delimeted option, -c.
       (if (nil? possible-params)
       potential-params
       (loop (params) (possible-params)
-          (if (or (empty-seq? params) (str-starts-with token-delim (first params)))
+          (if (or (empty-seq? params) (str-starts-with token-delim (str (first params))))
             potential-params
             (do
                 (vec-push! potential-params (first params))

@@ -226,25 +226,18 @@ fn str_rsplitn(n: i64, pat: &str, text: &str) -> LispResult<Expression> {
 /// (test::assert-equal "string yyy some" (str-cat-list " " '("string" "yyy" "some")))
 /// (test::assert-equal "stringyyysome" (str-cat-list "" '("string" "yyy" "some")))
 #[sl_sh_fn(fn_name = "str-cat-list", takes_env = true)]
-fn str_cat_list(
-    environment: &mut Environment,
-    join_str: String,
-    list: Vec<Expression>,
-) -> LispResult<Expression> {
+fn str_cat_list(environment: &mut Environment, join_str: String, list: Vec<String>) -> String {
     let mut new_str = String::new();
     let mut first = true;
     for exp in list {
         if !first {
             new_str.push_str(&join_str);
         }
-        // relies on as_string as it can turn any expression into a string
-        new_str.push_str(&as_string(environment, &exp)?);
+        // TODO nope? relies on as_string as it can turn any expression into a string
+        new_str.push_str(&exp);
         first = false;
     }
-    Ok(Expression::alloc_data(ExpEnum::String(
-        new_str.into(),
-        None,
-    )))
+    new_str
 }
 
 /// Usage: (str-sub string start [length]) -> string
@@ -261,7 +254,7 @@ fn str_cat_list(
 /// (test::assert-equal "yyy" (str-sub "stringxxxyyyxxxsome" 9 3))
 /// (test::assert-equal "some" (str-sub "stringxxxyyyxxxsome" 15))
 #[sl_sh_fn(fn_name = "str-sub")]
-fn str_sub(s: &str, start: usize, length: Option<usize>) -> LispResult<Expression> {
+fn str_sub(s: &str, start: usize, length: Option<usize>) -> LispResult<String> {
     let len = if let Some(length) = length {
         length as usize
     } else {
@@ -269,15 +262,9 @@ fn str_sub(s: &str, start: usize, length: Option<usize>) -> LispResult<Expressio
     };
     if (start + len) <= s.len() {
         if len > 0 {
-            Ok(Expression::alloc_data(ExpEnum::String(
-                s[start..(start + len)].to_string().into(),
-                None,
-            )))
+            Ok(s[start..(start + len)].to_string())
         } else {
-            Ok(Expression::alloc_data(ExpEnum::String(
-                s[start..].to_string().into(),
-                None,
-            )))
+            Ok(s[start..].to_string())
         }
     } else {
         Err(LispError::new("str-sub index out of range"))
@@ -295,14 +282,11 @@ fn str_sub(s: &str, start: usize, length: Option<usize>) -> LispResult<Expressio
 /// (test::assert-equal "string" (str-append "string" ""))
 /// (test::assert-equal "string " (str-append "string" " "))
 #[sl_sh_fn(fn_name = "str-append")]
-fn str_append(start: &str, end: &str) -> LispResult<Expression> {
+fn str_append(start: &str, end: &str) -> String {
     let mut new_string = String::with_capacity(start.len() + end.len());
     new_string.push_str(start);
     new_string.push_str(end);
-    Ok(Expression::alloc_data(ExpEnum::String(
-        new_string.into(),
-        None,
-    )))
+    new_string
 }
 
 fn builtin_str(
@@ -339,12 +323,8 @@ pub fn builtin_do_unstr(
 /// (test::assert-false (str-empty? " "))
 /// (test::assert-false (str-empty? "string"))
 #[sl_sh_fn(fn_name = "str-empty?")]
-fn str_empty(string: &str) -> LispResult<Expression> {
-    if string.is_empty() {
-        Ok(Expression::make_true())
-    } else {
-        Ok(Expression::make_nil())
-    }
+fn str_empty(string: &str) -> bool {
+    string.is_empty()
 }
 
 /// Usage: (str-nth n string) -> char
@@ -429,19 +409,9 @@ fn str_bytes(string: &str) -> usize {
 /// Example:
 /// (test::assert-true (str-starts-with "Stau" "Stausomething"))
 /// (test::assert-false (str-starts-with "StaU" "Stausomething"))
-#[sl_sh_fn(fn_name = "str-starts-with", takes_env = true)]
-fn str_starts_with(
-    environment: &mut Environment,
-    pat: Expression,
-    text: Expression,
-) -> LispResult<Expression> {
-    let pat = as_string(environment, &pat)?;
-    let text = as_string(environment, &text)?;
-    if text.starts_with(&pat) {
-        Ok(Expression::alloc_data(ExpEnum::True))
-    } else {
-        Ok(Expression::make_nil())
-    }
+#[sl_sh_fn(fn_name = "str-starts-with")]
+fn str_starts_with(pat: &str, text: &str) -> bool {
+    text.starts_with(&pat)
 }
 
 /// Usage: (str-contains pattern string) -> t/nil
@@ -477,7 +447,6 @@ fn str_contains(pat: &str, text: &str) -> bool {
 /// (test::assert-equal "def-stringsome" (str-push! test-str-push "some"))
 /// (test::assert-equal "def-stringsome" test-str-push)
 #[sl_sh_fn(fn_name = "str-push!")]
-//TODO VarArgs<&str>?
 fn str_push(target: Expression, strings: VarArgs<String>) -> LispResult<Expression> {
     let mut target_d = target.get_mut();
     if let ExpEnum::String(res, chars) = &mut target_d.data {
@@ -494,29 +463,31 @@ fn str_push(target: Expression, strings: VarArgs<String>) -> LispResult<Expressi
     }
 }
 
-fn builtin_str_clear(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(arg0) = args.next() {
-        if args.next().is_none() {
-            let s = eval(environment, arg0)?;
-            let mut s_d = s.get_mut();
-            if let ExpEnum::String(res, chars) = &mut s_d.data {
-                *chars = None; // maintian the iterator invariant.
-                res.to_mut().clear();
-                drop(s_d);
-                Ok(s)
-            } else {
-                Err(LispError::new(
-                    "str-clear! takes a string buffer as first form",
-                ))
-            }
-        } else {
-            Err(LispError::new("str-clear! takes only one form"))
-        }
+/// Usage: (str-clear! string) -> string
+///
+/// Clears a string.  This is a destructive form.
+///
+/// Returns the string it was given.
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-equal "" (str-clear! (str "string")))
+/// (def test-str-clear (str "def-string"))
+/// (test::assert-equal "" (str-clear! test-str-clear))
+/// (test::assert-equal "" test-str-clear)
+#[sl_sh_fn(fn_name = "str-clear!")]
+fn str_clear(s: Expression) -> LispResult<Expression> {
+    let mut s_d = s.get_mut();
+    if let ExpEnum::String(res, chars) = &mut s_d.data {
+        *chars = None; // maintain the iterator invariant.
+        res.to_mut().clear();
+        drop(s_d);
+        Ok(s)
     } else {
-        Err(LispError::new("str-clear! takes one form"))
+        Err(LispError::new(
+            "str-clear! takes a string buffer as first form",
+        ))
     }
 }
 
@@ -883,26 +854,7 @@ Example:
     intern_str_starts_with(interner, data);
     intern_str_contains(interner, data);
     intern_str_push(interner, data);
-    data.insert(
-        interner.intern("str-clear!"),
-        Expression::make_function(
-            builtin_str_clear,
-            r#"Usage: (str-clear! string) -> string
-
-Clears a string.  This is a destructive form.
-
-Returns the string it was given.
-
-Section: string
-
-Example:
-(test::assert-equal "" (str-clear! (str "string")))
-(def test-str-clear (str "def-string"))
-(test::assert-equal "" (str-clear! test-str-clear))
-(test::assert-equal "" test-str-clear)
-"#,
-        ),
-    );
+    intern_str_clear(interner, data);
     data.insert(
         interner.intern("str-map"),
         Expression::make_function(

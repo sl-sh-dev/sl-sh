@@ -333,7 +333,7 @@ Section: namespace"
   `(ns-export (let* ((curr-syms (iterator::filter (fn (x) (nil? (hash-get *std-lib-syms-hash* x))) (ns-symbols ,symbol)))
          (public-syms
            (iterator::filter
-             (fn (x) (chain x (sym->str _) (str-starts-with "-" _) (not _)))
+             (fn (x) (chain x (sym->str _) (str-starts-with "-" (str _)) (not _)))
              curr-syms)))
     (iterator::collect public-syms))))
 
@@ -439,7 +439,7 @@ Example:
                     "[" logger-name "]"
                     " " to-log)))
   (:fn log-it (self calling-log-level to-log)
-      (let ((log-str (self :get-log calling-log-level (str-cat-list " " to-log))))
+      (let ((log-str (self :get-log calling-log-level (str-cat-list " " (iterator::collect-vec (iterator::map str to-log))))))
           (when (not (falsey? log-str))
               (println log-str))))
   (:fn trace (self &rest to-log)
