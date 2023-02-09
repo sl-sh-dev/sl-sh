@@ -109,6 +109,7 @@ impl TryFrom<Expression> for String {
             ExpEnum::String(cow, _) => Ok(cow.to_string()),
             ExpEnum::Symbol(sym, _) => Ok(sym.to_string()),
             ExpEnum::Char(ch) => Ok(ch.to_string()),
+            ExpEnum::CodePoint(ch) => Ok(ch.to_string()),
             _ => Err(LispError::new(
                 "Can only convert String from ExpEnum::String.",
             )),
@@ -337,6 +338,36 @@ where
     F: FnOnce(&mut T) -> LispResult<Expression> + ?Sized,
 {
     fn apply_ref_mut(&mut self, fn_name: &str, fun: F) -> LispResult<Expression>;
+}
+
+pub struct Codepoint(pub char);
+
+impl TryIntoExpression<Codepoint> for Expression {
+    type Error = LispError;
+
+    fn human_readable_dest_type(&self) -> String {
+        ExpEnum::CodePoint(Default::default()).to_string()
+    }
+}
+
+impl TryFrom<Expression> for Codepoint {
+    type Error = LispError;
+
+    fn try_from(value: Expression) -> Result<Self, Self::Error> {
+        let val = value.get();
+        match &val.data {
+            ExpEnum::CodePoint(char) => Ok(Codepoint(*char)),
+            _ => Err(LispError::new(
+                "Can only convert char from ExpEnum::CodePoint",
+            )),
+        }
+    }
+}
+
+impl From<Codepoint> for Expression {
+    fn from(value: Codepoint) -> Self {
+        Expression::alloc_data(ExpEnum::CodePoint(value.0))
+    }
 }
 
 pub struct CharString(pub Cow<'static, str>);
