@@ -13,7 +13,6 @@ use crate::environment::*;
 use crate::eval::*;
 use crate::interner::*;
 use crate::types::*;
-use crate::{param_eval, params_done};
 use std::collections::hash_map::DefaultHasher;
 
 fn as_string(environment: &mut Environment, exp: &Expression) -> Result<String, LispError> {
@@ -33,8 +32,8 @@ fn as_string(environment: &mut Environment, exp: &Expression) -> Result<String, 
 /// (test::assert-equal "some string" (str-trim "some string   "))
 /// (test::assert-equal "some string" (str-trim "some string"))
 #[sl_sh_fn(fn_name = "str-trim")]
-fn str_trim(arg: String) -> LispResult<String> {
-    Ok(arg.trim().to_string())
+fn str_trim(arg: String) -> String {
+    arg.trim().to_string()
 }
 
 /// Usage: (str-ltrim string) -> string
@@ -50,8 +49,8 @@ fn str_trim(arg: String) -> LispResult<String> {
 /// (test::assert-equal "some string   " (str-ltrim "some string   "))
 /// (test::assert-equal "some string" (str-ltrim "some string"))
 #[sl_sh_fn(fn_name = "str-ltrim")]
-fn str_ltrim(arg: String) -> LispResult<String> {
-    Ok(arg.trim_start().to_string())
+fn str_ltrim(arg: String) -> String {
+    arg.trim_start().to_string()
 }
 
 /// Usage: (str-rtrim string) -> string
@@ -67,8 +66,8 @@ fn str_ltrim(arg: String) -> LispResult<String> {
 /// (test::assert-equal "some string" (str-rtrim "some string   "))
 /// (test::assert-equal "some string" (str-rtrim "some string"))
 #[sl_sh_fn(fn_name = "str-rtrim")]
-fn str_rtrim(arg: String) -> LispResult<String> {
-    Ok(arg.trim_end().to_string())
+fn str_rtrim(arg: String) -> String {
+    arg.trim_end().to_string()
 }
 
 /// Usage: (str-replace string old-pattern new-pattern) -> string
@@ -82,8 +81,8 @@ fn str_rtrim(arg: String) -> LispResult<String> {
 /// (test::assert-equal "some yyy string yyy" (str-replace "some xxx string xxx" "xxx" "yyy"))
 /// (test::assert-equal "yyy some yyy string yyy" (str-replace "xxx some xxx string xxx" "xxx" "yyy"))
 #[sl_sh_fn(fn_name = "str-replace")]
-fn str_replace(source: String, old_pattern: &str, new_pattern: &str) -> LispResult<String> {
-    Ok(source.replace(old_pattern, new_pattern))
+fn str_replace(source: String, old_pattern: &str, new_pattern: &str) -> String {
+    source.replace(old_pattern, new_pattern)
 }
 
 /// Usage: (str-split split-pattern string) -> vector
@@ -188,7 +187,7 @@ fn str_rsplitn(n: usize, pat: &str, text: &str) -> LispResult<Vec<String>> {
 /// (test::assert-equal "string yyy some" (str-cat-list " " '("string" "yyy" "some")))
 /// (test::assert-equal "stringyyysome" (str-cat-list "" '("string" "yyy" "some")))
 #[sl_sh_fn(fn_name = "str-cat-list")]
-fn str_cat_list(join_str: String, list: Vec<String>) -> String {
+fn str_cat_list(join_str: &str, list: Vec<String>) -> String {
     let mut new_str = String::new();
     let mut first = true;
     for exp in list {
@@ -300,13 +299,15 @@ fn str_empty(string: &str) -> bool {
 /// (test::assert-equal #\u (str-nth 3 "stau"))
 /// (test::assert-equal nil (str-nth 9 "stau"))
 #[sl_sh_fn(fn_name = "str-nth")]
-fn str_nth(idx: i64, string: &str) -> LispResult<Expression> {
+fn str_nth(idx: i64, string: &str) -> Option<CharString> {
+    let mut opt = None;
     for (i, ch) in UnicodeSegmentation::graphemes(string, true).enumerate() {
         if i as i64 == idx {
-            return Ok(Expression::alloc_data(ExpEnum::Char(ch.to_string().into())));
+            opt = Some(CharString(ch.to_string().into()));
+            break;
         }
     }
-    Ok(Expression::make_nil())
+    opt
 }
 
 /// Usage: (str-lower string) -> string
@@ -322,8 +323,8 @@ fn str_nth(idx: i64, string: &str) -> LispResult<Expression> {
 /// (test::assert-equal "stau" (str-lower "StaU"))
 /// (test::assert-equal "stau" (str-lower "sTaU"))
 #[sl_sh_fn(fn_name = "str-lower")]
-fn str_lower(string: String) -> String {
-    string.to_ascii_lowercase()
+fn str_lower(string: &str) -> String {
+    string.to_lowercase()
 }
 
 /// Usage: (str-upper string) -> string
@@ -339,8 +340,8 @@ fn str_lower(string: String) -> String {
 /// (test::assert-equal "STAU" (str-upper "StaU"))
 /// (test::assert-equal "STAU" (str-upper "sTaU"))
 #[sl_sh_fn(fn_name = "str-upper")]
-fn str_upper(string: String) -> String {
-    string.to_ascii_uppercase()
+fn str_upper(string: &str) -> String {
+    string.to_uppercase()
 }
 
 /// Usage: (str-bytes string) -> int
@@ -643,7 +644,7 @@ fn char_upper(target: CharStringRef) -> CharString {
 /// (test::assert-true (char-whitespace? #\tab))
 /// (test::assert-false (char-whitespace? #\s))
 #[sl_sh_fn(fn_name = "char-whitespace?")]
-fn char_is_whitespace(target: CharString) -> bool {
+fn char_is_whitespace(target: CharStringRef) -> bool {
     if let Some(target) = target.0.chars().next() {
         target.is_whitespace()
     } else {
@@ -672,9 +673,9 @@ fn char_is_whitespace(target: CharString) -> bool {
 /// (test::assert-equal 7101 (char->int #\\स्))
 /// (test::assert-equal 9881 (char->int (str \"\\\" \"u{2699}\")))
 #[sl_sh_fn(fn_name = "char->int")]
-fn char_int(target: String) -> LispResult<i64> {
+fn char_int(target: &str) -> LispResult<i64> {
     let mut count = 0;
-    for _s in <str as UnicodeSegmentation>::graphemes(&target, true) {
+    for _s in <str as UnicodeSegmentation>::graphemes(target, true) {
         count += 1;
         if count >= 2 {
             break;
@@ -725,7 +726,7 @@ fn char_int(target: String) -> LispResult<i64> {
 /// (test::assert-equal (vec (str \"\\\" \"u{61}\")) (codepoints \"a\"))
 /// (test::assert-equal (vec (str \"\\\" \"u{61}\")) (codepoints #\\a))
 #[sl_sh_fn(fn_name = "codepoints")]
-fn codepoints(target: String) -> LispResult<Vec<Codepoint>> {
+fn codepoints(target: &str) -> LispResult<Vec<Codepoint>> {
     Ok(target
         .chars()
         .map(|c| Codepoint(c))
