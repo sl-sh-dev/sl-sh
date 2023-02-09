@@ -106,3 +106,6 @@ pub use crate::signals::*;
 
 pub mod unix;
 pub use crate::unix::*;
+
+pub mod macro_types;
+pub use crate::macro_types::*;

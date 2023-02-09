@@ -1,3 +1,5 @@
+use crate::CharString;
+use crate::CharStringRef;
 use crate::LispResult;
 use crate::VarArgs;
 use sl_sh_proc_macros::sl_sh_fn;
