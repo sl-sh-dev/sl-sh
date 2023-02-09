@@ -596,60 +596,57 @@ fn builtin_str_iter_empty(
     Err(LispError::new("str-iter-empty takes a string"))
 }
 
-fn builtin_char_lower(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(ch) = args.next() {
-        if args.next().is_none() {
-            if let ExpEnum::Char(ch) = &eval(environment, ch)?.get().data {
-                return Ok(Expression::alloc_data(ExpEnum::Char(
-                    ch.to_lowercase().into(),
-                )));
-            }
-        }
-    }
-    Err(LispError::new(
-        "char-lower takes a single char and produces it's ascii lowercase char",
-    ))
+/// Usage: (char-lower char) -> char
+///
+/// Get lower case (utf) character for a character.
+///
+/// Section: char
+///
+/// Example:
+/// (test::assert-equal #\a (char-lower #\A))
+/// (test::assert-equal #\a (char-lower #\a))
+/// (test::assert-not-equal #\a (char-lower #\Z))
+/// (test::assert-equal #\λ (char-lower #\Λ))
+/// (test::assert-equal #\λ (char-lower #\λ))
+#[sl_sh_fn(fn_name = "char-lower")]
+fn char_lower(target: CharStringRef) -> CharString {
+    target.0.to_lowercase().into()
 }
 
-fn builtin_char_upper(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(ch) = args.next() {
-        if args.next().is_none() {
-            if let ExpEnum::Char(ch) = &eval(environment, ch)?.get().data {
-                return Ok(Expression::alloc_data(ExpEnum::Char(
-                    ch.to_uppercase().into(),
-                )));
-            }
-        }
-    }
-    Err(LispError::new(
-        "char-upper takes a single char and produces it's ascii upper char",
-    ))
+/// Usage: (char-upper char) -> char
+///
+/// Get upper case (utf) character for a character.
+///
+/// Section: char
+///
+/// Example:
+/// (test::assert-equal #\A (char-upper #\A))
+/// (test::assert-equal #\A (char-upper #\a))
+/// (test::assert-not-equal #\A (char-upper #\Z))
+/// (test::assert-equal #\Λ (char-upper #\λ))
+/// (test::assert-equal #\Λ (char-upper #\Λ))
+#[sl_sh_fn(fn_name = "char-upper")]
+fn char_upper(target: CharStringRef) -> CharString {
+    target.0.to_uppercase().into()
 }
 
-fn builtin_char_is_whitespace(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(ch) = args.next() {
-        if args.next().is_none() {
-            if let ExpEnum::Char(ch) = &eval(environment, ch)?.get().data {
-                return if ch.len() == 1 && ch.chars().next().unwrap().is_whitespace() {
-                    Ok(Expression::alloc_data(ExpEnum::True))
-                } else {
-                    Ok(Expression::make_nil())
-                };
-            }
-        }
+/// Usage: (char-whitespace? char) -> t/nil
+///
+/// Returns true if a character is whitespace, false/nil otherwise.
+///
+/// Section: char
+///
+/// Example:
+/// (test::assert-true (char-whitespace? #\ ))
+/// (test::assert-true (char-whitespace? #\tab))
+/// (test::assert-false (char-whitespace? #\s))
+#[sl_sh_fn(fn_name = "char-whitespace?")]
+fn char_is_whitespace(target: CharString) -> bool {
+    if let Some(target) = target.0.chars().next() {
+        target.is_whitespace()
+    } else {
+        false
     }
-    Err(LispError::new(
-        "char-whitespace? takes a single char and returns true if it is whitespace",
-    ))
 }
 
 fn builtin_char_int(
@@ -966,63 +963,9 @@ Example:
 "#,
         ),
     );
-
-    data.insert(
-        interner.intern("char-lower"),
-        Expression::make_function(
-            builtin_char_lower,
-            r#"Usage: (char-lower char) -> char
-
-Get lower case (utf) character for a character.
-
-Section: char
-
-Example:
-(test::assert-equal #\a (char-lower #\A))
-(test::assert-equal #\a (char-lower #\a))
-(test::assert-not-equal #\a (char-lower #\Z))
-(test::assert-equal #\λ (char-lower #\Λ))
-(test::assert-equal #\λ (char-lower #\λ))
-"#,
-        ),
-    );
-    data.insert(
-        interner.intern("char-upper"),
-        Expression::make_function(
-            builtin_char_upper,
-            r#"Usage: (char-upper char) -> char
-
-Get upper case (utf) character for a character.
-
-Section: char
-
-Example:
-(test::assert-equal #\A (char-upper #\A))
-(test::assert-equal #\A (char-upper #\a))
-(test::assert-not-equal #\A (char-upper #\Z))
-(test::assert-equal #\Λ (char-upper #\λ))
-(test::assert-equal #\Λ (char-upper #\Λ))
-"#,
-        ),
-    );
-    data.insert(
-        interner.intern("char-whitespace?"),
-        Expression::make_function(
-            builtin_char_is_whitespace,
-            r#"Usage: (char-whitespace? char) -> t/nil
-
-Returns true if a character is whitespace, false/nil otherwise.
-
-Section: char
-
-Example:
-(test::assert-true (char-whitespace? #\ ))
-(test::assert-true (char-whitespace? #\tab))
-(test::assert-false (char-whitespace? #\s))
-"#,
-        ),
-    );
-
+    intern_char_lower(interner, data);
+    intern_char_upper(interner, data);
+    intern_char_is_whitespace(interner, data);
     data.insert(
         interner.intern("char->int"),
         Expression::make_function(

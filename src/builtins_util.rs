@@ -232,6 +232,38 @@ impl TryIntoExpression<Expression> for Expression {
     }
 }
 
+impl From<String> for CharString {
+    fn from(value: String) -> Self {
+        CharString(Cow::from(value))
+    }
+}
+
+impl TryIntoExpression<CharString> for Expression {
+    type Error = LispError;
+
+    fn human_readable_dest_type(&self) -> String {
+        ExpEnum::Char(Cow::from(String::default())).to_string()
+    }
+}
+
+impl From<CharString> for Expression {
+    fn from(src: CharString) -> Self {
+        Expression::alloc_data(ExpEnum::Char(src.0.clone()))
+    }
+}
+
+impl TryFrom<Expression> for CharString {
+    type Error = LispError;
+
+    fn try_from(value: Expression) -> Result<Self, Self::Error> {
+        let val = value.get();
+        match &val.data {
+            ExpEnum::Char(char_string) => Ok(CharString(char_string.to_owned())),
+            _ => Err(LispError::new("Can only convert Char from ExpEnum::Char")),
+        }
+    }
+}
+
 impl TryIntoExpression<String> for Expression {
     type Error = LispError;
 

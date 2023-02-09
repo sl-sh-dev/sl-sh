@@ -1132,7 +1132,51 @@ where
     fn apply_ref_mut(&mut self, fn_name: &str, fun: F) -> LispResult<Expression>;
 }
 
-struct Symbol(&'static str, SymLoc);
+pub struct CharString(pub Cow<'static, str>);
+
+pub struct CharStringRef<'a>(pub &'a Cow<'static, str>);
+
+impl<F> RustProcedure<CharString, F> for TypedWrapper<'_, CharString, Expression>
+where
+    F: FnOnce(CharString) -> LispResult<Expression>,
+{
+    fn apply(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
+        let got = self.0.display_type();
+        match &self.0.get().data {
+            ExpEnum::Char(str) => {
+                let sym = CharString(str.to_owned());
+                fun(sym)
+            }
+            _ => Err(LispError::new(ErrorStrings::mismatched_type(
+                fn_name,
+                &ExpEnum::Char(Default::default()).to_string(),
+                &got,
+            ))),
+        }
+    }
+}
+
+impl<F> RustProcedure<CharStringRef<'_>, F> for TypedWrapper<'_, CharStringRef<'_>, Expression>
+where
+    F: FnOnce(CharStringRef<'_>) -> LispResult<Expression>,
+{
+    fn apply(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
+        let got = self.0.display_type();
+        match &self.0.get().data {
+            ExpEnum::Char(str) => {
+                let sym = CharStringRef(str);
+                fun(sym)
+            }
+            _ => Err(LispError::new(ErrorStrings::mismatched_type(
+                fn_name,
+                &ExpEnum::Char(Default::default()).to_string(),
+                &got,
+            ))),
+        }
+    }
+}
+
+pub struct Symbol(&'static str, SymLoc);
 
 impl<F> RustProcedureRefMut<Symbol, F> for TypedWrapper<'_, Symbol, Expression>
 where
