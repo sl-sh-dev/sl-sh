@@ -67,10 +67,10 @@ enum Object {
 }
 
 #[derive(Clone, Copy)]
-union Numeric64 {
-    int: i64,
-    uint: u64,
-    float: f64,
+pub union Numeric64 {
+    pub int: i64,
+    pub uint: u64,
+    pub float: f64,
 }
 
 pub enum MutState {
@@ -122,9 +122,18 @@ macro_rules! value_op {
             Value::CallFrame(handle) => $heap.objects.$op(handle.idx()),
             Value::Value(handle) => $heap.objects.$op(handle.idx()),
 
-            Value::Int64(handle) => $heap.numerics.$op(handle.into()),
-            Value::UInt64(handle) => $heap.numerics.$op(handle.into()),
-            Value::Float64(handle) => $heap.numerics.$op(handle.into()),
+            Value::Int64(handle) => match handle {
+                Numeric::Local(_) => $default,
+                Numeric::Heap(handle) => $heap.numerics.$op(handle.into()),
+            },
+            Value::UInt64(handle) => match handle {
+                Numeric::Local(_) => $default,
+                Numeric::Heap(handle) => $heap.numerics.$op(handle.into()),
+            },
+            Value::Float64(handle) => match handle {
+                Numeric::Local(_) => $default,
+                Numeric::Heap(handle) => $heap.numerics.$op(handle.into()),
+            },
 
             Value::Byte(_)
             | Value::Int32(_)
@@ -205,7 +214,7 @@ impl Heap {
         // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
         let heap: &mut Heap = unsafe { (self as *mut Heap).as_mut().unwrap() };
         let num = Numeric64 { uint: num };
-        Value::Int64(
+        Value::Int64(Numeric::Heap(
             self.numerics
                 .alloc(num, mutable.flag(), || {
                     if heap.paused == 0 {
@@ -213,7 +222,7 @@ impl Heap {
                     }
                 })
                 .into(),
-        )
+        ))
     }
 
     pub fn alloc_i64<MarkFunc>(
@@ -228,7 +237,7 @@ impl Heap {
         // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
         let heap: &mut Heap = unsafe { (self as *mut Heap).as_mut().unwrap() };
         let num = Numeric64 { int: num };
-        Value::UInt64(
+        Value::UInt64(Numeric::Heap(
             self.numerics
                 .alloc(num, mutable.flag(), || {
                     if heap.paused == 0 {
@@ -236,7 +245,7 @@ impl Heap {
                     }
                 })
                 .into(),
-        )
+        ))
     }
 
     pub fn alloc_f64<MarkFunc>(
@@ -251,7 +260,7 @@ impl Heap {
         // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
         let heap: &mut Heap = unsafe { (self as *mut Heap).as_mut().unwrap() };
         let num = Numeric64 { float: num };
-        Value::Float64(
+        Value::Float64(Numeric::Heap(
             self.numerics
                 .alloc(num, mutable.flag(), || {
                     if heap.paused == 0 {
@@ -259,7 +268,7 @@ impl Heap {
                     }
                 })
                 .into(),
-        )
+        ))
     }
 
     pub fn alloc_pair<MarkFunc>(
@@ -429,10 +438,30 @@ impl Heap {
         }
     }
 
+    pub fn get_int_mut(&mut self, handle: Numeric64Handle) -> &mut i64 {
+        unsafe {
+            if let Some(Numeric64 { int }) = self.numerics.get_mut(handle.as_usize()) {
+                int
+            } else {
+                panic!("Handle {handle} is not a valid int!");
+            }
+        }
+    }
+
     pub fn get_uint(&self, handle: Numeric64Handle) -> u64 {
         unsafe {
             if let Some(Numeric64 { uint }) = self.numerics.get(handle.as_usize()) {
                 *uint
+            } else {
+                panic!("Handle {handle} is not a valid uint!");
+            }
+        }
+    }
+
+    pub fn get_uint_mut(&mut self, handle: Numeric64Handle) -> &mut u64 {
+        unsafe {
+            if let Some(Numeric64 { uint }) = self.numerics.get_mut(handle.as_usize()) {
+                uint
             } else {
                 panic!("Handle {handle} is not a valid uint!");
             }

@@ -341,7 +341,7 @@ impl<'vm> Reader<'vm> {
             }
             if ch.len() == 1 {
                 Ok(Value::CodePoint(ch.chars().next().unwrap()))
-            } else if ch.len() < 7 {
+            } else if ch.len() < 6 {
                 let mut v: [u8; 6] = [0; 6];
                 for (i, c) in ch.bytes().enumerate() {
                     v[i] = c;

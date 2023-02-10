@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use crate::chunk::*;
 use crate::error::*;
-use crate::handle::Numeric64Handle;
 use crate::heap::*;
 use crate::interner::*;
 use crate::persistent_map::{MapNode, PersistentMap};
@@ -117,6 +116,11 @@ impl<ENV> GVm<ENV> {
         }
     }
 
+    pub fn local_i64(&mut self, reg: usize, num: i64) -> Value {
+        self.numbers[reg].int = num;
+        Value::Int64(Numeric::Local(reg as u16))
+    }
+
     pub fn alloc_i64(&mut self, num: i64) -> Value {
         // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
         let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
@@ -124,11 +128,21 @@ impl<ENV> GVm<ENV> {
         heap.alloc_i64(num, MutState::Mutable, |heap| self.mark_roots(heap))
     }
 
+    pub fn local_u64(&mut self, reg: usize, num: u64) -> Value {
+        self.numbers[reg].uint = num;
+        Value::UInt64(Numeric::Local(reg as u16))
+    }
+
     pub fn alloc_u64(&mut self, num: u64) -> Value {
         // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
         let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
         // alloc must not save mark_roots (it does not) since we broke heap away from self.
         heap.alloc_u64(num, MutState::Mutable, |heap| self.mark_roots(heap))
+    }
+
+    pub fn local_f64(&mut self, reg: usize, num: f64) -> Value {
+        self.numbers[reg].float = num;
+        Value::Float64(Numeric::Local(reg as u16))
     }
 
     pub fn alloc_f64(&mut self, num: f64) -> Value {
@@ -331,20 +345,46 @@ impl<ENV> GVm<ENV> {
         self.globals.get(idx)
     }
 
-    pub fn get_int(&self, handle: Numeric64Handle) -> i64 {
-        self.heap.get_int(handle)
+    pub fn get_int(&self, handle: Numeric) -> i64 {
+        match handle {
+            Numeric::Local(idx) => unsafe { self.numbers[idx as usize].int },
+            Numeric::Heap(handle) => self.heap.get_int(handle),
+        }
     }
 
-    pub fn get_uint(&self, handle: Numeric64Handle) -> u64 {
-        self.heap.get_uint(handle)
+    pub fn get_int_mut(&mut self, handle: Numeric) -> &mut i64 {
+        match handle {
+            Numeric::Local(idx) => unsafe { &mut self.numbers[idx as usize].int },
+            Numeric::Heap(handle) => self.heap.get_int_mut(handle),
+        }
     }
 
-    pub fn get_float(&self, handle: Numeric64Handle) -> f64 {
-        self.heap.get_float(handle)
+    pub fn get_uint(&self, handle: Numeric) -> u64 {
+        match handle {
+            Numeric::Local(idx) => unsafe { self.numbers[idx as usize].uint },
+            Numeric::Heap(handle) => self.heap.get_uint(handle),
+        }
     }
 
-    pub fn get_float_mut(&mut self, handle: Numeric64Handle) -> &mut f64 {
-        self.heap.get_float_mut(handle)
+    pub fn get_uint_mut(&mut self, handle: Numeric) -> &mut u64 {
+        match handle {
+            Numeric::Local(idx) => unsafe { &mut self.numbers[idx as usize].uint },
+            Numeric::Heap(handle) => self.heap.get_uint_mut(handle),
+        }
+    }
+
+    pub fn get_float(&self, handle: Numeric) -> f64 {
+        match handle {
+            Numeric::Local(idx) => unsafe { self.numbers[idx as usize].float },
+            Numeric::Heap(handle) => self.heap.get_float(handle),
+        }
+    }
+
+    pub fn get_float_mut(&mut self, handle: Numeric) -> &mut f64 {
+        match handle {
+            Numeric::Local(idx) => unsafe { &mut self.numbers[idx as usize].float },
+            Numeric::Heap(handle) => self.heap.get_float_mut(handle),
+        }
     }
 
     pub fn get_string(&self, handle: Handle) -> &str {

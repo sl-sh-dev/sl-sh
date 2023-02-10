@@ -20,6 +20,7 @@ pub struct GVm<ENV> {
     interner: Interner,
     heap: Heap,
     //stack: Vec<Value>,
+    numbers: [Numeric64; STACK_CAP],
     stack: [Value; STACK_CAP],
     globals: Globals,
     buitins: Vec<CallFunc<ENV>>,
@@ -58,6 +59,7 @@ impl<ENV> GVm<ENV> {
         Self {
             interner: Interner::with_capacity(8192),
             heap: Heap::new(),
+            numbers: [Numeric64 { int: 0 }; STACK_CAP],
             stack: [Value::Undefined; STACK_CAP],
             globals,
             buitins: Vec::new(),

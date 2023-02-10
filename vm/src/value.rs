@@ -105,13 +105,19 @@ impl Hash for F64Wrap {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub enum Numeric {
+    Local(u16),
+    Heap(Numeric64Handle),
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum Value {
     Byte(u8),
     Int32(i32),
     UInt32(u32),
-    Int64(Numeric64Handle),
-    UInt64(Numeric64Handle),
-    Float64(Numeric64Handle),
+    Int64(Numeric),   //64Handle),
+    UInt64(Numeric),  //64Handle),
+    Float64(Numeric), //64Handle),
     CodePoint(char),
     CharCluster(u8, [u8; 6]),
     CharClusterLong(Handle), // XXX TODO- move to Object?
@@ -139,45 +145,6 @@ pub enum Value {
     Continuation(Handle),
     CallFrame(Handle),
     Value(Handle),
-}
-
-type Handle2 = u32;
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub enum Value2 {
-    Byte(u8),
-    Int(u32),
-    UInt(u32),
-    UInt48([u8; 6]),
-    UInt56([u8; 7]),
-    //Float(u32),
-    //Float(F64Wrap),
-    //IntXX(u64),
-    CodePoint(char),
-    CharCluster(u8, [u8; 6]),
-    CharClusterLong(Handle2), // XXX TODO- move to Object?
-    Symbol(Interned),
-    Keyword(Interned),
-    StringConst(Interned),
-    Builtin(u32),
-    True,
-    False,
-    Nil,
-    Undefined,
-
-    String(Handle2),
-    Vector(Handle2),
-    PersistentVec(Handle2),
-    PersistentMap(Handle2),
-    Map(Handle2),
-    Bytes(Handle2),
-    Pair(Handle2),
-    List(Handle2, u8, u16),
-    Lambda(Handle2),
-    Closure(Handle2),
-    Continuation(Handle2),
-    CallFrame(Handle2),
-    Value(Handle2),
 }
 
 impl Default for Value {
@@ -595,6 +562,7 @@ impl Globals {
     }
 
     pub fn set(&mut self, idx: u32, val: Value) {
+        // XXXX - promote local numbers.
         self.objects[idx as usize] = val;
     }
 

@@ -352,27 +352,83 @@ macro_rules! binary_math {
         let (dest, op2) = decode2!($code, $ip, $wide);
         let op1 = get_reg!($registers, dest);
         let op2 = get_reg!($registers, op2);
-        let val = if matches!(op1, Value::Float64(_)) || matches!(op2, Value::Float64(_)) {
-            if let Value::Float64(handle) = op1 {
-                *$vm.get_float_mut(handle) = $bin_fn(
-                    get_float!($vm, op1).map_err(|e| (e, $chunk.clone()))?,
+        match (op1, op2) {
+            (Value::Float64(op1_handle), Value::Float64(op2_handle)) => {
+                *$vm.get_float_mut(op1_handle) =
+                    $bin_fn($vm.get_float(op1_handle), $vm.get_float(op2_handle));
+            }
+            (Value::Float64(op1_handle), _) => {
+                *$vm.get_float_mut(op1_handle) = $bin_fn(
+                    $vm.get_float(op1_handle),
                     get_float!($vm, op2).map_err(|e| (e, $chunk.clone()))?,
                 );
-                op1
-            } else {
-                $vm.alloc_f64($bin_fn(
-                    get_float!($vm, op1).map_err(|e| (e, $chunk.clone()))?,
-                    get_float!($vm, op2).map_err(|e| (e, $chunk.clone()))?,
-                ))
             }
-        } else {
-            // XXX TODO- overflow
-            Value::Int32($bin_fn(
-                get_int!($vm, op1).map_err(|e| (e, $chunk.clone()))?,
-                get_int!($vm, op2).map_err(|e| (e, $chunk.clone()))?,
-            ) as i32)
-        };
-        mov_register!($registers, dest as usize, val);
+            (_, Value::Float64(op2_handle)) => {
+                $registers[dest as usize] = $vm.local_f64(
+                    dest as usize,
+                    $bin_fn(
+                        get_float!($vm, op1).map_err(|e| (e, $chunk.clone()))?,
+                        $vm.get_float(op2_handle),
+                    ),
+                );
+            }
+            (Value::Int64(op1_handle), Value::Int64(op2_handle)) => {
+                *$vm.get_int_mut(op1_handle) =
+                    $bin_fn($vm.get_int(op1_handle), $vm.get_int(op2_handle));
+            }
+            (Value::Int64(op1_handle), _) => {
+                *$vm.get_int_mut(op1_handle) = $bin_fn(
+                    $vm.get_int(op1_handle),
+                    get_int!($vm, op2).map_err(|e| (e, $chunk.clone()))?,
+                );
+            }
+            (Value::UInt64(op1_handle), Value::UInt64(op2_handle)) => {
+                *$vm.get_uint_mut(op1_handle) =
+                    $bin_fn($vm.get_uint(op1_handle), $vm.get_uint(op2_handle));
+            }
+            (Value::UInt64(op1_handle), _) => {
+                let val = $bin_fn(
+                    $vm.get_uint(op1_handle) as i64,
+                    get_int!($vm, op2).map_err(|e| (e, $chunk.clone()))?,
+                );
+                if val >= 0 {
+                    *$vm.get_uint_mut(op1_handle) = val as u64;
+                } else {
+                    $registers[dest as usize] = $vm.local_i64(dest as usize, val);
+                }
+            }
+            (Value::Int32(op1_val), _) => {
+                let val = $bin_fn(
+                    op1_val as i64,
+                    get_int!($vm, op2).map_err(|e| (e, $chunk.clone()))?,
+                );
+                if val < i32::MAX as i64 {
+                    $registers[dest as usize] = Value::Int32(val as i32);
+                } else {
+                    $registers[dest as usize] = $vm.local_i64(dest as usize, val);
+                }
+            }
+            (Value::UInt32(op1_val), _) => {
+                let val = $bin_fn(
+                    op1_val as i64,
+                    get_int!($vm, op2).map_err(|e| (e, $chunk.clone()))?,
+                );
+                if val >= 0 && val < u32::MAX as i64 {
+                    $registers[dest as usize] = Value::UInt32(val as u32);
+                } else {
+                    $registers[dest as usize] = $vm.local_i64(dest as usize, val);
+                }
+            }
+            (_, _) => {
+                $registers[dest as usize] = $vm.local_i64(
+                    dest as usize,
+                    $bin_fn(
+                        get_int!($vm, op1).map_err(|e| (e, $chunk.clone()))?,
+                        get_int!($vm, op2).map_err(|e| (e, $chunk.clone()))?,
+                    ),
+                );
+            }
+        }
     }};
 }
 
@@ -381,41 +437,111 @@ macro_rules! div_math {
         let (dest, op2) = decode2!($code, $ip, $wide);
         let op1 = get_reg!($registers, dest);
         let op2 = get_reg!($registers, op2);
-        let val = if matches!(op1, Value::Float64(_)) || matches!(op2, Value::Float64(_)) {
-            let op2 = get_float!($vm, op2).map_err(|e| (e, $chunk.clone()))?;
-            if op2 == 0.0 {
-                return Err((VMError::new_vm("Divide by zero error."), $chunk));
+        match (op1, op2) {
+            (Value::Float64(op1_handle), Value::Float64(op2_handle)) => {
+                let op1 = $vm.get_float(op1_handle);
+                let op2 = $vm.get_float(op2_handle);
+                if op2 == 0.0 {
+                    return Err((VMError::new_vm("Divide by zero error."), $chunk));
+                }
+                *$vm.get_float_mut(op1_handle) = op1 / op2;
             }
-            if let Value::Float64(handle) = op1 {
-                *$vm.get_float_mut(handle) =
-                    get_float!($vm, op1).map_err(|e| (e, $chunk.clone()))? / op2;
-                op1
-            } else {
-                $vm.alloc_f64(get_float!($vm, op1).map_err(|e| (e, $chunk.clone()))? / op2)
+            (Value::Float64(op1_handle), _) => {
+                let op1 = $vm.get_float(op1_handle);
+                let op2 = get_float!($vm, op2).map_err(|e| (e, $chunk.clone()))?;
+                if op2 == 0.0 {
+                    return Err((VMError::new_vm("Divide by zero error."), $chunk));
+                }
+                *$vm.get_float_mut(op1_handle) = op1 / op2;
             }
-        } else {
-            // XXX TODO- overflow
-            let op2 = get_int!($vm, op2).map_err(|e| (e, $chunk.clone()))? as i32;
-            if op2 == 0 {
-                return Err((VMError::new_vm("Divide by zero error."), $chunk));
+            (_, Value::Float64(op2_handle)) => {
+                let op1 = get_float!($vm, op1).map_err(|e| (e, $chunk.clone()))?;
+                let op2 = $vm.get_float(op2_handle);
+                if op2 == 0.0 {
+                    return Err((VMError::new_vm("Divide by zero error."), $chunk));
+                }
+                $registers[dest as usize] = $vm.local_f64(dest as usize, op1 / op2);
             }
-            Value::Int32(get_int!($vm, op1).map_err(|e| (e, $chunk.clone()))? as i32 / op2)
-        };
-        mov_register!($registers, dest as usize, val);
-    }};
-}
-
-/*#[macro_export]
-macro_rules! set_register {
-    ($vm:expr, $registers:expr, $idx:expr, $val:expr) => {{
-        match &get_reg!($registers, $idx) {
-            Value::Value(handle) => {
-                *($vm.heap.get_value_mut(*handle)) = $val;
+            (Value::Int64(op1_handle), Value::Int64(op2_handle)) => {
+                let op1 = $vm.get_int(op1_handle);
+                let op2 = $vm.get_int(op2_handle);
+                if op2 == 0 {
+                    return Err((VMError::new_vm("Divide by zero error."), $chunk));
+                }
+                *$vm.get_int_mut(op1_handle) = op1 / op2;
             }
-            _ => $registers[$idx] = $val,
+            (Value::Int64(op1_handle), _) => {
+                let op1 = $vm.get_int(op1_handle);
+                let op2 = get_int!($vm, op2).map_err(|e| (e, $chunk.clone()))?;
+                if op2 == 0 {
+                    return Err((VMError::new_vm("Divide by zero error."), $chunk));
+                }
+                *$vm.get_int_mut(op1_handle) = op1 / op2;
+            }
+            (Value::UInt64(op1_handle), Value::UInt64(op2_handle)) => {
+                let op1 = $vm.get_uint(op1_handle);
+                let op2 = $vm.get_uint(op2_handle);
+                if op2 == 0 {
+                    return Err((VMError::new_vm("Divide by zero error."), $chunk));
+                }
+                *$vm.get_uint_mut(op1_handle) = op1 / op2;
+            }
+            (Value::UInt64(op1_handle), _) => {
+                let op1 = $vm.get_uint(op1_handle);
+                let op2 = get_int!($vm, op2).map_err(|e| (e, $chunk.clone()))?;
+                if op2 == 0 {
+                    return Err((VMError::new_vm("Divide by zero error."), $chunk));
+                }
+                if op2 > 0 {
+                    *$vm.get_uint_mut(op1_handle) = op1 / op2 as u64;
+                } else {
+                    $registers[dest as usize] = $vm.local_i64(dest as usize, op1 as i64 / op2);
+                }
+            }
+            (Value::Int32(op1_val), _) => {
+                let op1 = op1_val as i64;
+                let op2 = get_int!($vm, op2).map_err(|e| (e, $chunk.clone()))?;
+                if op2 == 0 {
+                    return Err((VMError::new_vm("Divide by zero error."), $chunk));
+                }
+                let val = op1 / op2;
+                if val < i32::MAX as i64 {
+                    $registers[dest as usize] = Value::Int32(val as i32);
+                } else {
+                    $registers[dest as usize] = $vm.local_i64(dest as usize, val);
+                }
+            }
+            (Value::UInt32(op1_val), _) => {
+                let op1 = op1_val as i64;
+                let op2 = get_int!($vm, op2).map_err(|e| (e, $chunk.clone()))?;
+                if op2 == 0 {
+                    return Err((VMError::new_vm("Divide by zero error."), $chunk));
+                }
+                let val = op1 / op2;
+                if val >= 0 && val < u32::MAX as i64 {
+                    $registers[dest as usize] = Value::UInt32(val as u32);
+                } else {
+                    $registers[dest as usize] = $vm.local_i64(dest as usize, val);
+                }
+            }
+            (_, _) => {
+                let op1 = get_int!($vm, op1).map_err(|e| (e, $chunk.clone()))?;
+                let op2 = get_int!($vm, op2).map_err(|e| (e, $chunk.clone()))?;
+                if op2 == 0 {
+                    return Err((VMError::new_vm("Divide by zero error."), $chunk));
+                }
+                let val = op1 / op2;
+                if val >= 0 && val < u32::MAX as i64 {
+                    $registers[dest as usize] = Value::UInt32(val as u32);
+                } else if val > i32::MIN as i64 && val < 0 {
+                    $registers[dest as usize] = Value::Int32(val as i32);
+                } else {
+                    $registers[dest as usize] = $vm.local_i64(dest as usize, val);
+                }
+            }
         }
     }};
-}*/
+}
 
 #[macro_export]
 macro_rules! set_register {
@@ -427,9 +553,23 @@ macro_rules! set_register {
             (Value::Float64(handle_to), Value::Float64(handle_from)) => {
                 *$vm.get_float_mut(*handle_to) = $vm.get_float(handle_from);
             }
+            (Value::Int64(handle_to), Value::Int64(handle_from)) => {
+                *$vm.get_int_mut(*handle_to) = $vm.get_int(handle_from);
+            }
+            (Value::UInt64(handle_to), Value::UInt64(handle_from)) => {
+                *$vm.get_uint_mut(*handle_to) = $vm.get_uint(handle_from);
+            }
             (_, Value::Float64(handle_from)) => {
                 let f = $vm.get_float(handle_from);
-                $registers[$idx] = $vm.alloc_f64(f);
+                $registers[$idx] = $vm.local_f64($idx, f);
+            }
+            (_, Value::Int64(handle_from)) => {
+                let f = $vm.get_int(handle_from);
+                $registers[$idx] = $vm.local_i64($idx, f);
+            }
+            (_, Value::UInt64(handle_from)) => {
+                let f = $vm.get_uint(handle_from);
+                $registers[$idx] = $vm.local_u64($idx, f);
             }
             _ => $registers[$idx] = $val,
         }
@@ -450,19 +590,26 @@ macro_rules! mov_register_num {
             (Value::Float64(handle_to), Value::Float64(handle_from)) => {
                 *$vm.get_float_mut(*handle_to) = $vm.get_float(handle_from);
             }
+            (Value::Int64(handle_to), Value::Int64(handle_from)) => {
+                *$vm.get_int_mut(*handle_to) = $vm.get_int(handle_from);
+            }
+            (Value::UInt64(handle_to), Value::UInt64(handle_from)) => {
+                *$vm.get_uint_mut(*handle_to) = $vm.get_uint(handle_from);
+            }
             (_, Value::Float64(handle_from)) => {
                 let f = $vm.get_float(handle_from);
-                $registers[$idx] = $vm.alloc_f64(f);
+                $registers[$idx] = $vm.local_f64($idx, f);
+            }
+            (_, Value::Int64(handle_from)) => {
+                let f = $vm.get_int(handle_from);
+                $registers[$idx] = $vm.local_i64($idx, f);
+            }
+            (_, Value::UInt64(handle_from)) => {
+                let f = $vm.get_uint(handle_from);
+                $registers[$idx] = $vm.local_u64($idx, f);
             }
             _ => $registers[$idx] = $val,
         }
-        /*match $val {
-            Value::Float64(handle_from) => {
-                let f = $vm.get_float(handle_from);
-                $registers[$idx] = $vm.alloc_f64(f);
-            }
-            _ => $registers[$idx] = $val,
-        }*/
     }};
 }
 
@@ -473,9 +620,23 @@ macro_rules! set_value {
             (Value::Float64(handle_to), Value::Float64(handle_from)) => {
                 *$vm.get_float_mut(handle_to) = $vm.get_float(handle_from);
             }
+            (Value::Int64(handle_to), Value::Int64(handle_from)) => {
+                *$vm.get_int_mut(handle_to) = $vm.get_int(handle_from);
+            }
+            (Value::UInt64(handle_to), Value::UInt64(handle_from)) => {
+                *$vm.get_uint_mut(handle_to) = $vm.get_uint(handle_from);
+            }
             (_, Value::Float64(handle_from)) => {
                 let f = $vm.get_float(handle_from);
                 $left = $vm.alloc_f64(f);
+            }
+            (_, Value::Int64(handle_from)) => {
+                let f = $vm.get_int(handle_from);
+                $left = $vm.alloc_i64(f);
+            }
+            (_, Value::UInt64(handle_from)) => {
+                let f = $vm.get_uint(handle_from);
+                $left = $vm.alloc_u64(f);
             }
             _ => $left = $right,
         }

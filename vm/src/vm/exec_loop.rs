@@ -827,11 +827,13 @@ impl<ENV> GVm<ENV> {
                 ),
                 INC => {
                     let (dest, i) = decode2!(code, &mut self.ip, wide);
-                    let val = match get_reg!(registers, dest) {
+                    match get_reg!(registers, dest) {
                         // XXX TODO- int 64, overflow
-                        Value::Byte(v) => Value::Byte(v + i as u8),
-                        Value::Int32(v) => Value::Int32(v + i as i32),
-                        Value::UInt32(v) => Value::UInt32(v + i as u32),
+                        Value::Byte(v) => registers[dest as usize] = Value::Byte(v + i as u8),
+                        Value::Int32(v) => registers[dest as usize] = Value::Int32(v + i as i32),
+                        Value::UInt32(v) => registers[dest as usize] = Value::UInt32(v + i as u32),
+                        Value::Int64(handle) => *self.get_int_mut(handle) += i as i64,
+                        Value::UInt64(handle) => *self.get_uint_mut(handle) += i as u64,
                         _ => {
                             return Err((
                                 VMError::new_vm(format!(
@@ -841,17 +843,29 @@ impl<ENV> GVm<ENV> {
                                 chunk,
                             ))
                         }
-                    };
-                    set_register!(self, registers, dest as usize, val);
-                    //mov_register!(registers, dest as usize, val);
+                    }
                 }
                 DEC => {
                     let (dest, i) = decode2!(code, &mut self.ip, wide);
-                    let val = match get_reg!(registers, dest) {
+                    match get_reg!(registers, dest) {
                         // XXX TODO- int 64, overflow
-                        Value::Byte(v) => Value::Byte(v - i as u8),
-                        Value::Int32(v) => Value::Int32(v - i as i32),
-                        Value::UInt32(v) => Value::UInt32(v - i as u32),
+                        Value::Byte(v) => registers[dest as usize] = Value::Byte(v - i as u8),
+                        Value::Int32(v) => registers[dest as usize] = Value::Int32(v - i as i32),
+                        Value::UInt32(v) => {
+                            if (i as u32) < v {
+                                registers[dest as usize] = Value::UInt32(v - i as u32)
+                            } else {
+                                registers[dest as usize] = Value::UInt32(0)
+                            }
+                        }
+                        Value::Int64(handle) => *self.get_int_mut(handle) -= i as i64,
+                        Value::UInt64(handle) => {
+                            if (i as u64) < self.get_uint(handle) {
+                                *self.get_uint_mut(handle) -= i as u64;
+                            } else {
+                                *self.get_uint_mut(handle) = 0;
+                            }
+                        }
                         _ => {
                             return Err((
                                 VMError::new_vm(format!(
@@ -861,8 +875,7 @@ impl<ENV> GVm<ENV> {
                                 chunk,
                             ))
                         }
-                    };
-                    set_register!(self, registers, dest as usize, val);
+                    }
                 }
                 CONS => {
                     let (dest, op2, op3) = decode3!(code, &mut self.ip, wide);

@@ -26,17 +26,17 @@ impl From<u32> for Handle {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Numeric64Handle(u32);
+pub struct Numeric64Handle(u16);
 
 impl From<u32> for Numeric64Handle {
     fn from(idx: u32) -> Self {
-        Self(idx)
+        Self(idx as u16)
     }
 }
 
 impl From<Numeric64Handle> for u32 {
     fn from(handle: Numeric64Handle) -> Self {
-        handle.0
+        handle.0 as u32
     }
 }
 
