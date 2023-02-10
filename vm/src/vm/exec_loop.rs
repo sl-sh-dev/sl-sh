@@ -314,12 +314,13 @@ impl<ENV> GVm<ENV> {
                 SET => {
                     let (dest, src) = decode2!(code, &mut self.ip, wide);
                     let val = get_reg!(registers, src);
-                    match &get_reg!(registers, dest) {
+                    set_register!(self, registers, dest as usize, val);
+                    /*match &get_reg!(registers, dest) {
                         Value::Value(handle) => {
                             *(self.get_value_mut(*handle)) = val;
                         }
                         _ => registers[dest as usize] = val,
-                    }
+                    }*/
                 }
                 CONST => {
                     let (dest, src) = decode2!(code, &mut self.ip, wide);
