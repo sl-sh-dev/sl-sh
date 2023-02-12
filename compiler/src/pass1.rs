@@ -52,6 +52,7 @@ pub fn pass1(env: &mut SloshVm, state: &mut CompileState, exp: Value) -> VMResul
         Value::Value(_) => {}
 
         _ => {
+            env.heap_immutable(exp);
             state.add_constant(exp);
         }
     }

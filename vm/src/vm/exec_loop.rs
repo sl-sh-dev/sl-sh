@@ -297,7 +297,7 @@ impl<ENV> GVm<ENV> {
                 }
                 MDSC => {
                     let decodes = decode3!(code, &mut self.ip, wide);
-                    self.map_destructure(decodes, /*&chunk.code[..],*/ registers) //, wide)
+                    self.map_destructure(decodes, registers)
                         .map_err(|e| (e, chunk.clone()))?;
                 }
                 COPY => {
@@ -307,27 +307,17 @@ impl<ENV> GVm<ENV> {
                 FRZ => {
                     let target = decode1!(code, &mut self.ip, wide);
                     let target = get_reg!(registers, target);
-                    if let Some(_handle) = target.get_handle() {
-                        // XXX mark handle read only
-                    }
+                    self.heap.immutable(target);
                 }
                 SET => {
                     let (dest, src) = decode2!(code, &mut self.ip, wide);
                     let val = get_reg!(registers, src);
                     set_register!(self, registers, dest as usize, val);
-                    /*match &get_reg!(registers, dest) {
-                        Value::Value(handle) => {
-                            *(self.get_value_mut(*handle)) = val;
-                        }
-                        _ => registers[dest as usize] = val,
-                    }*/
                 }
                 CONST => {
                     let (dest, src) = decode2!(code, &mut self.ip, wide);
                     let val = chunk.constants[src as usize];
                     set_register!(self, registers, dest as usize, val);
-                    // XXXSLS
-                    //mov_register!(registers, dest as usize, val);
                 }
                 DEF => {
                     let src = decode1!(code, &mut self.ip, wide);
@@ -337,7 +327,7 @@ impl<ENV> GVm<ENV> {
                         decode_u16!(code, &mut self.ip) as u32
                     };
                     let val = get_reg!(registers, src);
-                    self.globals.set(idx, val);
+                    self.set_global(idx, val);
                 }
                 DEFV => {
                     let src = decode1!(code, &mut self.ip, wide);
@@ -348,7 +338,7 @@ impl<ENV> GVm<ENV> {
                     };
                     let val = get_reg!(registers, src);
                     if let Value::Undefined = self.globals.get(idx) {
-                        self.globals.set(idx, val);
+                        self.set_global(idx, val);
                     }
                 }
                 REFI => {
@@ -358,7 +348,7 @@ impl<ENV> GVm<ENV> {
                     } else {
                         decode_u16!(code, &mut self.ip) as u32
                     };
-                    mov_register!(registers, dest as usize, self.globals.get(idx));
+                    mov_register_num!(self, registers, dest as usize, self.globals.get(idx));
                 }
                 CLRREG => {
                     let dest = decode1!(code, &mut self.ip, wide);
@@ -398,7 +388,6 @@ impl<ENV> GVm<ENV> {
                     let lambda = get_reg_unref!(registers, src, self);
                     let (lambda, caps) = if let Value::Lambda(h) = lambda {
                         let l = self.heap.get_lambda(h);
-                        let l = l.clone();
                         let mut caps = Vec::new();
                         if let Some(captures) = &l.captures {
                             for c in captures {
@@ -412,7 +401,7 @@ impl<ENV> GVm<ENV> {
                                 }
                             }
                         }
-                        (l.clone(), caps)
+                        (l, caps)
                     } else {
                         return Err((
                             VMError::new_vm(format!("CLOSE: requires a lambda, got {lambda:?}.")),

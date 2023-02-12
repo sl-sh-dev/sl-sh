@@ -687,6 +687,10 @@ impl Heap {
         }
     }
 
+    pub fn immutable(&mut self, val: Value) {
+        value_op!(self, val, immutable, ());
+    }
+
     pub fn sticky(&mut self, val: Value) {
         value_op!(self, val, sticky, ());
     }

@@ -561,8 +561,9 @@ impl Globals {
         index as u32
     }
 
+    /// Sets a global to val.  The value needs have local numbers promoted to the heap before
+    /// setting it.
     pub fn set(&mut self, idx: u32, val: Value) {
-        // XXXX - promote local numbers.
         self.objects[idx as usize] = val;
     }
 

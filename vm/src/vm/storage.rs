@@ -88,6 +88,7 @@ impl<ENV> GVm<ENV> {
     }
 
     pub fn set_global(&mut self, slot: u32, value: Value) {
+        let value = self.promote_number(value);
         self.globals.set(slot, value);
     }
 
@@ -285,11 +286,34 @@ impl<ENV> GVm<ENV> {
         heap.alloc_callframe(frame, |heap| self.mark_roots(heap))
     }
 
+    /// If val is a 64 bit number stored on the number stack then promote to the heap.  Otherwise
+    /// just return val.
+    fn promote_number(&mut self, mut val: Value) -> Value {
+        // If we have a number stored locally then put it on the heap as well as the value that references it.
+        if let Value::Int64(Numeric::Local(idx)) = val {
+            val = self.alloc_i64(unsafe { self.numbers[idx as usize].int });
+        }
+        if let Value::UInt64(Numeric::Local(idx)) = val {
+            val = self.alloc_u64(unsafe { self.numbers[idx as usize].uint });
+        }
+        if let Value::Float64(Numeric::Local(idx)) = val {
+            val = self.alloc_f64(unsafe { self.numbers[idx as usize].float });
+        }
+        val
+    }
+
+    /// Allocate a Value on the heap.  Moving a value to the heap is useful for captured variable
+    /// for instance.
     pub fn alloc_value(&mut self, val: Value) -> Value {
+        let val = self.promote_number(val);
         // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
         let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
         // alloc must not save mark_roots (it does not) since we broke heap away from self.
         heap.alloc_value(val, MutState::Mutable, |heap| self.mark_roots(heap))
+    }
+
+    pub fn heap_immutable(&mut self, val: Value) {
+        self.heap.immutable(val);
     }
 
     pub fn heap_sticky(&mut self, val: Value) {

@@ -1,4 +1,6 @@
-use crate::bits::{is_live, is_marked, is_mutable, is_traced, FLAG_MARK, FLAG_STICKY, FLAG_TRACED};
+use crate::bits::{
+    is_live, is_marked, is_mutable, is_traced, FLAG_MARK, FLAG_MUT, FLAG_STICKY, FLAG_TRACED,
+};
 use crate::{clear_bit, is_bit_set, set_bit};
 
 #[derive(Debug)]
@@ -91,11 +93,21 @@ impl<T: Clone> Storage<T> {
         }
     }
 
+    /// Is the object at index mutable.
     pub fn is_mutable(&self, idx: usize) -> bool {
         if let Some(flag) = self.flags.get(idx) {
             is_mutable(*flag)
         } else {
             false
+        }
+    }
+
+    /// Mark the object at index immutable.
+    pub fn immutable(&mut self, idx: usize) {
+        if let Some(flag) = self.flags.get_mut(idx) {
+            clear_bit!(*flag, FLAG_MUT);
+        } else {
+            panic!("Invalid object handle in immutable!")
         }
     }
 
