@@ -51,10 +51,10 @@ fn main() -> Result<(), VMError> {
     chunk.encode2(REFI, 1, 2, Some(2))?;
     chunk.encode3(CONS, 1, 2, 3, None)?;
     chunk.encode2(DEF, 1, 2, Some(4))?;
-    chunk.encode0(JMP, Some(5))?;
-    chunk.encode_jump_offset(1)?;
-    chunk.encode1(JMPT, 1, Some(5))?;
-    chunk.encode_jump_offset(-12)?;
+    let jmp_idx = chunk.add_jump(1);
+    chunk.encode1(JMP, jmp_idx as u16, Some(5))?;
+    let jmp_idx = chunk.add_jump(chunk.code.len() as u32 - 12);
+    chunk.encode2(JMPT, 1, jmp_idx as u16, Some(5))?;
     let vm = Vm::new();
     chunk.disassemble_chunk(&vm, 0)?;
 

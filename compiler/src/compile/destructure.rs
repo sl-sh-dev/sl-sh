@@ -126,20 +126,17 @@ impl DestructState {
     ) -> VMResult<()> {
         for opt_comps in &self.all_optionals {
             for (target_reg, default) in opt_comps {
+                let jmp_idx = state.chunk.add_jump(0);
                 state
                     .chunk
-                    .encode1(JMPNU, *target_reg as u16, env.own_line())?;
-                let encode_offset = state.chunk.code.len();
-                state.chunk.encode_jump_offset(0)?;
-                let start_offset = state.chunk.code.len();
+                    .encode2(JMPNU, *target_reg as u16, jmp_idx as u16, env.own_line())?;
                 compile(env, state, *default, free_reg)?;
                 state
                     .chunk
                     .encode2(MOV, *target_reg as u16, free_reg as u16, env.own_line())?;
-                state.chunk.reencode_jump_offset(
-                    encode_offset,
-                    (state.chunk.code.len() - start_offset) as i32,
-                )?;
+                state
+                    .chunk
+                    .update_jump(jmp_idx, state.chunk.code.len() as u32);
             }
         }
         Ok(())
@@ -343,15 +340,14 @@ impl DestructState {
         let err_str = Value::StringConst(env.intern("missing structure"));
         // For each destructure raise an error if something was missing.
         for destructure in &self.destructures {
-            state.chunk.encode2(
+            let jmp_idx = state.chunk.add_jump(0);
+            state.chunk.encode3(
                 JMPRNU,
                 destructure.start_reg,
                 destructure.len,
+                jmp_idx as u16,
                 env.own_line(),
             )?;
-            let encode_offset = state.chunk.code.len();
-            state.chunk.encode_jump_offset(0)?;
-            let start_offset = state.chunk.code.len();
             mkconst(env, state, kw, *free_reg)?;
             mkconst(env, state, err_str, *free_reg + 1)?;
             state.chunk.encode2(
@@ -360,10 +356,9 @@ impl DestructState {
                 (*free_reg + 1) as u16,
                 env.own_line(),
             )?;
-            state.chunk.reencode_jump_offset(
-                encode_offset,
-                (state.chunk.code.len() - start_offset) as i32,
-            )?;
+            state
+                .chunk
+                .update_jump(jmp_idx, state.chunk.code.len() as u32);
         }
         self.destructures.clear();
         self.all_optionals.clear();

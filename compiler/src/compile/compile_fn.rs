@@ -111,20 +111,17 @@ pub(crate) fn compile_fn(
     let reserved = new_state.reserved_regs();
     for (i, r) in opt_comps.into_iter().enumerate() {
         let target_reg = new_state.chunk.args as usize + i + 1;
+        let jmp_idx = new_state.chunk.add_jump(0);
         new_state
             .chunk
-            .encode1(JMPNU, target_reg as u16, env.own_line())?;
-        let encode_offset = new_state.chunk.code.len();
-        new_state.chunk.encode_jump_offset(0)?;
-        let start_offset = new_state.chunk.code.len();
+            .encode2(JMPNU, target_reg as u16, jmp_idx as u16, env.own_line())?;
         compile(env, &mut new_state, r, reserved)?;
         new_state
             .chunk
             .encode2(MOV, target_reg as u16, reserved as u16, env.own_line())?;
-        new_state.chunk.reencode_jump_offset(
-            encode_offset,
-            (new_state.chunk.code.len() - start_offset) as i32,
-        )?;
+        new_state
+            .chunk
+            .update_jump(jmp_idx, new_state.chunk.code.len() as u32);
     }
     let mut destruct_state = DestructState::new();
     for destruct_type in destructure_patterns {

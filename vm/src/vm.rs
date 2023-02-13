@@ -789,35 +789,35 @@ mod tests {
         chunk.encode3(VECMKD, 10, 100, 103, Some(line))?; // pols
                                                           //chunk.encode2(VECELS, 10, 100, Some(line))?;
                                                           // loop i .. n
+        let jmp0_idx = chunk.add_jump(chunk.code.len() as u32);
         chunk.encode2(CONST, 3, zerof, Some(line))?;
         chunk.encode2(CONST, 7, zero, Some(line))?; // j
-                                                    // loop j .. 100
-                                                    // (set! mu (/ (+ mu 2.0) 2.0))
+        let jmp1_idx = chunk.add_jump(chunk.code.len() as u32);
+        // loop j .. 100
+        // (set! mu (/ (+ mu 2.0) 2.0))
         chunk.encode2(ADD, 4, 8, Some(line))?;
         chunk.encode2(DIV, 4, 8, Some(line))?;
         // (vec-set! pol j mu)))
         chunk.encode3(VECSTH, 10, 4, 7, Some(line))?;
 
         chunk.encode2(INC, 7, 1, Some(line))?;
-        chunk.encode2(JMPLT, 7, 100, Some(line))?;
-        chunk.encode_jump_offset(-19)?;
+        chunk.encode3(JMPLT, 7, 100, jmp1_idx as u16, Some(line))?;
 
         chunk.encode2(CONST, 7, zero, Some(line))?; // j
-                                                    // (dotimes-i j 100 (j2)
-                                                    //   (set! su (+ (vec-nth pol j) (* su x))))
+        let jmp2_idx = chunk.add_jump(chunk.code.len() as u32);
+        // (dotimes-i j 100 (j2)
+        //   (set! su (+ (vec-nth pol j) (* su x))))
         chunk.encode2(MUL, 3, 2, Some(line))?; // FROM 3
         chunk.encode3(VECNTH, 10, 51, 7, Some(line))?;
         chunk.encode2(ADD, 3, 51, Some(line))?;
 
         chunk.encode2(INC, 7, 1, Some(line))?;
-        chunk.encode2(JMPLT, 7, 100, Some(line))?;
-        chunk.encode_jump_offset(-19)?;
+        chunk.encode3(JMPLT, 7, 100, jmp2_idx as u16, Some(line))?;
         // (set! pu (+ pu su))))
         chunk.encode2(ADD, 5, 3, Some(line))?;
 
         chunk.encode2(INC, 6, 1, Some(line))?;
-        chunk.encode2(JMPLT, 6, 1, Some(line))?;
-        chunk.encode_jump_offset(-59)?;
+        chunk.encode3(JMPLT, 6, 1, jmp0_idx as u16, Some(line))?;
 
         chunk.encode0(RET, Some(line))?;
         //chunk.disassemble_chunk(&vm)?;
@@ -1040,71 +1040,71 @@ mod tests {
         vm.stack[3] = Value::Int32(0);
         let line = 1;
         chunk.encode2(CONST, 4, const0, Some(line))?;
-        chunk.encode0(JMP, Some(line))?;
-        chunk.encode_jump_offset(3)?;
+        let jmp = chunk.add_jump(chunk.code.len() as u32 + 5);
+        chunk.encode1(JMP, jmp as u16, Some(line))?;
         chunk.encode2(CONST, 4, const1, Some(line))?;
         chunk.encode2(CONST, 5, const1, Some(line))?;
 
         chunk.encode2(CONST, 6, const0, Some(line))?;
-        chunk.encode0(JMP, Some(line))?;
-        chunk.encode_jump_offset(3)?;
+        let jmp = chunk.add_jump(chunk.code.len() as u32 + 5);
+        chunk.encode1(JMP, jmp as u16, Some(line))?;
         chunk.encode2(CONST, 6, const1, Some(line))?;
         chunk.encode2(CONST, 7, const1, Some(line))?;
 
-        chunk.encode0(JMP, Some(line))?;
-        chunk.encode_jump_offset(7)?;
+        let jmp = chunk.add_jump(chunk.code.len() as u32 + 7);
+        chunk.encode1(JMP, jmp as u16, Some(line))?;
+        let jmp_back = chunk.add_jump(chunk.code.len() as u32);
         chunk.encode2(CONST, 8, const0, Some(line))?;
-        chunk.encode0(JMP, Some(line))?;
-        chunk.encode_jump_offset(4)?;
-        chunk.encode0(JMP, Some(line))?;
-        chunk.encode_jump_offset(-11)?;
+        let jmp = chunk.add_jump(chunk.code.len() as u32 + 4);
+        chunk.encode1(JMP, jmp as u16, Some(line))?;
+        chunk.encode1(JMP, jmp_back as u16, Some(line))?;
         chunk.encode2(CONST, 9, const1, Some(line))?;
 
         chunk.encode2(CONST, 10, const0, Some(line))?;
-        chunk.encode1(JMPT, 0, Some(line))?;
-        chunk.encode_jump_offset(3)?;
+        let jmp = chunk.add_jump(chunk.code.len() as u32 + 6);
+        chunk.encode2(JMPT, 0, jmp as u16, Some(line))?;
         chunk.encode2(CONST, 10, const1, Some(line))?;
         chunk.encode2(CONST, 11, const1, Some(line))?;
 
         chunk.encode2(CONST, 12, const0, Some(line))?;
-        chunk.encode1(JMPT, 3, Some(line))?;
-        chunk.encode_jump_offset(3)?;
+        let jmp = chunk.add_jump(chunk.code.len() as u32 + 6);
+        chunk.encode2(JMPT, 3, jmp as u16, Some(line))?;
         chunk.encode2(CONST, 12, const1, Some(line))?;
         chunk.encode2(CONST, 13, const1, Some(line))?;
 
         chunk.encode2(CONST, 14, const0, Some(line))?;
-        chunk.encode1(JMPF, 1, Some(line))?;
-        chunk.encode_jump_offset(3)?;
+        let jmp = chunk.add_jump(chunk.code.len() as u32 + 6);
+        chunk.encode2(JMPF, 1, jmp as u16, Some(line))?;
         chunk.encode2(CONST, 14, const1, Some(line))?;
         chunk.encode2(CONST, 15, const1, Some(line))?;
 
         chunk.encode2(CONST, 16, const0, Some(line))?;
-        chunk.encode1(JMPF, 2, Some(line))?;
-        chunk.encode_jump_offset(3)?;
+        let jmp = chunk.add_jump(chunk.code.len() as u32 + 6);
+        chunk.encode2(JMPF, 2, jmp as u16, Some(line))?;
         chunk.encode2(CONST, 16, const1, Some(line))?;
         chunk.encode2(CONST, 17, const1, Some(line))?;
 
         chunk.encode2(CONST, 18, const0, Some(line))?;
-        chunk.encode1(JMPT, 1, Some(line))?;
-        chunk.encode_jump_offset(3)?;
+        let jmp = chunk.add_jump(chunk.code.len() as u32 + 6);
+        chunk.encode2(JMPT, 1, jmp as u16, Some(line))?;
         chunk.encode2(CONST, 18, const1, Some(line))?;
         chunk.encode2(CONST, 19, const1, Some(line))?;
 
         chunk.encode2(CONST, 20, const0, Some(line))?;
-        chunk.encode1(JMPT, 2, Some(line))?;
-        chunk.encode_jump_offset(3)?;
+        let jmp = chunk.add_jump(chunk.code.len() as u32 + 6);
+        chunk.encode2(JMPT, 2, jmp as u16, Some(line))?;
         chunk.encode2(CONST, 20, const1, Some(line))?;
         chunk.encode2(CONST, 21, const1, Some(line))?;
 
         chunk.encode2(CONST, 22, const0, Some(line))?;
-        chunk.encode1(JMPF, 0, Some(line))?;
-        chunk.encode_jump_offset(3)?;
+        let jmp = chunk.add_jump(chunk.code.len() as u32 + 6);
+        chunk.encode2(JMPF, 0, jmp as u16, Some(line))?;
         chunk.encode2(CONST, 22, const1, Some(line))?;
         chunk.encode2(CONST, 23, const1, Some(line))?;
 
         chunk.encode2(CONST, 24, const0, Some(line))?;
-        chunk.encode1(JMPF, 3, Some(line))?;
-        chunk.encode_jump_offset(3)?;
+        let jmp = chunk.add_jump(chunk.code.len() as u32 + 6);
+        chunk.encode2(JMPF, 3, jmp as u16, Some(line))?;
         chunk.encode2(CONST, 24, const1, Some(line))?;
         chunk.encode2(CONST, 25, const1, Some(line))?;
 

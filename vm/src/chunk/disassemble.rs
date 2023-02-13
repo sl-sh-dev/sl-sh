@@ -61,27 +61,6 @@ macro_rules! decode_u32_enum {
     }};
 }
 
-macro_rules! decode_i24_enum {
-    ($code:expr) => {{
-        if let (Some((_, idx1)), Some((_, idx2)), Some((pnip, idx3))) =
-            ($code.next(), $code.next(), $code.next())
-        {
-            let negative = (idx1 & 0x80) == 0x80;
-            let num =
-                ((((idx1 & 0x7f) as u32) << 16) | ((idx2 as u32) << 8) | (idx3 as u32)) as i32;
-            if negative {
-                Ok((-num, (pnip + 1) as i32))
-            } else {
-                Ok((num, (pnip + 1) as i32))
-            }
-        } else {
-            Err(VMError::new_chunk(
-                "Error decoding a i24 from chunk stream.",
-            ))
-        }
-    }};
-}
-
 macro_rules! disassemble_operand {
     ($code:expr, $register:expr, $wide:expr) => {{
         if $register {
@@ -114,25 +93,32 @@ macro_rules! disassemble_immediate_global {
     ($code:expr, $wide:expr, $vm:expr) => {{
         if $wide {
             let idx = decode_u32_enum!($code)?;
-            //print!("{:#010x}:{}", idx, $vm.global_name(idx as usize));
             print!("{idx:#010x}");
         } else {
             let idx = decode_u16_enum!($code)?;
-            //print!("{:#06x}:{}", idx, $vm.global_name(idx as usize));
             print!("{idx:#06x}");
         }
     }};
 }
 
-macro_rules! disassemble_jump_offset {
-    ($code:expr) => {{
-        let (offset, nip) = decode_i24_enum!($code)?;
-        print!("{offset} -> {:#010x}", nip + offset);
+macro_rules! disassemble_jump_operand {
+    ($chunk:expr, $code:expr, $wide:expr) => {{
+        let idx = if $wide {
+            let idx = decode_u16_enum!($code)?;
+            print!("J({idx:#06x})\t");
+            idx as usize
+        } else {
+            let idx = decode_u8_enum!($code)?;
+            print!("J({idx:#04x})\t");
+            idx as usize
+        };
+        print!("{:#010x}", $chunk.jump_table[idx]);
     }};
 }
 
 impl Chunk {
     fn disassemble_instruction<I, ENV>(
+        &self,
         chunk: I,
         op: OpCode,
         wide: bool,
@@ -468,7 +454,7 @@ impl Chunk {
             }
             JMP => {
                 print!("JMP({JMP:#04x})    \t");
-                disassemble_jump_offset!(code);
+                disassemble_jump_operand!(self, code, wide);
                 println!();
                 Ok(false)
             }
@@ -476,7 +462,7 @@ impl Chunk {
                 print!("JMPT({JMPT:#04x})   \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
-                disassemble_jump_offset!(code);
+                disassemble_jump_operand!(self, code, wide);
                 println!();
                 Ok(false)
             }
@@ -484,7 +470,7 @@ impl Chunk {
                 print!("JMPF({JMPF:#04x})   \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
-                disassemble_jump_offset!(code);
+                disassemble_jump_operand!(self, code, wide);
                 println!();
                 Ok(false)
             }
@@ -494,7 +480,7 @@ impl Chunk {
                 print!("\t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
-                disassemble_jump_offset!(code);
+                disassemble_jump_operand!(self, code, wide);
                 println!();
                 Ok(false)
             }
@@ -504,7 +490,7 @@ impl Chunk {
                 print!("\t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
-                disassemble_jump_offset!(code);
+                disassemble_jump_operand!(self, code, wide);
                 println!();
                 Ok(false)
             }
@@ -514,7 +500,7 @@ impl Chunk {
                 print!("\t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
-                disassemble_jump_offset!(code);
+                disassemble_jump_operand!(self, code, wide);
                 println!();
                 Ok(false)
             }
@@ -522,7 +508,7 @@ impl Chunk {
                 print!("JMPU({JMPU:#04x})   \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
-                disassemble_jump_offset!(code);
+                disassemble_jump_operand!(self, code, wide);
                 println!();
                 Ok(false)
             }
@@ -530,7 +516,7 @@ impl Chunk {
                 print!("JMPNU({JMPNU:#04x})  \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
-                disassemble_jump_offset!(code);
+                disassemble_jump_operand!(self, code, wide);
                 println!();
                 Ok(false)
             }
@@ -540,7 +526,7 @@ impl Chunk {
                 print!("\t");
                 disassemble_immediate!(code, wide);
                 print!("\t");
-                disassemble_jump_offset!(code);
+                disassemble_jump_operand!(self, code, wide);
                 println!();
                 Ok(false)
             }
@@ -550,7 +536,7 @@ impl Chunk {
                 print!("\t");
                 disassemble_immediate!(code, wide);
                 print!("\t");
-                disassemble_jump_offset!(code);
+                disassemble_jump_operand!(self, code, wide);
                 println!();
                 Ok(false)
             }
@@ -884,7 +870,7 @@ impl Chunk {
             } else {
                 print!("     | ");
             }
-            wide = Chunk::disassemble_instruction(&mut code, curr_op, wide, vm)?;
+            wide = self.disassemble_instruction(&mut code, curr_op, wide, vm)?;
             op = code.next();
         }
         Ok(())

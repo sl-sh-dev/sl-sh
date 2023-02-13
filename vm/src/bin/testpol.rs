@@ -57,11 +57,13 @@ fn main() -> Result<(), VMError> {
     chunk.encode3(VECMKD, 10, 100, 103, None)?; // pols
                                                 //chunk.encode2(VECELS, 10, 100, None)?;
                                                 // loop i .. n
+    chunk.add_jump(chunk.code.len() as u32);
     chunk.encode2(CONST, 3, zerof, None)?;
     chunk.encode2(CONST, 7, zero, None)?; // j
                                           //chunk.encode2(CONST, 7, five_hundred, None)?; // j
                                           // loop j .. 100
                                           // (set! mu (/ (+ mu 2.0) 2.0))
+    chunk.add_jump(chunk.code.len() as u32);
     chunk.encode2(ADD, 4, 8, None)?;
     chunk.encode2(DIV, 4, 8, None)?;
     // (vec-set! pol j mu)))
@@ -69,29 +71,30 @@ fn main() -> Result<(), VMError> {
     //chunk.encode2(MOVI, 7, 4, None)?;
 
     chunk.encode2(INC, 7, 1, None)?;
-    chunk.encode2(JMPLT, 7, 100, None)?;
-    chunk.encode_jump_offset(-19)?;
+    chunk.encode3(JMPLT, 7, 100, 1, None)?;
+    //chunk.encode_jump_offset(-19)?;
     //chunk.encode_jump_offset(-18)?;
 
     chunk.encode2(CONST, 7, zero, None)?; // j
                                           //chunk.encode2(CONST, 7, five_hundred, None)?; // j
                                           // (dotimes-i j 100 (j2)
                                           //   (set! su (+ (vec-nth pol j) (* su x))))
+    chunk.add_jump(chunk.code.len() as u32);
     chunk.encode2(MUL, 3, 2, None)?;
     chunk.encode3(VECNTH, 10, 51, 7, None)?;
     //chunk.encode2(MOVII, 51, 7, None)?;
     chunk.encode2(ADD, 3, 51, None)?;
 
     chunk.encode2(INC, 7, 1, None)?;
-    chunk.encode2(JMPLT, 7, 100, None)?;
-    chunk.encode_jump_offset(-19)?;
+    chunk.encode3(JMPLT, 7, 100, 2, None)?;
+    //chunk.encode_jump_offset(-19)?;
     //chunk.encode_jump_offset(-18)?;
     // (set! pu (+ pu su))))
     chunk.encode2(ADD, 5, 3, None)?;
 
     chunk.encode2(INC, 6, 1, None)?;
-    chunk.encode2(JMPLT, 6, 1, None)?;
-    chunk.encode_jump_offset(-59)?;
+    chunk.encode3(JMPLT, 6, 1, 0, None)?;
+    //chunk.encode_jump_offset(-59)?;
     //chunk.encode_jump_offset(-57)?;
 
     chunk.encode0(RET, None)?;

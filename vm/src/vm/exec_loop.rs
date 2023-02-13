@@ -520,26 +520,23 @@ impl<ENV> GVm<ENV> {
                     }
                 }
                 JMP => {
-                    let ipoff = decode_i24!(code, &mut self.ip);
-                    self.ip = (self.ip as isize + ipoff) as usize;
+                    let jmp = decode1!(code, &mut self.ip, wide);
+                    self.ip = chunk.jump_table[jmp as usize] as usize;
                 }
                 JMPT => {
-                    let test = decode1!(code, &mut self.ip, wide);
-                    let ipoff = decode_i24!(code, &mut self.ip);
+                    let (test, jmp) = decode2!(code, &mut self.ip, wide);
                     if get_reg!(registers, test).is_truethy() {
-                        self.ip = (self.ip as isize + ipoff) as usize;
+                        self.ip = chunk.jump_table[jmp as usize] as usize;
                     }
                 }
                 JMPF => {
-                    let test = decode1!(code, &mut self.ip, wide);
-                    let ipoff = decode_i24!(code, &mut self.ip);
+                    let (test, jmp) = decode2!(code, &mut self.ip, wide);
                     if get_reg!(registers, test).is_falsey() {
-                        self.ip = (self.ip as isize + ipoff) as usize;
+                        self.ip = chunk.jump_table[jmp as usize] as usize;
                     }
                 }
                 JMPEQ => {
-                    let (op1, op2) = decode2!(code, &mut self.ip, wide);
-                    let ipoff = decode_i24!(code, &mut self.ip);
+                    let (op1, op2, jmp) = decode3!(code, &mut self.ip, wide);
                     let op1 = get_reg!(registers, op1)
                         .get_int(self)
                         .map_err(|e| (e, chunk.clone()))?;
@@ -547,58 +544,52 @@ impl<ENV> GVm<ENV> {
                         .get_int(self)
                         .map_err(|e| (e, chunk.clone()))?;
                     if op1 == op2 {
-                        self.ip = (self.ip as isize + ipoff) as usize;
+                        self.ip = chunk.jump_table[jmp as usize] as usize;
                     }
                 }
                 JMPLT => {
-                    let (op1, op2) = decode2!(code, &mut self.ip, wide);
-                    let ipoff = decode_i24!(code, &mut self.ip);
+                    let (op1, op2, jmp) = decode3!(code, &mut self.ip, wide);
                     let op1 = get_reg_int!(self, registers, op1).map_err(|e| (e, chunk.clone()))?;
                     let op2 = get_reg_int!(self, registers, op2).map_err(|e| (e, chunk.clone()))?;
                     if op1 < op2 {
-                        self.ip = (self.ip as isize + ipoff) as usize;
+                        self.ip = chunk.jump_table[jmp as usize] as usize;
                     }
                 }
                 JMPGT => {
-                    let (op1, op2) = decode2!(code, &mut self.ip, wide);
-                    let ipoff = decode_i24!(code, &mut self.ip);
+                    let (op1, op2, jmp) = decode3!(code, &mut self.ip, wide);
                     let op1 = get_reg_int!(self, registers, op1).map_err(|e| (e, chunk.clone()))?;
                     let op2 = get_reg_int!(self, registers, op2).map_err(|e| (e, chunk.clone()))?;
                     if op1 > op2 {
-                        self.ip = (self.ip as isize + ipoff) as usize;
+                        self.ip = chunk.jump_table[jmp as usize] as usize;
                     }
                 }
                 JMPU => {
-                    let test = decode1!(code, &mut self.ip, wide);
-                    let ipoff = decode_i24!(code, &mut self.ip);
+                    let (test, jmp) = decode2!(code, &mut self.ip, wide);
                     if get_reg!(registers, test).is_undef() {
-                        self.ip = (self.ip as isize + ipoff) as usize;
+                        self.ip = chunk.jump_table[jmp as usize] as usize;
                     }
                 }
                 JMPNU => {
-                    let test = decode1!(code, &mut self.ip, wide);
-                    let ipoff = decode_i24!(code, &mut self.ip);
+                    let (test, jmp) = decode2!(code, &mut self.ip, wide);
                     if !get_reg!(registers, test).is_undef() {
-                        self.ip = (self.ip as isize + ipoff) as usize;
+                        self.ip = chunk.jump_table[jmp as usize] as usize;
                     }
                 }
                 JMPRU => {
-                    let (test, len) = decode2!(code, &mut self.ip, wide);
-                    let ipoff = decode_i24!(code, &mut self.ip);
+                    let (test, len, jmp) = decode3!(code, &mut self.ip, wide);
                     if len > 0 {
                         let test = test as usize;
                         let len = len as usize;
                         for i in 0..len {
                             if get_reg!(registers, test + i).is_undef() {
-                                self.ip = (self.ip as isize + ipoff) as usize;
+                                self.ip = chunk.jump_table[jmp as usize] as usize;
                                 break;
                             }
                         }
                     }
                 }
                 JMPRNU => {
-                    let (test, len) = decode2!(code, &mut self.ip, wide);
-                    let ipoff = decode_i24!(code, &mut self.ip);
+                    let (test, len, jmp) = decode3!(code, &mut self.ip, wide);
                     if len > 0 {
                         let len = len as usize;
                         let test = test as usize;
@@ -610,7 +601,7 @@ impl<ENV> GVm<ENV> {
                             }
                         }
                         if jump {
-                            self.ip = (self.ip as isize + ipoff) as usize;
+                            self.ip = chunk.jump_table[jmp as usize] as usize;
                         }
                     }
                 }

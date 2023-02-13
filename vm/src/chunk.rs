@@ -16,6 +16,7 @@ pub struct Chunk {
     last_line: u32,
     line_numbers: Vec<u8>,
     pub constants: Vec<Value>,
+    pub jump_table: Vec<u32>,
     pub captures: Option<Vec<u32>>,
     // Registers holding input (arguments and closed over values) plus 1 for the result.
     pub input_regs: usize,
@@ -37,6 +38,7 @@ impl Chunk {
             last_line: start_line,
             line_numbers: Vec::new(),
             constants: Vec::new(),
+            jump_table: Vec::new(),
             captures: None,
             input_regs: 0,
             extra_regs: 0,
@@ -152,6 +154,20 @@ impl Chunk {
         self.constants.len() - 1
     }
 
+    pub fn add_jump(&mut self, offset: u32) -> usize {
+        /*for (i, c) in self.jump_table.iter().enumerate() {
+            if *c == offset {
+                return i;
+            }
+        }*/
+        self.jump_table.push(offset);
+        self.jump_table.len() - 1
+    }
+
+    pub fn update_jump(&mut self, jmp: usize, offset: u32) {
+        self.jump_table[jmp] = offset;
+    }
+
     pub fn encode0(&mut self, op_code: OpCode, line_number: Option<u32>) -> VMResult<()> {
         self.encode_line_number(1, line_number)?;
         self.code.push(op_code);
@@ -197,32 +213,6 @@ impl Chunk {
         self.encode_operand(op2, wide);
 
         Ok(())
-    }
-
-    pub fn reencode_jump_offset(&mut self, ip: usize, offset: i32) -> VMResult<()> {
-        let (neg_bit, offset) = if offset < 0 {
-            (0x80, -offset as u32)
-        } else {
-            (0x00, offset as u32)
-        };
-        if (0xff_80_00_00 & offset) != 0 {
-            return Err(VMError::new_chunk(
-                "Jump offset is to large must fit in 24 bits with sign).",
-            ));
-        }
-        self.code[ip] = ((offset & 0x00_7f_00_00) >> 16) as u8 | neg_bit;
-        self.code[ip + 1] = ((offset & 0x00_00_ff_00) >> 8) as u8;
-        self.code[ip + 2] = (offset & 0x00_00_00_ff) as u8;
-        Ok(())
-    }
-
-    pub fn encode_jump_offset(&mut self, offset: i32) -> VMResult<()> {
-        let ip = self.code.len();
-        self.code.push(0);
-        self.code.push(0);
-        self.code.push(0);
-        self.encode_line_number(3, None)?;
-        self.reencode_jump_offset(ip, offset)
     }
 
     pub fn encode_def(
