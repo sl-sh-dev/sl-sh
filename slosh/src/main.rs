@@ -17,7 +17,10 @@ use builtins::{get_prop, set_prop, sizeof_heap_object, sizeof_value};
 use sl_liner::{Context, Prompt};
 use slvm::Chunk;
 
+mod config;
 pub mod debug;
+
+use config::*;
 use debug::*;
 use sl_compiler::pass1::pass1;
 
@@ -58,22 +61,7 @@ fn load_one_expression(
     Ok((Arc::new(state.chunk), state.doc_string))
 }
 
-fn load(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
-    if registers.len() != 1 {
-        return Err(VMError::new_compile(
-            "load: wrong number of args, expected one",
-        ));
-    }
-    let name = match registers[0].unref(vm) {
-        Value::StringConst(i) => vm.get_interned(i),
-        Value::String(h) => {
-            let s = vm.get_string(h);
-            let s = s.to_string();
-            let s_i = vm.intern(&s);
-            vm.get_interned(s_i)
-        }
-        _ => return Err(VMError::new_vm("load: Not a string.")),
-    };
+fn load_internal(vm: &mut SloshVm, name: &'static str) -> VMResult<Value> {
     let file = std::fs::File::open(name)?;
 
     let mut last = Value::Nil;
@@ -92,6 +80,25 @@ fn load(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         last = reader_vm.execute(chunk)?;
     }
     Ok(last)
+}
+
+fn load(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    if registers.len() != 1 {
+        return Err(VMError::new_compile(
+            "load: wrong number of args, expected one",
+        ));
+    }
+    let name = match registers[0].unref(vm) {
+        Value::StringConst(i) => vm.get_interned(i),
+        Value::String(h) => {
+            let s = vm.get_string(h);
+            let s = s.to_string();
+            let s_i = vm.intern(&s);
+            vm.get_interned(s_i)
+        }
+        _ => return Err(VMError::new_vm("load: Not a string.")),
+    };
+    load_internal(vm, name)
 }
 
 fn eval(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
@@ -339,80 +346,91 @@ Example:
 }
 
 fn main() {
-    let mut con = Context::new();
+    if let Some(config) = get_config() {
+        let mut env = new_slosh_vm();
+        setup_vecs(&mut env);
+        env.set_global_builtin("pr", pr);
+        env.set_global_builtin("prn", prn);
+        env.set_global_builtin("dasm", dasm);
+        env.set_global_builtin("load", load);
+        env.set_global_builtin("make-hash", make_hash);
+        env.set_global_builtin("get-prop", get_prop);
+        env.set_global_builtin("set-prop", set_prop);
+        env.set_global_builtin("eval", eval);
+        env.set_global_builtin("sizeof-heap-object", sizeof_heap_object);
+        env.set_global_builtin("sizeof-value", sizeof_value);
+        if config.command.is_none() && config.script.is_none() {
+            let mut con = Context::new();
 
-    if let Err(e) = con.history.set_file_name_and_load_history("history") {
-        println!("Error loading history: {e}");
-    }
-    let mut env = new_slosh_vm();
-    setup_vecs(&mut env);
-    env.set_global_builtin("pr", pr);
-    env.set_global_builtin("prn", prn);
-    env.set_global_builtin("dasm", dasm);
-    env.set_global_builtin("load", load);
-    env.set_global_builtin("make-hash", make_hash);
-    env.set_global_builtin("get-prop", get_prop);
-    env.set_global_builtin("set-prop", set_prop);
-    env.set_global_builtin("eval", eval);
-    env.set_global_builtin("sizeof-heap-object", sizeof_heap_object);
-    env.set_global_builtin("sizeof-value", sizeof_value);
-    loop {
-        let res = match con.read_line(Prompt::from("slosh> "), None) {
-            Ok(input) => input,
-            Err(err) => match err.kind() {
-                ErrorKind::UnexpectedEof => {
-                    break;
-                }
-                ErrorKind::Interrupted => {
-                    continue;
-                }
-                _ => {
-                    eprintln!("Error on input: {err}");
-                    continue;
-                }
-            },
-        };
-
-        if res.is_empty() {
-            continue;
-        }
-
-        con.history.push(&res).expect("Failed to push history.");
-        let reader = Reader::from_string(res, &mut env, "", 1, 0);
-        let exps: Result<Vec<Value>, ReadError> = reader.collect();
-        match exps {
-            Ok(exps) => {
-                for exp in exps {
-                    let line_num = env.line_num();
-                    let mut state = CompileState::new_state(PROMPT_FN, line_num, None);
-                    if let Err(e) = pass1(&mut env, &mut state, exp) {
-                        println!("Compile error, line {}: {}", env.line_num(), e);
-                    }
-                    if let Err(e) = compile(&mut env, &mut state, exp, 0) {
-                        println!("Compile error, line {}: {}", env.line_num(), e);
-                    }
-                    if let Err(e) = state.chunk.encode0(RET, env.own_line()) {
-                        println!("Compile error, line {}: {}", env.line_num(), e);
-                    }
-                    let chunk = Arc::new(state.chunk.clone());
-                    if let Err(err) = env.execute(chunk) {
-                        println!("ERROR: {}", err.display(&env));
-                        if let Some(err_frame) = env.err_frame() {
-                            let ip = err_frame.current_ip;
-                            let line = err_frame.chunk.offset_to_line(ip).unwrap_or(0);
-                            println!(
-                                "{} line: {} ip: {:#010x}",
-                                err_frame.chunk.file_name, line, ip
-                            );
+            if let Err(e) = con.history.set_file_name_and_load_history("history") {
+                println!("Error loading history: {e}");
+            }
+            loop {
+                let res = match con.read_line(Prompt::from("slosh> "), None) {
+                    Ok(input) => input,
+                    Err(err) => match err.kind() {
+                        ErrorKind::UnexpectedEof => {
+                            break;
                         }
-                        debug(&mut env);
-                    } else {
-                        let reg = env.get_stack(0);
-                        println!("{}", display_value(&env, reg));
+                        ErrorKind::Interrupted => {
+                            continue;
+                        }
+                        _ => {
+                            eprintln!("Error on input: {err}");
+                            continue;
+                        }
+                    },
+                };
+
+                if res.is_empty() {
+                    continue;
+                }
+
+                con.history.push(&res).expect("Failed to push history.");
+                let reader = Reader::from_string(res, &mut env, "", 1, 0);
+                let exps: Result<Vec<Value>, ReadError> = reader.collect();
+                match exps {
+                    Ok(exps) => {
+                        for exp in exps {
+                            let line_num = env.line_num();
+                            let mut state = CompileState::new_state(PROMPT_FN, line_num, None);
+                            if let Err(e) = pass1(&mut env, &mut state, exp) {
+                                println!("Compile error, line {}: {}", env.line_num(), e);
+                            }
+                            if let Err(e) = compile(&mut env, &mut state, exp, 0) {
+                                println!("Compile error, line {}: {}", env.line_num(), e);
+                            }
+                            if let Err(e) = state.chunk.encode0(RET, env.own_line()) {
+                                println!("Compile error, line {}: {}", env.line_num(), e);
+                            }
+                            let chunk = Arc::new(state.chunk.clone());
+                            if let Err(err) = env.execute(chunk) {
+                                println!("ERROR: {}", err.display(&env));
+                                if let Some(err_frame) = env.err_frame() {
+                                    let ip = err_frame.current_ip;
+                                    let line = err_frame.chunk.offset_to_line(ip).unwrap_or(0);
+                                    println!(
+                                        "{} line: {} ip: {:#010x}",
+                                        err_frame.chunk.file_name, line, ip
+                                    );
+                                }
+                                debug(&mut env);
+                            } else {
+                                let reg = env.get_stack(0);
+                                println!("{}", display_value(&env, reg));
+                            }
+                        }
                     }
+                    Err(err) => println!("Reader error: {err}"),
                 }
             }
-            Err(err) => println!("Reader error: {err}"),
+        } else if let Some(script) = config.script {
+            let script = env.intern(&script);
+            let script = env.get_interned(script);
+            match load_internal(&mut env, script) {
+                Ok(res) => println!("{}", res.display_value(&env)),
+                Err(err) => println!("ERROR: {err}"),
+            }
         }
     }
 }
