@@ -54,20 +54,20 @@ pub(crate) fn compile_while(
 ) -> VMResult<()> {
     let mut cdr_i = cdr.iter();
     if let Some(conditional) = cdr_i.next() {
-        let loop_start = state.chunk.code.len();
-        compile(env, state, *conditional, result)?;
-        let jmp_idx = state.chunk.add_jump(0);
-        state
-            .chunk
-            .encode2(JMPF, result as u16, jmp_idx as u16, env.own_line())?;
+        let jmp_cond = state.chunk.add_jump(0);
+        state.chunk.encode1(JMP, jmp_cond as u16, env.own_line())?;
+        let jmp_loop_start = state.chunk.add_jump(state.chunk.code.len() as u32);
         for r in cdr_i {
             compile(env, state, *r, result)?;
         }
-        let jmp2_idx = state.chunk.add_jump(loop_start as u32);
-        state.chunk.encode1(JMP, jmp2_idx as u16, env.own_line())?;
+
         state
             .chunk
-            .update_jump(jmp_idx, state.chunk.code.len() as u32);
+            .update_jump(jmp_cond, state.chunk.code.len() as u32);
+        compile(env, state, *conditional, result)?;
+        state
+            .chunk
+            .encode2(JMPT, result as u16, jmp_loop_start as u16, env.own_line())?;
         Ok(())
     } else {
         Err(VMError::new_compile(format!(
