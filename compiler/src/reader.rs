@@ -65,11 +65,10 @@ impl fmt::Display for ReadError {
     }
 }
 
-//#[derive(Clone, Debug)]
 pub struct Reader<'vm> {
     vm: &'vm mut SloshVm,
     char_iter: Option<Box<ReaderCharIter>>,
-    pub file_name: &'static str,
+    file_name: &'static str,
 }
 
 impl<'vm> Iterator for Reader<'vm> {
@@ -79,12 +78,11 @@ impl<'vm> Iterator for Reader<'vm> {
         if self.chars().peek().is_none() {
             None
         } else {
-            let result = match self.read_form() {
-                Ok(None) => return None,
-                Ok(Some(val)) => Ok(val),
-                Err(err) => Err(err),
-            };
-            Some(result)
+            match self.read_form() {
+                Ok(None) => None,
+                Ok(Some(val)) => Some(Ok(val)),
+                Err(err) => Some(Err(err)),
+            }
         }
     }
 }
@@ -475,53 +473,6 @@ impl<'vm> Reader<'vm> {
                 let mut proc_ch = true;
                 if read_table.contains_key(&*ch) {
                     proc_ch = false;
-                    /*if let ExpEnum::Symbol(s) = read_table.get(&*ch).unwrap().get().data {
-                        let res = prep_reader_macro(environment, chars, s, &ch);
-                        match res {
-                            Ok((None, ichars)) => {
-                                chars = ichars;
-                                continue;
-                            }
-                            Ok((Some(exp), ichars)) => {
-                                chars = ichars;
-                                let exp_d = exp.get();
-                                match &exp_d.data {
-                                    ExpEnum::String(s, _) => symbol.push_str(s),
-                                    ExpEnum::Char(s) => symbol.push_str(s),
-                                    ExpEnum::CodePoint(c) => symbol.push(*c),
-                                    _ => {
-                                        if let Some(l) = res_list.as_mut() {
-                                            drop(exp_d);
-                                            if !symbol.is_empty() {
-                                                l.push(make_exp(
-                                                    ExpEnum::String(symbol.clone().into(), None),
-                                                    meta,
-                                                ));
-                                            }
-                                            symbol.clear();
-                                            l.push(wrap_trim(exp, meta));
-                                        } else {
-                                            drop(exp_d);
-                                            let mut list = vec![make_exp(
-                                                ExpEnum::Symbol("str"),
-                                                meta,
-                                            )];
-                                            if !symbol.is_empty() {
-                                                list.push(make_exp(
-                                                    ExpEnum::String(symbol.clone().into(), None),
-                                                    meta,
-                                                ));
-                                            }
-                                            symbol.clear();
-                                            list.push(wrap_trim(exp, meta));
-                                            res_list = Some(list);
-                                        }
-                                    }
-                                }
-                            }
-                            Err((err, ichars)) => return Err((err, ichars)),
-                        }
-                    }*/
                 }
                 if proc_ch {
                     if ch != "\\" {
@@ -533,15 +484,7 @@ impl<'vm> Reader<'vm> {
                 }
             }
         }
-        /*if let Some(mut list) = res_list.take() {
-            if !symbol.is_empty() {
-                list.push(make_exp(ExpEnum::String(symbol.clone().into(), None), meta));
-            }
-            let fl = Expression::with_list_meta(list, meta);
-            Ok((fl, chars))
-        } else {*/
         Ok(symbol)
-        //}
     }
 
     fn read_string_literal<'sym>(
@@ -950,36 +893,6 @@ impl<'vm> Reader<'vm> {
         in_back_quote: bool,
         return_close: ReadReturn,
     ) -> Result<Option<Value>, ReadError> {
-        /*let read_table_out;
-        let read_table_d;
-        let empty_read_table;
-        let read_table = get_read_table!(
-            environment,
-            "*read-table*",
-            read_table_out,
-            read_table_d,
-            empty_read_table
-        );
-        let str_read_table_out;
-        let str_read_table_d;
-        let str_empty_read_table;
-        let str_read_table = get_read_table!(
-            environment,
-            "*string-read-table*",
-            str_read_table_out,
-            str_read_table_d,
-            str_empty_read_table
-        );
-        let term_read_table_out;
-        let term_read_table_d;
-        let term_empty_read_table;
-        let read_table_term = get_read_table!(
-            environment,
-            "*read-table-terminal*",
-            term_read_table_out,
-            term_read_table_d,
-            term_empty_read_table
-        );*/
         self.consume_whitespace();
         let read_table_term: HashMap<&'static str, Value> = HashMap::new();
         let read_table: HashMap<&'static str, Chunk> = HashMap::new();
@@ -987,29 +900,6 @@ impl<'vm> Reader<'vm> {
         let i_quote = self.vm.intern("quote");
         let i_backquote = self.vm.intern("back-quote");
         while let Some((ch, peek_ch)) = self.next2() {
-            /*if read_table.contains_key(&*ch) {
-                if let ExpEnum::Symbol(s) = read_table.get(&*ch).unwrap().get().data {
-                    let res = prep_reader_macro(environment, chars, s, &ch);
-                    match res {
-                        Ok((None, ichars)) => {
-                            chars = ichars;
-                            continue;
-                        }
-                        _ => return res,
-                    }
-                }
-            } else if read_table_term.contains_key(&*ch) {
-                if let ExpEnum::Symbol(s) = read_table_term.get(&*ch).unwrap().get().data {
-                    let res = prep_reader_macro(environment, chars, s, &ch);
-                    match res {
-                        Ok((None, ichars)) => {
-                            chars = ichars;
-                            continue;
-                        }
-                        _ => return res,
-                    }
-                }
-            }*/
             match &*ch {
                 "\"" => {
                     match self.read_string(buffer, &read_table, false) {
