@@ -13,7 +13,7 @@ use sl_compiler::reader::*;
 
 use builtins::collections::{make_hash, vec_slice, vec_to_list};
 use builtins::print::{dasm, display_value, pr, prn};
-use builtins::{get_prop, set_prop, sizeof_heap_object, sizeof_value};
+use builtins::{gensym, get_prop, set_prop, sizeof_heap_object, sizeof_value};
 use sl_liner::{Context, Prompt};
 use slvm::Chunk;
 
@@ -359,6 +359,7 @@ fn main() {
         env.set_global_builtin("eval", eval);
         env.set_global_builtin("sizeof-heap-object", sizeof_heap_object);
         env.set_global_builtin("sizeof-value", sizeof_value);
+        env.set_global_builtin("gensym", gensym);
         if config.command.is_none() && config.script.is_none() {
             let mut con = Context::new();
 

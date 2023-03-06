@@ -338,6 +338,7 @@ pub struct CompileEnvironment {
     line: u32,
     specials: Option<Specials>,
     global_map: HashMap<Interned, usize>,
+    gensym_idx: usize,
 }
 
 impl Default for CompileEnvironment {
@@ -353,7 +354,18 @@ impl CompileEnvironment {
             line: 1,
             specials: None,
             global_map: HashMap::new(),
+            gensym_idx: 0,
         }
+    }
+
+    pub fn next_gensym(&mut self) -> usize {
+        let r = self.gensym_idx;
+        self.gensym_idx += 1;
+        r
+    }
+
+    pub fn line(&self) -> u32 {
+        self.line
     }
 }
 
