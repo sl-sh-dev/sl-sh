@@ -12,7 +12,7 @@ impl<ENV> GVm<ENV> {
         registers: &mut [Value],
         //wide: bool,
     ) -> VMResult<()> {
-        let (dest, len, src) = decodes; //decode3!(code, &mut self.ip, wide);
+        let (dest, len, src) = decodes; //decode3!(code, wide);
         if len > 0 {
             let len = len as usize;
             let dest = dest as usize;
@@ -119,11 +119,19 @@ impl<ENV> GVm<ENV> {
         Ok(())
     }
 
+    fn get_line(&self, wide: bool, chunk: &Chunk) -> Option<u32> {
+        if wide {
+            unsafe { chunk.offset_to_line(self.ip_ptr.offset_from(get_code!(chunk)) as usize - 4) }
+        } else {
+            unsafe { chunk.offset_to_line(self.ip_ptr.offset_from(get_code!(chunk)) as usize - 2) }
+        }
+    }
+
     pub(super) fn exec_loop(&mut self, chunk: Arc<Chunk>) -> Result<(), (VMError, Arc<Chunk>)> {
         let _env: PhantomData<ENV>;
         let mut registers = self.make_registers();
         let mut chunk = chunk;
-        self.ip = 0;
+        self.ip_ptr = get_code!(chunk);
         let mut wide = false;
         // Clean up the working regs we are about to use.
         if chunk.extra_regs > 0 {
@@ -135,14 +143,13 @@ impl<ENV> GVm<ENV> {
                 *reg = Value::Undefined;
             }
         }
-        let mut code = get_code!(chunk);
         let mut opcode = NOP;
         loop {
             if wide && opcode != WIDE {
                 wide = false;
             }
-            self.current_ip = self.ip;
-            opcode = decode_u8!(code, &mut self.ip);
+            self.current_ip_ptr = self.ip_ptr;
+            opcode = decode_u8!(self.ip_ptr);
             match opcode {
                 NOP => {}
                 HALT => {
@@ -151,9 +158,9 @@ impl<ENV> GVm<ENV> {
                 RET => {
                     if let Some(defer) = self.defers.pop() {
                         let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
-                        self.ip = self.current_ip;
+                        self.ip_ptr = self.current_ip_ptr;
                         chunk = self.make_call(defer, chunk, registers, first_reg, 0, false)?;
-                        code = get_code!(chunk);
+                        //self.ip_ptr = get_code!(chunk);
                         registers = self.make_registers();
                     } else {
                         self.stack[self.stack_top] = get_reg!(registers, self.stack_top);
@@ -166,10 +173,10 @@ impl<ENV> GVm<ENV> {
                             self.stack_top = frame.stack_top;
                             registers = self.make_registers();
                             chunk = frame.chunk.clone();
-                            code = get_code!(chunk);
+                            //self.ip_ptr = get_code!(chunk);
                             self.stack_max = self.stack_top + chunk.input_regs + chunk.extra_regs;
-                            self.ip = frame.ip;
-                            self.current_ip = frame.current_ip;
+                            self.ip_ptr = frame.ip;
+                            self.current_ip_ptr = frame.current_ip;
                             self.this_fn = frame.this_fn;
                             self.on_error = frame.on_error;
                             std::mem::swap(&mut self.defers, &mut frame.defers);
@@ -181,12 +188,12 @@ impl<ENV> GVm<ENV> {
                 SRET => {
                     if let Some(defer) = self.defers.pop() {
                         let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
-                        self.ip = self.current_ip;
+                        self.ip_ptr = self.current_ip_ptr;
                         chunk = self.make_call(defer, chunk, registers, first_reg, 0, false)?;
-                        code = get_code!(chunk);
+                        //self.ip_ptr = get_code!(chunk);
                         registers = self.make_registers();
                     } else {
-                        let src = decode1!(code, &mut self.ip, wide);
+                        let src = decode1!(self.ip_ptr, wide);
                         let val = get_reg!(registers, src);
                         let old_top = self.stack_top;
                         if let Some(frame) = self.call_frame_mut() {
@@ -198,10 +205,10 @@ impl<ENV> GVm<ENV> {
                             self.stack_top = frame.stack_top;
                             registers = self.make_registers();
                             chunk = frame.chunk.clone();
-                            code = get_code!(chunk);
+                            //self.ip_ptr = get_code!(chunk);
                             self.stack_max = self.stack_top + chunk.input_regs + chunk.extra_regs;
-                            self.ip = frame.ip;
-                            self.current_ip = frame.current_ip;
+                            self.ip_ptr = frame.ip;
+                            self.current_ip_ptr = frame.current_ip;
                             self.this_fn = frame.this_fn;
                             self.on_error = frame.on_error;
                             std::mem::swap(&mut self.defers, &mut frame.defers);
@@ -214,14 +221,14 @@ impl<ENV> GVm<ENV> {
                 }
                 WIDE => wide = true,
                 MOV => {
-                    let (dest, src) = decode2!(code, &mut self.ip, wide);
+                    let (dest, src) = decode2!(self.ip_ptr, wide);
                     // XXX TODO- figure out proper mov symantics...
                     let val = get_reg_unref!(registers, src, self);
                     //let val = get_reg!(registers, src);
                     mov_register_num!(self, registers, dest as usize, val);
                 }
                 MOVI => {
-                    let (dest, src) = decode2!(code, &mut self.ip, wide);
+                    let (dest, src) = decode2!(self.ip_ptr, wide);
                     let val = get_reg_unref!(registers, src, self);
                     let dest =
                         get_reg_int!(self, registers, dest).map_err(|e| (e, chunk.clone()))?;
@@ -229,14 +236,14 @@ impl<ENV> GVm<ENV> {
                     mov_register_num!(self, registers, dest as usize, val);
                 }
                 MOVII => {
-                    let (dest, src) = decode2!(code, &mut self.ip, wide);
+                    let (dest, src) = decode2!(self.ip_ptr, wide);
                     let src = get_reg_int!(self, registers, src).map_err(|e| (e, chunk.clone()))?;
                     let val = get_reg_unref!(registers, src, self);
                     //let val = get_reg!(registers, src);
                     mov_register_num!(self, registers, dest as usize, val);
                 }
                 BMOV => {
-                    let (dest, src, len) = decode3!(code, &mut self.ip, wide);
+                    let (dest, src, len) = decode3!(self.ip_ptr, wide);
                     for i in 0..len as usize {
                         //registers[dest as usize + i] = registers[src as usize + i];
                         mov_register_num!(
@@ -248,7 +255,7 @@ impl<ENV> GVm<ENV> {
                     }
                 }
                 LDSC => {
-                    let (dest, len, src) = decode3!(code, &mut self.ip, wide);
+                    let (dest, len, src) = decode3!(self.ip_ptr, wide);
                     if len > 0 {
                         let len = len as usize;
                         let dest = dest as usize;
@@ -269,7 +276,7 @@ impl<ENV> GVm<ENV> {
                     }
                 }
                 LDSCR => {
-                    let (dest, len, src) = decode3!(code, &mut self.ip, wide);
+                    let (dest, len, src) = decode3!(self.ip_ptr, wide);
                     if len > 0 {
                         let len = len as usize;
                         let dest = dest as usize;
@@ -296,45 +303,45 @@ impl<ENV> GVm<ENV> {
                     }
                 }
                 MDSC => {
-                    let decodes = decode3!(code, &mut self.ip, wide);
+                    let decodes = decode3!(self.ip_ptr, wide);
                     self.map_destructure(decodes, registers)
                         .map_err(|e| (e, chunk.clone()))?;
                 }
                 COPY => {
-                    let (_dest, _src) = decode2!(code, &mut self.ip, wide);
+                    let (_dest, _src) = decode2!(self.ip_ptr, wide);
                     // XXX Deep copy src to dest
                 }
                 FRZ => {
-                    let target = decode1!(code, &mut self.ip, wide);
+                    let target = decode1!(self.ip_ptr, wide);
                     let target = get_reg!(registers, target);
                     self.heap.immutable(target);
                 }
                 SET => {
-                    let (dest, src) = decode2!(code, &mut self.ip, wide);
+                    let (dest, src) = decode2!(self.ip_ptr, wide);
                     let val = get_reg!(registers, src);
                     set_register!(self, registers, dest as usize, val);
                 }
                 CONST => {
-                    let (dest, src) = decode2!(code, &mut self.ip, wide);
+                    let (dest, src) = decode2!(self.ip_ptr, wide);
                     let val = chunk.constants[src as usize];
                     set_register!(self, registers, dest as usize, val);
                 }
                 DEF => {
-                    let src = decode1!(code, &mut self.ip, wide);
+                    let src = decode1!(self.ip_ptr, wide);
                     let idx = if wide {
-                        decode_u32!(code, &mut self.ip)
+                        decode_u32!(self.ip_ptr)
                     } else {
-                        decode_u16!(code, &mut self.ip) as u32
+                        decode_u16!(self.ip_ptr) as u32
                     };
                     let val = get_reg!(registers, src);
                     self.set_global(idx, val);
                 }
                 DEFV => {
-                    let src = decode1!(code, &mut self.ip, wide);
+                    let src = decode1!(self.ip_ptr, wide);
                     let idx = if wide {
-                        decode_u32!(code, &mut self.ip)
+                        decode_u32!(self.ip_ptr)
                     } else {
-                        decode_u16!(code, &mut self.ip) as u32
+                        decode_u16!(self.ip_ptr) as u32
                     };
                     let val = get_reg!(registers, src);
                     if let Value::Undefined = self.globals.get(idx) {
@@ -342,48 +349,48 @@ impl<ENV> GVm<ENV> {
                     }
                 }
                 REFI => {
-                    let dest = decode1!(code, &mut self.ip, wide);
+                    let dest = decode1!(self.ip_ptr, wide);
                     let idx = if wide {
-                        decode_u32!(code, &mut self.ip)
+                        decode_u32!(self.ip_ptr)
                     } else {
-                        decode_u16!(code, &mut self.ip) as u32
+                        decode_u16!(self.ip_ptr) as u32
                     };
                     mov_register_num!(self, registers, dest as usize, self.globals.get(idx));
                 }
                 CLRREG => {
-                    let dest = decode1!(code, &mut self.ip, wide);
+                    let dest = decode1!(self.ip_ptr, wide);
                     mov_register!(registers, dest as usize, Value::Undefined);
                 }
                 REGT => {
-                    let dest = decode1!(code, &mut self.ip, wide);
+                    let dest = decode1!(self.ip_ptr, wide);
                     set_register!(self, registers, dest as usize, Value::True);
                 }
                 REGF => {
-                    let dest = decode1!(code, &mut self.ip, wide);
+                    let dest = decode1!(self.ip_ptr, wide);
                     set_register!(self, registers, dest as usize, Value::False);
                 }
                 REGN => {
-                    let dest = decode1!(code, &mut self.ip, wide);
+                    let dest = decode1!(self.ip_ptr, wide);
                     set_register!(self, registers, dest as usize, Value::Nil);
                 }
                 REGC => {
-                    let dest = decode1!(code, &mut self.ip, wide);
+                    let dest = decode1!(self.ip_ptr, wide);
                     set_register!(self, registers, dest as usize, Value::Undefined);
                 }
                 REGB => {
-                    let (dest, i) = decode2!(code, &mut self.ip, wide);
+                    let (dest, i) = decode2!(self.ip_ptr, wide);
                     set_register!(self, registers, dest as usize, Value::Byte(i as u8));
                 }
                 REGI => {
-                    let (dest, i) = decode2!(code, &mut self.ip, wide);
+                    let (dest, i) = decode2!(self.ip_ptr, wide);
                     set_register!(self, registers, dest as usize, Value::Int32(i as i32));
                 }
                 REGU => {
-                    let (dest, i) = decode2!(code, &mut self.ip, wide);
+                    let (dest, i) = decode2!(self.ip_ptr, wide);
                     set_register!(self, registers, dest as usize, Value::UInt32(i as u32));
                 }
                 CLOSE => {
-                    let (dest, src) = decode2!(code, &mut self.ip, wide);
+                    let (dest, src) = decode2!(self.ip_ptr, wide);
                     //let lambda = get_reg!(registers, src);
                     let lambda = get_reg_unref!(registers, src, self);
                     let (lambda, caps) = if let Value::Lambda(h) = lambda {
@@ -412,37 +419,33 @@ impl<ENV> GVm<ENV> {
                     set_register!(self, registers, dest as usize, new_closure);
                 }
                 CALL => {
-                    let (lambda, num_args, first_reg) = decode3!(code, &mut self.ip, wide);
+                    let (lambda, num_args, first_reg) = decode3!(self.ip_ptr, wide);
                     let lambda = get_reg!(registers, lambda);
                     chunk = self.make_call(lambda, chunk, registers, first_reg, num_args, false)?;
-                    code = get_code!(chunk);
                     registers = self.make_registers();
                 }
                 CALLG => {
                     let idx = if wide {
-                        decode_u32!(code, &mut self.ip)
+                        decode_u32!(self.ip_ptr)
                     } else {
-                        decode_u16!(code, &mut self.ip) as u32
+                        decode_u16!(self.ip_ptr) as u32
                     };
-                    let (num_args, first_reg) = decode2!(code, &mut self.ip, wide);
+                    let (num_args, first_reg) = decode2!(self.ip_ptr, wide);
                     let lambda = self.get_global(idx);
                     chunk = self.make_call(lambda, chunk, registers, first_reg, num_args, false)?;
-                    code = get_code!(chunk);
                     registers = self.make_registers();
                 }
                 TCALL => {
                     if let Some(defer) = self.defers.pop() {
                         // Tail call so do defers first.
                         let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
-                        self.ip = self.current_ip;
+                        self.ip_ptr = self.current_ip_ptr;
                         chunk = self.make_call(defer, chunk, registers, first_reg, 0, false)?;
-                        code = get_code!(chunk);
                         registers = self.make_registers();
                     } else {
-                        let (lambda, num_args) = decode2!(code, &mut self.ip, wide);
+                        let (lambda, num_args) = decode2!(self.ip_ptr, wide);
                         let lambda = get_reg!(registers, lambda);
                         chunk = self.make_call(lambda, chunk, registers, 0, num_args, true)?;
-                        code = get_code!(chunk);
                         registers = self.make_registers(); // In case of a builtin call
                     }
                 }
@@ -450,36 +453,29 @@ impl<ENV> GVm<ENV> {
                     if let Some(defer) = self.defers.pop() {
                         // Tail call so do defers first.
                         let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
-                        self.ip = self.current_ip;
+                        self.ip_ptr = self.current_ip_ptr;
                         chunk = self.make_call(defer, chunk, registers, first_reg, 0, false)?;
-                        code = get_code!(chunk);
                         registers = self.make_registers();
                     } else {
                         let idx = if wide {
-                            decode_u32!(code, &mut self.ip)
+                            decode_u32!(self.ip_ptr)
                         } else {
-                            decode_u16!(code, &mut self.ip) as u32
+                            decode_u16!(self.ip_ptr) as u32
                         };
-                        let num_args = decode1!(code, &mut self.ip, wide);
+                        let num_args = decode1!(self.ip_ptr, wide);
                         let lambda = self.get_global(idx);
                         chunk = self.make_call(lambda, chunk, registers, 0, num_args, true)?;
-                        code = get_code!(chunk);
                         registers = self.make_registers(); // In case of a builtin call
                     }
                 }
                 CALLM => {
-                    let (num_args, first_reg) = decode2!(code, &mut self.ip, wide);
+                    let (num_args, first_reg) = decode2!(self.ip_ptr, wide);
                     if let Some(this_fn) = self.this_fn {
                         chunk =
                             self.make_call(this_fn, chunk, registers, first_reg, num_args, false)?;
-                        code = get_code!(chunk);
                         registers = self.make_registers();
                     } else {
-                        let line = if wide {
-                            chunk.offset_to_line(self.ip - 4)
-                        } else {
-                            chunk.offset_to_line(self.ip - 2)
-                        };
+                        let line = self.get_line(wide, &chunk);
                         return Err((
                             VMError::new_vm(format!(
                                 "CALLM: Not in an existing lambda call, line {}.",
@@ -493,22 +489,16 @@ impl<ENV> GVm<ENV> {
                     if let Some(defer) = self.defers.pop() {
                         // Tail call so do defers first.
                         let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
-                        self.ip = self.current_ip;
+                        self.ip_ptr = self.current_ip_ptr;
                         chunk = self.make_call(defer, chunk, registers, first_reg, 0, false)?;
-                        code = get_code!(chunk);
                         registers = self.make_registers();
                     } else {
-                        let num_args = decode1!(code, &mut self.ip, wide);
+                        let num_args = decode1!(self.ip_ptr, wide);
                         if let Some(this_fn) = self.this_fn {
                             chunk = self.make_call(this_fn, chunk, registers, 0, num_args, true)?;
-                            code = get_code!(chunk);
                             registers = self.make_registers(); // In case of a builtin call
                         } else {
-                            let line = if wide {
-                                chunk.offset_to_line(self.ip - 4)
-                            } else {
-                                chunk.offset_to_line(self.ip - 2)
-                            };
+                            let line = self.get_line(wide, &chunk);
                             return Err((
                                 VMError::new_vm(format!(
                                     "TCALLM: Not in an existing lambda call, line {}.",
@@ -520,23 +510,23 @@ impl<ENV> GVm<ENV> {
                     }
                 }
                 JMP => {
-                    let jmp = decode1!(code, &mut self.ip, wide);
-                    self.ip = chunk.jump_table[jmp as usize] as usize;
+                    let jmp = decode1!(self.ip_ptr, wide);
+                    self.ip_ptr = get_code_at!(chunk, chunk.jump_table[jmp as usize] as isize);
                 }
                 JMPT => {
-                    let (test, jmp) = decode2!(code, &mut self.ip, wide);
+                    let (test, jmp) = decode2!(self.ip_ptr, wide);
                     if get_reg!(registers, test).is_truethy() {
-                        self.ip = chunk.jump_table[jmp as usize] as usize;
+                        self.ip_ptr = get_code_at!(chunk, chunk.jump_table[jmp as usize] as isize);
                     }
                 }
                 JMPF => {
-                    let (test, jmp) = decode2!(code, &mut self.ip, wide);
+                    let (test, jmp) = decode2!(self.ip_ptr, wide);
                     if get_reg!(registers, test).is_falsey() {
-                        self.ip = chunk.jump_table[jmp as usize] as usize;
+                        self.ip_ptr = get_code_at!(chunk, chunk.jump_table[jmp as usize] as isize);
                     }
                 }
                 JMPEQ => {
-                    let (op1, op2, jmp) = decode3!(code, &mut self.ip, wide);
+                    let (op1, op2, jmp) = decode3!(self.ip_ptr, wide);
                     let op1 = get_reg!(registers, op1)
                         .get_int(self)
                         .map_err(|e| (e, chunk.clone()))?;
@@ -544,52 +534,53 @@ impl<ENV> GVm<ENV> {
                         .get_int(self)
                         .map_err(|e| (e, chunk.clone()))?;
                     if op1 == op2 {
-                        self.ip = chunk.jump_table[jmp as usize] as usize;
+                        self.ip_ptr = get_code_at!(chunk, chunk.jump_table[jmp as usize] as isize);
                     }
                 }
                 JMPLT => {
-                    let (op1, op2, jmp) = decode3!(code, &mut self.ip, wide);
+                    let (op1, op2, jmp) = decode3!(self.ip_ptr, wide);
                     let op1 = get_reg_int!(self, registers, op1).map_err(|e| (e, chunk.clone()))?;
                     let op2 = get_reg_int!(self, registers, op2).map_err(|e| (e, chunk.clone()))?;
                     if op1 < op2 {
-                        self.ip = chunk.jump_table[jmp as usize] as usize;
+                        self.ip_ptr = get_code_at!(chunk, chunk.jump_table[jmp as usize] as isize);
                     }
                 }
                 JMPGT => {
-                    let (op1, op2, jmp) = decode3!(code, &mut self.ip, wide);
+                    let (op1, op2, jmp) = decode3!(self.ip_ptr, wide);
                     let op1 = get_reg_int!(self, registers, op1).map_err(|e| (e, chunk.clone()))?;
                     let op2 = get_reg_int!(self, registers, op2).map_err(|e| (e, chunk.clone()))?;
                     if op1 > op2 {
-                        self.ip = chunk.jump_table[jmp as usize] as usize;
+                        self.ip_ptr = get_code_at!(chunk, chunk.jump_table[jmp as usize] as isize);
                     }
                 }
                 JMPU => {
-                    let (test, jmp) = decode2!(code, &mut self.ip, wide);
+                    let (test, jmp) = decode2!(self.ip_ptr, wide);
                     if get_reg!(registers, test).is_undef() {
-                        self.ip = chunk.jump_table[jmp as usize] as usize;
+                        self.ip_ptr = get_code_at!(chunk, chunk.jump_table[jmp as usize] as isize);
                     }
                 }
                 JMPNU => {
-                    let (test, jmp) = decode2!(code, &mut self.ip, wide);
+                    let (test, jmp) = decode2!(self.ip_ptr, wide);
                     if !get_reg!(registers, test).is_undef() {
-                        self.ip = chunk.jump_table[jmp as usize] as usize;
+                        self.ip_ptr = get_code_at!(chunk, chunk.jump_table[jmp as usize] as isize);
                     }
                 }
                 JMPRU => {
-                    let (test, len, jmp) = decode3!(code, &mut self.ip, wide);
+                    let (test, len, jmp) = decode3!(self.ip_ptr, wide);
                     if len > 0 {
                         let test = test as usize;
                         let len = len as usize;
                         for i in 0..len {
                             if get_reg!(registers, test + i).is_undef() {
-                                self.ip = chunk.jump_table[jmp as usize] as usize;
+                                self.ip_ptr =
+                                    get_code_at!(chunk, chunk.jump_table[jmp as usize] as isize);
                                 break;
                             }
                         }
                     }
                 }
                 JMPRNU => {
-                    let (test, len, jmp) = decode3!(code, &mut self.ip, wide);
+                    let (test, len, jmp) = decode3!(self.ip_ptr, wide);
                     if len > 0 {
                         let len = len as usize;
                         let test = test as usize;
@@ -601,26 +592,27 @@ impl<ENV> GVm<ENV> {
                             }
                         }
                         if jump {
-                            self.ip = chunk.jump_table[jmp as usize] as usize;
+                            self.ip_ptr =
+                                get_code_at!(chunk, chunk.jump_table[jmp as usize] as isize);
                         }
                     }
                 }
                 EQ => {
-                    let (dest, reg1, reg2) = decode3!(code, &mut self.ip, wide);
+                    let (dest, reg1, reg2) = decode3!(self.ip_ptr, wide);
                     let val = self
                         .is_eq(registers, reg1, reg2)
                         .map_err(|e| (e, chunk.clone()))?;
                     set_register!(self, registers, dest as usize, val);
                 }
                 EQUAL => {
-                    let (dest, reg1, reg2) = decode3!(code, &mut self.ip, wide);
+                    let (dest, reg1, reg2) = decode3!(self.ip_ptr, wide);
                     let val = self
                         .is_equal(registers, reg1, reg2)
                         .map_err(|e| (e, chunk.clone()))?;
                     set_register!(self, registers, dest as usize, val);
                 }
                 NOT => {
-                    let (dest, val) = decode2!(code, &mut self.ip, wide);
+                    let (dest, val) = decode2!(self.ip_ptr, wide);
                     let val = get_reg!(registers, val);
                     let res = if val.is_falsey() {
                         Value::True
@@ -630,7 +622,7 @@ impl<ENV> GVm<ENV> {
                     set_register!(self, registers, dest as usize, res);
                 }
                 ERR => {
-                    let (key, val) = decode2!(code, &mut self.ip, wide);
+                    let (key, val) = decode2!(self.ip_ptr, wide);
                     let key = get_reg!(registers, key);
                     let val = get_reg!(registers, val);
                     let key_str = if let Value::Keyword(i) = key {
@@ -660,13 +652,13 @@ impl<ENV> GVm<ENV> {
                     }
                 }
                 CCC => {
-                    let (lambda, first_reg) = decode2!(code, &mut self.ip, wide);
+                    let (lambda, first_reg) = decode2!(self.ip_ptr, wide);
                     let lambda = get_reg!(registers, lambda);
                     let frame = CallFrame {
                         id: 0,
                         chunk: chunk.clone(),
-                        ip: self.ip,
-                        current_ip: self.current_ip,
+                        ip: self.ip_ptr,
+                        current_ip: self.current_ip_ptr,
                         stack_top: self.stack_top,
                         this_fn: self.this_fn,
                         defers: Vec::new(),
@@ -684,11 +676,10 @@ impl<ENV> GVm<ENV> {
                     let k_obj = self.alloc_continuation(k);
                     mov_register!(registers, (first_reg + 1) as usize, k_obj);
                     chunk = self.make_call(lambda, chunk, registers, first_reg, 1, false)?;
-                    code = get_code!(chunk);
                     registers = self.make_registers();
                 }
                 DFR => {
-                    let lambda = decode1!(code, &mut self.ip, wide);
+                    let lambda = decode1!(self.ip_ptr, wide);
                     let lambda = get_reg!(registers, lambda);
                     self.defers.push(lambda);
                 }
@@ -696,12 +687,11 @@ impl<ENV> GVm<ENV> {
                     if let Some(defer) = self.defers.pop() {
                         let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
                         chunk = self.make_call(defer, chunk, registers, first_reg, 0, false)?;
-                        code = get_code!(chunk);
                         registers = self.make_registers();
                     }
                 }
                 ONERR => {
-                    let on_error_reg = decode1!(code, &mut self.ip, wide);
+                    let on_error_reg = decode1!(self.ip_ptr, wide);
                     let on_error = get_reg!(registers, on_error_reg);
                     if let Some(oe) = self.on_error {
                         mov_register!(registers, on_error_reg as usize, oe);
@@ -714,39 +704,14 @@ impl<ENV> GVm<ENV> {
                         self.on_error = Some(on_error);
                     }
                 }
-                ADD => binary_math!(
-                    self,
-                    chunk,
-                    code,
-                    &mut self.ip,
-                    registers,
-                    |a, b| a + b,
-                    wide
-                ),
-                SUB => binary_math!(
-                    self,
-                    chunk,
-                    code,
-                    &mut self.ip,
-                    registers,
-                    |a, b| a - b,
-                    wide
-                ),
-                MUL => binary_math!(
-                    self,
-                    chunk,
-                    code,
-                    &mut self.ip,
-                    registers,
-                    |a, b| a * b,
-                    wide
-                ),
-                DIV => div_math!(self, chunk, code, &mut self.ip, registers, wide),
+                ADD => binary_math!(self, chunk, self.ip_ptr, registers, |a, b| a + b, wide),
+                SUB => binary_math!(self, chunk, self.ip_ptr, registers, |a, b| a - b, wide),
+                MUL => binary_math!(self, chunk, self.ip_ptr, registers, |a, b| a * b, wide),
+                DIV => div_math!(self, chunk, self.ip_ptr, registers, wide),
                 NUMEQ => compare_int!(
                     self,
                     chunk,
-                    code,
-                    &mut self.ip,
+                    self.ip_ptr,
                     registers,
                     |a, b| a == b,
                     |a: f64, b: f64| (a - b).abs() < f64::EPSILON,
@@ -757,8 +722,7 @@ impl<ENV> GVm<ENV> {
                 NUMNEQ => compare_int!(
                     self,
                     chunk,
-                    code,
-                    &mut self.ip,
+                    self.ip_ptr,
                     registers,
                     |a, b| a == b,
                     |a: f64, b: f64| (a - b).abs() < f64::EPSILON,
@@ -769,8 +733,7 @@ impl<ENV> GVm<ENV> {
                 NUMLT => compare!(
                     self,
                     chunk,
-                    code,
-                    &mut self.ip,
+                    self.ip_ptr,
                     registers,
                     |a, b| a < b,
                     wide,
@@ -779,8 +742,7 @@ impl<ENV> GVm<ENV> {
                 NUMLTE => compare!(
                     self,
                     chunk,
-                    code,
-                    &mut self.ip,
+                    self.ip_ptr,
                     registers,
                     |a, b| a <= b,
                     wide,
@@ -789,8 +751,7 @@ impl<ENV> GVm<ENV> {
                 NUMGT => compare!(
                     self,
                     chunk,
-                    code,
-                    &mut self.ip,
+                    self.ip_ptr,
                     registers,
                     |a, b| a > b,
                     wide,
@@ -799,15 +760,14 @@ impl<ENV> GVm<ENV> {
                 NUMGTE => compare!(
                     self,
                     chunk,
-                    code,
-                    &mut self.ip,
+                    self.ip_ptr,
                     registers,
                     |a, b| a >= b,
                     wide,
                     true
                 ),
                 INC => {
-                    let (dest, i) = decode2!(code, &mut self.ip, wide);
+                    let (dest, i) = decode2!(self.ip_ptr, wide);
                     match get_reg!(registers, dest) {
                         // XXX TODO- int 64, overflow
                         Value::Byte(v) => registers[dest as usize] = Value::Byte(v + i as u8),
@@ -827,7 +787,7 @@ impl<ENV> GVm<ENV> {
                     }
                 }
                 DEC => {
-                    let (dest, i) = decode2!(code, &mut self.ip, wide);
+                    let (dest, i) = decode2!(self.ip_ptr, wide);
                     match get_reg!(registers, dest) {
                         // XXX TODO- int 64, overflow
                         Value::Byte(v) => registers[dest as usize] = Value::Byte(v - i as u8),
@@ -859,14 +819,14 @@ impl<ENV> GVm<ENV> {
                     }
                 }
                 CONS => {
-                    let (dest, op2, op3) = decode3!(code, &mut self.ip, wide);
+                    let (dest, op2, op3) = decode3!(self.ip_ptr, wide);
                     let car = get_reg!(registers, op2);
                     let cdr = get_reg!(registers, op3);
                     let pair = self.alloc_pair(car, cdr);
                     set_register!(self, registers, dest as usize, pair);
                 }
                 CAR => {
-                    let (dest, op) = decode2!(code, &mut self.ip, wide);
+                    let (dest, op) = decode2!(self.ip_ptr, wide);
                     let op = get_reg!(registers, op);
                     match op {
                         Value::Pair(_) | Value::List(_, _) => {
@@ -886,7 +846,7 @@ impl<ENV> GVm<ENV> {
                     }
                 }
                 CDR => {
-                    let (dest, op) = decode2!(code, &mut self.ip, wide);
+                    let (dest, op) = decode2!(self.ip_ptr, wide);
                     let op = get_reg!(registers, op);
                     match op {
                         Value::Pair(_) | Value::List(_, _) => {
@@ -899,28 +859,20 @@ impl<ENV> GVm<ENV> {
                 }
                 LIST => {
                     self.pause_gc();
-                    let r = self
-                        .list(code, registers, wide)
-                        .map_err(|e| (e, chunk.clone()));
+                    let r = self.list(registers, wide).map_err(|e| (e, chunk.clone()));
                     self.unpause_gc();
                     r?
                 }
                 APND => {
                     self.pause_gc();
-                    let r = self
-                        .append(code, registers, wide)
-                        .map_err(|e| (e, chunk.clone()));
+                    let r = self.append(registers, wide).map_err(|e| (e, chunk.clone()));
                     self.unpause_gc();
                     r?;
                 }
-                XAR => self
-                    .xar(code, registers, wide)
-                    .map_err(|e| (e, chunk.clone()))?,
-                XDR => self
-                    .xdr(code, registers, wide)
-                    .map_err(|e| (e, chunk.clone()))?,
+                XAR => self.xar(registers, wide).map_err(|e| (e, chunk.clone()))?,
+                XDR => self.xdr(registers, wide).map_err(|e| (e, chunk.clone()))?,
                 VEC => {
-                    let (dest, start, end) = decode3!(code, &mut self.ip, wide);
+                    let (dest, start, end) = decode3!(self.ip_ptr, wide);
                     if end == start {
                         let vh = self.alloc_vector(Vec::new());
                         set_register!(self, registers, dest as usize, vh);
@@ -934,7 +886,7 @@ impl<ENV> GVm<ENV> {
                     }
                 }
                 VECMK => {
-                    let (dest, op) = decode2!(code, &mut self.ip, wide);
+                    let (dest, op) = decode2!(self.ip_ptr, wide);
                     let len = get_reg!(registers, op)
                         .get_int(self)
                         .map_err(|e| (e, chunk.clone()))?;
@@ -942,7 +894,7 @@ impl<ENV> GVm<ENV> {
                     set_register!(self, registers, dest as usize, val);
                 }
                 VECELS => {
-                    let (dest, op) = decode2!(code, &mut self.ip, wide);
+                    let (dest, op) = decode2!(self.ip_ptr, wide);
                     let len = get_reg!(registers, op)
                         .get_int(self)
                         .map_err(|e| (e, chunk.clone()))?;
@@ -955,7 +907,7 @@ impl<ENV> GVm<ENV> {
                     }
                 }
                 VECPSH => {
-                    let (dest, op) = decode2!(code, &mut self.ip, wide);
+                    let (dest, op) = decode2!(self.ip_ptr, wide);
                     let val = get_reg!(registers, op);
                     if let Value::Vector(h) = get_reg!(registers, dest) {
                         let v = self
@@ -966,7 +918,7 @@ impl<ENV> GVm<ENV> {
                     }
                 }
                 VECPOP => {
-                    let (vc, dest) = decode2!(code, &mut self.ip, wide);
+                    let (vc, dest) = decode2!(self.ip_ptr, wide);
                     let val = if let Value::Vector(h) = get_reg!(registers, vc) {
                         let v = self
                             .heap
@@ -983,7 +935,7 @@ impl<ENV> GVm<ENV> {
                     set_register!(self, registers, dest as usize, val);
                 }
                 VECNTH => {
-                    let (vc, dest, i) = decode3!(code, &mut self.ip, wide);
+                    let (vc, dest, i) = decode3!(self.ip_ptr, wide);
                     let i =
                         get_reg_int!(self, registers, i).map_err(|e| (e, chunk.clone()))? as usize;
                     let val = match get_reg!(registers, vc) {
@@ -1024,7 +976,7 @@ impl<ENV> GVm<ENV> {
                     set_register!(self, registers, dest as usize, val);
                 }
                 VECSTH => {
-                    let (vc, src, i) = decode3!(code, &mut self.ip, wide);
+                    let (vc, src, i) = decode3!(self.ip_ptr, wide);
                     let i =
                         get_reg_int!(self, registers, i).map_err(|e| (e, chunk.clone()))? as usize;
                     let val = get_reg!(registers, src);
@@ -1048,7 +1000,7 @@ impl<ENV> GVm<ENV> {
                     };
                 }
                 VECMKD => {
-                    let (dest, len, dfn) = decode3!(code, &mut self.ip, wide);
+                    let (dest, len, dfn) = decode3!(self.ip_ptr, wide);
                     let len = get_reg!(registers, len)
                         .get_int(self)
                         .map_err(|e| (e, chunk.clone()))?;
@@ -1068,7 +1020,7 @@ impl<ENV> GVm<ENV> {
                     set_register!(self, registers, dest as usize, val);
                 }
                 VECLEN => {
-                    let (dest, v) = decode2!(code, &mut self.ip, wide);
+                    let (dest, v) = decode2!(self.ip_ptr, wide);
                     match get_reg!(registers, v) {
                         Value::Vector(h) => {
                             let v = self.get_vector(h);
@@ -1084,7 +1036,7 @@ impl<ENV> GVm<ENV> {
                     }
                 }
                 VECCLR => {
-                    let v = decode1!(code, &mut self.ip, wide);
+                    let v = decode1!(self.ip_ptr, wide);
                     if let Value::Vector(h) = get_reg!(registers, v) {
                         let v = self
                             .heap
@@ -1094,14 +1046,14 @@ impl<ENV> GVm<ENV> {
                     }
                 }
                 STR => {
-                    let (dest, reg1, reg2) = decode3!(code, &mut self.ip, wide);
+                    let (dest, reg1, reg2) = decode3!(self.ip_ptr, wide);
                     let val = self
                         .mk_str(registers, reg1, reg2)
                         .map_err(|e| (e, chunk.clone()))?;
                     set_register!(self, registers, dest as usize, val);
                 }
                 TYPE => {
-                    let (dest, val) = decode2!(code, &mut self.ip, wide);
+                    let (dest, val) = decode2!(self.ip_ptr, wide);
                     let val = get_reg!(registers, val);
                     let t = Value::StringConst(self.intern_static(val.display_type(self)));
                     set_register!(self, registers, dest as usize, t);

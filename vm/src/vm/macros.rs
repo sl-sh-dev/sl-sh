@@ -1,12 +1,14 @@
-#[cfg(not(feature = "nohelmet"))]
 #[macro_export]
-macro_rules! get_code {
-    ($chunk:expr) => {{
-        &$chunk.code[..]
+macro_rules! inc_ip {
+    ($code_ip:expr) => {{
+        unsafe {
+            let r = *$code_ip;
+            $code_ip = $code_ip.offset(1);
+            r
+        }
     }};
 }
 
-#[cfg(feature = "nohelmet")]
 #[macro_export]
 macro_rules! get_code {
     ($chunk:expr) => {{
@@ -14,177 +16,81 @@ macro_rules! get_code {
     }};
 }
 
-#[cfg(not(feature = "nohelmet"))]
 #[macro_export]
-macro_rules! decode_u8 {
-    ($code:expr, $ip:expr) => {{
-        let idx1 = $code[*$ip];
-        *$ip += 1;
-        idx1
+macro_rules! get_code_at {
+    ($chunk:expr, $idx:expr) => {{
+        unsafe { $chunk.code.as_ptr().offset($idx) }
     }};
 }
 
-#[cfg(feature = "nohelmet")]
 #[macro_export]
 macro_rules! decode_u8 {
-    ($code:expr, $ip:expr) => {{
-        unsafe {
-            let idx1 = *$code.add(*$ip);
-            *$ip += 1;
-            idx1
-        }
+    ($code:expr) => {{
+        $crate::inc_ip!($code)
     }};
 }
 
-#[cfg(not(feature = "nohelmet"))]
 #[macro_export]
 macro_rules! decode_u16 {
-    ($code:expr, $ip:expr) => {{
-        let idx1 = $code[*$ip];
-        let idx2 = $code[*$ip + 1];
-        *$ip += 2;
+    ($code:expr) => {{
+        let idx1 = $crate::inc_ip!($code);
+        let idx2 = $crate::inc_ip!($code);
         ((idx1 as u16) << 8) | (idx2 as u16)
     }};
 }
 
-#[cfg(feature = "nohelmet")]
-#[macro_export]
-macro_rules! decode_u16 {
-    ($code:expr, $ip:expr) => {{
-        unsafe {
-            let idx1 = *$code.add(*$ip);
-            let idx2 = *$code.add(*$ip + 1);
-            *$ip += 2;
-            ((idx1 as u16) << 8) | (idx2 as u16)
-        }
-    }};
-}
-
-#[cfg(not(feature = "nohelmet"))]
 #[macro_export]
 macro_rules! decode_u32 {
-    ($code:expr, $ip:expr) => {{
-        let idx1 = $code[*$ip];
-        let idx2 = $code[*$ip + 1];
-        let idx3 = $code[*$ip + 2];
-        let idx4 = $code[*$ip + 3];
-        *$ip += 4;
+    ($code:expr) => {{
+        let idx1 = $crate::inc_ip!($code);
+        let idx2 = $crate::inc_ip!($code);
+        let idx3 = $crate::inc_ip!($code);
+        let idx4 = $crate::inc_ip!($code);
         ((idx1 as u32) << 24) | ((idx2 as u32) << 16) | ((idx3 as u32) << 8) | (idx4 as u32)
     }};
 }
 
-#[cfg(feature = "nohelmet")]
-#[macro_export]
-macro_rules! decode_u32 {
-    ($code:expr, $ip:expr) => {{
-        unsafe {
-            let idx1 = *$code.add(*$ip);
-            let idx2 = *$code.add(*$ip + 1);
-            let idx3 = *$code.add(*$ip + 2);
-            let idx4 = *$code.add(*$ip + 3);
-            *$ip += 4;
-            ((idx1 as u32) << 24) | ((idx2 as u32) << 16) | ((idx3 as u32) << 8) | (idx4 as u32)
-        }
-    }};
-}
-
-#[cfg(not(feature = "nohelmet"))]
 #[macro_export]
 macro_rules! decode1 {
-    ($code:expr, $ip:expr, $wide:expr) => {{
+    ($code:expr, $wide:expr) => {{
         if $wide {
-            decode_u16!($code, $ip)
+            decode_u16!($code)
         } else {
-            let oip = *$ip;
-            *$ip += 1;
-            $code[oip] as u16
+            $crate::inc_ip!($code) as u16
         }
     }};
 }
 
-#[cfg(feature = "nohelmet")]
-#[macro_export]
-macro_rules! decode1 {
-    ($code:expr, $ip:expr, $wide:expr) => {{
-        if $wide {
-            decode_u16!($code, $ip)
-        } else {
-            let oip = *$ip;
-            *$ip += 1;
-            unsafe { *$code.add(oip) as u16 }
-        }
-    }};
-}
-
-#[cfg(not(feature = "nohelmet"))]
 #[macro_export]
 macro_rules! decode2 {
-    ($code:expr, $ip:expr, $wide:expr) => {{
+    ($code:expr, $wide:expr) => {{
         if $wide {
-            (decode_u16!($code, $ip), decode_u16!($code, $ip))
+            (decode_u16!($code), decode_u16!($code))
         } else {
-            let oip = *$ip;
-            *$ip += 2;
-            ($code[oip] as u16, $code[oip + 1] as u16)
-        }
-    }};
-}
-
-#[cfg(feature = "nohelmet")]
-#[macro_export]
-macro_rules! decode2 {
-    ($code:expr, $ip:expr, $wide:expr) => {{
-        if $wide {
-            (decode_u16!($code, $ip), decode_u16!($code, $ip))
-        } else {
-            let oip = *$ip;
-            *$ip += 2;
-            unsafe { (*$code.add(oip) as u16, *$code.add(oip + 1) as u16) }
-        }
-    }};
-}
-
-#[cfg(not(feature = "nohelmet"))]
-#[macro_export]
-macro_rules! decode3 {
-    ($code:expr, $ip:expr, $wide:expr) => {{
-        if $wide {
-            (
-                decode_u16!($code, $ip),
-                decode_u16!($code, $ip),
-                decode_u16!($code, $ip),
-            )
-        } else {
-            let oip = *$ip;
-            *$ip += 3;
-            (
-                $code[oip] as u16,
-                $code[oip + 1] as u16,
-                $code[oip + 2] as u16,
-            )
-        }
-    }};
-}
-
-#[cfg(feature = "nohelmet")]
-#[macro_export]
-macro_rules! decode3 {
-    ($code:expr, $ip:expr, $wide:expr) => {{
-        if $wide {
-            (
-                decode_u16!($code, $ip),
-                decode_u16!($code, $ip),
-                decode_u16!($code, $ip),
-            )
-        } else {
-            let oip = *$ip;
-            *$ip += 3;
+            //(crate::inc_ip!($code) as u16, crate::inc_ip!($code) as u16)
             unsafe {
-                (
-                    *$code.add(oip) as u16,
-                    *$code.add(oip + 1) as u16,
-                    *$code.add(oip + 2) as u16,
-                )
+                let r = (*$code as u16, *$code.offset(1) as u16);
+                $code = $code.offset(2);
+                r
+            }
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! decode3 {
+    ($code:expr, $wide:expr) => {{
+        if $wide {
+            (decode_u16!($code), decode_u16!($code), decode_u16!($code))
+        } else {
+            unsafe {
+                let r = (
+                    *$code as u16,
+                    *$code.offset(1) as u16,
+                    *$code.offset(2) as u16,
+                );
+                $code = $code.offset(3);
+                r
             }
         }
     }};
@@ -241,9 +147,9 @@ macro_rules! get_reg {
 }
 
 macro_rules! compare_int {
-    ($vm:expr, $chunk:expr, $code:expr, $ip:expr, $registers:expr, $comp_fn:expr,
+    ($vm:expr, $chunk:expr, $code:expr, $registers:expr, $comp_fn:expr,
      $compf_fn:expr, $wide:expr, $move:expr, $not:expr) => {{
-        let (dest, reg1, reg2) = decode3!($code, $ip, $wide);
+        let (dest, reg1, reg2) = decode3!($code, $wide);
         let mut val = false;
         for reg in reg1..reg2 {
             let op1 = get_reg_unref!($registers, reg, $vm);
@@ -276,8 +182,8 @@ macro_rules! compare_int {
 }
 
 macro_rules! compare {
-    ($vm:expr, $chunk:expr, $code:expr, $ip:expr, $registers:expr, $comp_fn:expr, $wide:expr, $move:expr) => {{
-        compare_int!($vm, $chunk, $code, $ip, $registers, $comp_fn, $comp_fn, $wide, $move, false)
+    ($vm:expr, $chunk:expr, $code:expr, $registers:expr, $comp_fn:expr, $wide:expr, $move:expr) => {{
+        compare_int!($vm, $chunk, $code, $registers, $comp_fn, $comp_fn, $wide, $move, false)
     }};
 }
 
@@ -309,8 +215,8 @@ macro_rules! get_float {
 }
 
 macro_rules! binary_math {
-    ($vm:expr, $chunk:expr, $code:expr, $ip:expr, $registers:expr, $bin_fn:expr, $wide:expr) => {{
-        let (dest, op2) = decode2!($code, $ip, $wide);
+    ($vm:expr, $chunk:expr, $code:expr, $registers:expr, $bin_fn:expr, $wide:expr) => {{
+        let (dest, op2) = decode2!($code, $wide);
         let op1 = get_reg!($registers, dest);
         let op2 = get_reg!($registers, op2);
         match (op1, op2) {
@@ -394,8 +300,8 @@ macro_rules! binary_math {
 }
 
 macro_rules! div_math {
-    ($vm:expr, $chunk:expr, $code:expr, $ip:expr, $registers:expr, $wide:expr) => {{
-        let (dest, op2) = decode2!($code, $ip, $wide);
+    ($vm:expr, $chunk:expr, $code:expr, $registers:expr, $wide:expr) => {{
+        let (dest, op2) = decode2!($code, $wide);
         let op1 = get_reg!($registers, dest);
         let op2 = get_reg!($registers, op2);
         match (op1, op2) {

@@ -9,6 +9,7 @@ use slvm::value::*;
 
 use sl_compiler::reader::*;
 
+use crate::get_offset;
 use compile_state::state::{SloshVm, SloshVmTrait};
 use sl_liner::{Context, Prompt};
 
@@ -206,18 +207,29 @@ pub fn debug(env: &mut SloshVm) {
             Some(Ok(Value::Keyword(k))) if k == stack => {
                 if let Some(frame) = env.err_frame() {
                     let ip = frame.current_ip;
-                    let line = frame.chunk.offset_to_line(ip).unwrap_or(0);
+                    let line = frame
+                        .chunk
+                        .offset_to_line(get_offset(ip, &frame.chunk))
+                        .unwrap_or(0);
                     println!(
                         "ERROR Frame: {} line: {} ip: {:#010x}",
-                        frame.chunk.file_name, line, ip
+                        frame.chunk.file_name,
+                        line,
+                        get_offset(ip, &frame.chunk)
                     );
                 }
                 for frame in env.get_call_stack() {
                     let ip = frame.current_ip;
-                    let line = frame.chunk.offset_to_line(ip).unwrap_or(0);
+                    let line = frame
+                        .chunk
+                        .offset_to_line(get_offset(ip, &frame.chunk))
+                        .unwrap_or(0);
                     println!(
                         "ID: {} {} line: {} ip: {:#010x}",
-                        frame.id, frame.chunk.file_name, line, ip
+                        frame.id,
+                        frame.chunk.file_name,
+                        line,
+                        get_offset(ip, &frame.chunk)
                     );
                 }
             }

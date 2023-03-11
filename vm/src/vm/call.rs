@@ -85,8 +85,8 @@ impl<ENV> GVm<ENV> {
         let frame = CallFrame {
             id: self.callframe_id,
             chunk,
-            ip: self.ip,
-            current_ip: self.current_ip,
+            ip: self.ip_ptr,
+            current_ip: self.current_ip_ptr,
             stack_top: self.stack_top,
             this_fn: self.this_fn,
             defers,
@@ -136,7 +136,7 @@ impl<ENV> GVm<ENV> {
                         self.stack_top = frame.stack_top;
                         self.stack_max =
                             self.stack_top + frame.chunk.input_regs + frame.chunk.extra_regs;
-                        self.ip = frame.ip;
+                        self.ip_ptr = frame.ip;
                         self.this_fn = frame.this_fn;
                         self.on_error = frame.on_error;
                         self.stack[res_reg] = res;
@@ -162,7 +162,7 @@ impl<ENV> GVm<ENV> {
                 }
                 self.stack_max = self.stack_top + l.input_regs + l.extra_regs;
                 self.this_fn = Some(lambda);
-                self.ip = 0;
+                self.ip_ptr = get_code!(l);
                 if l.rest {
                     let (rest_reg, h) = self.setup_rest(&l, registers, first_reg, num_args);
                     mov_register!(registers, rest_reg, h);
@@ -188,7 +188,7 @@ impl<ENV> GVm<ENV> {
                 let caps = self.heap.get_closure_captures(handle);
                 self.stack_max = self.stack_top + l.input_regs + l.extra_regs;
                 self.this_fn = Some(lambda);
-                self.ip = 0;
+                self.ip_ptr = get_code!(l);
                 let cap_first = (first_reg + l.args + l.opt_args + 1) as usize;
                 if l.rest {
                     let (rest_reg, h) = unsafe_vm.setup_rest(&l, registers, first_reg, num_args);
@@ -227,7 +227,7 @@ impl<ENV> GVm<ENV> {
                 if defered {
                     if let Some(defer) = self.defers.pop() {
                         let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
-                        self.ip = self.current_ip;
+                        self.ip_ptr = self.current_ip_ptr;
                         self.make_call(defer, chunk, registers, first_reg, 0, false)
                     } else {
                         // If k_defers returns true than self.defers.pop() better
@@ -282,8 +282,8 @@ impl<ENV> GVm<ENV> {
                     self.stack_top = k.frame.stack_top;
                     self.stack_max =
                         self.stack_top + k.frame.chunk.input_regs + k.frame.chunk.extra_regs;
-                    self.ip = k.frame.ip;
-                    self.current_ip = k.frame.current_ip;
+                    self.ip_ptr = k.frame.ip;
+                    self.current_ip_ptr = k.frame.current_ip;
                     self.this_fn = k.frame.this_fn;
                     self.on_error = k.frame.on_error;
                     let chunk = k.frame.chunk.clone();

@@ -5,6 +5,7 @@ use crate::error::*;
 use crate::heap::*;
 use crate::interner::*;
 use crate::value::*;
+use crate::HALT;
 
 mod cons;
 mod storage;
@@ -15,6 +16,8 @@ mod call_collection;
 mod exec_loop;
 
 const STACK_CAP: usize = 1024;
+
+const DEAD_CODE: [u8; 3] = [HALT, HALT, HALT];
 
 pub struct GVm<ENV> {
     interner: Interner,
@@ -30,8 +33,8 @@ pub struct GVm<ENV> {
     err_frame: Option<CallFrame>,
     stack_top: usize,
     stack_max: usize,
-    ip: usize,
-    current_ip: usize,
+    ip_ptr: *const u8,
+    current_ip_ptr: *const u8,
     callframe_id: usize,
     defers: Vec<Value>,
     env: ENV,
@@ -68,8 +71,8 @@ impl<ENV> GVm<ENV> {
             err_frame: None,
             stack_top: 0,
             stack_max: 0,
-            ip: 0,
-            current_ip: 0,
+            ip_ptr: DEAD_CODE.as_ptr(),
+            current_ip_ptr: DEAD_CODE.as_ptr(),
             callframe_id: 0,
             defers: Vec::new(),
             env,
@@ -245,7 +248,7 @@ impl<ENV> GVm<ENV> {
     ) -> VMResult<Value> {
         let stack_top = self.stack_top;
         let stack_max = self.stack_max;
-        let ip = self.ip;
+        let ip = self.ip_ptr;
         let this_fn = self.this_fn;
         let on_error = self.on_error;
         self.this_fn = None;
@@ -277,7 +280,7 @@ impl<ENV> GVm<ENV> {
         let res = self.execute2(chunk).map(|_| self.stack[self.stack_top]);
         self.stack_top = stack_top;
         self.stack_max = stack_max;
-        self.ip = ip;
+        self.ip_ptr = ip;
         self.this_fn = this_fn;
         self.on_error = on_error;
         res
@@ -288,7 +291,7 @@ impl<ENV> GVm<ENV> {
     pub fn execute(&mut self, chunk: Arc<Chunk>) -> VMResult<Value> {
         let stack_top = self.stack_top;
         let stack_max = self.stack_max;
-        let ip = self.ip;
+        let ip = self.ip_ptr;
         let this_fn = self.this_fn;
         let on_error = self.on_error;
         self.this_fn = None;
@@ -302,7 +305,7 @@ impl<ENV> GVm<ENV> {
 
         self.stack_top = stack_top;
         self.stack_max = stack_max;
-        self.ip = ip;
+        self.ip_ptr = ip;
         self.this_fn = this_fn;
         self.on_error = on_error;
         Ok(res)
@@ -316,8 +319,8 @@ impl<ENV> GVm<ENV> {
         self.err_frame = None;
         self.stack_top = 0;
         self.stack_max = 0;
-        self.ip = 0;
-        self.current_ip = 0;
+        self.ip_ptr = DEAD_CODE.as_ptr();
+        self.current_ip_ptr = DEAD_CODE.as_ptr();
         self.callframe_id = 0;
         // XXX TODO- should probably run any defers before the reset.
         self.defers = Vec::new();
@@ -335,8 +338,8 @@ impl<ENV> GVm<ENV> {
                         id: 0,
                         chunk: echunk,
                         stack_top: self.stack_top,
-                        ip: self.ip,
-                        current_ip: self.current_ip,
+                        ip: self.ip_ptr,
+                        current_ip: self.current_ip_ptr,
                         this_fn: self.this_fn,
                         defers: std::mem::take(&mut self.defers),
                         on_error: self.on_error,

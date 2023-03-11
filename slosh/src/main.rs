@@ -15,7 +15,7 @@ use builtins::collections::{make_hash, vec_slice, vec_to_list};
 use builtins::print::{dasm, display_value, pr, prn};
 use builtins::{gensym, get_prop, set_prop, sizeof_heap_object, sizeof_value};
 use sl_liner::{Context, Prompt};
-use slvm::Chunk;
+use slvm::{get_code, Chunk};
 
 mod config;
 pub mod debug;
@@ -405,14 +405,19 @@ fn main() {
                                 println!("Compile error, line {}: {}", env.line_num(), e);
                             }
                             let chunk = Arc::new(state.chunk.clone());
-                            if let Err(err) = env.execute(chunk) {
+                            if let Err(err) = env.execute(chunk.clone()) {
                                 println!("ERROR: {}", err.display(&env));
                                 if let Some(err_frame) = env.err_frame() {
                                     let ip = err_frame.current_ip;
-                                    let line = err_frame.chunk.offset_to_line(ip).unwrap_or(0);
+                                    let line = err_frame
+                                        .chunk
+                                        .offset_to_line(get_offset(ip, &chunk))
+                                        .unwrap_or(0);
                                     println!(
                                         "{} line: {} ip: {:#010x}",
-                                        err_frame.chunk.file_name, line, ip
+                                        err_frame.chunk.file_name,
+                                        line,
+                                        get_offset(ip, &chunk)
                                     );
                                 }
                                 debug(&mut env);
@@ -434,4 +439,8 @@ fn main() {
             }
         }
     }
+}
+
+pub fn get_offset(ip: *const u8, chunk: &Chunk) -> usize {
+    unsafe { ip.offset_from(get_code!(chunk)) as usize }
 }
