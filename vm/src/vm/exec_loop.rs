@@ -314,7 +314,7 @@ impl<ENV> GVm<ENV> {
                 FRZ => {
                     let target = decode1!(self.ip_ptr, wide);
                     let target = get_reg!(registers, target);
-                    self.heap.immutable(target);
+                    self.heap_mut().immutable(target);
                 }
                 SET => {
                     let (dest, src) = decode2!(self.ip_ptr, wide);
@@ -359,7 +359,7 @@ impl<ENV> GVm<ENV> {
                 }
                 CLRREG => {
                     let dest = decode1!(self.ip_ptr, wide);
-                    mov_register!(registers, dest as usize, Value::Undefined);
+                    mov_register!(self, dest as usize, Value::Undefined);
                 }
                 REGT => {
                     let dest = decode1!(self.ip_ptr, wide);
@@ -394,7 +394,7 @@ impl<ENV> GVm<ENV> {
                     //let lambda = get_reg!(registers, src);
                     let lambda = get_reg_unref!(registers, src, self);
                     let (lambda, caps) = if let Value::Lambda(h) = lambda {
-                        let l = self.heap.get_lambda(h);
+                        let l = self.heap().get_lambda(h);
                         let mut caps = Vec::new();
                         if let Some(captures) = &l.captures {
                             for c in captures {
@@ -403,7 +403,7 @@ impl<ENV> GVm<ENV> {
                                     caps.push(b);
                                 } else {
                                     let val = self.new_upval(r);
-                                    mov_register!(registers, *c as usize, val);
+                                    mov_register!(self, *c as usize, val);
                                     caps.push(val.get_handle().unwrap());
                                 }
                             }
@@ -674,7 +674,7 @@ impl<ENV> GVm<ENV> {
                         stack,
                     };
                     let k_obj = self.alloc_continuation(k);
-                    mov_register!(registers, (first_reg + 1) as usize, k_obj);
+                    mov_register!(self, (first_reg + 1) as usize, k_obj);
                     chunk = self.make_call(lambda, chunk, registers, first_reg, 1, false)?;
                     registers = self.make_registers();
                 }
@@ -694,9 +694,9 @@ impl<ENV> GVm<ENV> {
                     let on_error_reg = decode1!(self.ip_ptr, wide);
                     let on_error = get_reg!(registers, on_error_reg);
                     if let Some(oe) = self.on_error {
-                        mov_register!(registers, on_error_reg as usize, oe);
+                        mov_register!(self, on_error_reg as usize, oe);
                     } else {
-                        mov_register!(registers, on_error_reg as usize, Value::Nil);
+                        mov_register!(self, on_error_reg as usize, Value::Nil);
                     }
                     if let Value::Nil = on_error {
                         self.on_error = None;
@@ -900,7 +900,7 @@ impl<ENV> GVm<ENV> {
                         .map_err(|e| (e, chunk.clone()))?;
                     if let Value::Vector(h) = get_reg!(registers, dest) {
                         let v = self
-                            .heap
+                            .heap_mut()
                             .get_vector_mut(h)
                             .map_err(|e| (e, chunk.clone()))?;
                         v.resize(len as usize, Value::Undefined);
@@ -911,7 +911,7 @@ impl<ENV> GVm<ENV> {
                     let val = get_reg!(registers, op);
                     if let Value::Vector(h) = get_reg!(registers, dest) {
                         let v = self
-                            .heap
+                            .heap_mut()
                             .get_vector_mut(h)
                             .map_err(|e| (e, chunk.clone()))?;
                         v.push(val);
@@ -921,7 +921,7 @@ impl<ENV> GVm<ENV> {
                     let (vc, dest) = decode2!(self.ip_ptr, wide);
                     let val = if let Value::Vector(h) = get_reg!(registers, vc) {
                         let v = self
-                            .heap
+                            .heap_mut()
                             .get_vector_mut(h)
                             .map_err(|e| (e, chunk.clone()))?;
                         if let Some(val) = v.pop() {
@@ -982,7 +982,7 @@ impl<ENV> GVm<ENV> {
                     let val = get_reg!(registers, src);
                     if let Value::Vector(h) = get_reg!(registers, vc) {
                         let v = self
-                            .heap
+                            .heap_mut()
                             .get_vector_mut(h)
                             .map_err(|e| (e, chunk.clone()))?;
                         if i >= v.len() {
@@ -1039,7 +1039,7 @@ impl<ENV> GVm<ENV> {
                     let v = decode1!(self.ip_ptr, wide);
                     if let Value::Vector(h) = get_reg!(registers, v) {
                         let v = self
-                            .heap
+                            .heap_mut()
                             .get_vector_mut(h)
                             .map_err(|e| (e, chunk.clone()))?;
                         v.clear();

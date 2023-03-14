@@ -193,13 +193,12 @@ impl Heap {
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (self as *mut Heap).as_mut().unwrap() };
-        Handle::new32(self.objects.alloc(obj, flags, || {
-            if heap.paused == 0 {
-                heap.collect(mark_roots);
+        if self.objects.live_objects() >= self.objects.capacity() {
+            if self.paused == 0 {
+                self.collect(mark_roots);
             }
-        }))
+        }
+        Handle::new32(self.objects.alloc(obj, flags))
     }
 
     pub fn alloc_u64<MarkFunc>(
@@ -211,16 +210,15 @@ impl Heap {
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (self as *mut Heap).as_mut().unwrap() };
+        if self.numerics.live_objects() >= self.numerics.capacity() {
+            if self.paused == 0 {
+                self.collect(mark_roots);
+            }
+        }
         let num = Numeric64 { uint: num };
         Value::Int64(Numeric::Heap(
             self.numerics
-                .alloc(num, mutable.flag(), || {
-                    if heap.paused == 0 {
-                        heap.collect(mark_roots);
-                    }
-                })
+                .alloc(num, mutable.flag())
                 .into(),
         ))
     }
@@ -234,16 +232,15 @@ impl Heap {
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (self as *mut Heap).as_mut().unwrap() };
+        if self.numerics.live_objects() >= self.numerics.capacity() {
+            if self.paused == 0 {
+                self.collect(mark_roots);
+            }
+        }
         let num = Numeric64 { int: num };
         Value::UInt64(Numeric::Heap(
             self.numerics
-                .alloc(num, mutable.flag(), || {
-                    if heap.paused == 0 {
-                        heap.collect(mark_roots);
-                    }
-                })
+                .alloc(num, mutable.flag())
                 .into(),
         ))
     }
@@ -257,16 +254,15 @@ impl Heap {
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (self as *mut Heap).as_mut().unwrap() };
+        if self.numerics.live_objects() >= self.numerics.capacity() {
+            if self.paused == 0 {
+                self.collect(mark_roots);
+            }
+        }
         let num = Numeric64 { float: num };
         Value::Float64(Numeric::Heap(
             self.numerics
-                .alloc(num, mutable.flag(), || {
-                    if heap.paused == 0 {
-                        heap.collect(mark_roots);
-                    }
-                })
+                .alloc(num, mutable.flag())
                 .into(),
         ))
     }

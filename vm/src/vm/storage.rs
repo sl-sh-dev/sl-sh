@@ -110,10 +110,10 @@ impl<ENV> GVm<ENV> {
         } else if num > i32::MIN as i64 && num < i32::MAX as i64 {
             Value::Int32(num as i32)
         } else {
-            // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-            let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
-            // alloc must not save mark_roots (it does not) since we broke heap away from self.
-            heap.alloc_i64(num, MutState::Mutable, |heap| self.mark_roots(heap))
+            let mut heap = self.heap.take().expect("VM must have a Heap!");
+            let res = heap.alloc_i64(num, MutState::Mutable, |heap| self.mark_roots(heap));
+            self.heap = Some(heap);
+            res
         }
     }
 
@@ -123,10 +123,10 @@ impl<ENV> GVm<ENV> {
     }
 
     pub fn alloc_i64(&mut self, num: i64) -> Value {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
-        // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_i64(num, MutState::Mutable, |heap| self.mark_roots(heap))
+        let mut heap = self.heap.take().expect("VM must have a Heap!");
+        let res = heap.alloc_i64(num, MutState::Mutable, |heap| self.mark_roots(heap));
+        self.heap = Some(heap);
+        res
     }
 
     pub fn local_u64(&mut self, reg: usize, num: u64) -> Value {
@@ -135,10 +135,10 @@ impl<ENV> GVm<ENV> {
     }
 
     pub fn alloc_u64(&mut self, num: u64) -> Value {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
-        // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_u64(num, MutState::Mutable, |heap| self.mark_roots(heap))
+        let mut heap = self.heap.take().expect("VM must have a Heap!");
+        let res = heap.alloc_u64(num, MutState::Mutable, |heap| self.mark_roots(heap));
+        self.heap = Some(heap);
+        res
     }
 
     pub fn local_f64(&mut self, reg: usize, num: f64) -> Value {
@@ -147,143 +147,149 @@ impl<ENV> GVm<ENV> {
     }
 
     pub fn alloc_f64(&mut self, num: f64) -> Value {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
-        // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_f64(num, MutState::Mutable, |heap| self.mark_roots(heap))
+        let mut heap = self.heap.take().expect("VM must have a Heap!");
+        let res = heap.alloc_f64(num, MutState::Mutable, |heap| self.mark_roots(heap));
+        self.heap = Some(heap);
+        res
     }
 
     pub fn alloc_pair(&mut self, car: Value, cdr: Value) -> Value {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
-        // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_pair(car, cdr, MutState::Mutable, |heap| self.mark_roots(heap))
+        let mut heap = self.heap.take().expect("VM must have a Heap!");
+        let res = heap.alloc_pair(car, cdr, MutState::Mutable, |heap| self.mark_roots(heap));
+        self.heap = Some(heap);
+        res
     }
 
     pub fn alloc_pair_ro(&mut self, car: Value, cdr: Value) -> Value {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
-        // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_pair(car, cdr, MutState::Immutable, |heap| self.mark_roots(heap))
+        let mut heap = self.heap.take().expect("VM must have a Heap!");
+        let res = heap.alloc_pair(car, cdr, MutState::Immutable, |heap| self.mark_roots(heap));
+        self.heap = Some(heap);
+        res
     }
 
     pub fn alloc_string(&mut self, s: String) -> Value {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
-        // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_string(s, MutState::Mutable, |heap| self.mark_roots(heap))
+        let mut heap = self.heap.take().expect("VM must have a Heap!");
+        let res = heap.alloc_string(s, MutState::Mutable, |heap| self.mark_roots(heap));
+        self.heap = Some(heap);
+        res
     }
 
     pub fn alloc_string_ro(&mut self, s: String) -> Value {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
-        // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_string(s, MutState::Immutable, |heap| self.mark_roots(heap))
+        let mut heap = self.heap.take().expect("VM must have a Heap!");
+        let res = heap.alloc_string(s, MutState::Immutable, |heap| self.mark_roots(heap));
+        self.heap = Some(heap);
+        res
     }
 
     pub fn alloc_vector(&mut self, v: Vec<Value>) -> Value {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
-        // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_vector(v, MutState::Mutable, |heap| self.mark_roots(heap))
+        let mut heap = self.heap.take().expect("VM must have a Heap!");
+        let res = heap.alloc_vector(v, MutState::Mutable, |heap| self.mark_roots(heap));
+        self.heap = Some(heap);
+        res
     }
 
     pub fn alloc_vector_ro(&mut self, v: Vec<Value>) -> Value {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
-        // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_vector(v, MutState::Immutable, |heap| self.mark_roots(heap))
+        let mut heap = self.heap.take().expect("VM must have a Heap!");
+        let res = heap.alloc_vector(v, MutState::Immutable, |heap| self.mark_roots(heap));
+        self.heap = Some(heap);
+        res
     }
 
     pub fn alloc_persistent_vector(&mut self, vec: PersistentVec) -> Value {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
-        // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_persistent_vector(vec, MutState::Immutable, |heap| self.mark_roots(heap))
+        let mut heap = self.heap.take().expect("VM must have a Heap!");
+        let res = heap.alloc_persistent_vector(vec, MutState::Immutable, |heap| self.mark_roots(heap));
+        self.heap = Some(heap);
+        res
     }
 
     pub fn alloc_vecnode(&mut self, node: VecNode) -> Value {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
-        // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_vecnode(node, |heap| self.mark_roots(heap))
+        let mut heap = self.heap.take().expect("VM must have a Heap!");
+        let res = heap.alloc_vecnode(node, |heap| self.mark_roots(heap));
+        self.heap = Some(heap);
+        res
     }
 
     pub fn alloc_persistent_map(&mut self, map: PersistentMap) -> Value {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
-        // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_persistent_map(map, MutState::Immutable, |heap| self.mark_roots(heap))
+        let mut heap = self.heap.take().expect("VM must have a Heap!");
+        let res = heap.alloc_persistent_map(map, MutState::Immutable, |heap| self.mark_roots(heap));
+        self.heap = Some(heap);
+        res
     }
 
     pub fn alloc_mapnode(&mut self, node: MapNode) -> Handle {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
+        let mut heap = self.heap.take().expect("VM must have a Heap!");
         // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_mapnode(node, |heap| self.mark_roots(heap))
+        let res = heap.alloc_mapnode(node, |heap| self.mark_roots(heap))
             .get_handle()
-            .unwrap()
+            .unwrap();
+        self.heap = Some(heap);
+        res
     }
 
     pub fn alloc_map(&mut self, map: HashMap<Value, Value>) -> Value {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
-        // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_map(map, MutState::Mutable, |heap| self.mark_roots(heap))
+        let mut heap = self.heap.take().expect("VM must have a Heap!");
+        let res = heap.alloc_map(map, MutState::Mutable, |heap| self.mark_roots(heap));
+        self.heap = Some(heap);
+        res
     }
 
     pub fn alloc_map_ro(&mut self, map: HashMap<Value, Value>) -> Value {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
-        // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_map(map, MutState::Immutable, |heap| self.mark_roots(heap))
+        let mut heap = self.heap.take().expect("VM must have a Heap!");
+        let res = heap.alloc_map(map, MutState::Immutable, |heap| self.mark_roots(heap));
+        self.heap = Some(heap);
+        res
     }
 
     pub fn alloc_list_ro(&mut self, v: Vec<Value>) -> Value {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
-        // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        Value::List(
+        let mut heap = self.heap.take().expect("VM must have a Heap!");
+        let res = Value::List(
             heap.alloc_vector(v, MutState::Immutable, |heap| self.mark_roots(heap))
                 .get_handle()
                 .expect("Allocated vector not a vector?"),
             0,
-        )
+        );
+        self.heap = Some(heap);
+        res
     }
 
     pub fn alloc_bytes(&mut self, v: Vec<u8>) -> Value {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
+        let mut heap = self.heap.take().expect("VM must have a Heap!");
         // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_bytes(v, MutState::Mutable, |heap| self.mark_roots(heap))
+        let res = heap.alloc_bytes(v, MutState::Mutable, |heap| self.mark_roots(heap));
+        self.heap = Some(heap);
+        res
     }
 
     pub fn alloc_lambda(&mut self, l: Arc<Chunk>) -> Value {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
+        let mut heap = self.heap.take().expect("VM must have a Heap!");
         // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_lambda(l, |heap| self.mark_roots(heap))
+        let res = heap.alloc_lambda(l, |heap| self.mark_roots(heap));
+        self.heap = Some(heap);
+        res
     }
 
     pub fn alloc_closure(&mut self, l: Arc<Chunk>, v: Vec<Handle>) -> Value {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
+        let mut heap = self.heap.take().expect("VM must have a Heap!");
         // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_closure(l, v, |heap| self.mark_roots(heap))
+        let res = heap.alloc_closure(l, v, |heap| self.mark_roots(heap));
+        self.heap = Some(heap);
+        res
     }
 
     pub fn alloc_continuation(&mut self, k: Continuation) -> Value {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
+        let mut heap = self.heap.take().expect("VM must have a Heap!");
         // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_continuation(k, |heap| self.mark_roots(heap))
+        let res = heap.alloc_continuation(k, |heap| self.mark_roots(heap));
+        self.heap = Some(heap);
+        res
     }
 
     pub fn alloc_callframe(&mut self, frame: CallFrame) -> Value {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
+        let mut heap = self.heap.take().expect("VM must have a Heap!");
         // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_callframe(frame, |heap| self.mark_roots(heap))
+        let res = heap.alloc_callframe(frame, |heap| self.mark_roots(heap));
+        self.heap = Some(heap);
+        res
     }
 
     /// If val is a 64 bit number stored on the number stack then promote to the heap.  Otherwise
@@ -307,38 +313,38 @@ impl<ENV> GVm<ENV> {
     pub fn alloc_value(&mut self, val: Value) -> Value {
         let val = self.promote_number(val);
         // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
+        let heap: &mut Heap = unsafe { (self.heap_mut() as *mut Heap).as_mut().unwrap() };
         // alloc must not save mark_roots (it does not) since we broke heap away from self.
         heap.alloc_value(val, MutState::Mutable, |heap| self.mark_roots(heap))
     }
 
     pub fn heap_immutable(&mut self, val: Value) {
-        self.heap.immutable(val);
+        self.heap_mut().immutable(val);
     }
 
     pub fn heap_sticky(&mut self, val: Value) {
-        self.heap.sticky(val);
+        self.heap_mut().sticky(val);
     }
 
     pub fn heap_unsticky(&mut self, val: Value) {
-        self.heap.unsticky(val);
+        self.heap_mut().unsticky(val);
     }
 
     /// Pause garbage collection.
     /// Each pause_gc must have an unpause_gc before GC resumes (it is a counter that must be 0).
     pub fn pause_gc(&mut self) {
-        self.heap.pause_gc();
+        self.heap_mut().pause_gc();
     }
 
     /// UnPause garbage collection.
     /// Each pause_gc must have an unpause_gc before GC resumes (it is a counter that must be 0).
     pub fn unpause_gc(&mut self) {
-        self.heap.unpause_gc();
+        self.heap_mut().unpause_gc();
     }
 
     pub fn get_heap_property(&self, key_val: Value, prop: &str) -> Option<Value> {
         if let Some(interned) = self.get_if_interned(prop) {
-            self.heap.get_property(key_val, interned)
+            self.heap().get_property(key_val, interned)
         } else {
             None
         }
@@ -346,15 +352,15 @@ impl<ENV> GVm<ENV> {
 
     pub fn set_heap_property(&mut self, key_val: Value, prop: &str, value: Value) {
         let str_ref = self.intern(prop);
-        self.heap.set_property(key_val, str_ref, value)
+        self.heap_mut().set_property(key_val, str_ref, value)
     }
 
     pub fn get_heap_property_interned(&self, key_val: Value, prop: Interned) -> Option<Value> {
-        self.heap.get_property(key_val, prop)
+        self.heap().get_property(key_val, prop)
     }
 
     pub fn set_heap_property_interned(&mut self, key_val: Value, prop: Interned, value: Value) {
-        self.heap.set_property(key_val, prop, value)
+        self.heap_mut().set_property(key_val, prop, value)
     }
 
     pub fn get_global_property(&self, global: u32, prop: Interned) -> Option<Value> {
@@ -372,127 +378,127 @@ impl<ENV> GVm<ENV> {
     pub fn get_int(&self, handle: Numeric) -> i64 {
         match handle {
             Numeric::Local(idx) => unsafe { self.numbers[idx as usize].int },
-            Numeric::Heap(handle) => self.heap.get_int(handle),
+            Numeric::Heap(handle) => self.heap().get_int(handle),
         }
     }
 
     pub fn get_int_mut(&mut self, handle: Numeric) -> &mut i64 {
         match handle {
             Numeric::Local(idx) => unsafe { &mut self.numbers[idx as usize].int },
-            Numeric::Heap(handle) => self.heap.get_int_mut(handle),
+            Numeric::Heap(handle) => self.heap_mut().get_int_mut(handle),
         }
     }
 
     pub fn get_uint(&self, handle: Numeric) -> u64 {
         match handle {
             Numeric::Local(idx) => unsafe { self.numbers[idx as usize].uint },
-            Numeric::Heap(handle) => self.heap.get_uint(handle),
+            Numeric::Heap(handle) => self.heap().get_uint(handle),
         }
     }
 
     pub fn get_uint_mut(&mut self, handle: Numeric) -> &mut u64 {
         match handle {
             Numeric::Local(idx) => unsafe { &mut self.numbers[idx as usize].uint },
-            Numeric::Heap(handle) => self.heap.get_uint_mut(handle),
+            Numeric::Heap(handle) => self.heap_mut().get_uint_mut(handle),
         }
     }
 
     pub fn get_float(&self, handle: Numeric) -> f64 {
         match handle {
             Numeric::Local(idx) => unsafe { self.numbers[idx as usize].float },
-            Numeric::Heap(handle) => self.heap.get_float(handle),
+            Numeric::Heap(handle) => self.heap().get_float(handle),
         }
     }
 
     pub fn get_float_mut(&mut self, handle: Numeric) -> &mut f64 {
         match handle {
             Numeric::Local(idx) => unsafe { &mut self.numbers[idx as usize].float },
-            Numeric::Heap(handle) => self.heap.get_float_mut(handle),
+            Numeric::Heap(handle) => self.heap_mut().get_float_mut(handle),
         }
     }
 
     pub fn get_string(&self, handle: Handle) -> &str {
-        self.heap.get_string(handle)
+        self.heap().get_string(handle)
     }
 
     pub fn get_string_mut(&mut self, handle: Handle) -> &mut String {
-        self.heap.get_string_mut(handle)
+        self.heap_mut().get_string_mut(handle)
     }
 
     pub fn get_vector(&self, handle: Handle) -> &[Value] {
-        self.heap.get_vector(handle)
+        self.heap().get_vector(handle)
     }
 
     pub fn get_vector_mut(&mut self, handle: Handle) -> VMResult<&mut Vec<Value>> {
-        self.heap.get_vector_mut(handle)
+        self.heap_mut().get_vector_mut(handle)
     }
 
     pub(crate) fn get_persistent_vector(&self, handle: Handle) -> &PersistentVec {
-        self.heap.get_persistent_vector(handle)
+        self.heap().get_persistent_vector(handle)
     }
 
     pub fn get_vecnode(&self, handle: Handle) -> &VecNode {
-        self.heap.get_vecnode(handle)
+        self.heap().get_vecnode(handle)
     }
 
     pub(crate) fn _get_persistent_map(&self, handle: Handle) -> &PersistentMap {
-        self.heap._get_persistent_map(handle)
+        self.heap()._get_persistent_map(handle)
     }
 
     pub fn get_mapnode(&self, handle: Handle) -> &MapNode {
-        self.heap.get_mapnode(handle)
+        self.heap().get_mapnode(handle)
     }
 
     pub fn get_map(&self, handle: Handle) -> &HashMap<Value, Value> {
-        self.heap.get_map(handle)
+        self.heap().get_map(handle)
     }
 
     pub fn get_map_mut(&mut self, handle: Handle) -> VMResult<&mut HashMap<Value, Value>> {
-        self.heap.get_map_mut(handle)
+        self.heap_mut().get_map_mut(handle)
     }
 
     pub fn get_bytes(&self, handle: Handle) -> &[u8] {
-        self.heap.get_bytes(handle)
+        self.heap().get_bytes(handle)
     }
 
     pub fn get_pair(&self, handle: Handle) -> (Value, Value) {
-        self.heap.get_pair(handle)
+        self.heap().get_pair(handle)
     }
 
     pub fn get_pair_mut(&mut self, handle: Handle) -> VMResult<(&mut Value, &mut Value)> {
-        self.heap.get_pair_mut(handle)
+        self.heap_mut().get_pair_mut(handle)
     }
 
     pub fn get_pair_mut_override(&mut self, handle: Handle) -> (&mut Value, &mut Value) {
-        self.heap.get_pair_mut_override(handle)
+        self.heap_mut().get_pair_mut_override(handle)
     }
 
     pub fn get_lambda(&self, handle: Handle) -> Arc<Chunk> {
-        self.heap.get_lambda(handle)
+        self.heap().get_lambda(handle)
     }
 
     pub fn get_closure(&self, handle: Handle) -> (Arc<Chunk>, &[Handle]) {
-        self.heap.get_closure(handle)
+        self.heap().get_closure(handle)
     }
 
     pub fn get_continuation(&self, handle: Handle) -> &Continuation {
-        self.heap.get_continuation(handle)
+        self.heap().get_continuation(handle)
     }
 
     pub fn get_callframe(&self, handle: Handle) -> &CallFrame {
-        self.heap.get_callframe(handle)
+        self.heap().get_callframe(handle)
     }
 
     pub fn get_callframe_mut(&mut self, handle: Handle) -> &mut CallFrame {
-        self.heap.get_callframe_mut(handle)
+        self.heap_mut().get_callframe_mut(handle)
     }
 
     pub fn get_value(&self, handle: Handle) -> Value {
-        self.heap.get_value(handle)
+        self.heap().get_value(handle)
     }
 
     pub fn get_value_mut(&mut self, handle: Handle) -> &mut Value {
-        self.heap.get_value_mut(handle)
+        self.heap_mut().get_value_mut(handle)
     }
 
     pub fn new_upval(&mut self, val: Value) -> Value {

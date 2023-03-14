@@ -46,12 +46,9 @@ impl<T: Clone> Storage<T> {
         self.live_objects
     }
 
-    pub fn alloc<CollectFunc>(&mut self, obj: T, flags: u8, collect: CollectFunc) -> u32
-    where
-        CollectFunc: FnOnce(),
+    pub fn alloc(&mut self, obj: T, flags: u8) -> u32
     {
         if self.live_objects >= self.capacity {
-            collect();
             let new_min = (self.live_objects as f64 * self.grow_factor) as usize;
             if new_min > self.capacity {
                 self.capacity = new_min;

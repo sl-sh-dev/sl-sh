@@ -21,7 +21,7 @@ const DEAD_CODE: [u8; 3] = [HALT, HALT, HALT];
 
 pub struct GVm<ENV> {
     interner: Interner,
-    heap: Heap,
+    heap: Option<Heap>,
     //stack: Vec<Value>,
     numbers: [Numeric64; STACK_CAP],
     stack: [Value; STACK_CAP],
@@ -61,7 +61,7 @@ impl<ENV> GVm<ENV> {
         //stack.resize(STACK_CAP, Value::Undefined);
         Self {
             interner: Interner::with_capacity(8192),
-            heap: Heap::new(),
+            heap: Some(Heap::new()),
             numbers: [Numeric64 { int: 0 }; STACK_CAP],
             stack: [Value::Undefined; STACK_CAP],
             globals,
@@ -85,6 +85,14 @@ impl<ENV> GVm<ENV> {
 
     pub fn env_mut(&mut self) -> &mut ENV {
         &mut self.env
+    }
+
+    fn heap(&self) -> &Heap {
+        self.heap.as_ref().expect("VM must have a Heap!")
+    }
+
+    fn heap_mut(&mut self) -> &mut Heap {
+        self.heap.as_mut().expect("VM must have a Heap!")
     }
 
     // Need to break the registers lifetime away from self or we can not do much...
@@ -148,14 +156,14 @@ impl<ENV> GVm<ENV> {
             match val1 {
                 Value::StringConst(s1) => {
                     if let Value::String(v2) = val2 {
-                        let s2 = self.heap.get_string(v2);
+                        let s2 = self.heap().get_string(v2);
                         if self.get_interned(s1) == s2 {
                             val = Value::True;
                         }
                     }
                 }
                 Value::String(h1) => {
-                    let s1 = self.heap.get_string(h1);
+                    let s1 = self.heap().get_string(h1);
                     if let Value::StringConst(s2) = val2 {
                         if s1 == self.get_interned(s2) {
                             val = Value::True;
@@ -164,8 +172,8 @@ impl<ENV> GVm<ENV> {
                 }
                 Value::Vector(h1) => {
                     if let Value::Vector(h2) = val2 {
-                        let v1 = self.heap.get_vector(h1);
-                        let v2 = self.heap.get_vector(h2);
+                        let v1 = self.heap().get_vector(h1);
+                        let v2 = self.heap().get_vector(h2);
                         if v1.len() == v2.len() {
                             if v1.is_empty() {
                                 val = Value::True;
@@ -182,8 +190,8 @@ impl<ENV> GVm<ENV> {
                 }
                 Value::Bytes(h1) => {
                     if let Value::Bytes(h2) = val2 {
-                        let b1 = self.heap.get_bytes(h1);
-                        let b2 = self.heap.get_bytes(h2);
+                        let b1 = self.heap().get_bytes(h1);
+                        let b2 = self.heap().get_bytes(h2);
                         if b1.len() == b2.len() {
                             if b1.is_empty() {
                                 val = Value::True;
@@ -266,15 +274,14 @@ impl<ENV> GVm<ENV> {
             if let Some(caps) = caps {
                 let cap_first = (chunk.args + chunk.opt_args + 1) as usize;
                 for (i, c) in caps.iter().enumerate() {
-                    mov_register!(registers, cap_first + i, Value::Value(*c));
+                    mov_register!(self, cap_first + i, Value::Value(*c));
                 }
             }
-            mov_register!(registers, rest_reg, h);
+            mov_register!(self, rest_reg, h);
         } else if let Some(caps) = caps {
-            let registers = self.make_registers();
             let cap_first = (chunk.args + chunk.opt_args + 1) as usize;
             for (i, c) in caps.iter().enumerate() {
-                mov_register!(registers, cap_first + i, Value::Value(*c));
+                mov_register!(self, cap_first + i, Value::Value(*c));
             }
         }
         let res = self.execute2(chunk).map(|_| self.stack[self.stack_top]);
@@ -532,13 +539,13 @@ mod tests {
         vm.execute(chunk.clone())?;
         let result = vm.stack.get(0).unwrap();
         if let Value::Pair(h) = result {
-            let (car, cdr) = vm.heap.get_pair(*h);
+            let (car, cdr) = vm.heap().get_pair(*h);
             assert!(get_int(&vm, &car)? == 1);
             if let Value::Pair(h2) = cdr {
-                let (car, cdr) = vm.heap.get_pair(h2);
+                let (car, cdr) = vm.heap().get_pair(h2);
                 assert!(get_int(&vm, &car)? == 2);
                 if let Value::Pair(h3) = cdr {
-                    let (car, cdr) = vm.heap.get_pair(h3);
+                    let (car, cdr) = vm.heap().get_pair(h3);
                     assert!(get_int(&vm, &car)? == 3);
                     assert!(is_nil(&vm, &cdr)?);
                 } else {
@@ -997,7 +1004,7 @@ mod tests {
         let result = vm.stack[7].get_int(&vm)?;
         assert!(result == 22);
         match vm.stack[15] {
-            Value::String(h) => assert!(vm.heap.get_string(h) == "builtin hello"),
+            Value::String(h) => assert!(vm.heap().get_string(h) == "builtin hello"),
             _ => panic!("bad make_str call"),
         }
 
@@ -1024,7 +1031,7 @@ mod tests {
         let result = vm.stack[5].get_int(&vm)?;
         assert!(result == 22);
         match vm.stack[11] {
-            Value::String(h) => assert!(vm.heap.get_string(h) == "builtin hello"),
+            Value::String(h) => assert!(vm.heap().get_string(h) == "builtin hello"),
             _ => panic!("bad make_str call"),
         }
 

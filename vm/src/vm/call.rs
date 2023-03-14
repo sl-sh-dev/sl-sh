@@ -31,9 +31,9 @@ impl<ENV> GVm<ENV> {
         if !k.stack.is_empty() {
             if k.frame.stack_top >= stack_top {
                 if let Value::CallFrame(h) = self.stack[stack_top] {
-                    let frame = self.heap.get_callframe(h);
+                    let frame = self.heap().get_callframe(h);
                     if let Value::CallFrame(k_h) = k.stack[stack_top] {
-                        let k_frame = self.heap.get_callframe(k_h);
+                        let k_frame = self.heap().get_callframe(k_h);
                         if frame.id != k_frame.id {
                             return Some((frame.stack_top, &frame.defers));
                         }
@@ -42,7 +42,7 @@ impl<ENV> GVm<ENV> {
                     }
                 }
             } else if let Value::CallFrame(h) = self.stack[stack_top] {
-                let frame = self.heap.get_callframe(h);
+                let frame = self.heap().get_callframe(h);
                 return Some((frame.stack_top, &frame.defers));
             }
         }
@@ -118,7 +118,7 @@ impl<ENV> GVm<ENV> {
                     |e| {
                         if self.err_frame().is_some() {
                             let call_frame = self.alloc_callframe(frame);
-                            mov_register!(registers, first_reg as usize, call_frame);
+                            mov_register!(self, first_reg as usize, call_frame);
                             self.stack_top += first_reg as usize;
                         }
                         (e, chunk.clone())
@@ -152,12 +152,13 @@ impl<ENV> GVm<ENV> {
                 }
             }
             Value::Lambda(handle) => {
-                let l = self.heap.get_lambda(handle);
+                let stack_top = self.stack_top;
+                let l = self.heap().get_lambda(handle);
                 check_num_args(&l, num_args).map_err(|e| (e, chunk.clone()))?;
                 if !tail_call {
                     let frame = self.make_call_frame(chunk, lambda, true);
                     let aframe = self.alloc_callframe(frame);
-                    mov_register!(registers, first_reg as usize, aframe);
+                    mov_register!(self, first_reg as usize, aframe);
                     self.stack_top += first_reg as usize;
                 }
                 self.stack_max = self.stack_top + l.input_regs + l.extra_regs;
@@ -165,14 +166,15 @@ impl<ENV> GVm<ENV> {
                 self.ip_ptr = get_code!(l);
                 if l.rest {
                     let (rest_reg, h) = self.setup_rest(&l, registers, first_reg, num_args);
-                    mov_register!(registers, rest_reg, h);
+                    self.stack[stack_top + rest_reg] = h;
                 }
                 // XXX TODO- maybe test for stack overflow vs waiting for a panic.
-                clear_opts::<ENV>(&l, registers, first_reg, num_args);
+                self.clear_opts(&l, first_reg, num_args);
                 Ok(l)
             }
             Value::Closure(handle) => {
-                let (l, _) = self.heap.get_closure(handle);
+                let stack_top = self.stack_top;
+                let (l, _) = self.heap().get_closure(handle);
                 check_num_args(&l, num_args).map_err(|e| (e, chunk.clone()))?;
                 // Make a self (vm) with it's lifetime broken away so we can call setup_rest.
                 // This is safe because it does not touch caps, it needs a &mut self so it
@@ -185,7 +187,9 @@ impl<ENV> GVm<ENV> {
                 } else {
                     None
                 };
-                let caps = self.heap.get_closure_captures(handle);
+                // Take the heap so we can mutate self.  Put it back when down or will panic on next access.
+                let heap = self.heap.take().expect("VM must have a Heap!");
+                let caps = heap.get_closure_captures(handle);
                 self.stack_max = self.stack_top + l.input_regs + l.extra_regs;
                 self.this_fn = Some(lambda);
                 self.ip_ptr = get_code!(l);
@@ -193,23 +197,25 @@ impl<ENV> GVm<ENV> {
                 if l.rest {
                     let (rest_reg, h) = unsafe_vm.setup_rest(&l, registers, first_reg, num_args);
                     for (i, c) in caps.iter().enumerate() {
-                        mov_register!(registers, cap_first + i, Value::Value(*c));
+                        self.stack[stack_top + cap_first + i] = Value::Value(*c);
                     }
-                    mov_register!(registers, rest_reg, h);
+                    self.stack[stack_top + rest_reg] = h;
                 } else {
                     for (i, c) in caps.iter().enumerate() {
-                        mov_register!(registers, cap_first + i, Value::Value(*c));
+                        self.stack[stack_top + cap_first + i] = Value::Value(*c);
                     }
                 }
+                // Put the heap back, if this doesn't happen will panic on next access attempt.
+                self.heap = Some(heap);
                 if let Some(frame) = frame {
                     let aframe = self.alloc_callframe(frame);
-                    mov_register!(registers, first_reg as usize, aframe);
+                    self.stack[stack_top + first_reg as usize] = aframe;
                 }
-                clear_opts::<ENV>(&l, registers, first_reg, num_args);
+                self.clear_opts(&l, first_reg, num_args);
                 Ok(l)
             }
             Value::Continuation(handle) => {
-                let k = self.heap.get_continuation(handle);
+                let k = self.heap().get_continuation(handle);
                 if num_args != 1 {
                     return Err((VMError::new_vm("Continuation takes one argument."), chunk));
                 }
@@ -275,7 +281,9 @@ impl<ENV> GVm<ENV> {
             // Had to break this out for continuations. Handling defers makes this necessary.
             match lambda {
                 Value::Continuation(h) => {
-                    let k = self.heap.get_continuation(h);
+                    // Take the heap so we can mutate self.  Put it back when down or will panic on next access.
+                    let heap = self.heap.take().expect("VM must have a Heap!");
+                    let k = heap.get_continuation(h);
                     let arg = registers[first_reg as usize + 1];
                     self.stack[..k.stack.len()].copy_from_slice(&k.stack[..]);
                     self.stack[k.arg_reg] = arg;
@@ -287,6 +295,8 @@ impl<ENV> GVm<ENV> {
                     self.this_fn = k.frame.this_fn;
                     self.on_error = k.frame.on_error;
                     let chunk = k.frame.chunk.clone();
+                    // Put the heap back, if this doesn't happen will panic on next access attempt.
+                    self.heap = Some(heap);
                     Ok(chunk)
                 }
                 _ => panic!("Must be a continuation!"),
@@ -295,39 +305,40 @@ impl<ENV> GVm<ENV> {
             result
         }
     }
-}
 
-/// Clear out the unused optional regs.
-/// Will clear working set to avoid writing to globals or closures by accident.
-fn clear_opts<ENV>(l: &Chunk, registers: &mut [Value], first_reg: u16, num_args: u16) {
-    // First clear any optional arguments.
-    let num_args = if l.rest && num_args == 0 {
-        // Always have at least 1 arg if we have a rest argument.
-        1
-    } else {
-        num_args
-    };
-    let end_arg = if l.rest {
-        // Do not clear the rest arg.
-        l.args + l.opt_args - 1
-    } else {
-        l.args + l.opt_args
-    };
-    if num_args < end_arg {
-        for r in num_args..end_arg {
-            mov_register!(
-                registers,
+    /// Clear out the unused optional regs.
+    /// Will clear working set to avoid writing to globals or closures by accident.
+    fn clear_opts(&mut self, l: &Chunk, first_reg: u16, num_args: u16) {
+        // First clear any optional arguments.
+        let num_args = if l.rest && num_args == 0 {
+            // Always have at least 1 arg if we have a rest argument.
+            1
+        } else {
+            num_args
+        };
+        let end_arg = if l.rest {
+            // Do not clear the rest arg.
+            l.args + l.opt_args - 1
+        } else {
+            l.args + l.opt_args
+        };
+        if num_args < end_arg {
+            for r in num_args..end_arg {
+                mov_register!(
+                self,
                 first_reg as usize + (r + 1) as usize,
                 Value::Undefined
             );
+            }
+        }
+        // Clear extra regs so things like closures or globals don't get changed by mistake.
+        if l.extra_regs > 0 {
+            for r in l.input_regs + 1..=l.input_regs + l.extra_regs {
+                mov_register!(self, first_reg as usize + r, Value::Undefined);
+            }
         }
     }
-    // Clear extra regs so things like closures or globals don't get changed by mistake.
-    if l.extra_regs > 0 {
-        for r in l.input_regs + 1..=l.input_regs + l.extra_regs {
-            mov_register!(registers, first_reg as usize + r, Value::Undefined);
-        }
-    }
+
 }
 
 /// Verify the number of args provided will work with a chunk.

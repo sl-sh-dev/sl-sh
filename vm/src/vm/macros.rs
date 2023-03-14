@@ -101,7 +101,7 @@ macro_rules! get_reg_unref {
     ($regs:expr, $idx:expr, $vm:expr) => {{
         let reg = $regs[$idx as usize];
         match &reg {
-            Value::Value(handle) => $vm.heap.get_value(*handle),
+            Value::Value(handle) => $vm.heap().get_value(*handle),
             _ => reg,
         }
     }};
@@ -112,7 +112,7 @@ macro_rules! get_reg_unref_int {
     ($regs:expr, $idx:expr, $vm:expr) => {{
         let reg = $regs[$idx as usize];
         match match &reg {
-            Value::Value(handle) => $vm.heap.get_value(*handle),
+            Value::Value(handle) => $vm.heap().get_value(*handle),
             _ => reg,
         } {
             Value::Byte(b) => Ok(b as i64),
@@ -143,6 +143,13 @@ macro_rules! get_reg_int {
 macro_rules! get_reg {
     ($regs:expr, $idx:expr) => {{
         $regs[$idx as usize]
+    }};
+}
+
+#[macro_export]
+macro_rules! get_reg_vm {
+    ($vm:expr, $idx:expr) => {{
+        $vm.stack[$vm.stack_top + $idx as usize]
     }};
 }
 
@@ -413,9 +420,9 @@ macro_rules! div_math {
 #[macro_export]
 macro_rules! set_register {
     ($vm:expr, $registers:expr, $idx:expr, $val:expr) => {{
-        match (&get_reg!($registers, $idx), $val) {
+        match (&$crate::get_reg_vm!($vm, $idx), $val) {
             (Value::Value(handle), _) => {
-                *($vm.heap.get_value_mut(*handle)) = $val;
+                *($vm.heap_mut().get_value_mut(*handle)) = $val;
             }
             (Value::Float64(handle_to), Value::Float64(handle_from)) => {
                 *$vm.get_float_mut(*handle_to) = $vm.get_float(handle_from);
@@ -428,32 +435,32 @@ macro_rules! set_register {
             }
             (_, Value::Float64(handle_from)) => {
                 let f = $vm.get_float(handle_from);
-                $registers[$idx] = $vm.local_f64($idx, f);
+                $vm.stack[$vm.stack_top + $idx] = $vm.local_f64($idx, f);
             }
             (_, Value::Int64(handle_from)) => {
                 let f = $vm.get_int(handle_from);
-                $registers[$idx] = $vm.local_i64($idx, f);
+                $vm.stack[$vm.stack_top + $idx] = $vm.local_i64($idx, f);
             }
             (_, Value::UInt64(handle_from)) => {
                 let f = $vm.get_uint(handle_from);
-                $registers[$idx] = $vm.local_u64($idx, f);
+                $vm.stack[$vm.stack_top + $idx] = $vm.local_u64($idx, f);
             }
-            _ => $registers[$idx] = $val,
+            _ => $vm.stack[$vm.stack_top + $idx] = $val,
         }
     }};
 }
 
 #[macro_export]
 macro_rules! mov_register {
-    ($registers:expr, $idx:expr, $val:expr) => {{
-        $registers[$idx] = $val;
+    ($vm:expr, $idx:expr, $val:expr) => {{
+        $vm.stack[$vm.stack_top + $idx] = $val;
     }};
 }
 
 #[macro_export]
 macro_rules! mov_register_num {
     ($vm:expr, $registers:expr, $idx:expr, $val:expr) => {{
-        match (&get_reg!($registers, $idx), $val) {
+        match (&$crate::get_reg_vm!($vm, $idx), $val) {
             (Value::Float64(handle_to), Value::Float64(handle_from)) => {
                 *$vm.get_float_mut(*handle_to) = $vm.get_float(handle_from);
             }
@@ -465,17 +472,17 @@ macro_rules! mov_register_num {
             }
             (_, Value::Float64(handle_from)) => {
                 let f = $vm.get_float(handle_from);
-                $registers[$idx] = $vm.local_f64($idx, f);
+                $vm.stack[$vm.stack_top + $idx] = $vm.local_f64($idx, f);
             }
             (_, Value::Int64(handle_from)) => {
                 let f = $vm.get_int(handle_from);
-                $registers[$idx] = $vm.local_i64($idx, f);
+                $vm.stack[$vm.stack_top + $idx] = $vm.local_i64($idx, f);
             }
             (_, Value::UInt64(handle_from)) => {
                 let f = $vm.get_uint(handle_from);
-                $registers[$idx] = $vm.local_u64($idx, f);
+                $vm.stack[$vm.stack_top + $idx] = $vm.local_u64($idx, f);
             }
-            _ => $registers[$idx] = $val,
+            _ => $vm.stack[$vm.stack_top + $idx] = $val,
         }
     }};
 }

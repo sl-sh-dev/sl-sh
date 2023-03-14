@@ -10,7 +10,7 @@ impl<ENV> GVm<ENV> {
     ) -> VMResult<()> {
         match num_args {
             1 => {
-                let map = self.heap.get_map(handle);
+                let map = self.heap().get_map(handle);
                 let res = if let Some(val) = map.get(&registers[first_reg as usize + 1]) {
                     *val
                 } else {
@@ -21,7 +21,7 @@ impl<ENV> GVm<ENV> {
                 Ok(())
             }
             2 => {
-                let map = self.heap.get_map(handle);
+                let map = self.heap().get_map(handle);
                 let res = if let Some(val) = map.get(&registers[first_reg as usize + 1]) {
                     *val
                 } else {
@@ -33,7 +33,7 @@ impl<ENV> GVm<ENV> {
             }
             3 => {
                 let eqi = self.intern("=");
-                let map = self.heap.get_map_mut(handle)?;
+                let map = self.heap_mut().get_map_mut(handle)?;
                 let key = registers[first_reg as usize + 1];
                 if matches!(key, Value::Undefined) {
                     return Err(VMError::new_vm("Key is undefined."));
@@ -71,7 +71,7 @@ impl<ENV> GVm<ENV> {
     ) -> VMResult<()> {
         match num_args {
             1 => {
-                let v = self.heap.get_vector(handle);
+                let v = self.heap().get_vector(handle);
                 let idx = registers[first_reg as usize + 1].get_int(self)?;
                 let res = if idx >= 0 {
                     if let Some(val) = v.get(idx as usize) {
@@ -89,7 +89,7 @@ impl<ENV> GVm<ENV> {
             3 => {
                 let eqi = self.intern("=");
                 let idx = registers[first_reg as usize + 1].get_int(self)?;
-                let v = self.heap.get_vector_mut(handle)?;
+                let v = self.heap_mut().get_vector_mut(handle)?;
                 if idx < 0 {
                     return Err(VMError::new_vm("A vector requires a positive index."));
                 }
