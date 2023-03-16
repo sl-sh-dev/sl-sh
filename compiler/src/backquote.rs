@@ -328,7 +328,7 @@ mod tests {
             compile(vm, &mut state, exp, 0)?;
             state.chunk.encode0(RET, Some(1))?;
             vm.execute(Arc::new(state.chunk))?;
-            Ok(vm.stack()[0])
+            Ok(vm.stack(0))
         } else {
             panic!("Got unexpected token error: {exp:?}");
         }

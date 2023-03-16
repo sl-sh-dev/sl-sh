@@ -46,8 +46,7 @@ impl<T: Clone> Storage<T> {
         self.live_objects
     }
 
-    pub fn alloc(&mut self, obj: T, flags: u8) -> u32
-    {
+    pub fn alloc(&mut self, obj: T, flags: u8) -> u32 {
         if self.live_objects >= self.capacity {
             let new_min = (self.live_objects as f64 * self.grow_factor) as usize;
             if new_min > self.capacity {

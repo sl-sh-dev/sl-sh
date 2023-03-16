@@ -1,35 +1,32 @@
-use crate::{
-    decode2, decode3, decode_u16, get_reg, get_reg_unref, set_register, GVm, VMError, VMResult,
-    Value,
-};
+use crate::{decode2, decode3, decode_u16, set_register, GVm, VMError, VMResult, Value};
 
 impl<ENV> GVm<ENV> {
-    pub(super) fn list(&mut self, registers: &mut [Value], wide: bool) -> VMResult<()> {
+    pub(super) fn list(&mut self, wide: bool) -> VMResult<()> {
         let (dest, start, end) = decode3!(self.ip_ptr, wide);
         if end < start {
-            set_register!(self, registers, dest as usize, Value::Nil);
+            set_register!(self, dest as usize, Value::Nil);
         } else {
             let mut last_cdr = Value::Nil;
             for i in (start..=end).rev() {
-                let car = get_reg_unref!(registers, i, self);
+                let car = self.register_unref(i as usize);
                 let cdr = last_cdr;
                 last_cdr = self.alloc_pair(car, cdr);
             }
-            set_register!(self, registers, dest as usize, last_cdr);
+            set_register!(self, dest as usize, last_cdr);
         }
         Ok(())
     }
 
-    pub(super) fn append(&mut self, registers: &mut [Value], wide: bool) -> VMResult<()> {
+    pub(super) fn append(&mut self, wide: bool) -> VMResult<()> {
         let (dest, start, end) = decode3!(self.ip_ptr, wide);
         if end < start {
-            set_register!(self, registers, dest as usize, Value::Nil);
+            set_register!(self, dest as usize, Value::Nil);
         } else {
             let mut last_cdr = Value::Nil;
             let mut head = Value::Nil;
             let mut loop_cdr;
             for i in start..=end {
-                let lst = get_reg_unref!(registers, i, self);
+                let lst = self.register_unref(i as usize);
                 match lst {
                     Value::Nil => {}
                     Value::Pair(_) | Value::List(_, _) => {
@@ -114,15 +111,15 @@ impl<ENV> GVm<ENV> {
                     }
                 }
             }
-            set_register!(self, registers, dest as usize, head);
+            set_register!(self, dest as usize, head);
         }
         Ok(())
     }
 
-    pub(super) fn xar(&mut self, registers: &mut [Value], wide: bool) -> VMResult<()> {
+    pub(super) fn xar(&mut self, wide: bool) -> VMResult<()> {
         let (pair_reg, val) = decode2!(self.ip_ptr, wide);
-        let pair = get_reg_unref!(registers, pair_reg, self);
-        let val = get_reg_unref!(registers, val, self);
+        let pair = self.register_unref(pair_reg as usize);
+        let val = self.register_unref(val as usize);
         match &pair {
             Value::Pair(handle) => {
                 let (car, _) = self.get_pair_mut(*handle)?;
@@ -134,10 +131,10 @@ impl<ENV> GVm<ENV> {
         Ok(())
     }
 
-    pub(super) fn xdr(&mut self, registers: &mut [Value], wide: bool) -> VMResult<()> {
+    pub(super) fn xdr(&mut self, wide: bool) -> VMResult<()> {
         let (pair_reg, val) = decode2!(self.ip_ptr, wide);
-        let pair = get_reg_unref!(registers, pair_reg, self);
-        let val = get_reg_unref!(registers, val, self);
+        let pair = self.register_unref(pair_reg as usize);
+        let val = self.register_unref(val as usize);
         match &pair {
             Value::Pair(handle) => {
                 let (_, cdr) = self.get_pair_mut(*handle)?;

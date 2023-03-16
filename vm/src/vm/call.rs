@@ -11,7 +11,6 @@ impl<ENV> GVm<ENV> {
     pub(crate) fn setup_rest(
         &mut self,
         chunk: &Arc<Chunk>,
-        registers: &mut [Value],
         first_reg: u16,
         num_args: u16,
     ) -> (usize, Value) {
@@ -21,7 +20,9 @@ impl<ENV> GVm<ENV> {
         } else {
             let rest_len = (num_args - (chunk.args + chunk.opt_args)) as usize + 1;
             let mut r = vec![Value::Undefined; rest_len];
-            r.copy_from_slice(&registers[rest_reg as usize..(rest_reg as usize + rest_len)]);
+            r.copy_from_slice(
+                &self.register_slice()[rest_reg as usize..(rest_reg as usize + rest_len)],
+            );
             self.alloc_list_ro(r)
         };
         (rest_reg.into(), v)
@@ -30,7 +31,7 @@ impl<ENV> GVm<ENV> {
     fn k_unshared_stack(&self, stack_top: usize, k: &Continuation) -> Option<(usize, &Vec<Value>)> {
         if !k.stack.is_empty() {
             if k.frame.stack_top >= stack_top {
-                if let Value::CallFrame(h) = self.stack[stack_top] {
+                if let Value::CallFrame(h) = self.stack(stack_top) {
                     let frame = self.heap().get_callframe(h);
                     if let Value::CallFrame(k_h) = k.stack[stack_top] {
                         let k_frame = self.heap().get_callframe(k_h);
@@ -41,7 +42,7 @@ impl<ENV> GVm<ENV> {
                         return Some((frame.stack_top, &frame.defers));
                     }
                 }
-            } else if let Value::CallFrame(h) = self.stack[stack_top] {
+            } else if let Value::CallFrame(h) = self.stack(stack_top) {
                 let frame = self.heap().get_callframe(h);
                 return Some((frame.stack_top, &frame.defers));
             }
@@ -102,7 +103,6 @@ impl<ENV> GVm<ENV> {
         &mut self,
         lambda: Value,
         chunk: Arc<Chunk>,
-        registers: &mut [Value],
         first_reg: u16,
         num_args: u16,
         tail_call: bool,
@@ -114,16 +114,16 @@ impl<ENV> GVm<ENV> {
                 // Useful if the builtin runs bytecode that errors otherwise a waste...
                 let frame = self.make_call_frame(chunk.clone(), lambda, false);
                 let f = &self.buitins[f_idx as usize];
-                let res = (f.func)(self, &registers[(first_reg + 1) as usize..last_reg]).map_err(
-                    |e| {
+                let regs = self.register_slice();
+                let res =
+                    (f.func)(self, &regs[(first_reg + 1) as usize..last_reg]).map_err(|e| {
                         if self.err_frame().is_some() {
                             let call_frame = self.alloc_callframe(frame);
                             mov_register!(self, first_reg as usize, call_frame);
                             self.stack_top += first_reg as usize;
                         }
                         (e, chunk.clone())
-                    },
-                )?;
+                    })?;
                 let res_reg = self.stack_top + first_reg as usize;
                 if tail_call {
                     // Go to last call frame so SRET does not mess up the return of a builtin.
@@ -139,15 +139,15 @@ impl<ENV> GVm<ENV> {
                         self.ip_ptr = frame.ip;
                         self.this_fn = frame.this_fn;
                         self.on_error = frame.on_error;
-                        self.stack[res_reg] = res;
+                        *self.stack_mut(res_reg) = res;
                         std::mem::swap(&mut self.defers, &mut frame.defers);
                         Ok(frame.chunk.clone())
                     } else {
-                        self.stack[res_reg] = res;
+                        *self.stack_mut(res_reg) = res;
                         Ok(chunk)
                     }
                 } else {
-                    self.stack[res_reg] = res;
+                    *self.stack_mut(res_reg) = res;
                     Ok(chunk)
                 }
             }
@@ -165,8 +165,8 @@ impl<ENV> GVm<ENV> {
                 self.this_fn = Some(lambda);
                 self.ip_ptr = get_code!(l);
                 if l.rest {
-                    let (rest_reg, h) = self.setup_rest(&l, registers, first_reg, num_args);
-                    self.stack[stack_top + rest_reg] = h;
+                    let (rest_reg, h) = self.setup_rest(&l, first_reg, num_args);
+                    *self.stack_mut(stack_top + rest_reg) = h;
                 }
                 // XXX TODO- maybe test for stack overflow vs waiting for a panic.
                 self.clear_opts(&l, first_reg, num_args);
@@ -176,10 +176,6 @@ impl<ENV> GVm<ENV> {
                 let stack_top = self.stack_top;
                 let (l, _) = self.heap().get_closure(handle);
                 check_num_args(&l, num_args).map_err(|e| (e, chunk.clone()))?;
-                // Make a self (vm) with it's lifetime broken away so we can call setup_rest.
-                // This is safe because it does not touch caps, it needs a &mut self so it
-                // can heap allocate.
-                let unsafe_vm: &mut GVm<ENV> = unsafe { (self as *mut GVm<ENV>).as_mut().unwrap() };
                 let frame = if !tail_call {
                     let frame = self.make_call_frame(chunk, lambda, true);
                     self.stack_top += first_reg as usize;
@@ -195,21 +191,21 @@ impl<ENV> GVm<ENV> {
                 self.ip_ptr = get_code!(l);
                 let cap_first = (first_reg + l.args + l.opt_args + 1) as usize;
                 if l.rest {
-                    let (rest_reg, h) = unsafe_vm.setup_rest(&l, registers, first_reg, num_args);
+                    let (rest_reg, h) = self.setup_rest(&l, first_reg, num_args);
                     for (i, c) in caps.iter().enumerate() {
-                        self.stack[stack_top + cap_first + i] = Value::Value(*c);
+                        *self.stack_mut(stack_top + cap_first + i) = Value::Value(*c);
                     }
-                    self.stack[stack_top + rest_reg] = h;
+                    *self.stack_mut(stack_top + rest_reg) = h;
                 } else {
                     for (i, c) in caps.iter().enumerate() {
-                        self.stack[stack_top + cap_first + i] = Value::Value(*c);
+                        *self.stack_mut(stack_top + cap_first + i) = Value::Value(*c);
                     }
                 }
                 // Put the heap back, if this doesn't happen will panic on next access attempt.
                 self.heap = Some(heap);
                 if let Some(frame) = frame {
                     let aframe = self.alloc_callframe(frame);
-                    self.stack[stack_top + first_reg as usize] = aframe;
+                    *self.stack_mut(stack_top + first_reg as usize) = aframe;
                 }
                 self.clear_opts(&l, first_reg, num_args);
                 Ok(l)
@@ -234,7 +230,7 @@ impl<ENV> GVm<ENV> {
                     if let Some(defer) = self.defers.pop() {
                         let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
                         self.ip_ptr = self.current_ip_ptr;
-                        self.make_call(defer, chunk, registers, first_reg, 0, false)
+                        self.make_call(defer, chunk, first_reg, 0, false)
                     } else {
                         // If k_defers returns true than self.defers.pop() better
                         // return something.  Need this to make the borrow checker
@@ -247,17 +243,17 @@ impl<ENV> GVm<ENV> {
                 }
             }
             Value::Map(handle) => {
-                self.call_map(handle, registers, first_reg, num_args)
+                self.call_map(handle, first_reg, num_args)
                     .map_err(|e| (e, chunk.clone()))?;
                 Ok(chunk)
             }
             Value::Vector(handle) => {
-                self.call_vector(handle, registers, first_reg, num_args)
+                self.call_vector(handle, first_reg, num_args)
                     .map_err(|e| (e, chunk.clone()))?;
                 Ok(chunk)
             }
             Value::Pair(_) | Value::List(_, _) => {
-                self.call_list(lambda, registers, first_reg, num_args)
+                self.call_list(lambda, first_reg, num_args)
                     .map_err(|e| (e, chunk.clone()))?;
                 Ok(chunk)
             }
@@ -266,7 +262,6 @@ impl<ENV> GVm<ENV> {
                 self.make_call(
                     self.get_value(handle),
                     chunk,
-                    registers,
                     first_reg,
                     num_args,
                     tail_call,
@@ -284,9 +279,9 @@ impl<ENV> GVm<ENV> {
                     // Take the heap so we can mutate self.  Put it back when down or will panic on next access.
                     let heap = self.heap.take().expect("VM must have a Heap!");
                     let k = heap.get_continuation(h);
-                    let arg = registers[first_reg as usize + 1];
-                    self.stack[..k.stack.len()].copy_from_slice(&k.stack[..]);
-                    self.stack[k.arg_reg] = arg;
+                    let arg = self.register(first_reg as usize + 1);
+                    self.stack_slice_mut()[..k.stack.len()].copy_from_slice(&k.stack[..]);
+                    *self.stack_mut(k.arg_reg) = arg;
                     self.stack_top = k.frame.stack_top;
                     self.stack_max =
                         self.stack_top + k.frame.chunk.input_regs + k.frame.chunk.extra_regs;
@@ -325,10 +320,10 @@ impl<ENV> GVm<ENV> {
         if num_args < end_arg {
             for r in num_args..end_arg {
                 mov_register!(
-                self,
-                first_reg as usize + (r + 1) as usize,
-                Value::Undefined
-            );
+                    self,
+                    first_reg as usize + (r + 1) as usize,
+                    Value::Undefined
+                );
             }
         }
         // Clear extra regs so things like closures or globals don't get changed by mistake.
@@ -338,7 +333,6 @@ impl<ENV> GVm<ENV> {
             }
         }
     }
-
 }
 
 /// Verify the number of args provided will work with a chunk.

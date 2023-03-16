@@ -56,19 +56,15 @@ impl<ENV> GVm<ENV> {
     }
 
     pub fn get_registers(&self, start: usize, end: usize) -> &[Value] {
-        &self.stack[start..end]
+        &self.stack_slice()[start..end]
     }
 
     pub fn get_stack(&self, idx: usize) -> Value {
-        self.stack[idx]
+        self.stack(idx)
     }
 
     pub fn stack_max(&self) -> usize {
         self.stack_max
-    }
-
-    pub fn stack(&self) -> &[Value] {
-        &self.stack
     }
 
     pub fn get_interned(&self, i: Interned) -> &'static str {
@@ -197,7 +193,8 @@ impl<ENV> GVm<ENV> {
 
     pub fn alloc_persistent_vector(&mut self, vec: PersistentVec) -> Value {
         let mut heap = self.heap.take().expect("VM must have a Heap!");
-        let res = heap.alloc_persistent_vector(vec, MutState::Immutable, |heap| self.mark_roots(heap));
+        let res =
+            heap.alloc_persistent_vector(vec, MutState::Immutable, |heap| self.mark_roots(heap));
         self.heap = Some(heap);
         res
     }
@@ -219,7 +216,8 @@ impl<ENV> GVm<ENV> {
     pub fn alloc_mapnode(&mut self, node: MapNode) -> Handle {
         let mut heap = self.heap.take().expect("VM must have a Heap!");
         // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        let res = heap.alloc_mapnode(node, |heap| self.mark_roots(heap))
+        let res = heap
+            .alloc_mapnode(node, |heap| self.mark_roots(heap))
             .get_handle()
             .unwrap();
         self.heap = Some(heap);
@@ -312,10 +310,10 @@ impl<ENV> GVm<ENV> {
     /// for instance.
     pub fn alloc_value(&mut self, val: Value) -> Value {
         let val = self.promote_number(val);
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (self.heap_mut() as *mut Heap).as_mut().unwrap() };
-        // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_value(val, MutState::Mutable, |heap| self.mark_roots(heap))
+        let mut heap = self.heap.take().expect("VM must have a Heap!");
+        let res = heap.alloc_value(val, MutState::Mutable, |heap| self.mark_roots(heap));
+        self.heap = Some(heap);
+        res
     }
 
     pub fn heap_immutable(&mut self, val: Value) {
@@ -510,7 +508,7 @@ impl<ENV> GVm<ENV> {
     }
 
     pub(super) fn call_frame_idx(&self, idx: usize) -> Option<&CallFrame> {
-        match self.stack[idx] {
+        match self.stack(idx) {
             Value::CallFrame(handle) => {
                 let frame = self.get_callframe(handle);
                 Some(frame)
@@ -525,7 +523,7 @@ impl<ENV> GVm<ENV> {
     }
 
     pub(super) fn call_frame_mut_idx(&mut self, idx: usize) -> Option<&mut CallFrame> {
-        match self.stack[idx] {
+        match self.stack(idx) {
             Value::CallFrame(handle) => Some(self.get_callframe_mut(handle)),
             _ => None,
             //_ => panic!("Invalid stack, not a call frame."),
@@ -535,7 +533,7 @@ impl<ENV> GVm<ENV> {
     fn mark_roots(&mut self, heap: &mut Heap) -> VMResult<()> {
         self.globals.mark(heap);
         for i in 0..self.stack_max {
-            heap.mark(self.stack[i]);
+            heap.mark(self.stack(i));
         }
         if let Some(this_fn) = self.this_fn {
             heap.mark(this_fn);

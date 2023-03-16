@@ -96,71 +96,14 @@ macro_rules! decode3 {
     }};
 }
 
-#[macro_export]
-macro_rules! get_reg_unref {
-    ($regs:expr, $idx:expr, $vm:expr) => {{
-        let reg = $regs[$idx as usize];
-        match &reg {
-            Value::Value(handle) => $vm.heap().get_value(*handle),
-            _ => reg,
-        }
-    }};
-}
-
-#[macro_export]
-macro_rules! get_reg_unref_int {
-    ($regs:expr, $idx:expr, $vm:expr) => {{
-        let reg = $regs[$idx as usize];
-        match match &reg {
-            Value::Value(handle) => $vm.heap().get_value(*handle),
-            _ => reg,
-        } {
-            Value::Byte(b) => Ok(b as i64),
-            Value::Int(i) => Ok(i),
-            Value::UInt(i) => Ok(i as i64),
-            // XXX TODO int 64s
-            _ => Err(VMError::new_value(format!("Not an integer: {:?}", reg))),
-        }
-    }};
-}
-
-#[macro_export]
-macro_rules! get_reg_int {
-    ($vm:expr, $regs:expr, $idx:expr) => {{
-        let reg = $regs[$idx as usize];
-        match reg {
-            Value::Byte(b) => Ok(b as i64),
-            Value::Int32(i) => Ok(i as i64),
-            Value::UInt32(i) => Ok(i as i64),
-            Value::Int64(handle) => Ok($vm.get_int(handle)),
-            Value::UInt64(handle) => Ok($vm.get_uint(handle) as i64), // XXX TODO- overflow.
-            _ => Err(VMError::new_value(format!("Not an integer: {:?}", reg))),
-        }
-    }};
-}
-
-#[macro_export]
-macro_rules! get_reg {
-    ($regs:expr, $idx:expr) => {{
-        $regs[$idx as usize]
-    }};
-}
-
-#[macro_export]
-macro_rules! get_reg_vm {
-    ($vm:expr, $idx:expr) => {{
-        $vm.stack[$vm.stack_top + $idx as usize]
-    }};
-}
-
 macro_rules! compare_int {
-    ($vm:expr, $chunk:expr, $code:expr, $registers:expr, $comp_fn:expr,
+    ($vm:expr, $chunk:expr, $code:expr, $comp_fn:expr,
      $compf_fn:expr, $wide:expr, $move:expr, $not:expr) => {{
         let (dest, reg1, reg2) = decode3!($code, $wide);
         let mut val = false;
         for reg in reg1..reg2 {
-            let op1 = get_reg_unref!($registers, reg, $vm);
-            let op2 = get_reg_unref!($registers, reg + 1, $vm);
+            let op1 = $vm.register_unref(reg as usize);
+            let op2 = $vm.register_unref(reg as usize + 1);
             val = if matches!(op1, Value::Float64(_)) || matches!(op2, Value::Float64(_)) {
                 $comp_fn(
                     get_float!($vm, op1).map_err(|e| (e, $chunk.clone()))?,
@@ -181,16 +124,16 @@ macro_rules! compare_int {
         }
         let val = if val { Value::True } else { Value::False };
         if $move {
-            $registers[dest as usize] = val;
+            *$vm.register_mut(dest as usize) = val;
         } else {
-            set_register!($vm, $registers, dest as usize, val);
+            set_register!($vm, dest as usize, val);
         }
     }};
 }
 
 macro_rules! compare {
-    ($vm:expr, $chunk:expr, $code:expr, $registers:expr, $comp_fn:expr, $wide:expr, $move:expr) => {{
-        compare_int!($vm, $chunk, $code, $registers, $comp_fn, $comp_fn, $wide, $move, false)
+    ($vm:expr, $chunk:expr, $code:expr, $comp_fn:expr, $wide:expr, $move:expr) => {{
+        compare_int!($vm, $chunk, $code, $comp_fn, $comp_fn, $wide, $move, false)
     }};
 }
 
@@ -222,10 +165,10 @@ macro_rules! get_float {
 }
 
 macro_rules! binary_math {
-    ($vm:expr, $chunk:expr, $code:expr, $registers:expr, $bin_fn:expr, $wide:expr) => {{
+    ($vm:expr, $chunk:expr, $code:expr, $bin_fn:expr, $wide:expr) => {{
         let (dest, op2) = decode2!($code, $wide);
-        let op1 = get_reg!($registers, dest);
-        let op2 = get_reg!($registers, op2);
+        let op1 = $vm.register(dest as usize);
+        let op2 = $vm.register(op2 as usize);
         match (op1, op2) {
             (Value::Float64(op1_handle), Value::Float64(op2_handle)) => {
                 *$vm.get_float_mut(op1_handle) =
@@ -238,7 +181,7 @@ macro_rules! binary_math {
                 );
             }
             (_, Value::Float64(op2_handle)) => {
-                $registers[dest as usize] = $vm.local_f64(
+                *$vm.register_mut(dest as usize) = $vm.local_f64(
                     dest as usize,
                     $bin_fn(
                         get_float!($vm, op1).map_err(|e| (e, $chunk.clone()))?,
@@ -268,7 +211,7 @@ macro_rules! binary_math {
                 if val >= 0 {
                     *$vm.get_uint_mut(op1_handle) = val as u64;
                 } else {
-                    $registers[dest as usize] = $vm.local_i64(dest as usize, val);
+                    *$vm.register_mut(dest as usize) = $vm.local_i64(dest as usize, val);
                 }
             }
             (Value::Int32(op1_val), _) => {
@@ -277,9 +220,9 @@ macro_rules! binary_math {
                     get_int!($vm, op2).map_err(|e| (e, $chunk.clone()))?,
                 );
                 if val < i32::MAX as i64 {
-                    $registers[dest as usize] = Value::Int32(val as i32);
+                    *$vm.register_mut(dest as usize) = Value::Int32(val as i32);
                 } else {
-                    $registers[dest as usize] = $vm.local_i64(dest as usize, val);
+                    *$vm.register_mut(dest as usize) = $vm.local_i64(dest as usize, val);
                 }
             }
             (Value::UInt32(op1_val), _) => {
@@ -288,13 +231,13 @@ macro_rules! binary_math {
                     get_int!($vm, op2).map_err(|e| (e, $chunk.clone()))?,
                 );
                 if val >= 0 && val < u32::MAX as i64 {
-                    $registers[dest as usize] = Value::UInt32(val as u32);
+                    *$vm.register_mut(dest as usize) = Value::UInt32(val as u32);
                 } else {
-                    $registers[dest as usize] = $vm.local_i64(dest as usize, val);
+                    *$vm.register_mut(dest as usize) = $vm.local_i64(dest as usize, val);
                 }
             }
             (_, _) => {
-                $registers[dest as usize] = $vm.local_i64(
+                *$vm.register_mut(dest as usize) = $vm.local_i64(
                     dest as usize,
                     $bin_fn(
                         get_int!($vm, op1).map_err(|e| (e, $chunk.clone()))?,
@@ -307,10 +250,10 @@ macro_rules! binary_math {
 }
 
 macro_rules! div_math {
-    ($vm:expr, $chunk:expr, $code:expr, $registers:expr, $wide:expr) => {{
+    ($vm:expr, $chunk:expr, $code:expr, $wide:expr) => {{
         let (dest, op2) = decode2!($code, $wide);
-        let op1 = get_reg!($registers, dest);
-        let op2 = get_reg!($registers, op2);
+        let op1 = $vm.register(dest as usize);
+        let op2 = $vm.register(op2 as usize);
         match (op1, op2) {
             (Value::Float64(op1_handle), Value::Float64(op2_handle)) => {
                 let op1 = $vm.get_float(op1_handle);
@@ -334,7 +277,7 @@ macro_rules! div_math {
                 if op2 == 0.0 {
                     return Err((VMError::new_vm("Divide by zero error."), $chunk));
                 }
-                $registers[dest as usize] = $vm.local_f64(dest as usize, op1 / op2);
+                *$vm.register_mut(dest as usize) = $vm.local_f64(dest as usize, op1 / op2);
             }
             (Value::Int64(op1_handle), Value::Int64(op2_handle)) => {
                 let op1 = $vm.get_int(op1_handle);
@@ -369,7 +312,8 @@ macro_rules! div_math {
                 if op2 > 0 {
                     *$vm.get_uint_mut(op1_handle) = op1 / op2 as u64;
                 } else {
-                    $registers[dest as usize] = $vm.local_i64(dest as usize, op1 as i64 / op2);
+                    *$vm.register_mut(dest as usize) =
+                        $vm.local_i64(dest as usize, op1 as i64 / op2);
                 }
             }
             (Value::Int32(op1_val), _) => {
@@ -380,9 +324,9 @@ macro_rules! div_math {
                 }
                 let val = op1 / op2;
                 if val < i32::MAX as i64 {
-                    $registers[dest as usize] = Value::Int32(val as i32);
+                    *$vm.register_mut(dest as usize) = Value::Int32(val as i32);
                 } else {
-                    $registers[dest as usize] = $vm.local_i64(dest as usize, val);
+                    *$vm.register_mut(dest as usize) = $vm.local_i64(dest as usize, val);
                 }
             }
             (Value::UInt32(op1_val), _) => {
@@ -393,9 +337,9 @@ macro_rules! div_math {
                 }
                 let val = op1 / op2;
                 if val >= 0 && val < u32::MAX as i64 {
-                    $registers[dest as usize] = Value::UInt32(val as u32);
+                    *$vm.register_mut(dest as usize) = Value::UInt32(val as u32);
                 } else {
-                    $registers[dest as usize] = $vm.local_i64(dest as usize, val);
+                    *$vm.register_mut(dest as usize) = $vm.local_i64(dest as usize, val);
                 }
             }
             (_, _) => {
@@ -406,11 +350,11 @@ macro_rules! div_math {
                 }
                 let val = op1 / op2;
                 if val >= 0 && val < u32::MAX as i64 {
-                    $registers[dest as usize] = Value::UInt32(val as u32);
+                    *$vm.register_mut(dest as usize) = Value::UInt32(val as u32);
                 } else if val > i32::MIN as i64 && val < 0 {
-                    $registers[dest as usize] = Value::Int32(val as i32);
+                    *$vm.register_mut(dest as usize) = Value::Int32(val as i32);
                 } else {
-                    $registers[dest as usize] = $vm.local_i64(dest as usize, val);
+                    *$vm.register_mut(dest as usize) = $vm.local_i64(dest as usize, val);
                 }
             }
         }
@@ -419,8 +363,8 @@ macro_rules! div_math {
 
 #[macro_export]
 macro_rules! set_register {
-    ($vm:expr, $registers:expr, $idx:expr, $val:expr) => {{
-        match (&$crate::get_reg_vm!($vm, $idx), $val) {
+    ($vm:expr, $idx:expr, $val:expr) => {{
+        match (&$vm.register($idx as usize), $val) {
             (Value::Value(handle), _) => {
                 *($vm.heap_mut().get_value_mut(*handle)) = $val;
             }
@@ -435,17 +379,17 @@ macro_rules! set_register {
             }
             (_, Value::Float64(handle_from)) => {
                 let f = $vm.get_float(handle_from);
-                $vm.stack[$vm.stack_top + $idx] = $vm.local_f64($idx, f);
+                *$vm.register_mut($idx) = $vm.local_f64($idx, f);
             }
             (_, Value::Int64(handle_from)) => {
                 let f = $vm.get_int(handle_from);
-                $vm.stack[$vm.stack_top + $idx] = $vm.local_i64($idx, f);
+                *$vm.register_mut($idx) = $vm.local_i64($idx, f);
             }
             (_, Value::UInt64(handle_from)) => {
                 let f = $vm.get_uint(handle_from);
-                $vm.stack[$vm.stack_top + $idx] = $vm.local_u64($idx, f);
+                *$vm.register_mut($idx) = $vm.local_u64($idx, f);
             }
-            _ => $vm.stack[$vm.stack_top + $idx] = $val,
+            _ => *$vm.register_mut($idx) = $val,
         }
     }};
 }
@@ -453,14 +397,15 @@ macro_rules! set_register {
 #[macro_export]
 macro_rules! mov_register {
     ($vm:expr, $idx:expr, $val:expr) => {{
-        $vm.stack[$vm.stack_top + $idx] = $val;
+        //*$vm.stack_mut($vm.stack_top + $idx) = $val;
+        *$vm.register_mut($idx) = $val;
     }};
 }
 
 #[macro_export]
 macro_rules! mov_register_num {
-    ($vm:expr, $registers:expr, $idx:expr, $val:expr) => {{
-        match (&$crate::get_reg_vm!($vm, $idx), $val) {
+    ($vm:expr, $idx:expr, $val:expr) => {{
+        match (&$vm.register($idx as usize), $val) {
             (Value::Float64(handle_to), Value::Float64(handle_from)) => {
                 *$vm.get_float_mut(*handle_to) = $vm.get_float(handle_from);
             }
@@ -472,17 +417,24 @@ macro_rules! mov_register_num {
             }
             (_, Value::Float64(handle_from)) => {
                 let f = $vm.get_float(handle_from);
-                $vm.stack[$vm.stack_top + $idx] = $vm.local_f64($idx, f);
+                //*$vm.stack_mut($vm.stack_top + $idx) = $vm.local_f64($idx, f);
+                *$vm.register_mut($idx) = $vm.local_f64($idx, f);
             }
             (_, Value::Int64(handle_from)) => {
                 let f = $vm.get_int(handle_from);
-                $vm.stack[$vm.stack_top + $idx] = $vm.local_i64($idx, f);
+                //*$vm.stack_mut($vm.stack_top + $idx) = $vm.local_i64($idx, f);
+                *$vm.register_mut($idx) = $vm.local_i64($idx, f);
             }
             (_, Value::UInt64(handle_from)) => {
                 let f = $vm.get_uint(handle_from);
-                $vm.stack[$vm.stack_top + $idx] = $vm.local_u64($idx, f);
+                //*$vm.stack_mut($vm.stack_top + $idx) = $vm.local_u64($idx, f);
+                *$vm.register_mut($idx) = $vm.local_u64($idx, f);
             }
-            _ => $vm.stack[$vm.stack_top + $idx] = $val,
+            _ =>
+            //*$vm.stack_mut($vm.stack_top + $idx) = $val,
+            {
+                *$vm.register_mut($idx) = $val
+            }
         }
     }};
 }

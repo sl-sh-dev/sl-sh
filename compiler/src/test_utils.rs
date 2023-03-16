@@ -40,7 +40,7 @@ pub fn exec(env: &mut SloshVm, input: &'static str) -> Value {
         let chunk = Arc::new(state.chunk);
         env.execute(chunk).unwrap();
     }
-    env.stack()[0].unref(env)
+    env.stack(0).unref(env)
 }
 
 /// Same as exec() but dump the registers and disassembled bytecode after executing.
@@ -63,7 +63,10 @@ pub fn exec_with_dump(env: &mut SloshVm, input: &'static str) -> Value {
     }
 
     let mut reg_names = state.chunk.dbg_args.as_ref().map(|iargs| iargs.iter());
-    for (i, r) in env.stack()[0..=state.chunk.extra_regs].iter().enumerate() {
+    for (i, r) in env.stack_slice()[0..=state.chunk.extra_regs]
+        .iter()
+        .enumerate()
+    {
         let aname = if i == 0 {
             "params/result"
         } else if let Some(reg_names) = reg_names.as_mut() {
@@ -95,7 +98,7 @@ pub fn exec_with_dump(env: &mut SloshVm, input: &'static str) -> Value {
     }
     let _ = state.chunk.disassemble_chunk(env, 0);
 
-    env.stack()[0]
+    env.stack(0)
 }
 
 /// Read and compile input and fail if compiling does not result in an error.

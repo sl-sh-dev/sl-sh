@@ -193,10 +193,8 @@ impl Heap {
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        if self.objects.live_objects() >= self.objects.capacity() {
-            if self.paused == 0 {
-                self.collect(mark_roots);
-            }
+        if self.objects.live_objects() >= self.objects.capacity() && self.paused == 0 {
+            self.collect(mark_roots);
         }
         Handle::new32(self.objects.alloc(obj, flags))
     }
@@ -210,16 +208,12 @@ impl Heap {
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        if self.numerics.live_objects() >= self.numerics.capacity() {
-            if self.paused == 0 {
-                self.collect(mark_roots);
-            }
+        if self.numerics.live_objects() >= self.numerics.capacity() && self.paused == 0 {
+            self.collect(mark_roots);
         }
         let num = Numeric64 { uint: num };
         Value::Int64(Numeric::Heap(
-            self.numerics
-                .alloc(num, mutable.flag())
-                .into(),
+            self.numerics.alloc(num, mutable.flag()).into(),
         ))
     }
 
@@ -232,16 +226,12 @@ impl Heap {
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        if self.numerics.live_objects() >= self.numerics.capacity() {
-            if self.paused == 0 {
-                self.collect(mark_roots);
-            }
+        if self.numerics.live_objects() >= self.numerics.capacity() && self.paused == 0 {
+            self.collect(mark_roots);
         }
         let num = Numeric64 { int: num };
         Value::UInt64(Numeric::Heap(
-            self.numerics
-                .alloc(num, mutable.flag())
-                .into(),
+            self.numerics.alloc(num, mutable.flag()).into(),
         ))
     }
 
@@ -254,16 +244,12 @@ impl Heap {
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        if self.numerics.live_objects() >= self.numerics.capacity() {
-            if self.paused == 0 {
-                self.collect(mark_roots);
-            }
+        if self.numerics.live_objects() >= self.numerics.capacity() && self.paused == 0 {
+            self.collect(mark_roots);
         }
         let num = Numeric64 { float: num };
         Value::Float64(Numeric::Heap(
-            self.numerics
-                .alloc(num, mutable.flag())
-                .into(),
+            self.numerics.alloc(num, mutable.flag()).into(),
         ))
     }
 
