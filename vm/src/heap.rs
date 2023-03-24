@@ -5,7 +5,7 @@ use crate::bits::FLAG_MUT;
 use crate::chunk::*;
 use crate::error::*;
 use crate::value::*;
-use crate::{FxHashMap, Interned};
+use crate::{get_code, FxHashMap, Interned};
 
 pub mod handle;
 pub use crate::handle::Handle;
@@ -30,6 +30,19 @@ pub struct CallFrame {
     pub defers: Vec<Value>,
     pub on_error: Option<Value>,
     pub called: Value,
+}
+
+impl CallFrame {
+    /// Return the line number that corresponds to the current_ip if available.
+    pub fn current_line(&self) -> Option<u32> {
+        let offset = unsafe { self.current_ip.offset_from(get_code!(self.chunk)) as usize };
+        self.chunk.offset_to_line(offset)
+    }
+
+    /// Return the current offset (IP) for the frame using current_ip.
+    pub fn current_offset(&self) -> usize {
+        unsafe { self.current_ip.offset_from(get_code!(self.chunk)) as usize }
+    }
 }
 
 #[derive(Clone, Debug)]
