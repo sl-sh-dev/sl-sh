@@ -33,20 +33,26 @@ macro_rules! decode_u8 {
 #[macro_export]
 macro_rules! decode_u16 {
     ($code:expr) => {{
-        let idx1 = $crate::inc_ip!($code);
-        let idx2 = $crate::inc_ip!($code);
-        ((idx1 as u16) << 8) | (idx2 as u16)
+        unsafe {
+            let idx1 = *$code;
+            let idx2 = *$code.offset(1);
+            $code = $code.offset(2);
+            ((idx1 as u16) << 8) | (idx2 as u16)
+        }
     }};
 }
 
 #[macro_export]
 macro_rules! decode_u32 {
     ($code:expr) => {{
-        let idx1 = $crate::inc_ip!($code);
-        let idx2 = $crate::inc_ip!($code);
-        let idx3 = $crate::inc_ip!($code);
-        let idx4 = $crate::inc_ip!($code);
-        ((idx1 as u32) << 24) | ((idx2 as u32) << 16) | ((idx3 as u32) << 8) | (idx4 as u32)
+        unsafe {
+            let idx1 = *$code;
+            let idx2 = *$code.offset(1);
+            let idx3 = *$code.offset(2);
+            let idx4 = *$code.offset(3);
+            $code = $code.offset(4);
+            ((idx1 as u32) << 24) | ((idx2 as u32) << 16) | ((idx3 as u32) << 8) | (idx4 as u32)
+        }
     }};
 }
 
@@ -397,7 +403,6 @@ macro_rules! set_register {
 #[macro_export]
 macro_rules! mov_register {
     ($vm:expr, $idx:expr, $val:expr) => {{
-        //*$vm.stack_mut($vm.stack_top + $idx) = $val;
         *$vm.register_mut($idx) = $val;
     }};
 }
@@ -417,24 +422,17 @@ macro_rules! mov_register_num {
             }
             (_, Value::Float64(handle_from)) => {
                 let f = $vm.get_float(handle_from);
-                //*$vm.stack_mut($vm.stack_top + $idx) = $vm.local_f64($idx, f);
                 *$vm.register_mut($idx) = $vm.local_f64($idx, f);
             }
             (_, Value::Int64(handle_from)) => {
                 let f = $vm.get_int(handle_from);
-                //*$vm.stack_mut($vm.stack_top + $idx) = $vm.local_i64($idx, f);
                 *$vm.register_mut($idx) = $vm.local_i64($idx, f);
             }
             (_, Value::UInt64(handle_from)) => {
                 let f = $vm.get_uint(handle_from);
-                //*$vm.stack_mut($vm.stack_top + $idx) = $vm.local_u64($idx, f);
                 *$vm.register_mut($idx) = $vm.local_u64($idx, f);
             }
-            _ =>
-            //*$vm.stack_mut($vm.stack_top + $idx) = $val,
-            {
-                *$vm.register_mut($idx) = $val
-            }
+            _ => *$vm.register_mut($idx) = $val,
         }
     }};
 }
