@@ -217,29 +217,29 @@ impl<'vm> Reader<'vm> {
         &mut **self.char_iter.as_mut().expect("Invalid Reader!")
     }
 
-    fn alloc_pair(&mut self, car: Value, cdr: Value) -> Value {
+    fn alloc_pair(&mut self, car: Value, cdr: Value, line: u32, column: u32) -> Value {
         let result = self.vm.alloc_pair_ro(car, cdr);
         // Just allocated this so the unwrap is safe.
         let file_name = self.vm.intern_static(self.file_name);
         self.vm
             .set_heap_property(result, "dbg-file", Value::StringConst(file_name));
         self.vm
-            .set_heap_property(result, "dbg-line", Value::UInt32(self.line() as u32));
+            .set_heap_property(result, "dbg-line", Value::UInt32(line));
         self.vm
-            .set_heap_property(result, "dbg-col", Value::UInt32(self.column() as u32));
+            .set_heap_property(result, "dbg-col", Value::UInt32(column));
         result
     }
 
-    fn alloc_list(&mut self, list: Vec<Value>) -> Value {
+    fn alloc_list(&mut self, list: Vec<Value>, line: u32, column: u32) -> Value {
         let result = self.vm.alloc_list_ro(list);
         // Just allocated this so the unwrap is safe.
         let file_name = self.vm.intern_static(self.file_name);
         self.vm
             .set_heap_property(result, "dbg-file", Value::StringConst(file_name));
         self.vm
-            .set_heap_property(result, "dbg-line", Value::UInt32(self.line() as u32));
+            .set_heap_property(result, "dbg-line", Value::UInt32(line));
         self.vm
-            .set_heap_property(result, "dbg-col", Value::UInt32(self.column() as u32));
+            .set_heap_property(result, "dbg-col", Value::UInt32(column));
         result
     }
 
@@ -798,6 +798,8 @@ impl<'vm> Reader<'vm> {
         let mut list = Vec::new();
         let i_close = self.vm.intern(")");
         let i_dot = self.vm.intern(".");
+        let line = self.line() as u32;
+        let column = self.column() as u32;
 
         while cont {
             let exp = match self.read_inner(buffer, in_back_quote, ReadReturn::List) {
@@ -874,7 +876,7 @@ impl<'vm> Reader<'vm> {
             if let Some(last) = list_iter.next() {
                 let mut last = *last;
                 for v in list_iter {
-                    last = self.alloc_pair(*v, last);
+                    last = self.alloc_pair(*v, last, self.line() as u32, self.column() as u32);
                 }
                 Ok(last)
             } else {
@@ -883,7 +885,7 @@ impl<'vm> Reader<'vm> {
         } else if list.is_empty() {
             Ok(Value::Nil)
         } else {
-            Ok(self.alloc_list(list))
+            Ok(self.alloc_list(list, line, column))
         }
     }
 
@@ -900,6 +902,8 @@ impl<'vm> Reader<'vm> {
         let i_quote = self.vm.intern("quote");
         let i_backquote = self.vm.intern("back-quote");
         while let Some((ch, peek_ch)) = self.next2() {
+            let line = self.line() as u32;
+            let column = self.column() as u32;
             match &*ch {
                 "\"" => {
                     match self.read_string(buffer, &read_table, false) {
@@ -909,8 +913,8 @@ impl<'vm> Reader<'vm> {
                 }
                 "'" => match self.read_inner(buffer, in_back_quote, ReadReturn::None) {
                     Ok(Some(exp)) => {
-                        let cdr = self.alloc_pair(exp, Value::Nil);
-                        let qlist = self.alloc_pair(Value::Symbol(i_quote), cdr);
+                        let cdr = self.alloc_pair(exp, Value::Nil, line, column);
+                        let qlist = self.alloc_pair(Value::Symbol(i_quote), cdr, line, column);
                         return Ok(Some(qlist));
                     }
                     Ok(None) => {
@@ -924,8 +928,8 @@ impl<'vm> Reader<'vm> {
                 },
                 "`" => match self.read_inner(buffer, true, ReadReturn::None) {
                     Ok(Some(exp)) => {
-                        let cdr = self.alloc_pair(exp, Value::Nil);
-                        let qlist = self.alloc_pair(Value::Symbol(i_backquote), cdr);
+                        let cdr = self.alloc_pair(exp, Value::Nil, line, column);
+                        let qlist = self.alloc_pair(Value::Symbol(i_backquote), cdr, line, column);
                         return Ok(Some(qlist));
                     }
                     Ok(None) => {
@@ -949,8 +953,8 @@ impl<'vm> Reader<'vm> {
                     };
                     match self.read_inner(buffer, in_back_quote, ReadReturn::None) {
                         Ok(Some(exp)) => {
-                            let cdr = self.alloc_pair(exp, Value::Nil);
-                            return Ok(Some(self.alloc_pair(sym, cdr)));
+                            let cdr = self.alloc_pair(exp, Value::Nil, line, column);
+                            return Ok(Some(self.alloc_pair(sym, cdr, line, column)));
                         }
                         Ok(None) => {
                             return Err(ReadError {
@@ -975,11 +979,14 @@ impl<'vm> Reader<'vm> {
                     match &*peek_ch {
                         "|" => self.consume_block_comment(),
                         "!" => {
+                            let line = self.line() as u32;
+                            let column = self.column() as u32;
                             match self.read_doc_string(buffer, &read_table) {
                                 Ok(s) => {
                                     let doc_sym = Value::Symbol(self.vm.intern("doc-string"));
                                     let doc_string = Value::StringConst(self.vm.intern(s));
-                                    let list = self.alloc_list(vec![doc_sym, doc_string]);
+                                    let list =
+                                        self.alloc_list(vec![doc_sym, doc_string], line, column);
                                     return Ok(Some(list));
                                 }
                                 Err(e) => return Err(e),

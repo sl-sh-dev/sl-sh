@@ -98,7 +98,11 @@ fn load(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         }
         _ => return Err(VMError::new_vm("load: Not a string.")),
     };
-    load_internal(vm, name)
+    let olf_line_num = vm.line_num();
+    vm.set_line_num(1);
+    let r = load_internal(vm, name);
+    vm.set_line_num(olf_line_num);
+    r
 }
 
 fn eval(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
