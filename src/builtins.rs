@@ -1420,7 +1420,12 @@ pub fn builtin_equal(
     if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
         ensure_tonicity!(|a, b| a == b, ints, &i64, i64)
     } else if let Ok(floats) = parse_list_of_floats(environment, &mut args) {
-        ensure_tonicity!(|a, b| ((a - b) as f64).abs() < 0.000_001, floats, &f64, f64)
+        ensure_tonicity!(
+            |a: &f64, b: &f64| (a - b).abs() < 0.000_001,
+            floats,
+            &f64,
+            f64
+        )
     } else {
         let strings = parse_list_of_strings(environment, &mut args)?;
         ensure_tonicity!(|a, b| a == b, strings, &str, String)

@@ -705,7 +705,7 @@ fn get_temp(
 fn random_name(prefix: &str, suffix: &str, len: i64) -> String {
     let prefix = if prefix.is_empty() { ".tmp" } else { prefix };
     let mut rng = rand::thread_rng();
-    let name = rand_alphanumeric_str(len.unsigned_abs() as u64, &mut rng);
+    let name = rand_alphanumeric_str(len.unsigned_abs(), &mut rng);
     format!("{}{}{}", prefix, name, suffix)
 }
 

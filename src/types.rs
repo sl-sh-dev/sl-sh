@@ -230,18 +230,13 @@ pub struct ExpMeta {
     pub col: usize,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub enum SymLoc {
+    #[default]
     None,
     Ref(Binding),
     Namespace(Rc<RefCell<Namespace>>, usize),
     Stack(usize),
-}
-
-impl Default for SymLoc {
-    fn default() -> Self {
-        SymLoc::None
-    }
 }
 
 impl SymLoc {
@@ -1139,7 +1134,7 @@ where
 
 struct Symbol(&'static str, SymLoc);
 
-impl<'a, F> RustProcedureRefMut<Symbol, F> for TypedWrapper<'_, Symbol, Expression>
+impl<F> RustProcedureRefMut<Symbol, F> for TypedWrapper<'_, Symbol, Expression>
 where
     F: FnOnce(&mut Symbol) -> LispResult<Expression>,
 {
@@ -1259,7 +1254,7 @@ where
     F: FnOnce(&str) -> LispResult<Expression>,
 {
     fn apply(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
-        try_inner_string!(fn_name, &self.0, arg, fun(arg))
+        try_inner_string!(fn_name, self.0, arg, fun(arg))
     }
 }
 
@@ -1268,7 +1263,7 @@ where
     F: FnOnce(String) -> LispResult<Expression>,
 {
     fn apply(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
-        try_inner_string!(fn_name, &self.0, arg, {
+        try_inner_string!(fn_name, self.0, arg, {
             let arg = arg.to_string();
             fun(arg)
         })
@@ -1280,7 +1275,7 @@ where
     F: FnOnce(&mut String) -> LispResult<Expression>,
 {
     fn apply_ref_mut(&mut self, fn_name: &str, fun: F) -> LispResult<Expression> {
-        try_inner_string!(fn_name, &self.0, arg, {
+        try_inner_string!(fn_name, self.0, arg, {
             let arg = &mut arg.to_string();
             fun(arg)
         })
