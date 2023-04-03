@@ -37,17 +37,18 @@
 	(defn pgz
 		"Parallelized gzip.
 		cores:
-			use lscpu to determine # of cores on box
+			use lscpu to determine the number of cores on box
 		compression-ratio:
 			- 1 fastest speed, worst compression
 			- 9 slowest speed, most compression
 			- default is 6
 
 		Section: user-shell"
-		(target-name cores compression-ratio &rest dirs)
+		(targetname cores compressionratio &rest dirs)
 			$(tar cf - $((str-cat-list " " dirs)) |
-				pigz  -p  $cores  " -" $compression-ratio |
-				$target-name))
+				pigz  -p  $cores  " -" $compressionratio |
+				$targetname))
+
 	(defn dpgz
 	"Parallelized un gzip.
 	cores:

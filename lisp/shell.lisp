@@ -765,7 +765,8 @@ Section: shell
       plist))
 
 (defn get_pwd ()
-  (str-cat-list "/" (path_list_trunc (str-split "/" (str-replace (str-trim $PWD) $HOME "~")))))
+	(str-replace (str-trim $PWD) $HOME "~"))
+  ;;(str-cat-list "/" (collect-vec (path_list_trunc (str-split "/" (str-replace (str-trim $PWD) $HOME "~"))))))
 
 (defn set_prompt_tail ()
   (if (= *last-status* 0) "\x1b[32m>\x1b[39m " (format "\x1b[31m(" *last-status* ")>\x1b[39m ")))

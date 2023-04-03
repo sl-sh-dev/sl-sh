@@ -186,18 +186,23 @@ fn str_rsplitn(n: usize, pat: &str, text: &str) -> LispResult<Vec<String>> {
 /// (test::assert-equal "stringxxxyyyxxxsome" (str-cat-list "xxx" '("string" "yyy" "some")))
 /// (test::assert-equal "string yyy some" (str-cat-list " " '("string" "yyy" "some")))
 /// (test::assert-equal "stringyyysome" (str-cat-list "" '("string" "yyy" "some")))
-#[sl_sh_fn(fn_name = "str-cat-list")]
-fn str_cat_list(join_str: &str, list: Vec<String>) -> String {
+#[sl_sh_fn(fn_name = "str-cat-list", takes_env = true)]
+fn str_cat_list(
+    environment: &mut Environment,
+    join_str: Option<String>,
+    list: Expression,
+) -> LispResult<String> {
     let mut new_str = String::new();
     let mut first = true;
-    for exp in list {
+    let join_str = join_str.unwrap_or_default();
+    for exp in list.iter() {
         if !first {
             new_str.push_str(&join_str);
         }
-        new_str.push_str(&exp);
+        new_str.push_str(&exp.as_string(environment)?);
         first = false;
     }
-    new_str
+    Ok(new_str)
 }
 
 /// Usage: (str-sub string start [length]) -> string

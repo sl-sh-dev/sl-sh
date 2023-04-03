@@ -147,7 +147,7 @@ impl fmt::Display for Expression {
                     write!(f, "({} . {})", e1, e2)
                 }
             }
-            ExpEnum::Nil => f.write_str("nil"),
+            ExpEnum::Nil => f.write_str("Nil"),
             ExpEnum::HashMap(map) => {
                 let mut res = String::new();
                 res.push_str("(make-hash (");

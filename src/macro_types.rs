@@ -15,6 +15,17 @@ impl ErrorStrings {
         format!("{fn_name}: mismatched type input, expected {expected}, got {got}.")
     }
 
+    pub fn mismatched_type_better(
+        fn_name: &str,
+        expected: &str,
+        got: &str,
+        of_type: &str,
+    ) -> String {
+        format!(
+            "{fn_name}: mismatched type input, expected {expected}, got {got} of type {of_type}."
+        )
+    }
+
     pub fn positive_integer(fn_name: &str, expected: &str, got: &str) -> String {
         format!("{fn_name}: expected positive {expected}, got {got}.")
     }
