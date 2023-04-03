@@ -148,9 +148,9 @@ fn opt_is_valid_generic_type<'a>(
     None
 }
 
-fn is_valid_generic_type<'a>(
+fn is_valid_generic_type(
     type_path: &TypePath,
-    possible_types: &'a [&str],
+    possible_types: &[&str],
 ) -> MacroResult<SupportedGenericReturnTypes> {
     if type_path.path.segments.len() == 1 && type_path.path.segments.first().is_some() {
         let path_segment = &type_path.path.segments.first().unwrap();
@@ -166,12 +166,11 @@ fn is_valid_generic_type<'a>(
         }
     }
     Err(Error::new(
-            type_path.span(),
-            format!(
-                "Functions of with generic arguments of type {:?} must contain Types, see GenericArgument.",
-                possible_types
-            ),
-        ))
+        type_path.span(),
+        format!(
+            "Functions can only return GenericArguments of type {possible_types:?}, try wrapping this value in Option or LispResult."
+        ),
+    ))
 }
 
 fn get_generic_argument_from_type_path(
@@ -565,14 +564,30 @@ fn parse_variadic_args_type(
         RustType::Path(wrapped_ty, _span) => {
             let arg_check = if arg_name_itself_is_iter {
                 quote! {
-                    if !crate::is_sequence!(#arg_name)
+                    let #arg_name = if !crate::is_sequence!(#arg_name)
                     {
                         let err_str = format!("{}: Expected a vector or list for argument at position {}.", #fn_name, #arg_pos);
                         return Err(LispError::new(err_str));
-                    }
+                    } else {
+                        #arg_name
+                    };
                 }
             } else {
-                quote! {}
+                // HACK: this should not be needed but sometimes in current sl-sh 0.9.69 implementation
+                // VarArgs (which are being passed in when arg_name_itself_is_iter  is false) can be
+                // passed an array that contains nil, which is different than nil itself, either way
+                // this can be dealt with easily at the macro level. Removing this code causes
+                // the try_into_for in the final quote! block to fail because it can't convert
+                // nil into its desired type. This happens because it is iterating over a list
+                // that is nil. In reality, it shouldn't but the Expression object is a vector of
+                // nil, this is defensive code that should go away in slosh.
+                quote! {
+                    let #arg_name = if #arg_name.len() == 1 && #arg_name.get(0).unwrap().is_nil() {
+                        vec![]
+                    } else {
+                        #arg_name
+                    };
+                }
             };
             Ok(quote! {{
                 #arg_check
@@ -605,7 +620,6 @@ fn parse_variadic_args_type(
                 let tuple_len = type_tuple.elems.len();
                 let arg_name_base = arg_name.to_string() + "_";
                 let arg_names = (0..type_tuple.elems.len())
-                    .into_iter()
                     .map(|x| {
                         Ident::new(
                             &(arg_name_base.to_string() + &x.to_string()),
@@ -1256,7 +1270,6 @@ fn parse_type_tuple(
     // expects.
     let arg_name_base = arg_name.to_string() + "_";
     let arg_names = (0..type_tuple.elems.len())
-        .into_iter()
         .map(|x| {
             Ident::new(
                 &(arg_name_base.to_string() + &x.to_string()),
