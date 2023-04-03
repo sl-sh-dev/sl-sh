@@ -129,6 +129,7 @@ struct MaskType {
 }
 
 impl MaskType {
+    #[allow(clippy::unnecessary_cast)]
     fn combine(&self, mode: Mode) -> Mode {
         let m = match &self.mask_type {
             PermissionOperator::Plus => !(self.class & self.perms) & mode.bits() as u32,
@@ -269,6 +270,7 @@ fn octal_string_to_u32(str: &str, fn_name: &str) -> Result<u32, LispError> {
     }
 }
 
+#[allow(clippy::unnecessary_cast)]
 fn to_mode(i: u32) -> Mode {
     NIX_PERMISSIONS.iter().fold(Mode::empty(), |acc, x| {
         if (x.bits() as u32 & i) == x.bits() as u32 {

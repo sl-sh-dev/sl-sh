@@ -169,7 +169,7 @@ fn run_command(
             };
             let result = match status {
                 Some(code) => {
-                    Expression::alloc_data(ExpEnum::Process(ProcessState::Over(proc, code as i32)))
+                    Expression::alloc_data(ExpEnum::Process(ProcessState::Over(proc, code)))
                 }
                 None => Expression::alloc_data(ExpEnum::Nil),
             };

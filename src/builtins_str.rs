@@ -1,3 +1,5 @@
+use crate::LispResult;
+use sl_sh_proc_macros::sl_sh_fn;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::hash::{BuildHasher, Hash, Hasher};
@@ -15,81 +17,83 @@ fn as_string(environment: &mut Environment, exp: &Expression) -> Result<String, 
     exp.as_string(environment)
 }
 
-fn builtin_str_trim(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(arg) = args.next() {
-        if args.next().is_none() {
-            let arg = eval(environment, arg)?;
-            let arg = arg.as_string(environment)?;
-            return Ok(Expression::alloc_data(ExpEnum::String(
-                arg.trim().to_string().into(),
-                None,
-            )));
-        }
-    }
-    Err(LispError::new("str-trim takes one form"))
+/// Usage: (str-trim string) -> string
+///
+/// Trim right and left whitespace from string.
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-equal "some string" (str-trim "   some string"))
+/// (test::assert-equal "some string" (str-trim "   some string   "))
+/// (test::assert-equal "some string" (str-trim (str "   some string   ")))
+/// (test::assert-equal "some string" (str-trim "some string   "))
+/// (test::assert-equal "some string" (str-trim "some string"))
+#[sl_sh_fn(fn_name = "str-trim")]
+fn str_trim(arg: String) -> LispResult<Expression> {
+    Ok(Expression::alloc_data(ExpEnum::String(
+        arg.trim().to_string().into(),
+        None,
+    )))
 }
 
-fn builtin_str_ltrim(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(arg) = args.next() {
-        if args.next().is_none() {
-            let arg = eval(environment, arg)?;
-            let arg = arg.as_string(environment)?;
-            return Ok(Expression::alloc_data(ExpEnum::String(
-                arg.trim_start().to_string().into(),
-                None,
-            )));
-        }
-    }
-    Err(LispError::new("str-ltrim takes one form"))
+/// Usage: (str-ltrim string) -> string
+///
+/// Trim left whitespace from string.
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-equal "some string" (str-ltrim "   some string"))
+/// (test::assert-equal "some string   " (str-ltrim "   some string   "))
+/// (test::assert-equal "some string   " (str-ltrim (str "   some string   ")))
+/// (test::assert-equal "some string   " (str-ltrim "some string   "))
+/// (test::assert-equal "some string" (str-ltrim "some string"))
+#[sl_sh_fn(fn_name = "str-ltrim")]
+fn str_ltrim(arg: String) -> LispResult<Expression> {
+    Ok(Expression::alloc_data(ExpEnum::String(
+        arg.trim_start().to_string().into(),
+        None,
+    )))
 }
 
-fn builtin_str_rtrim(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(arg) = args.next() {
-        if args.next().is_none() {
-            let arg = eval(environment, arg)?;
-            let arg = arg.as_string(environment)?;
-            return Ok(Expression::alloc_data(ExpEnum::String(
-                arg.trim_end().to_string().into(),
-                None,
-            )));
-        }
-    }
-    Err(LispError::new("str-rtrim takes one form"))
+/// Usage: (str-rtrim string) -> string
+///
+/// Trim right whitespace from string.
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-equal "   some string" (str-rtrim "   some string"))
+/// (test::assert-equal "   some string" (str-rtrim "   some string   "))
+/// (test::assert-equal "   some string" (str-rtrim (str "   some string   ")))
+/// (test::assert-equal "some string" (str-rtrim "some string   "))
+/// (test::assert-equal "some string" (str-rtrim "some string"))
+#[sl_sh_fn(fn_name = "str-rtrim")]
+fn str_rtrim(arg: String) -> LispResult<Expression> {
+    Ok(Expression::alloc_data(ExpEnum::String(
+        arg.trim_end().to_string().into(),
+        None,
+    )))
 }
 
-fn builtin_str_replace(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(arg0) = args.next() {
-        if let Some(arg1) = args.next() {
-            if let Some(arg2) = args.next() {
-                if args.next().is_none() {
-                    let arg0 = &eval(environment, arg0)?;
-                    let arg0 = arg0.as_string(environment)?;
-                    let arg1 = &eval(environment, arg1)?;
-                    let arg1 = arg1.as_string(environment)?;
-                    let arg2 = &eval(environment, arg2)?;
-                    let arg2 = arg2.as_string(environment)?;
-                    let new_str = arg0.replace(&arg1, &arg2);
-                    return Ok(Expression::alloc_data(ExpEnum::String(
-                        new_str.into(),
-                        None,
-                    )));
-                }
-            }
-        }
-    }
-    Err(LispError::new("str-replace takes three forms"))
+/// Usage: (str-replace string old-pattern new-pattern) -> string
+///
+/// Replace occurances of second string with third in the first string.
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-equal "some yyy string" (str-replace "some xxx string" "xxx" "yyy"))
+/// (test::assert-equal "some yyy string yyy" (str-replace "some xxx string xxx" "xxx" "yyy"))
+/// (test::assert-equal "yyy some yyy string yyy" (str-replace "xxx some xxx string xxx" "xxx" "yyy"))
+#[sl_sh_fn(fn_name = "str-replace")]
+fn str_replace(source: String, old_pattern: &str, new_pattern: &str) -> LispResult<Expression> {
+    let new_str = source.replace(old_pattern, new_pattern);
+    Ok(Expression::alloc_data(ExpEnum::String(
+        new_str.into(),
+        None,
+    )))
 }
 
 fn builtin_str_split(
@@ -885,80 +889,10 @@ pub fn add_str_builtins<S: BuildHasher>(
     interner: &mut Interner,
     data: &mut HashMap<&'static str, (Expression, String), S>,
 ) {
-    data.insert(
-        interner.intern("str-trim"),
-        Expression::make_function(
-            builtin_str_trim,
-            r#"Usage: (str-trim string) -> string
-
-Trim right and left whitespace from string.
-
-Section: string
-
-Example:
-(test::assert-equal "some string" (str-trim "   some string"))
-(test::assert-equal "some string" (str-trim "   some string   "))
-(test::assert-equal "some string" (str-trim (str "   some string   ")))
-(test::assert-equal "some string" (str-trim "some string   "))
-(test::assert-equal "some string" (str-trim "some string"))
-"#,
-        ),
-    );
-    data.insert(
-        interner.intern("str-ltrim"),
-        Expression::make_function(
-            builtin_str_ltrim,
-            r#"Usage: (str-ltrim string) -> string
-
-Trim left whitspace from string.
-
-Section: string
-
-Example:
-(test::assert-equal "some string" (str-ltrim "   some string"))
-(test::assert-equal "some string   " (str-ltrim "   some string   "))
-(test::assert-equal "some string   " (str-ltrim (str "   some string   ")))
-(test::assert-equal "some string   " (str-ltrim "some string   "))
-(test::assert-equal "some string" (str-ltrim "some string"))
-"#,
-        ),
-    );
-    data.insert(
-        interner.intern("str-rtrim"),
-        Expression::make_function(
-            builtin_str_rtrim,
-            r#"Usage: (str-rtrim string) -> string
-
-Trim right whitespace from string.
-
-Section: string
-
-Example:
-(test::assert-equal "   some string" (str-rtrim "   some string"))
-(test::assert-equal "   some string" (str-rtrim "   some string   "))
-(test::assert-equal "   some string" (str-rtrim (str "   some string   ")))
-(test::assert-equal "some string" (str-rtrim "some string   "))
-(test::assert-equal "some string" (str-rtrim "some string"))
-"#,
-        ),
-    );
-    data.insert(
-        interner.intern("str-replace"),
-        Expression::make_function(
-            builtin_str_replace,
-            r#"Usage: (str-replace string old-pattern new-pattern) -> string
-
-Replace occurances of second string with third in the first string.
-
-Section: string
-
-Example:
-(test::assert-equal "some yyy string" (str-replace "some xxx string" "xxx" "yyy"))
-(test::assert-equal "some yyy string yyy" (str-replace "some xxx string xxx" "xxx" "yyy"))
-(test::assert-equal "yyy some yyy string yyy" (str-replace "xxx some xxx string xxx" "xxx" "yyy"))
-"#,
-        ),
-    );
+    intern_str_trim(interner, data);
+    intern_str_ltrim(interner, data);
+    intern_str_rtrim(interner, data);
+    intern_str_replace(interner, data);
     data.insert(
         interner.intern("str-split"),
         Expression::make_function(

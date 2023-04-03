@@ -7,7 +7,7 @@ use crate::builtins_util::*;
 use crate::environment::*;
 use crate::interner::*;
 use crate::types::*;
-use crate::{LispResult, VarArgs};
+use crate::{LispError, LispResult, VarArgs};
 
 /// Usage: (type expression)
 ///
@@ -254,7 +254,7 @@ fn is_symbol(exp: Expression) -> bool {
 /// (test::assert-true (string? "string"))
 /// (test::assert-false (string? 1))
 #[sl_sh_fn(fn_name = "string?")]
-fn is_string(exp: Expression) -> bool {
+fn is_string(exp: &Expression) -> bool {
     matches!(exp.get().data, ExpEnum::String(_, _))
 }
 
@@ -563,7 +563,7 @@ fn sym(environment: &mut Environment, args: VarArgs<Expression>) -> LispResult<E
 /// (test::assert-true (string? (sym->str 'test-sym->str-sym)))
 /// (test::assert-equal "test-sym->str-sym" (sym->str 'test-sym->str-sym))
 #[sl_sh_fn(fn_name = "sym->str")]
-fn symbol_to_str(exp: Expression) -> LispResult<String> {
+fn symbol_to_str(exp: &Expression) -> LispResult<String> {
     match exp.get().data {
         ExpEnum::Symbol(s, _) => Ok(s.to_string()),
         _ => Err(LispError::new(
@@ -628,17 +628,54 @@ pub fn add_type_builtins<S: BuildHasher>(
 mod test {
     use super::*;
 
-    /// Usage: (intvec-stuff-float int) -> float
+    impl PartialEq<Self> for Expression {
+        fn eq(&self, other: &Self) -> bool {
+            match (&self.get().data, &other.get().data) {
+                (ExpEnum::True, ExpEnum::True) => true,
+                (ExpEnum::False, ExpEnum::False) => true,
+                (ExpEnum::Nil, ExpEnum::Nil) => true,
+                (ExpEnum::Float(lf), ExpEnum::Float(rt)) => lf == rt,
+                (ExpEnum::Int(lf), ExpEnum::Int(rt)) => lf == rt,
+                (ExpEnum::Char(lf), ExpEnum::Char(rt)) => lf == rt,
+                (ExpEnum::CodePoint(lf), ExpEnum::CodePoint(rt)) => lf == rt,
+                (_, _) => false,
+            }
+            //(ExpEnum::String(lf_s, lf_i), ExpEnum::String(rt_s, rt_i) => {}
+            //(ExpEnum::Symbol(_, _), ExpEnum::Symbol(_, _)) => {}
+            //(ExpEnum::Regex(_), ExpEnum::Regex(_)) => {}
+            //ExpEnum::Symbol(_, _) => {}
+            //ExpEnum::Lambda(_) => {}
+            //ExpEnum::Macro(_) => {}
+            //ExpEnum::Function(_) => {}
+            //ExpEnum::LazyFn(_, _) => {}
+            //ExpEnum::Vector(_) => {}
+            //ExpEnum::Values(_) => {}
+            //ExpEnum::Pair(_, _) => {}
+            //ExpEnum::HashMap(_) => {}
+            //ExpEnum::Process(_) => {}
+            //ExpEnum::File(_) => {}
+            //ExpEnum::Wrapper(_) => {}
+            //ExpEnum::DeclareDef => {}
+            //ExpEnum::DeclareVar => {}
+            //ExpEnum::DeclareFn => {}
+            //ExpEnum::DeclareMacro => {}
+            //ExpEnum::Quote => {}
+            //ExpEnum::BackQuote => {}
+            //ExpEnum::Undefined => {}
+        }
+    }
+
+    /// Usage: (tuple-vec-to-float int) -> float
     ///     Cast an int as a float.
     /// Section: type
     /// Example:
-    ///     (test::assert-equal 34 (intvec-stuff-float '#(#(7 1 9) #(4 5 8))))
-    ///     (test::assert-equal 34 (intvec-stuff-float (list (join 8 (join 5 4)) (join 9 (join 4 4)))))
-    ///     (test::assert-equal 34 (intvec-stuff-float '((8 5 4) (9 4 4)))
-    ///     (test::assert-error (intvec-stuff-float "not vec"))
-    ///     (test::assert-error (intvec-stuff-float 9))
-    #[sl_sh_fn(fn_name = "intvec-stuff-float")]
-    fn intvec_stuff_float(ints: Vec<(i64, i64, i64)>) -> f64 {
+    ///     (test::assert-equal 34 (tuple-vec-to-float '#(#(7 1 9) #(4 5 8))))
+    ///     (test::assert-equal 34 (tuple-vec-to-float (list (join 8 (join 5 4)) (join 9 (join 4 4)))))
+    ///     (test::assert-equal 34 (tuple-vec-to-float '((8 5 4) (9 4 4)))
+    ///     (test::assert-error (tuple-vec-to-float "not vec"))
+    ///     (test::assert-error (tuple-vec-to-float 9))
+    #[sl_sh_fn(fn_name = "tuple-vec-to-float")]
+    fn tuple_vec_to_float(ints: Vec<(i64, i64, i64)>) -> f64 {
         let mut f = 0.0;
         for i in ints.iter() {
             f += i.0 as f64 + i.1 as f64 + i.2 as f64;
@@ -646,17 +683,17 @@ mod test {
         f
     }
 
-    /// Usage: (int-stuff-float int) -> float
+    /// Usage: (tuple-to-float int) -> float
     ///     Cast an int as a float.
     /// Section: type
     /// Example:
-    ///     (test::assert-equal 17 (int-stuff-float '#(8 9 0)))
-    ///     (test::assert-equal 18 (int-stuff-float '(8 9 1)))
-    ///     (test::assert-equal 17 (int-stuff-float (join 8 (join 5 4))))
-    ///     (test::assert-error (int-stuff-float "not vec"))
-    ///     (test::assert-error (int-stuff-float 8))
-    #[sl_sh_fn(fn_name = "int-stuff-float")]
-    fn int_stuff_float(i: (i64, i64, i64)) -> f64 {
+    ///     (test::assert-equal 17 (tuple-to-float '#(8 9 0)))
+    ///     (test::assert-equal 18 (tuple-to-float '(8 9 1)))
+    ///     (test::assert-equal 17 (tuple-to-float (join 8 (join 5 4))))
+    ///     (test::assert-error (tuple-to-float "not vec"))
+    ///     (test::assert-error (tuple-to-float 8))
+    #[sl_sh_fn(fn_name = "tuple-to-float")]
+    fn tuple_to_float(i: (i64, i64, i64)) -> f64 {
         i.0 as f64 + i.1 as f64 + i.2 as f64
     }
 
@@ -692,17 +729,25 @@ mod test {
         f
     }
 
+    /// the above four functions generate entrypoints with the names
+    /// `parse_<fn_name>` where <fn_name> is the name of the function
+    /// with the sl_sh_fn  annotation. This tests that the generated functions
+    /// take and receive the proper sl-sh objects.
     #[test]
     fn test_sl_sh_fn() {
         let int8 = Expression::alloc_data(ExpEnum::Int(8));
         let int9 = Expression::alloc_data(ExpEnum::Int(9));
         let f_result = Expression::alloc_data(ExpEnum::Float(17.0));
         let intvec = Expression::alloc_data(ExpEnum::Pair(int8.clone(), int9.clone()));
+        let quote = Expression::alloc_data(ExpEnum::Quote);
+        let intvec = Expression::alloc_data(ExpEnum::Vector(vec![quote, intvec]));
         let mut env = build_default_environment();
-        let result = builtin_intvec_to_float(&mut env, ArgType::Exp(intvec.clone())).unwrap();
+
+        let result =
+            parse_intvec_to_float(&mut env, &mut vec![intvec.clone()].into_iter()).unwrap();
         assert_eq!(f_result, result);
 
-        let result = builtin_int_pair_float(&mut env, ArgType::Exp(intvec.clone())).unwrap();
+        let result = parse_int_pair_float(&mut env, &mut vec![intvec.clone()].into_iter()).unwrap();
         assert_eq!(f_result, result);
 
         let int4 = Expression::alloc_data(ExpEnum::Int(4));
@@ -710,7 +755,10 @@ mod test {
             int9.clone(),
             Expression::alloc_data(ExpEnum::Pair(int4.clone(), int4.clone())),
         ));
-        let result = builtin_int_stuff_float(&mut env, ArgType::Exp(intvec.clone())).unwrap();
+        let quote = Expression::alloc_data(ExpEnum::Quote);
+        let intvec = Expression::alloc_data(ExpEnum::Vector(vec![quote, intvec]));
+
+        let result = parse_tuple_to_float(&mut env, &mut vec![intvec.clone()].into_iter()).unwrap();
         assert_eq!(f_result, result);
 
         let intvec = Expression::alloc_data(ExpEnum::Vector(vec![
@@ -718,11 +766,11 @@ mod test {
             int9.clone(),
             int4.clone(),
         ]));
-        let result = builtin_intvec_stuff_float(
-            &mut env,
-            ArgType::Exp(Expression::alloc_data(ExpEnum::Vector(vec![intvec]))),
-        )
-        .unwrap();
+        let quote = Expression::alloc_data(ExpEnum::Quote);
+        let intvec = Expression::alloc_data(ExpEnum::Vector(vec![intvec]));
+        let intvec = Expression::alloc_data(ExpEnum::Vector(vec![quote, intvec]));
+        let result =
+            parse_tuple_vec_to_float(&mut env, &mut vec![intvec.clone()].into_iter()).unwrap();
         assert_eq!(f_result, result);
     }
 }

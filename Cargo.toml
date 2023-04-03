@@ -18,7 +18,7 @@ unicode-width = "0.1"
 rand = "0.8.3"
 walkdir = "2"
 same-file = "1.0.6"
-remove_dir_all = "0.7"
+remove_dir_all = "0.8"
 #jemallocator = "0.3.2"
 regex = "1.5"
 sl-sh-proc-macros = { git = "https://github.com/sl-sh-dev/sl-sh-proc-macros.git" }

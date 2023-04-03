@@ -7,9 +7,9 @@ use crate::eval::*;
 use crate::interner::*;
 use crate::types::*;
 
-pub fn proc_set_vars<'a>(
+pub fn proc_set_vars(
     environment: &mut Environment,
-    args: &'a mut dyn Iterator<Item = Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<(&'static str, Option<String>, Expression), LispError> {
     if let Some(key) = args.next() {
         if let Some(arg1) = args.next() {
@@ -343,7 +343,7 @@ NOTE: var is deprecated, use let or let* to create local bindings.
 Adds an expression to the current lexical scope.  Return the expression that was defined.
 This will not add to a namespace (use def for that), use it within functions or
 let forms to create local bindings.
-Symbol is not evaluted.
+Symbol is not evaluated.
 
 Section: core
 
