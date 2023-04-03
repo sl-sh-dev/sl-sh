@@ -190,7 +190,7 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")
            (list (str "``" (check-if-pipe-shorthand (first trim-arr)) "``"))
            (rest trim-arr)))))))
 (defn sanitize-for-md-row (to-sanitize)
-		(str-replace to-sanitize "|" "\|"))
+		(str-replace (if (nil? to-sanitize) "" to-sanitize) "|" "\|"))
 
 (defn write-doc-struct-to-file (doc-struct file) (let
 		((doc-form (let ((form (doc-struct :name)))
