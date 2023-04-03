@@ -129,12 +129,14 @@ struct MaskType {
 }
 
 impl MaskType {
+    #[allow(clippy::unnecessary_cast)]
     fn combine(&self, mode: Mode) -> Mode {
         let m = match &self.mask_type {
-            PermissionOperator::Plus => !(self.class & self.perms) & mode.bits(),
-            PermissionOperator::Minus => mode.bits() | (self.class & self.perms),
+            PermissionOperator::Plus => !(self.class & self.perms) & mode.bits() as u32,
+            PermissionOperator::Minus => mode.bits() as u32 | (self.class & self.perms),
             PermissionOperator::Equal => {
-                ((self.class & self.perms) ^ 0o777) & ((mode.bits() & !self.class) ^ self.class)
+                ((self.class & self.perms) ^ 0o777)
+                    & ((mode.bits() as u32 & !self.class) ^ self.class)
             }
         };
         to_mode(m)
@@ -268,9 +270,10 @@ fn octal_string_to_u32(str: &str, fn_name: &str) -> Result<u32, LispError> {
     }
 }
 
+#[allow(clippy::unnecessary_cast)]
 fn to_mode(i: u32) -> Mode {
     NIX_PERMISSIONS.iter().fold(Mode::empty(), |acc, x| {
-        if (x.bits() & i) == x.bits() {
+        if (x.bits() as u32 & i) == x.bits() as u32 {
             acc | *x
         } else {
             acc
