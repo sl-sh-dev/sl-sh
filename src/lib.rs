@@ -148,9 +148,9 @@ fn opt_is_valid_generic_type<'a>(
     None
 }
 
-fn is_valid_generic_type<'a>(
+fn is_valid_generic_type(
     type_path: &TypePath,
-    possible_types: &'a [&str],
+    possible_types: &[&str],
 ) -> MacroResult<SupportedGenericReturnTypes> {
     if type_path.path.segments.len() == 1 && type_path.path.segments.first().is_some() {
         let path_segment = &type_path.path.segments.first().unwrap();
@@ -620,7 +620,6 @@ fn parse_variadic_args_type(
                 let tuple_len = type_tuple.elems.len();
                 let arg_name_base = arg_name.to_string() + "_";
                 let arg_names = (0..type_tuple.elems.len())
-                    .into_iter()
                     .map(|x| {
                         Ident::new(
                             &(arg_name_base.to_string() + &x.to_string()),
@@ -1271,7 +1270,6 @@ fn parse_type_tuple(
     // expects.
     let arg_name_base = arg_name.to_string() + "_";
     let arg_names = (0..type_tuple.elems.len())
-        .into_iter()
         .map(|x| {
             Ident::new(
                 &(arg_name_base.to_string() + &x.to_string()),
