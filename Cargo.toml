@@ -6,6 +6,7 @@ members = [
     "vm",
     "builtins",
     "compile_state",
+    "shell",
 ]
 
 [profile.release]
