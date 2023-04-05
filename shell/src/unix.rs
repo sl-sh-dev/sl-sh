@@ -396,7 +396,6 @@ pub fn wait_pid(
     pid: u32,
     term_settings: Option<&termios::Termios>,
     terminal_fd: i32,
-    is_tty: bool,
     jobs: &mut Jobs,
 ) -> Option<i32> {
     let result: Option<i32>;
@@ -433,7 +432,7 @@ pub fn wait_pid(
         }
     }
     // Move the shell back into the foreground.
-    if is_tty {
+    if jobs.is_tty() {
         let pid = unistd::getpid();
         if let Err(err) = unistd::tcsetpgrp(terminal_fd, pid) {
             // XXX TODO- be more specific with this (ie only turn off tty if that is the error)?

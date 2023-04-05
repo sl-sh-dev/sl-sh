@@ -1,10 +1,16 @@
-use crate::unix::try_wait_pid;
-use nix::libc;
-use nix::unistd::{self, Pid};
+use crate::unix::{terminal_fd, try_wait_pid, wait_pid};
+use nix::{
+    libc,
+    sys::{
+        signal::{self, Signal},
+        termios,
+    },
+    unistd::{self, Pid},
+};
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum JobStatus {
     Running,
     Stopped,
@@ -21,22 +27,37 @@ impl fmt::Display for JobStatus {
 
 #[derive(Clone, Debug)]
 pub struct Job {
+    pub id: u32,
     pub pids: Vec<u32>,
     pub names: Vec<String>,
     pub status: JobStatus,
 }
 
 pub struct Jobs {
+    next_job: u32,
     jobs: Vec<Job>,
     job_control: bool,
+    is_tty: bool,
 }
 
 impl Jobs {
     pub fn new() -> Self {
         Self {
+            next_job: 1,
             jobs: vec![],
             job_control: true,
+            is_tty: true,
         }
+    }
+
+    /// Are we running on a tty?
+    pub fn is_tty(&self) -> bool {
+        self.is_tty
+    }
+
+    /// Sets whether we are on a tty or not.
+    pub fn set_tty(&mut self, is_tty: bool) {
+        self.is_tty = is_tty;
     }
 
     /// Is job control active?  Note that Jobs will be used for bookkeeping even if job control is off.
@@ -53,11 +74,16 @@ impl Jobs {
             None => Pid::from_raw(proc as i32),
         };
         if pgid.is_none() {
+            if self.jobs.is_empty() {
+                self.next_job = 1;
+            }
             let mut job = Job {
+                id: self.next_job,
                 pids: Vec::new(),
                 names: Vec::new(),
                 status: JobStatus::Running,
             };
+            self.next_job += 1;
             job.pids.push(proc);
             job.names.push(command.to_string());
             self.jobs.push(job);
@@ -110,6 +136,18 @@ impl Jobs {
         }
     }
 
+    /// Mark the job containing pid as running.
+    pub fn mark_job_running(&mut self, pid: u32) {
+        'outer: for mut j in self.jobs.iter_mut() {
+            for p in &j.pids {
+                if *p == pid {
+                    j.status = JobStatus::Running;
+                    break 'outer;
+                }
+            }
+        }
+    }
+
     /// Check any pids in a job by calling wait and updating the books.
     pub fn reap_procs(&mut self) {
         let pids: Vec<u32> = self
@@ -122,15 +160,76 @@ impl Jobs {
             try_wait_pid(pid, self);
         }
     }
+
+    /// Return the pid for job_num if job_num is stopped.
+    pub fn pid_for_stopped_job(&self, job_num: u32) -> Option<u32> {
+        for job in &self.jobs {
+            if job.id == job_num {
+                return if job.status == JobStatus::Stopped {
+                    job.pids.first().copied()
+                } else {
+                    None
+                };
+            }
+        }
+        None
+    }
+
+    /// Return the pid for job_num, any status.
+    pub fn pid_for_job(&self, job_num: u32) -> Option<u32> {
+        for job in &self.jobs {
+            if job.id == job_num {
+                return job.pids.first().copied();
+            }
+        }
+        None
+    }
+
+    /// Move the job for job_num to te foreground.
+    pub fn foreground_job(&mut self, job_num: u32) {
+        if let Some(pid) = self.pid_for_stopped_job(job_num) {
+            let term_settings = termios::tcgetattr(libc::STDIN_FILENO).unwrap();
+            let ppid = Pid::from_raw(pid as i32);
+            if let Err(err) = signal::kill(ppid, Signal::SIGCONT) {
+                eprintln!("Error sending sigcont to wake up process: {}.", err);
+            } else {
+                if let Err(err) = unistd::tcsetpgrp(libc::STDIN_FILENO, ppid) {
+                    eprintln!("Error making {pid} foreground in parent: {err}");
+                }
+                self.mark_job_running(pid);
+                wait_pid(pid, Some(&term_settings), terminal_fd(), self);
+            }
+        } else if let Some(pid) = self.pid_for_job(job_num) {
+            let ppid = Pid::from_raw(pid as i32);
+            // The job is running, so no sig cont needed...
+            let term_settings = termios::tcgetattr(libc::STDIN_FILENO).unwrap();
+            if let Err(err) = unistd::tcsetpgrp(libc::STDIN_FILENO, ppid) {
+                eprintln!("Error making {pid} foreground in parent: {err}");
+            }
+            wait_pid(pid, Some(&term_settings), terminal_fd(), self);
+        }
+    }
+
+    /// Move the job for job_num to te background and running (start a stopped job in the background).
+    pub fn background_job(&mut self, job_num: u32) {
+        if let Some(pid) = self.pid_for_stopped_job(job_num) {
+            let ppid = Pid::from_raw(pid as i32);
+            if let Err(err) = signal::kill(ppid, Signal::SIGCONT) {
+                eprintln!("Error sending sigcont to wake up process: {}.", err);
+            } else {
+                self.mark_job_running(pid);
+            }
+        }
+    }
 }
 
 impl Display for Jobs {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        for (i, job) in self.jobs.iter().enumerate() {
+        for job in &self.jobs {
             writeln!(
                 f,
                 "[{}]\t{}\t{:?}\t{:?}",
-                i, job.status, job.pids, job.names
+                job.id, job.status, job.pids, job.names
             )?;
         }
         Ok(())

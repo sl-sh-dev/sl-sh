@@ -76,7 +76,7 @@ fn main() {
             command.push(' ');
             command.push_str(&config.args.join(" "));
             let mut jobs = Jobs::new();
-            if let Err(err) = run_one_command(&command, is_tty, &mut jobs) {
+            if let Err(err) = run_one_command(&command, &mut jobs) {
                 eprintln!("Error running {}: {}", command, err);
                 return;
             }
@@ -143,7 +143,7 @@ fn parse_one_run_command_line(input: &str) -> Vec<Vec<String>> {
     ret
 }
 
-pub fn run_one_command(command: &str, is_tty: bool, jobs: &mut Jobs) -> Result<(), io::Error> {
+pub fn run_one_command(command: &str, jobs: &mut Jobs) -> Result<(), io::Error> {
     // Try to make sense out of whatever crap we get (looking at you fzf-tmux)
     // and make it work.
     let commands = parse_one_run_command_line(command);
@@ -163,6 +163,28 @@ pub fn run_one_command(command: &str, is_tty: bool, jobs: &mut Jobs) -> Result<(
                     } else {
                         cd(Some(commands[0][1].clone()))
                     };
+                } else if &commands[0][0] == "fg" {
+                    let _r = if commands[0].len() != 2 {
+                        eprintln!("fg: takes one argument!");
+                        -1
+                    } else if let Ok(job_num) = commands[0][1].parse() {
+                        jobs.foreground_job(job_num);
+                        0
+                    } else {
+                        eprintln!("fg: argument not a number!");
+                        -1
+                    };
+                } else if &commands[0][0] == "bg" {
+                    let _r = if commands[0].len() != 2 {
+                        eprintln!("fg: takes one argument!");
+                        -1
+                    } else if let Ok(job_num) = commands[0][1].parse() {
+                        jobs.background_job(job_num);
+                        0
+                    } else {
+                        eprintln!("fg: argument not a number!");
+                        -1
+                    };
                 } else if &commands[0][0] == "jobs" {
                     if commands[0].len() > 1 {
                         eprintln!("jobs: too many arguments!");
@@ -179,13 +201,13 @@ pub fn run_one_command(command: &str, is_tty: bool, jobs: &mut Jobs) -> Result<(
                         None,
                         jobs,
                     )?;
-                    wait_pid(pid, Some(&term_settings), terminal_fd, is_tty, jobs);
+                    wait_pid(pid, Some(&term_settings), terminal_fd, jobs);
                 }
             }
         }
         _ => {
             let pid = fork_pipe(None, None, None, commands, jobs)?;
-            wait_pid(pid, Some(&term_settings), terminal_fd, is_tty, jobs);
+            wait_pid(pid, Some(&term_settings), terminal_fd, jobs);
         }
     }
     Ok(())
@@ -216,6 +238,7 @@ pub fn start_interactive(is_tty: bool) -> i32 {
         eprintln!("Error loading history: {e}");
     }
     let mut jobs = Jobs::new();
+    jobs.set_tty(is_tty);
     loop {
         jobs.reap_procs();
         let res = match con.read_line(Prompt::from("shell> "), None) {
@@ -239,7 +262,7 @@ pub fn start_interactive(is_tty: bool) -> i32 {
         }
 
         con.history.push(&res).expect("Failed to push history.");
-        if let Err(err) = run_one_command(&res, is_tty, &mut jobs) {
+        if let Err(err) = run_one_command(&res, &mut jobs) {
             eprintln!("ERROR executing {res}: {err}");
         }
     }
