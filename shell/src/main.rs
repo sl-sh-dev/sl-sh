@@ -1,5 +1,6 @@
 mod builtins;
 mod config;
+mod jobs;
 mod signals;
 mod unix;
 
@@ -10,6 +11,7 @@ mod unix;
 
 use crate::builtins::cd;
 use crate::config::get_config;
+use crate::jobs::Jobs;
 use crate::signals::{install_sigint_handler, mask_signals};
 use crate::unix::{fork_exec, fork_pipe, terminal_fd, wait_pid};
 use nix::sys::termios;
@@ -73,7 +75,8 @@ fn main() {
             let mut command = config.command.unwrap();
             command.push(' ');
             command.push_str(&config.args.join(" "));
-            if let Err(err) = run_one_command(&command, is_tty) {
+            let mut jobs = Jobs::new();
+            if let Err(err) = run_one_command(&command, is_tty, &mut jobs) {
                 eprintln!("Error running {}: {}", command, err);
                 return;
             }
@@ -140,42 +143,50 @@ fn parse_one_run_command_line(input: &str) -> Vec<Vec<String>> {
     ret
 }
 
-pub fn run_one_command(command: &str, is_tty: bool) -> Result<(), io::Error> {
+pub fn run_one_command(command: &str, is_tty: bool, jobs: &mut Jobs) -> Result<(), io::Error> {
     // Try to make sense out of whatever crap we get (looking at you fzf-tmux)
     // and make it work.
     let commands = parse_one_run_command_line(command);
     let term_settings = termios::tcgetattr(libc::STDIN_FILENO).unwrap();
     let terminal_fd = terminal_fd();
 
-    if commands.len() == 1 {
-        if !commands[0].is_empty() {
-            if &commands[0][0] == "cd" {
-                let _r = if commands[0].len() > 2 {
-                    eprintln!("cd: too many arguments!");
-                    -1
-                } else {
-                    if commands[0].len() == 1 {
+    match commands.len() {
+        0 => {} // Nothing to do.
+        1 => {
+            if !commands[0].is_empty() {
+                if &commands[0][0] == "cd" {
+                    let _r = if commands[0].len() > 2 {
+                        eprintln!("cd: too many arguments!");
+                        -1
+                    } else if commands[0].len() == 1 {
                         cd(None)
                     } else {
                         cd(Some(commands[0][1].clone()))
+                    };
+                } else if &commands[0][0] == "jobs" {
+                    if commands[0].len() > 1 {
+                        eprintln!("jobs: too many arguments!");
+                    } else {
+                        println!("{jobs}");
                     }
-                };
-            } else {
-                let pid = fork_exec(
-                    None,
-                    None,
-                    None,
-                    &commands[0][0],
-                    commands[0][1..].iter(),
-                    None,
-                    &mut None,
-                )?;
-                wait_pid(pid, Some(&term_settings), terminal_fd, is_tty);
+                } else {
+                    let pid = fork_exec(
+                        None,
+                        None,
+                        None,
+                        &commands[0][0],
+                        commands[0][1..].iter(),
+                        None,
+                        jobs,
+                    )?;
+                    wait_pid(pid, Some(&term_settings), terminal_fd, is_tty, jobs);
+                }
             }
         }
-    } else if commands.len() > 1 {
-        let pid = fork_pipe(None, None, None, commands, None, &mut None)?;
-        wait_pid(pid, Some(&term_settings), terminal_fd, is_tty);
+        _ => {
+            let pid = fork_pipe(None, None, None, commands, jobs)?;
+            wait_pid(pid, Some(&term_settings), terminal_fd, is_tty, jobs);
+        }
     }
     Ok(())
 }
@@ -204,7 +215,9 @@ pub fn start_interactive(is_tty: bool) -> i32 {
     if let Err(e) = con.history.set_file_name_and_load_history(".shell-history") {
         eprintln!("Error loading history: {e}");
     }
+    let mut jobs = Jobs::new();
     loop {
+        jobs.reap_procs();
         let res = match con.read_line(Prompt::from("shell> "), None) {
             Ok(input) => input,
             Err(err) => match err.kind() {
@@ -226,7 +239,7 @@ pub fn start_interactive(is_tty: bool) -> i32 {
         }
 
         con.history.push(&res).expect("Failed to push history.");
-        if let Err(err) = run_one_command(&res, is_tty) {
+        if let Err(err) = run_one_command(&res, is_tty, &mut jobs) {
             eprintln!("ERROR executing {res}: {err}");
         }
     }

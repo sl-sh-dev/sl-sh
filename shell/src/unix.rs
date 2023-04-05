@@ -4,36 +4,15 @@ use std::fs::File;
 use std::io::{self, Read, Write};
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::io::FromRawFd;
-use std::{env, fmt, ptr};
+use std::{env, ptr};
 
+use crate::jobs::Jobs;
 use crate::signals::test_clear_sigint;
 use nix::libc;
 use nix::sys::signal::{self, kill, SigHandler, Signal};
 use nix::sys::termios;
 use nix::sys::wait::{self, WaitPidFlag, WaitStatus};
 use nix::unistd::{self, Pid};
-
-#[derive(Clone, Debug)]
-pub enum JobStatus {
-    Running,
-    Stopped,
-}
-
-impl fmt::Display for JobStatus {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            JobStatus::Running => write!(f, "Running"),
-            JobStatus::Stopped => write!(f, "Stopped"),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct Job {
-    pub pids: Vec<u32>,
-    pub names: Vec<String>,
-    pub status: JobStatus,
-}
 
 trait IsMinusOne {
     fn is_minus_one(&self) -> bool;
@@ -51,7 +30,7 @@ impl_is_minus_one! { i8 i16 i32 i64 isize }
 
 fn cvt<T: IsMinusOne>(t: T) -> Result<T, io::Error> {
     if t.is_minus_one() {
-        Err(io::Error::last_os_error().into())
+        Err(io::Error::last_os_error())
     } else {
         Ok(t)
     }
@@ -83,39 +62,6 @@ pub fn anon_pipe() -> Result<(i32, i32), io::Error> {
             }
             Ok((fds[0], fds[1]))
         }
-    }
-}
-
-fn setup_job(proc: u32, command: &str, pgid: Option<u32>, jobs: &mut Vec<Job>) {
-    let pid = Pid::from_raw(proc as i32);
-    let pgid_raw = match pgid {
-        Some(pgid) => Pid::from_raw(pgid as i32),
-        None => Pid::from_raw(proc as i32),
-    };
-    if pgid.is_none() {
-        let mut job = Job {
-            pids: Vec::new(),
-            names: Vec::new(),
-            status: JobStatus::Running,
-        };
-        job.pids.push(proc);
-        job.names.push(command.to_string());
-        jobs.push(job);
-    } else {
-        let job = jobs.pop();
-        if let Some(mut job) = job {
-            job.pids.push(proc);
-            job.names.push(command.to_string());
-            jobs.push(job);
-        } else {
-            eprintln!("WARNING: Something in job control is amiss, probably a command not part of pipe or a bug!");
-        }
-    }
-    if let Err(_err) = unistd::setpgid(pid, pgid_raw) {
-        // Ignore, do in parent and child.
-    }
-    if let Err(_err) = unistd::tcsetpgrp(libc::STDIN_FILENO, pgid_raw) {
-        // Ignore, do in parent and child.
     }
 }
 
@@ -226,8 +172,7 @@ pub fn fork_pipe(
     stdout: Option<i32>,
     stderr: Option<i32>,
     programs: Vec<Vec<String>>,
-    pgid: Option<u32>,
-    jobs: &mut Option<Vec<Job>>,
+    jobs: &mut Jobs,
 ) -> Result<u32, io::Error> {
     let mut last_pid = 0;
     let progs = programs.len();
@@ -238,6 +183,7 @@ pub fn fork_pipe(
     let mut next_in = stdin;
     let mut next_out = Some(fds[1]);
     let mut upcoming_in = Some(fds[0]);
+    let mut pgid = None;
     for (i, program) in programs.into_iter().enumerate() {
         if !program.is_empty() {
             if i == (progs - 1) {
@@ -269,6 +215,9 @@ pub fn fork_pipe(
                     upcoming_in = Some(fds[0]);
                 }
             }
+            if pgid.is_none() {
+                pgid = Some(last_pid);
+            }
         }
     }
     Ok(last_pid)
@@ -281,7 +230,7 @@ pub fn fork_exec<I, S>(
     program: &str,
     args: I,
     pgid: Option<u32>,
-    jobs: &mut Option<Vec<Job>>,
+    jobs: &mut Jobs,
 ) -> Result<u32, io::Error>
 where
     I: IntoIterator<Item = S>,
@@ -336,7 +285,7 @@ where
                         libc::_exit(10);
                     }
                 }
-                if jobs.is_some() {
+                if jobs.job_control() {
                     let pid = unistd::getpid();
                     let pgid = match pgid {
                         Some(pgid) => Pid::from_raw(pgid as i32),
@@ -388,9 +337,7 @@ where
     loop {
         match input.read(&mut bytes) {
             Ok(0) => {
-                if let Some(jobs) = jobs {
-                    setup_job(pid, program, pgid, jobs);
-                }
+                jobs.add_proc(pid, program, pgid);
                 return Ok(pid);
             }
             Ok(8) => {
@@ -402,7 +349,7 @@ where
                 );
                 let errno = i32::from_be_bytes(errno.try_into().unwrap());
                 //assert!(p.wait().is_ok(), "wait() should either return Ok or panic");
-                return Err(io::Error::from_raw_os_error(errno).into());
+                return Err(io::Error::from_raw_os_error(errno));
             }
             Err(ref e) if e.kind() == io::ErrorKind::Interrupted => {}
             Err(e) => {
@@ -416,7 +363,7 @@ where
     }
 }
 
-pub fn try_wait_pid(pid: u32) -> (bool, Option<i32>) {
+pub fn try_wait_pid(pid: u32, jobs: &mut Jobs) -> (bool, Option<i32>) {
     let mut opts = WaitPidFlag::WUNTRACED;
     opts.insert(WaitPidFlag::WCONTINUED);
     opts.insert(WaitPidFlag::WNOHANG);
@@ -424,20 +371,20 @@ pub fn try_wait_pid(pid: u32) -> (bool, Option<i32>) {
         Err(nix::errno::Errno::ECHILD) => {
             // Does not exist.
             let code = None;
-            // XXXX remove_job(environment, pid);
+            jobs.remove_pid(pid);
             (true, code)
         }
         Err(err) => {
             eprintln!("Error waiting for pid {}, {}", pid, err);
-            // XXXX remove_job(environment, pid);
+            jobs.remove_pid(pid);
             (true, None)
         }
         Ok(WaitStatus::Exited(_, status)) => {
-            // XXXX remove_job(environment, pid);
+            jobs.remove_pid(pid);
             (true, Some(status))
         }
         Ok(WaitStatus::Stopped(..)) => {
-            // XXXX mark_job_stopped(environment, pid);
+            jobs.mark_job_stopped(pid);
             (true, None)
         }
         Ok(WaitStatus::Continued(_)) => (false, None),
@@ -450,6 +397,7 @@ pub fn wait_pid(
     term_settings: Option<&termios::Termios>,
     terminal_fd: i32,
     is_tty: bool,
+    jobs: &mut Jobs,
 ) -> Option<i32> {
     let result: Option<i32>;
     let mut int_cnt = 0;
@@ -468,7 +416,7 @@ pub fn wait_pid(
             }
             int_cnt += 1;
         }
-        let (stop, status) = try_wait_pid(pid);
+        let (stop, status) = try_wait_pid(pid, jobs);
         if stop {
             result = status;
             if let Some(status) = status {
