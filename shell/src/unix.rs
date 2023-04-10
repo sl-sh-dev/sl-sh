@@ -4,9 +4,10 @@ use std::fs::File;
 use std::io::{self, Read, Write};
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::io::FromRawFd;
-use std::{env, ptr};
+use std::ptr;
 
-use crate::jobs::Jobs;
+use crate::jobs::Job;
+use crate::parse::ParsedJob;
 use crate::signals::test_clear_sigint;
 use nix::libc;
 use nix::sys::signal::{self, kill, SigHandler, Signal};
@@ -171,11 +172,10 @@ pub fn fork_pipe(
     stdin: Option<i32>,
     stdout: Option<i32>,
     stderr: Option<i32>,
-    programs: Vec<Vec<String>>,
-    jobs: &mut Jobs,
-) -> Result<u32, io::Error> {
-    let mut last_pid = 0;
-    let progs = programs.len();
+    new_job: ParsedJob,
+    job: &mut Job,
+) -> Result<(), io::Error> {
+    let progs = new_job.len();
     let mut fds: [i32; 2] = [0; 2];
     unsafe {
         cvt(libc::pipe(fds.as_mut_ptr()))?;
@@ -183,29 +183,13 @@ pub fn fork_pipe(
     let mut next_in = stdin;
     let mut next_out = Some(fds[1]);
     let mut upcoming_in = Some(fds[0]);
-    let mut pgid = None;
-    for (i, program) in programs.into_iter().enumerate() {
-        if !program.is_empty() {
+    for (i, program) in new_job.commands().iter().enumerate() {
+        if let Some(command) = program.command() {
+            let args = program.args();
             if i == (progs - 1) {
-                last_pid = fork_exec(
-                    next_in,
-                    stdout,
-                    stderr,
-                    &program[0],
-                    &program[1..],
-                    pgid,
-                    jobs,
-                )?;
+                fork_exec(next_in, stdout, stderr, command, args, job)?;
             } else {
-                last_pid = fork_exec(
-                    next_in,
-                    next_out,
-                    None,
-                    &program[0],
-                    &program[1..],
-                    pgid,
-                    jobs,
-                )?;
+                fork_exec(next_in, next_out, None, command, args, job)?;
                 next_in = upcoming_in;
                 if i < (progs - 1) {
                     unsafe {
@@ -215,12 +199,13 @@ pub fn fork_pipe(
                     upcoming_in = Some(fds[0]);
                 }
             }
-            if pgid.is_none() {
-                pgid = Some(last_pid);
-            }
         }
     }
-    Ok(last_pid)
+    if job.is_empty() {
+        Err(io::Error::new(io::ErrorKind::Other, "no processes execed"))
+    } else {
+        Ok(())
+    }
 }
 
 pub fn fork_exec<I, S>(
@@ -229,9 +214,8 @@ pub fn fork_exec<I, S>(
     stderr: Option<i32>,
     program: &str,
     args: I,
-    pgid: Option<u32>,
-    jobs: &mut Jobs,
-) -> Result<u32, io::Error>
+    job: &mut Job,
+) -> Result<(), io::Error>
 where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
@@ -285,19 +269,21 @@ where
                         libc::_exit(10);
                     }
                 }
-                if jobs.job_control() {
-                    let pid = unistd::getpid();
-                    let pgid = match pgid {
-                        Some(pgid) => Pid::from_raw(pgid as i32),
-                        None => pid,
-                    };
-                    if let Err(_err) = unistd::setpgid(pid, pgid) {
-                        // Ignore, do in parent and child.
-                    }
-                    if let Err(_err) = unistd::tcsetpgrp(libc::STDIN_FILENO, pgid) {
-                        // Ignore, do in parent and child.
-                    }
+                //XXXX if jobs.job_control() {
+                let pid = unistd::getpid();
+                let pgid = if job.is_empty() {
+                    pid
+                } else {
+                    Pid::from_raw(job.pgid())
+                };
+                if let Err(_err) = unistd::setpgid(pid, pgid) {
+                    // Ignore, do in parent and child.
                 }
+                // XXXX only if foreground
+                if let Err(_err) = unistd::tcsetpgrp(libc::STDIN_FILENO, pgid) {
+                    // Ignore, do in parent and child.
+                }
+                //}
 
                 let err = exec(program, args);
                 let errno = err.raw_os_error().unwrap_or(libc::EINVAL) as u32;
@@ -318,7 +304,7 @@ where
                 File::from_raw_fd(output).write_all(&bytes)?;
                 libc::_exit(1);
             }
-            n => n as u32,
+            n => n,
         }
     };
     unsafe {
@@ -337,8 +323,8 @@ where
     loop {
         match input.read(&mut bytes) {
             Ok(0) => {
-                jobs.add_proc(pid, program, pgid);
-                return Ok(pid);
+                job.add_process(pid, program);
+                return Ok(());
             }
             Ok(8) => {
                 let (errno, footer) = bytes.split_at(4);
@@ -363,68 +349,79 @@ where
     }
 }
 
-pub fn try_wait_pid(pid: u32, jobs: &mut Jobs) -> (bool, Option<i32>) {
+pub fn try_wait_pid(pid: i32, job: &mut Job) -> (bool, Option<i32>) {
     let mut opts = WaitPidFlag::WUNTRACED;
     opts.insert(WaitPidFlag::WCONTINUED);
     opts.insert(WaitPidFlag::WNOHANG);
-    match wait::waitpid(Pid::from_raw(pid as i32), Some(opts)) {
+    match wait::waitpid(Pid::from_raw(pid), Some(opts)) {
         Err(nix::errno::Errno::ECHILD) => {
             // Does not exist.
-            let code = None;
-            jobs.remove_pid(pid);
-            (true, code)
+            (true, None)
         }
         Err(err) => {
-            eprintln!("Error waiting for pid {}, {}", pid, err);
-            jobs.remove_pid(pid);
+            eprintln!("Error waiting for pid {pid}, {err}");
+            job.process_error(pid);
             (true, None)
         }
         Ok(WaitStatus::Exited(_, status)) => {
-            jobs.remove_pid(pid);
+            job.process_done(pid, status);
             (true, Some(status))
         }
         Ok(WaitStatus::Stopped(..)) => {
-            jobs.mark_job_stopped(pid);
+            job.mark_stopped();
+            (true, None)
+        }
+        Ok(WaitStatus::Signaled(pid, signal, _core_dumped)) => {
+            job.process_signaled(pid.into(), signal);
             (true, None)
         }
         Ok(WaitStatus::Continued(_)) => (false, None),
-        Ok(_) => (false, None),
+        Ok(WaitStatus::PtraceEvent(_pid, _signal, _)) => (false, None),
+        Ok(WaitStatus::PtraceSyscall(_pid)) => (false, None),
+        Ok(WaitStatus::StillAlive) => (false, None),
     }
 }
 
-pub fn wait_pid(
-    pid: u32,
+pub fn wait_job(
+    job: &mut Job,
     term_settings: Option<&termios::Termios>,
     terminal_fd: i32,
-    jobs: &mut Jobs,
 ) -> Option<i32> {
-    let result: Option<i32>;
+    let mut result: Option<i32> = None;
     let mut int_cnt = 0;
-    loop {
-        if test_clear_sigint() {
-            if int_cnt == 0 {
-                if let Err(err) = kill(Pid::from_raw(pid as i32), Signal::SIGINT) {
-                    eprintln!("ERROR sending SIGINT to child process {}, {}", pid, err);
+    let pgid = job.pgid();
+    let mut i = 0;
+    while let Some(pid) = job.pids().get(i) {
+        i += 1;
+        let pid = pid.pid();
+        loop {
+            if test_clear_sigint() {
+                if int_cnt == 0 {
+                    if let Err(err) = kill(Pid::from_raw(-pgid), Signal::SIGINT) {
+                        eprintln!("ERROR sending SIGINT to child process group {pgid}, {err}");
+                    }
+                } else if int_cnt == 1 {
+                    if let Err(err) = kill(Pid::from_raw(-pgid), Signal::SIGTERM) {
+                        eprintln!("ERROR sending SIGTERM to child process group {pgid}, {err}");
+                    }
+                } else if let Err(err) = kill(Pid::from_raw(-pgid), Signal::SIGKILL) {
+                    eprintln!("ERROR sending SIGKILL to child process group {pgid}, {err}");
                 }
-            } else if int_cnt == 1 {
-                if let Err(err) = kill(Pid::from_raw(pid as i32), Signal::SIGTERM) {
-                    eprintln!("ERROR sending SIGTERM to child process {}, {}", pid, err);
-                }
-            } else if let Err(err) = kill(Pid::from_raw(pid as i32), Signal::SIGKILL) {
-                eprintln!("ERROR sending SIGKILL to child process {}, {}", pid, err);
+                int_cnt += 1;
             }
-            int_cnt += 1;
-        }
-        let (stop, status) = try_wait_pid(pid, jobs);
-        if stop {
-            result = status;
-            if let Some(status) = status {
-                env::set_var("LAST_STATUS", format!("{}", status));
+            let (stop, status) = try_wait_pid(pid, job);
+            if stop {
+                result = status;
+                break;
             }
-            break;
+            std::thread::sleep(std::time::Duration::from_millis(100));
         }
-        std::thread::sleep(std::time::Duration::from_millis(100));
     }
+    restore_terminal(term_settings, terminal_fd, job);
+    result
+}
+
+pub fn restore_terminal(term_settings: Option<&termios::Termios>, terminal_fd: i32, job: &Job) {
     // If we were given terminal settings restore them.
     if let Some(settings) = term_settings {
         if let Err(err) = termios::tcsetattr(terminal_fd, termios::SetArg::TCSANOW, settings) {
@@ -432,7 +429,7 @@ pub fn wait_pid(
         }
     }
     // Move the shell back into the foreground.
-    if jobs.is_tty() {
+    if job.is_tty() {
         let pid = unistd::getpid();
         if let Err(err) = unistd::tcsetpgrp(terminal_fd, pid) {
             // XXX TODO- be more specific with this (ie only turn off tty if that is the error)?
@@ -440,10 +437,8 @@ pub fn wait_pid(
                 "Error making shell (stop pretending to be a tty?) {} foreground: {}",
                 pid, err
             );
-            //environment.is_tty = false;
         }
     }
-    result
 }
 
 pub fn terminal_fd() -> i32 {

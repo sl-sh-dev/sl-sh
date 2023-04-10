@@ -1,6 +1,7 @@
 mod builtins;
 mod config;
 mod jobs;
+mod parse;
 mod signals;
 mod unix;
 
@@ -12,8 +13,9 @@ mod unix;
 use crate::builtins::cd;
 use crate::config::get_config;
 use crate::jobs::Jobs;
+use crate::parse::parse_line;
 use crate::signals::{install_sigint_handler, mask_signals};
-use crate::unix::{fork_exec, fork_pipe, terminal_fd, wait_pid};
+use crate::unix::{fork_exec, fork_pipe, restore_terminal, terminal_fd, wait_job};
 use nix::sys::termios;
 use nix::{
     libc,
@@ -89,125 +91,100 @@ fn main() {
     }
 }
 
-fn parse_one_run_command_line(input: &str) -> Vec<Vec<String>> {
-    let mut ret = vec![];
-    let mut in_string = false;
-    let mut in_stringd = false;
-    let mut token = String::new();
-    let mut last_ch = ' ';
-    let mut args = vec![];
-    for ch in input.chars() {
-        if ch == '\'' && last_ch != '\\' {
-            in_string = !in_string;
-            if !in_string {
-                args.push(token);
-                token = String::new();
-            }
-            last_ch = ch;
-            continue;
-        }
-        if ch == '"' && last_ch != '\\' {
-            in_stringd = !in_stringd;
-            if !in_stringd {
-                args.push(token);
-                token = String::new();
-            }
-            last_ch = ch;
-            continue;
-        }
-        if ch == '|' && last_ch != '\\' {
-            if !token.is_empty() {
-                args.push(token);
-                token = String::new();
-            }
-            ret.push(args);
-            args = vec![];
-            continue;
-        }
-        if in_string || in_stringd {
-            token.push(ch);
-        } else if ch == ' ' {
-            if !token.is_empty() {
-                args.push(token);
-                token = String::new();
-            }
-        } else {
-            token.push(ch);
-        }
-        last_ch = ch;
-    }
-    if !token.is_empty() {
-        args.push(token);
-    }
-    ret.push(args);
-    ret
-}
-
 pub fn run_one_command(command: &str, jobs: &mut Jobs) -> Result<(), io::Error> {
     // Try to make sense out of whatever crap we get (looking at you fzf-tmux)
     // and make it work.
-    let commands = parse_one_run_command_line(command);
+    let commands = parse_line(command);
     let term_settings = termios::tcgetattr(libc::STDIN_FILENO).unwrap();
     let terminal_fd = terminal_fd();
 
     match commands.len() {
         0 => {} // Nothing to do.
         1 => {
-            if !commands[0].is_empty() {
-                if &commands[0][0] == "cd" {
-                    let _r = if commands[0].len() > 2 {
-                        eprintln!("cd: too many arguments!");
-                        -1
-                    } else if commands[0].len() == 1 {
-                        cd(None)
-                    } else {
-                        cd(Some(commands[0][1].clone()))
+            if let Some(command) = commands.commands()[0].command() {
+                let args = commands.commands()[0].args();
+                if command == "cd" {
+                    let _r = match args.len() {
+                        0 => cd(None),
+                        1 => cd(Some(args[0].clone())),
+                        _ => {
+                            eprintln!("cd: too many arguments!");
+                            -1
+                        }
                     };
-                } else if &commands[0][0] == "fg" {
-                    let _r = if commands[0].len() != 2 {
+                } else if command == "fg" {
+                    let _r = if args.len() != 1 {
                         eprintln!("fg: takes one argument!");
                         -1
-                    } else if let Ok(job_num) = commands[0][1].parse() {
+                    } else if let Ok(job_num) = args[0].parse() {
                         jobs.foreground_job(job_num);
                         0
                     } else {
                         eprintln!("fg: argument not a number!");
                         -1
                     };
-                } else if &commands[0][0] == "bg" {
-                    let _r = if commands[0].len() != 2 {
+                } else if command == "bg" {
+                    let _r = if args.len() != 1 {
                         eprintln!("fg: takes one argument!");
                         -1
-                    } else if let Ok(job_num) = commands[0][1].parse() {
+                    } else if let Ok(job_num) = args[0].parse() {
                         jobs.background_job(job_num);
                         0
                     } else {
                         eprintln!("fg: argument not a number!");
                         -1
                     };
-                } else if &commands[0][0] == "jobs" {
-                    if commands[0].len() > 1 {
+                } else if command == "jobs" {
+                    if !args.is_empty() {
                         eprintln!("jobs: too many arguments!");
                     } else {
                         println!("{jobs}");
                     }
                 } else {
-                    let pid = fork_exec(
+                    let background = commands.background();
+                    let mut job = jobs.new_job();
+                    fork_exec(
                         None,
                         None,
                         None,
-                        &commands[0][0],
-                        commands[0][1..].iter(),
-                        None,
-                        jobs,
+                        command,
+                        commands.commands()[0].args().iter(),
+                        &mut job,
                     )?;
-                    wait_pid(pid, Some(&term_settings), terminal_fd, jobs);
+                    job.mark_running();
+                    if !background {
+                        if let Some(status) = wait_job(&mut job, Some(&term_settings), terminal_fd)
+                        {
+                            env::set_var("LAST_STATUS", format!("{}", status));
+                        } else {
+                            env::set_var("LAST_STATUS", format!("{}", -66));
+                            jobs.push_job(job);
+                        }
+                    } else {
+                        restore_terminal(Some(&term_settings), terminal_fd, &job);
+                        env::set_var("LAST_STATUS", format!("{}", 0));
+                        jobs.push_job(job);
+                    }
                 }
             }
         }
         _ => {
-            let pid = fork_pipe(None, None, None, commands, jobs)?;
-            wait_pid(pid, Some(&term_settings), terminal_fd, jobs);
+            let background = commands.background();
+            let mut job = jobs.new_job();
+            fork_pipe(None, None, None, commands, &mut job)?;
+            job.mark_running();
+            if !background {
+                if let Some(status) = wait_job(&mut job, Some(&term_settings), terminal_fd) {
+                    env::set_var("LAST_STATUS", format!("{}", status));
+                } else {
+                    env::set_var("LAST_STATUS", format!("{}", -66));
+                    jobs.push_job(job);
+                }
+            } else {
+                restore_terminal(Some(&term_settings), terminal_fd, &job);
+                env::set_var("LAST_STATUS", format!("{}", 0));
+                jobs.push_job(job);
+            }
         }
     }
     Ok(())
@@ -240,7 +217,6 @@ pub fn start_interactive(is_tty: bool) -> i32 {
     let mut jobs = Jobs::new();
     jobs.set_tty(is_tty);
     loop {
-        jobs.reap_procs();
         let res = match con.read_line(Prompt::from("shell> "), None) {
             Ok(input) => input,
             Err(err) => match err.kind() {
@@ -262,6 +238,7 @@ pub fn start_interactive(is_tty: bool) -> i32 {
         }
 
         con.history.push(&res).expect("Failed to push history.");
+        jobs.reap_procs();
         if let Err(err) = run_one_command(&res, &mut jobs) {
             eprintln!("ERROR executing {res}: {err}");
         }

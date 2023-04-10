@@ -1,4 +1,4 @@
-use crate::unix::{terminal_fd, try_wait_pid, wait_pid};
+use crate::unix::{terminal_fd, try_wait_pid, wait_job};
 use nix::{
     libc,
     sys::{
@@ -10,27 +10,187 @@ use nix::{
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// Status of a Job.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum JobStatus {
+    /// New job, not initialized.
+    New,
+    /// Running job.
     Running,
+    /// Job is paused in background.
     Stopped,
+    /// Job is done.
+    Done,
 }
 
 impl fmt::Display for JobStatus {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            JobStatus::New => write!(f, "New"),
             JobStatus::Running => write!(f, "Running"),
             JobStatus::Stopped => write!(f, "Stopped"),
+            JobStatus::Done => write!(f, "Done"),
+        }
+    }
+}
+
+/// Status of a process that is part of a job.
+#[derive(Copy, Clone, Debug)]
+pub enum PidStatus {
+    /// Process is running, contains the pid.
+    Running(i32),
+    /// Process is done, contains the pid and status code.
+    Done(i32, i32), // pid, status
+    /// Process had an error, no status code available.  Contains the pid.
+    Error(i32),
+    /// Process was stopped due to a signal.  Contains the pid and signal that stopped it.
+    Signaled(i32, Signal),
+}
+
+impl PidStatus {
+    pub fn pid(&self) -> i32 {
+        match self {
+            PidStatus::Running(pid) => *pid,
+            PidStatus::Done(pid, _) => *pid,
+            PidStatus::Error(pid) => *pid,
+            PidStatus::Signaled(pid, _) => *pid,
         }
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct Job {
-    pub id: u32,
-    pub pids: Vec<u32>,
-    pub names: Vec<String>,
-    pub status: JobStatus,
+    id: u32,
+    pgid: i32,
+    pids: Vec<PidStatus>,
+    names: Vec<String>,
+    status: JobStatus,
+    tty: bool,
+}
+
+impl Job {
+    /// Create a new empty job with id.
+    fn new(id: u32, tty: bool) -> Self {
+        Self {
+            id,
+            pgid: 1,
+            pids: vec![],
+            names: vec![],
+            status: JobStatus::New,
+            tty,
+        }
+    }
+
+    /// Job id/number.  Unique while job is active but will be reused once not active.
+    pub fn id(&self) -> u32 {
+        self.id
+    }
+
+    /// Number of processes in this job.
+    pub fn len(&self) -> usize {
+        self.pids.len()
+    }
+
+    /// True if this job is empty (contains no processes).
+    pub fn is_empty(&self) -> bool {
+        self.pids.is_empty()
+    }
+
+    /// The process group id for the job.  Should be equal to the first pid.
+    pub fn pgid(&self) -> i32 {
+        self.pgid
+    }
+
+    /// Pids with status that make up a job.
+    pub fn pids(&self) -> &[PidStatus] {
+        &self.pids[..]
+    }
+
+    /// THe names of the processes (without args) that make up the job.
+    pub fn names(&self) -> &[String] {
+        &self.names[..]
+    }
+
+    /// Status of this job.
+    pub fn status(&self) -> JobStatus {
+        self.status
+    }
+
+    /// True if this job was stated with a tty.
+    pub fn is_tty(&self) -> bool {
+        self.tty
+    }
+
+    /// Mark the job as stopped.
+    pub fn mark_stopped(&mut self) {
+        self.status = JobStatus::Stopped;
+    }
+
+    /// Mark the job as running.
+    pub fn mark_running(&mut self) {
+        self.status = JobStatus::Running;
+    }
+
+    /// Mark the job status to done.
+    pub fn mark_done(&mut self) {
+        self.status = JobStatus::Done;
+    }
+
+    /// Add pid to list of pids as Running with name.
+    /// If the pid list is currently empty record this pid as the pgid (process group) for the job.
+    pub fn add_process(&mut self, pid: i32, name: impl Into<String>) {
+        if self.pids.is_empty() {
+            self.pgid = pid;
+        }
+        self.pids.push(PidStatus::Running(pid));
+        self.names.push(name.into());
+    }
+
+    /// Move the process pid to the done state with status.
+    /// Will panic if pid is not part of job.
+    pub fn process_done(&mut self, pid: i32, status: i32) {
+        for proc in self.pids.iter_mut() {
+            if proc.pid() == pid {
+                *proc = PidStatus::Done(pid, status);
+                return;
+            }
+        }
+        panic!("process {pid} not part of job");
+    }
+
+    /// Move the process pid to the error state.
+    /// Will panic if pid is not part of job.
+    pub fn process_error(&mut self, pid: i32) {
+        for proc in self.pids.iter_mut() {
+            if proc.pid() == pid {
+                *proc = PidStatus::Error(pid);
+                return;
+            }
+        }
+        panic!("process {pid} not part of job");
+    }
+
+    /// Move the process pid to the signaled state.
+    /// Will panic if pid is not part of job.
+    pub fn process_signaled(&mut self, pid: i32, signal: Signal) {
+        for proc in self.pids.iter_mut() {
+            if proc.pid() == pid {
+                *proc = PidStatus::Signaled(pid, signal);
+                return;
+            }
+        }
+        panic!("process {pid} not part of job");
+    }
+}
+
+impl Display for Job {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        writeln!(
+            f,
+            "[{}]\t{}\t{:?}\t{:?}",
+            self.id, self.status, self.pids, self.names
+        )
+    }
 }
 
 pub struct Jobs {
@@ -43,11 +203,27 @@ pub struct Jobs {
 impl Jobs {
     pub fn new() -> Self {
         Self {
-            next_job: 1,
+            next_job: 0,
             jobs: vec![],
             job_control: true,
             is_tty: true,
         }
+    }
+
+    /// Create a new job with the next job number.
+    /// Note, this new job is NOT in the jobs list.
+    pub fn new_job(&mut self) -> Job {
+        if self.jobs.is_empty() {
+            self.next_job = 0;
+        }
+        // Job numbers/ids always start at 1.
+        self.next_job += 1;
+        Job::new(self.next_job, self.is_tty)
+    }
+
+    /// Push job onto the list of jobs.
+    pub fn push_job(&mut self, job: Job) {
+        self.jobs.push(job);
     }
 
     /// Are we running on a tty?
@@ -65,159 +241,87 @@ impl Jobs {
         self.job_control
     }
 
-    /// Add proc to the job list with name command.  If pgid is Some then add a new proc to the last
-    /// job (for pipeline bookkeeping).
-    pub fn add_proc(&mut self, proc: u32, command: &str, pgid: Option<u32>) {
-        let pid = Pid::from_raw(proc as i32);
-        let pgid_raw = match pgid {
-            Some(pgid) => Pid::from_raw(pgid as i32),
-            None => Pid::from_raw(proc as i32),
-        };
-        if pgid.is_none() {
-            if self.jobs.is_empty() {
-                self.next_job = 1;
-            }
-            let mut job = Job {
-                id: self.next_job,
-                pids: Vec::new(),
-                names: Vec::new(),
-                status: JobStatus::Running,
-            };
-            self.next_job += 1;
-            job.pids.push(proc);
-            job.names.push(command.to_string());
-            self.jobs.push(job);
-        } else {
-            let job = self.jobs.pop();
-            if let Some(mut job) = job {
-                job.pids.push(proc);
-                job.names.push(command.to_string());
-                self.jobs.push(job);
-            } else {
-                eprintln!("WARNING: Something in job control is amiss, probably a command not part of pipe or a bug!");
-            }
-        }
-        if let Err(_err) = unistd::setpgid(pid, pgid_raw) {
-            // Ignore, do in parent and child.
-        }
-        if let Err(_err) = unistd::tcsetpgrp(libc::STDIN_FILENO, pgid_raw) {
-            // Ignore, do in parent and child.
-        }
+    /// Get the job for job_id if it exists.
+    pub fn get_job(&self, job_id: u32) -> Option<&Job> {
+        self.jobs.iter().find(|job| job.id == job_id)
     }
 
-    /// Remove pid from any jobs and if it is the only pid in a job then remove the job.
-    pub fn remove_pid(&mut self, pid: u32) {
-        let mut idx: Option<usize> = None;
-        'outer: for (i, j) in self.jobs.iter_mut().enumerate() {
-            for p in &j.pids {
-                if *p == pid {
-                    idx = Some(i);
-                    break 'outer;
+    /// Get the mutable job for job_id if it exists.
+    pub fn get_job_mut(&mut self, job_id: u32) -> Option<&mut Job> {
+        self.jobs.iter_mut().find(|job| job.id == job_id)
+    }
+
+    /// Check any pids in a job by calling wait and updating the books.
+    pub fn reap_procs(&mut self) {
+        for job in self.jobs.iter_mut() {
+            if let JobStatus::Running = job.status() {
+                let pids: Vec<i32> = job.pids().iter().map(|s| s.pid()).collect();
+                for pid in &pids {
+                    try_wait_pid(*pid, job);
+                }
+                let mut done = true;
+                for pid_status in job.pids() {
+                    if let PidStatus::Running(_) = pid_status {
+                        done = false;
+                    }
+                }
+                if done {
+                    job.mark_done();
                 }
             }
         }
-        if let Some(i) = idx {
-            self.jobs[i].pids.retain(|p| *p != pid);
-            if self.jobs[i].pids.is_empty() {
+        // Remove any Done jobs.
+        let jobs_len = self.jobs.len();
+        for i in (0..jobs_len).rev() {
+            if let JobStatus::Done = self.jobs[i].status() {
+                eprintln!("{}", self.jobs[i]);
                 self.jobs.remove(i);
             }
         }
     }
 
-    /// Mark the job containing pid as stopped.
-    pub fn mark_job_stopped(&mut self, pid: u32) {
-        'outer: for mut j in self.jobs.iter_mut() {
-            for p in &j.pids {
-                if *p == pid {
-                    j.status = JobStatus::Stopped;
-                    break 'outer;
-                }
-            }
-        }
-    }
-
-    /// Mark the job containing pid as running.
-    pub fn mark_job_running(&mut self, pid: u32) {
-        'outer: for mut j in self.jobs.iter_mut() {
-            for p in &j.pids {
-                if *p == pid {
-                    j.status = JobStatus::Running;
-                    break 'outer;
-                }
-            }
-        }
-    }
-
-    /// Check any pids in a job by calling wait and updating the books.
-    pub fn reap_procs(&mut self) {
-        let pids: Vec<u32> = self
-            .jobs
-            .iter()
-            .flat_map(|j| j.pids.iter().copied())
-            .collect();
-        for pid in pids {
-            // try_wait_pid removes them and tracks exit status
-            try_wait_pid(pid, self);
-        }
-    }
-
-    /// Return the pid for job_num if job_num is stopped.
-    pub fn pid_for_stopped_job(&self, job_num: u32) -> Option<u32> {
-        for job in &self.jobs {
-            if job.id == job_num {
-                return if job.status == JobStatus::Stopped {
-                    job.pids.first().copied()
-                } else {
-                    None
-                };
-            }
-        }
-        None
-    }
-
-    /// Return the pid for job_num, any status.
-    pub fn pid_for_job(&self, job_num: u32) -> Option<u32> {
-        for job in &self.jobs {
-            if job.id == job_num {
-                return job.pids.first().copied();
-            }
-        }
-        None
-    }
-
     /// Move the job for job_num to te foreground.
     pub fn foreground_job(&mut self, job_num: u32) {
-        if let Some(pid) = self.pid_for_stopped_job(job_num) {
+        let job = self
+            .get_job_mut(job_num)
+            .expect("job number {job_num} is invalid");
+        let pgid = job.pgid();
+        if let JobStatus::Stopped = job.status() {
             let term_settings = termios::tcgetattr(libc::STDIN_FILENO).unwrap();
-            let ppid = Pid::from_raw(pid as i32);
-            if let Err(err) = signal::kill(ppid, Signal::SIGCONT) {
+            let ppgid = Pid::from_raw(-pgid);
+            if let Err(err) = signal::kill(ppgid, Signal::SIGCONT) {
                 eprintln!("Error sending sigcont to wake up process: {}.", err);
             } else {
-                if let Err(err) = unistd::tcsetpgrp(libc::STDIN_FILENO, ppid) {
-                    eprintln!("Error making {pid} foreground in parent: {err}");
+                let ppgid = Pid::from_raw(pgid);
+                if let Err(err) = unistd::tcsetpgrp(libc::STDIN_FILENO, ppgid) {
+                    eprintln!("Error making {pgid} foreground in parent: {err}");
                 }
-                self.mark_job_running(pid);
-                wait_pid(pid, Some(&term_settings), terminal_fd(), self);
+                job.mark_running();
+                wait_job(job, Some(&term_settings), terminal_fd());
             }
-        } else if let Some(pid) = self.pid_for_job(job_num) {
-            let ppid = Pid::from_raw(pid as i32);
+        } else {
+            let ppgid = Pid::from_raw(pgid);
             // The job is running, so no sig cont needed...
             let term_settings = termios::tcgetattr(libc::STDIN_FILENO).unwrap();
-            if let Err(err) = unistd::tcsetpgrp(libc::STDIN_FILENO, ppid) {
-                eprintln!("Error making {pid} foreground in parent: {err}");
+            if let Err(err) = unistd::tcsetpgrp(libc::STDIN_FILENO, ppgid) {
+                eprintln!("Error making {pgid} foreground in parent: {err}");
             }
-            wait_pid(pid, Some(&term_settings), terminal_fd(), self);
+            wait_job(job, Some(&term_settings), terminal_fd());
         }
     }
 
     /// Move the job for job_num to te background and running (start a stopped job in the background).
     pub fn background_job(&mut self, job_num: u32) {
-        if let Some(pid) = self.pid_for_stopped_job(job_num) {
-            let ppid = Pid::from_raw(pid as i32);
-            if let Err(err) = signal::kill(ppid, Signal::SIGCONT) {
-                eprintln!("Error sending sigcont to wake up process: {}.", err);
+        let job = self
+            .get_job_mut(job_num)
+            .expect("job number {job_num} is invalid");
+        let pgid = job.pgid();
+        if let JobStatus::Stopped = job.status() {
+            let ppgid = Pid::from_raw(-pgid);
+            if let Err(err) = signal::kill(ppgid, Signal::SIGCONT) {
+                eprintln!("Error sending sigcont to wake up process: {err}.");
             } else {
-                self.mark_job_running(pid);
+                job.mark_running();
             }
         }
     }
@@ -226,11 +330,7 @@ impl Jobs {
 impl Display for Jobs {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         for job in &self.jobs {
-            writeln!(
-                f,
-                "[{}]\t{}\t{:?}\t{:?}",
-                job.id, job.status, job.pids, job.names
-            )?;
+            writeln!(f, "{job}")?;
         }
         Ok(())
     }
