@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 sl-liner = { git = "https://github.com/sl-sh-dev/sl-liner.git" }
 nix = "0.26.2"
+glob = "0.3"
 cfg-if = "1.0"
 
 [build-dependencies]

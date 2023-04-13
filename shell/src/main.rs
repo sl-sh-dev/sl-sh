@@ -1,5 +1,6 @@
 mod builtins;
 mod config;
+mod glob;
 mod jobs;
 mod parse;
 mod signals;
@@ -25,6 +26,7 @@ use nix::{
 use sl_liner::Prompt;
 use std::ffi::OsString;
 use std::io::ErrorKind;
+use std::path::PathBuf;
 use std::{env, io};
 
 fn main() {
@@ -106,7 +108,7 @@ pub fn run_one_command(command: &str, jobs: &mut Jobs) -> Result<(), io::Error> 
                 if command == "cd" {
                     let _r = match args.len() {
                         0 => cd(None),
-                        1 => cd(Some(args[0].clone())),
+                        1 => cd(Some(PathBuf::from(&args[0]))),
                         _ => {
                             eprintln!("cd: too many arguments!");
                             -1

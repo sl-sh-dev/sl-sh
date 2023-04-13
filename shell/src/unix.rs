@@ -1,11 +1,12 @@
 use std::convert::TryInto;
-use std::ffi::{CString, OsStr};
+use std::ffi::{c_char, CString, OsStr};
 use std::fs::File;
 use std::io::{self, Read, Write};
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::io::FromRawFd;
 use std::ptr;
 
+use crate::glob::{expand_glob, GlobOutput};
 use crate::jobs::Job;
 use crate::parse::ParsedJob;
 use crate::signals::test_clear_sigint;
@@ -131,6 +132,22 @@ fn os2c(s: &OsStr, saw_nul: &mut bool) -> CString {
     })
 }
 
+fn arg_into_args<S: AsRef<OsStr>>(
+    arg: S,
+    argv: &mut Vec<*const c_char>,
+    args_t: &mut Vec<CString>,
+    saw_nul: &mut bool,
+) {
+    // Overwrite the trailing NULL pointer in `argv` and then add a new null
+    // pointer.
+    let arg = os2c(arg.as_ref(), saw_nul);
+    argv[args_t.len()] = arg.as_ptr();
+    argv.push(ptr::null());
+    // Also make sure we keep track of the owned value to schedule a
+    // destructor for this memory.
+    args_t.push(arg);
+}
+
 pub fn exec<I, S, P>(program: P, args: I) -> io::Error
 where
     I: IntoIterator<Item = S>,
@@ -142,14 +159,14 @@ where
     let mut argv = vec![program.as_ptr(), ptr::null()];
     let mut args_t = vec![program.clone()];
     for arg in args {
-        // Overwrite the trailing NULL pointer in `argv` and then add a new null
-        // pointer.
-        let arg = os2c(arg.as_ref(), &mut saw_nul);
-        argv[args_t.len()] = arg.as_ptr();
-        argv.push(ptr::null());
-        // Also make sure we keep track of the owned value to schedule a
-        // destructor for this memory.
-        args_t.push(arg);
+        match expand_glob(arg.as_ref()) {
+            GlobOutput::Arg(arg) => arg_into_args(arg, &mut argv, &mut args_t, &mut saw_nul),
+            GlobOutput::Args(args) => {
+                for arg in args {
+                    arg_into_args(arg, &mut argv, &mut args_t, &mut saw_nul)
+                }
+            }
+        }
     }
 
     unsafe {

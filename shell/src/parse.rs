@@ -27,7 +27,7 @@ impl CommandWithArgs {
         }
     }
 
-    /// Argss to the command.
+    /// Args to the command.
     pub fn args(&self) -> &[String] {
         if self.args.is_empty() {
             &self.args[..]
