@@ -1,5 +1,6 @@
+use crate::jobs::Jobs;
 use std::env;
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 
 pub fn cd(arg: Option<PathBuf>) -> i32 {
@@ -97,5 +98,56 @@ fn cd_expand_all_dots(cd: PathBuf) -> PathBuf {
         new_cd.into()
     } else {
         cd
+    }
+}
+
+pub fn run_builtin<I, S>(command: &OsStr, args: &mut I, jobs: &mut Jobs) -> bool
+where
+    I: Iterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    if command == "cd" {
+        let arg = args.next();
+        if args.next().is_none() {
+            cd(arg.map(|s| s.as_ref().into()));
+        } else {
+            eprintln!("cd: too many arguments!");
+        }
+        true
+    } else if command == "fg" {
+        if let Some(arg) = args.next() {
+            if args.next().is_none() {
+                if let Some(Ok(job_num)) = arg.as_ref().to_str().map(|s| s.parse()) {
+                    jobs.foreground_job(job_num);
+                }
+            } else {
+                eprintln!("fg: takes one argument!");
+            }
+        } else {
+            eprintln!("fg: takes one argument!");
+        }
+        true
+    } else if command == "bg" {
+        if let Some(arg) = args.next() {
+            if args.next().is_none() {
+                if let Some(Ok(job_num)) = arg.as_ref().to_str().map(|s| s.parse()) {
+                    jobs.background_job(job_num);
+                }
+            } else {
+                eprintln!("fg: takes one argument!");
+            }
+        } else {
+            eprintln!("fg: takes one argument!");
+        }
+        true
+    } else if command == "jobs" {
+        if args.next().is_some() {
+            eprintln!("jobs: too many arguments!");
+        } else {
+            println!("{jobs}");
+        }
+        true
+    } else {
+        false
     }
 }

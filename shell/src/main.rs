@@ -11,10 +11,10 @@ mod unix;
 //#[global_allocator]
 //static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
-use crate::builtins::cd;
+use crate::builtins::run_builtin;
 use crate::config::get_config;
-use crate::jobs::Jobs;
-use crate::parse::parse_line;
+use crate::jobs::{Job, Jobs};
+use crate::parse::{parse_line, Run};
 use crate::signals::{install_sigint_handler, mask_signals};
 use crate::unix::{fork_exec, fork_pipe, restore_terminal, terminal_fd, wait_job};
 use nix::sys::termios;
@@ -26,7 +26,6 @@ use nix::{
 use sl_liner::Prompt;
 use std::ffi::OsString;
 use std::io::ErrorKind;
-use std::path::PathBuf;
 use std::{env, io};
 
 fn main() {
@@ -93,102 +92,97 @@ fn main() {
     }
 }
 
+fn finish_run(
+    background: bool,
+    mut job: Job,
+    jobs: &mut Jobs,
+    term_settings: Option<&termios::Termios>,
+    terminal_fd: i32,
+) -> i32 {
+    job.mark_running();
+    if !background {
+        if let Some(status) = wait_job(&mut job, term_settings, terminal_fd) {
+            env::set_var("LAST_STATUS", format!("{}", status));
+            status
+        } else {
+            env::set_var("LAST_STATUS", format!("{}", -66));
+            jobs.push_job(job);
+            -66
+        }
+    } else {
+        restore_terminal(term_settings, terminal_fd, &job);
+        env::set_var("LAST_STATUS", format!("{}", 0));
+        jobs.push_job(job);
+        0
+    }
+}
+
+pub fn run_job(run: &Run, background: bool, jobs: &mut Jobs) -> Result<i32, io::Error> {
+    let term_settings = termios::tcgetattr(libc::STDIN_FILENO).unwrap();
+    let terminal_fd = terminal_fd();
+    let status = match run {
+        Run::Command(command, ios) => {
+            if let Some(command_name) = command.command() {
+                let mut args = command.args_iter();
+                if !run_builtin(command_name, &mut args, jobs) {
+                    let mut job = jobs.new_job();
+                    fork_exec(command, ios, &mut job)?;
+                    finish_run(background, job, jobs, Some(&term_settings), terminal_fd)
+                } else {
+                    0
+                }
+            } else {
+                0
+            }
+        }
+        Run::Pipe(pipe, ios) => {
+            let mut job = jobs.new_job();
+            let stdin = ios.as_ref().and_then(|io| io.stdin);
+            let stdout = ios.as_ref().and_then(|io| io.stdout);
+            let stderr = ios.as_ref().and_then(|io| io.stderr);
+            fork_pipe(stdin, stdout, stderr, &pipe[..], &mut job, jobs, background)?;
+            finish_run(background, job, jobs, Some(&term_settings), terminal_fd)
+        }
+        Run::Sequence(seq, _) => {
+            let mut status = 0;
+            for r in seq {
+                status = run_job(r, background, jobs)?;
+            }
+            status
+        }
+        Run::And(seq, _ios) => {
+            // XXXX should background == true be an error?
+            let mut status = 0;
+            for r in seq {
+                status = run_job(r, false, jobs)?;
+                if status != 0 {
+                    break;
+                }
+            }
+            status
+        }
+        Run::Or(seq, _ios) => {
+            // XXXX should background == true be an error?
+            let mut status = 0;
+            for r in seq {
+                status = run_job(r, false, jobs)?;
+                if status == 0 {
+                    break;
+                }
+            }
+            status
+        }
+        Run::Empty => 0,
+    };
+    Ok(status)
+}
+
 pub fn run_one_command(command: &str, jobs: &mut Jobs) -> Result<(), io::Error> {
     // Try to make sense out of whatever crap we get (looking at you fzf-tmux)
     // and make it work.
     let commands = parse_line(command);
-    let term_settings = termios::tcgetattr(libc::STDIN_FILENO).unwrap();
-    let terminal_fd = terminal_fd();
 
-    match commands.len() {
-        0 => {} // Nothing to do.
-        1 => {
-            if let Some(command) = commands.commands()[0].command() {
-                let args = commands.commands()[0].args();
-                if command == "cd" {
-                    let _r = match args.len() {
-                        0 => cd(None),
-                        1 => cd(Some(PathBuf::from(&args[0]))),
-                        _ => {
-                            eprintln!("cd: too many arguments!");
-                            -1
-                        }
-                    };
-                } else if command == "fg" {
-                    let _r = if args.len() != 1 {
-                        eprintln!("fg: takes one argument!");
-                        -1
-                    } else if let Ok(job_num) = args[0].parse() {
-                        jobs.foreground_job(job_num);
-                        0
-                    } else {
-                        eprintln!("fg: argument not a number!");
-                        -1
-                    };
-                } else if command == "bg" {
-                    let _r = if args.len() != 1 {
-                        eprintln!("fg: takes one argument!");
-                        -1
-                    } else if let Ok(job_num) = args[0].parse() {
-                        jobs.background_job(job_num);
-                        0
-                    } else {
-                        eprintln!("fg: argument not a number!");
-                        -1
-                    };
-                } else if command == "jobs" {
-                    if !args.is_empty() {
-                        eprintln!("jobs: too many arguments!");
-                    } else {
-                        println!("{jobs}");
-                    }
-                } else {
-                    let background = commands.background();
-                    let mut job = jobs.new_job();
-                    fork_exec(
-                        None,
-                        None,
-                        None,
-                        command,
-                        commands.commands()[0].args().iter(),
-                        &mut job,
-                    )?;
-                    job.mark_running();
-                    if !background {
-                        if let Some(status) = wait_job(&mut job, Some(&term_settings), terminal_fd)
-                        {
-                            env::set_var("LAST_STATUS", format!("{}", status));
-                        } else {
-                            env::set_var("LAST_STATUS", format!("{}", -66));
-                            jobs.push_job(job);
-                        }
-                    } else {
-                        restore_terminal(Some(&term_settings), terminal_fd, &job);
-                        env::set_var("LAST_STATUS", format!("{}", 0));
-                        jobs.push_job(job);
-                    }
-                }
-            }
-        }
-        _ => {
-            let background = commands.background();
-            let mut job = jobs.new_job();
-            fork_pipe(None, None, None, commands, &mut job)?;
-            job.mark_running();
-            if !background {
-                if let Some(status) = wait_job(&mut job, Some(&term_settings), terminal_fd) {
-                    env::set_var("LAST_STATUS", format!("{}", status));
-                } else {
-                    env::set_var("LAST_STATUS", format!("{}", -66));
-                    jobs.push_job(job);
-                }
-            } else {
-                restore_terminal(Some(&term_settings), terminal_fd, &job);
-                env::set_var("LAST_STATUS", format!("{}", 0));
-                jobs.push_job(job);
-            }
-        }
-    }
+    run_job(commands.commands(), commands.background(), jobs)?;
     Ok(())
 }
 

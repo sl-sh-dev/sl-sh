@@ -1,14 +1,15 @@
 use std::convert::TryInto;
 use std::ffi::{c_char, CString, OsStr};
 use std::fs::File;
-use std::io::{self, Read, Write};
+use std::io::{self, ErrorKind, Read, Write};
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::io::FromRawFd;
 use std::ptr;
 
 use crate::glob::{expand_glob, GlobOutput};
-use crate::jobs::Job;
-use crate::parse::ParsedJob;
+use crate::jobs::{Job, Jobs};
+use crate::parse::{BoxedIos, CommandWithArgs, Run};
+use crate::run_job;
 use crate::signals::test_clear_sigint;
 use nix::libc;
 use nix::sys::signal::{self, kill, SigHandler, Signal};
@@ -38,7 +39,7 @@ fn cvt<T: IsMinusOne>(t: T) -> Result<T, io::Error> {
     }
 }
 
-pub fn anon_pipe() -> Result<(i32, i32), io::Error> {
+fn anon_pipe() -> Result<(i32, i32), io::Error> {
     // Adapted from sys/unix/pipe.rs in std lib.
     let mut fds = [0; 2];
 
@@ -148,7 +149,7 @@ fn arg_into_args<S: AsRef<OsStr>>(
     args_t.push(arg);
 }
 
-pub fn exec<I, S, P>(program: P, args: I) -> io::Error
+fn exec<I, S, P>(program: P, args: I) -> io::Error
 where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
@@ -189,8 +190,10 @@ pub fn fork_pipe(
     stdin: Option<i32>,
     stdout: Option<i32>,
     stderr: Option<i32>,
-    new_job: ParsedJob,
+    new_job: &[Run],
     job: &mut Job,
+    jobs: &mut Jobs,
+    background: bool,
 ) -> Result<(), io::Error> {
     let progs = new_job.len();
     let mut fds: [i32; 2] = [0; 2];
@@ -200,21 +203,30 @@ pub fn fork_pipe(
     let mut next_in = stdin;
     let mut next_out = Some(fds[1]);
     let mut upcoming_in = Some(fds[0]);
-    for (i, program) in new_job.commands().iter().enumerate() {
-        if let Some(command) = program.command() {
-            let args = program.args();
-            if i == (progs - 1) {
-                fork_exec(next_in, stdout, stderr, command, args, job)?;
+    for (i, program) in new_job.iter().enumerate() {
+        if i == (progs - 1) {
+            let mut program = program.clone();
+            program.set_io(next_in, stdout, stderr);
+            if let Run::Command(command, ios) = &program {
+                fork_exec(command, ios, job)?;
             } else {
-                fork_exec(next_in, next_out, None, command, args, job)?;
-                next_in = upcoming_in;
-                if i < (progs - 1) {
-                    unsafe {
-                        cvt(libc::pipe(fds.as_mut_ptr()))?;
-                    }
-                    next_out = Some(fds[1]);
-                    upcoming_in = Some(fds[0]);
+                run_job(&program, background, jobs)?;
+            }
+        } else {
+            let mut program = program.clone();
+            program.set_io(next_in, next_out, None);
+            if let Run::Command(command, ios) = &program {
+                fork_exec(command, ios, job)?;
+            } else {
+                run_job(&program, background, jobs)?;
+            }
+            next_in = upcoming_in;
+            if i < (progs - 1) {
+                unsafe {
+                    cvt(libc::pipe(fds.as_mut_ptr()))?;
                 }
+                next_out = Some(fds[1]);
+                upcoming_in = Some(fds[0]);
             }
         }
     }
@@ -225,18 +237,20 @@ pub fn fork_pipe(
     }
 }
 
-pub fn fork_exec<I, S>(
-    stdin: Option<i32>,
-    stdout: Option<i32>,
-    stderr: Option<i32>,
-    program: &str,
-    args: I,
+pub fn fork_exec(
+    command: &CommandWithArgs,
+    ios: &BoxedIos,
     job: &mut Job,
-) -> Result<(), io::Error>
-where
-    I: IntoIterator<Item = S>,
-    S: AsRef<OsStr>,
-{
+) -> Result<(), io::Error> {
+    let stdin = ios.as_ref().and_then(|io| io.stdin);
+    let stdout = ios.as_ref().and_then(|io| io.stdout);
+    let stderr = ios.as_ref().and_then(|io| io.stderr);
+    let program = if let Some(program) = command.command() {
+        program
+    } else {
+        return Err(io::Error::new(ErrorKind::Other, "no program to execute"));
+    };
+    let args = command.args_iter();
     const CLOEXEC_MSG_FOOTER: [u8; 4] = *b"NOEX";
     let (input, output) = anon_pipe()?;
     let result = unsafe { cvt(libc::fork())? };
@@ -340,7 +354,7 @@ where
     loop {
         match input.read(&mut bytes) {
             Ok(0) => {
-                job.add_process(pid, program);
+                job.add_process(pid, program.to_string_lossy());
                 return Ok(());
             }
             Ok(8) => {
