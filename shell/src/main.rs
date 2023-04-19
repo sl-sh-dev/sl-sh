@@ -1,4 +1,5 @@
 mod builtins;
+mod command_data;
 mod config;
 mod glob;
 mod jobs;
@@ -12,9 +13,10 @@ mod unix;
 //static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 use crate::builtins::run_builtin;
+use crate::command_data::Run;
 use crate::config::get_config;
 use crate::jobs::{Job, Jobs};
-use crate::parse::{parse_line, Run};
+use crate::parse::parse_line;
 use crate::signals::{install_sigint_handler, mask_signals};
 use crate::unix::{fork_exec, fork_pipe, restore_terminal, terminal_fd, wait_job};
 use nix::sys::termios;
@@ -137,9 +139,9 @@ pub fn run_job(run: &Run, background: bool, jobs: &mut Jobs) -> Result<i32, io::
         }
         Run::Pipe(pipe, ios) => {
             let mut job = jobs.new_job();
-            let stdin = ios.as_ref().and_then(|io| io.stdin);
-            let stdout = ios.as_ref().and_then(|io| io.stdout);
-            let stderr = ios.as_ref().and_then(|io| io.stderr);
+            let stdin = ios.as_ref().and_then(|io| io.stdin());
+            let stdout = ios.as_ref().and_then(|io| io.stdout());
+            let stderr = ios.as_ref().and_then(|io| io.stderr());
             fork_pipe(stdin, stdout, stderr, &pipe[..], &mut job, jobs, background)?;
             finish_run(background, job, jobs, Some(&term_settings), terminal_fd)
         }

@@ -1,331 +1,4 @@
-use std::ffi::{OsStr, OsString};
-
-/// Arg to a command, either a direct string or a sub command to run to get the arg.
-#[derive(Clone, Debug)]
-pub enum Arg {
-    Str(OsString),
-    Command(Run),
-}
-
-/// Optional file descriptors for standard in, out and error.
-#[derive(Clone, Debug)]
-pub struct StdIos {
-    pub stdin: Option<i32>,
-    pub stdout: Option<i32>,
-    pub stderr: Option<i32>,
-}
-
-/// An individual command with args.
-#[derive(Clone, Debug)]
-pub struct CommandWithArgs {
-    /// args[0] is the command.
-    args: Vec<Arg>,
-}
-
-impl CommandWithArgs {
-    fn new() -> Self {
-        Self { args: vec![] }
-    }
-
-    fn push_arg(&mut self, arg: OsString) {
-        self.args.push(Arg::Str(arg));
-    }
-
-    /// Empty, not even the command is set.
-    pub fn is_empty(&self) -> bool {
-        self.args.is_empty()
-    }
-
-    /// Command name, None if no command name set (args are empty).
-    pub fn command(&self) -> Option<&OsStr> {
-        if let Some(Arg::Str(command)) = self.args.get(0) {
-            Some(command)
-        } else {
-            None
-        }
-    }
-
-    /// Args to the command.
-    pub fn args(&self) -> &[Arg] {
-        if self.args.is_empty() {
-            &self.args[..]
-        } else {
-            &self.args[1..]
-        }
-    }
-
-    pub fn args_iter(&self) -> CommandArgs {
-        CommandArgs {
-            args: self.args(),
-            temps: vec![],
-            index: 0,
-        }
-    }
-}
-
-pub struct CommandArgs<'args> {
-    args: &'args [Arg],
-    temps: Vec<OsString>,
-    index: usize,
-}
-
-impl<'args> Iterator for CommandArgs<'args> {
-    type Item = &'args OsStr;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.index < self.args.len() {
-            let r = match &self.args[self.index] {
-                Arg::Str(s) => s.as_ref(),
-                Arg::Command(_run) => {
-                    self.temps.push("XXX".into());
-                    self.last().unwrap()
-                }
-            };
-            self.index += 1;
-            Some(r)
-        } else {
-            None
-        }
-    }
-}
-
-pub type BoxedIos = Option<Box<StdIos>>;
-
-/// Command(s) ready to run with context.
-#[derive(Clone, Debug)]
-pub enum Run {
-    Command(CommandWithArgs, BoxedIos),
-    Pipe(Vec<Run>, BoxedIos),
-    Sequence(Vec<Run>, BoxedIos),
-    And(Vec<Run>, BoxedIos),
-    Or(Vec<Run>, BoxedIos),
-    Empty,
-}
-
-impl Run {
-    fn push_command(self, command: CommandWithArgs, com_ios: BoxedIos) -> Self {
-        match self {
-            Run::Command(current, ios) => Run::Sequence(
-                vec![Run::Command(current, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Pipe(pipe, ios) => Run::Sequence(
-                vec![Run::Pipe(pipe, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Sequence(mut seq, ios) => {
-                seq.push(Run::Command(command, com_ios));
-                Run::Sequence(seq, ios)
-            }
-            Run::And(seq, ios) => Run::Sequence(
-                vec![Run::And(seq, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Or(seq, ios) => Run::Sequence(
-                vec![Run::Or(seq, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Empty => Run::Command(command, com_ios),
-        }
-    }
-
-    fn _push_to_last(self, command: CommandWithArgs, com_ios: BoxedIos) -> Self {
-        match self {
-            Run::Command(current, ios) => Run::Sequence(
-                vec![Run::Command(current, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Pipe(mut pipe, ios) => {
-                pipe.push(Run::Command(command, com_ios));
-                Run::Pipe(pipe, ios)
-            }
-            Run::Sequence(mut seq, ios) => {
-                seq.push(Run::Command(command, com_ios));
-                Run::Sequence(seq, ios)
-            }
-            Run::And(mut seq, ios) => {
-                seq.push(Run::Command(command, com_ios));
-                Run::And(seq, ios)
-            }
-            Run::Or(mut seq, ios) => {
-                seq.push(Run::Command(command, com_ios));
-                Run::Or(seq, ios)
-            }
-            Run::Empty => Run::Command(command, com_ios),
-        }
-    }
-
-    fn push_pipe(self, command: CommandWithArgs, com_ios: BoxedIos) -> Self {
-        match self {
-            Run::Command(current, ios) => Run::Pipe(
-                vec![Run::Command(current, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Pipe(mut pipe, ios) => {
-                pipe.push(Run::Command(command, com_ios));
-                Run::Pipe(pipe, ios)
-            }
-            Run::Sequence(seq, ios) => Run::Pipe(
-                vec![Run::Sequence(seq, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::And(seq, ios) => Run::Pipe(
-                vec![Run::And(seq, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Or(seq, ios) => Run::Pipe(
-                vec![Run::Or(seq, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Empty => Run::Command(command, com_ios),
-        }
-    }
-
-    fn push_sequence(self, command: CommandWithArgs, com_ios: BoxedIos) -> Self {
-        match self {
-            Run::Command(current, ios) => Run::Sequence(
-                vec![Run::Command(current, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Pipe(pipe, ios) => Run::Sequence(
-                vec![Run::Pipe(pipe, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Sequence(mut seq, ios) => {
-                seq.push(Run::Command(command, com_ios));
-                Run::Sequence(seq, ios)
-            }
-            Run::And(seq, ios) => Run::Sequence(
-                vec![Run::And(seq, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Or(seq, ios) => Run::Sequence(
-                vec![Run::Or(seq, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Empty => Run::Command(command, com_ios),
-        }
-    }
-
-    fn push_and(self, command: CommandWithArgs, com_ios: BoxedIos) -> Self {
-        match self {
-            Run::Command(current, ios) => Run::And(
-                vec![Run::Command(current, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Pipe(pipe, ios) => Run::And(
-                vec![Run::Pipe(pipe, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Sequence(seq, ios) => Run::And(
-                vec![Run::Sequence(seq, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::And(mut seq, ios) => {
-                seq.push(Run::Command(command, com_ios));
-                Run::And(seq, ios)
-            }
-            Run::Or(seq, ios) => Run::And(
-                vec![Run::Or(seq, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Empty => Run::Command(command, com_ios),
-        }
-    }
-
-    fn push_or(self, command: CommandWithArgs, com_ios: BoxedIos) -> Self {
-        match self {
-            Run::Command(current, ios) => Run::Or(
-                vec![Run::Command(current, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Pipe(pipe, ios) => Run::Or(
-                vec![Run::Pipe(pipe, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Sequence(seq, ios) => Run::Or(
-                vec![Run::Or(seq, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::And(seq, ios) => Run::Or(
-                vec![Run::And(seq, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Or(mut seq, ios) => {
-                seq.push(Run::Command(command, com_ios));
-                Run::Or(seq, ios)
-            }
-            Run::Empty => Run::Command(command, com_ios),
-        }
-    }
-
-    pub fn stdin(&self) -> Option<i32> {
-        match self {
-            Run::Command(_, ios) => ios.as_ref().and_then(|io| io.stdin),
-            Run::Pipe(_, ios) => ios.as_ref().and_then(|io| io.stdin),
-            Run::Sequence(_, ios) => ios.as_ref().and_then(|io| io.stdin),
-            Run::And(_, ios) => ios.as_ref().and_then(|io| io.stdin),
-            Run::Or(_, ios) => ios.as_ref().and_then(|io| io.stdin),
-            Run::Empty => None,
-        }
-    }
-
-    pub fn stdout(&self) -> Option<i32> {
-        match self {
-            Run::Command(_, ios) => ios.as_ref().and_then(|io| io.stdout),
-            Run::Pipe(_, ios) => ios.as_ref().and_then(|io| io.stdout),
-            Run::Sequence(_, ios) => ios.as_ref().and_then(|io| io.stdout),
-            Run::And(_, ios) => ios.as_ref().and_then(|io| io.stdout),
-            Run::Or(_, ios) => ios.as_ref().and_then(|io| io.stdout),
-            Run::Empty => None,
-        }
-    }
-
-    pub fn stderr(&self) -> Option<i32> {
-        match self {
-            Run::Command(_, ios) => ios.as_ref().and_then(|io| io.stderr),
-            Run::Pipe(_, ios) => ios.as_ref().and_then(|io| io.stderr),
-            Run::Sequence(_, ios) => ios.as_ref().and_then(|io| io.stderr),
-            Run::And(_, ios) => ios.as_ref().and_then(|io| io.stderr),
-            Run::Or(_, ios) => ios.as_ref().and_then(|io| io.stderr),
-            Run::Empty => None,
-        }
-    }
-
-    fn set_io_inner(
-        ios: &mut BoxedIos,
-        stdin: Option<i32>,
-        stdout: Option<i32>,
-        stderr: Option<i32>,
-    ) {
-        match ios {
-            Some(ios) => {
-                ios.stdin = stdin;
-                ios.stdout = stdout;
-                ios.stderr = stderr;
-            }
-            None => {
-                let nios = Box::new(StdIos {
-                    stdin,
-                    stdout,
-                    stderr,
-                });
-                *ios = Some(nios);
-            }
-        }
-    }
-
-    pub fn set_io(&mut self, stdin: Option<i32>, stdout: Option<i32>, stderr: Option<i32>) {
-        match self {
-            Run::Command(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr),
-            Run::Pipe(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr),
-            Run::Sequence(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr),
-            Run::And(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr),
-            Run::Or(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr),
-            Run::Empty => {}
-        }
-    }
-}
+use crate::command_data::{BoxedIos, CommandWithArgs, Run};
 
 /// Type of the current sequence being parsed.
 #[derive(Copy, Clone, Debug)]
@@ -413,136 +86,206 @@ fn push_next_seq_item(
     }
 }
 
+struct ParseState {
+    ret: ParsedJob,
+    // Should not be None, is Option to allow ownership to change.
+    command: Option<CommandWithArgs>,
+    in_string: bool,
+    in_stringd: bool,
+    // Should not be None, is Option to allow ownership to change.
+    token: Option<String>,
+    last_ch: char,
+    current_seq: SeqType,
+}
+
+impl ParseState {
+    fn new() -> Self {
+        let ret = ParsedJob::new();
+        let command = Some(CommandWithArgs::new());
+        let in_string = false;
+        let in_stringd = false;
+        let token = Some(String::new());
+        let last_ch = ' ';
+        let current_seq = SeqType::Command;
+        Self {
+            ret,
+            command,
+            in_string,
+            in_stringd,
+            token,
+            last_ch,
+            current_seq,
+        }
+    }
+
+    fn command(&mut self) -> &mut CommandWithArgs {
+        self.command.as_mut().expect("invalid empty command")
+    }
+
+    fn token(&mut self) -> &mut String {
+        self.token.as_mut().expect("invalid empty token")
+    }
+
+    fn take_token(&mut self) -> String {
+        let result = self.token.take().expect("invalid empty token");
+        self.token = Some(String::new());
+        result
+    }
+
+    fn in_string(&self) -> bool {
+        self.in_string || self.in_stringd
+    }
+
+    fn str_single(&mut self, ch: char) {
+        self.in_string = !self.in_string;
+        if !self.in_string {
+            let token = self.take_token();
+            self.command().push_arg(token.into());
+        }
+        self.last_ch = ch;
+    }
+
+    fn str_double(&mut self, ch: char) {
+        self.in_stringd = !self.in_stringd;
+        if !self.in_stringd {
+            let token = self.take_token();
+            self.command().push_arg(token.into());
+        }
+        self.last_ch = ch;
+    }
+
+    fn pipe_or(&mut self, ch: char, next_char: Option<&char>) {
+        if self.last_ch == '\\' {
+            self.token().push('|');
+            self.last_ch = ' ';
+        } else if self.last_ch == '|' {
+            if !self.token().is_empty() {
+                let token = self.take_token();
+                self.command().push_arg(token.into());
+            }
+            if !self.command().is_empty() {
+                if let Some(command) = self.command.take() {
+                    push_next_seq_item(&mut self.ret, command, None, self.current_seq);
+                }
+                self.command = Some(CommandWithArgs::new());
+            }
+            self.current_seq = SeqType::Or;
+            self.last_ch = ' ';
+        }
+        // If the next char is not a '|' then we have a pipe, else will loop and become an OR.
+        if let Some(&'|') = next_char {
+            self.last_ch = ch;
+        } else {
+            if !self.token().is_empty() {
+                let token = self.take_token();
+                self.command().push_arg(token.into());
+            }
+            if !self.command().is_empty() {
+                if let Some(command) = self.command.take() {
+                    push_next_seq_item(&mut self.ret, command, None, self.current_seq);
+                }
+                self.command = Some(CommandWithArgs::new());
+            }
+            self.current_seq = SeqType::Pipe;
+            self.last_ch = ' ';
+        }
+    }
+
+    fn seq(&mut self) {
+        if !self.token().is_empty() {
+            let token = self.take_token();
+            self.command().push_arg(token.into());
+        }
+        if !self.command().is_empty() {
+            if let Some(command) = self.command.take() {
+                push_next_seq_item(&mut self.ret, command, None, self.current_seq);
+            }
+            self.command = Some(CommandWithArgs::new());
+        }
+        self.current_seq = SeqType::Sequence;
+    }
+
+    fn and(&mut self, mut ch: char) {
+        if self.last_ch == '\\' {
+            self.token().push('&');
+            ch = ' ';
+        } else if self.last_ch == '&' {
+            if !self.token().is_empty() {
+                let token = self.take_token();
+                self.command().push_arg(token.into());
+            }
+            if !self.command().is_empty() {
+                if let Some(command) = self.command.take() {
+                    push_next_seq_item(&mut self.ret, command, None, self.current_seq);
+                }
+                self.command = Some(CommandWithArgs::new());
+            }
+            self.current_seq = SeqType::And;
+            ch = ' ';
+        } else if !self.token().is_empty() {
+            let token = self.take_token();
+            self.command().push_arg(token.into());
+        }
+        self.last_ch = ch;
+    }
+}
+
+impl From<ParseState> for ParsedJob {
+    fn from(value: ParseState) -> Self {
+        value.ret
+    }
+}
+
 pub fn parse_line(input: &str) -> ParsedJob {
-    let mut ret = ParsedJob::new();
-    let mut command = CommandWithArgs::new();
-    let mut in_string = false;
-    let mut in_stringd = false;
-    let mut token = String::new();
-    let mut last_ch = ' ';
-    let mut current_seq = SeqType::Command;
     let mut chars = input.chars().peekable();
+    let mut state = ParseState::new();
     while let Some(ch) = chars.next() {
-        let next_char = chars.peek();
-        if ch == '\'' && last_ch != '\\' {
-            in_string = !in_string;
-            if !in_string {
-                command.push_arg(token.into());
-                token = String::new();
+        match ch {
+            '\'' if state.last_ch != '\\' && !state.in_stringd => {
+                state.str_single(ch);
             }
-            last_ch = ch;
-            continue;
-        }
-        if ch == '"' && last_ch != '\\' {
-            in_stringd = !in_stringd;
-            if !in_stringd {
-                command.push_arg(token.into());
-                token = String::new();
+            '"' if state.last_ch != '\\' && !state.in_string => {
+                state.str_double(ch);
             }
-            last_ch = ch;
-            continue;
-        }
-        if ch == '|' {
-            if last_ch == '\\' {
-                token.push('|');
-                last_ch = ' ';
-                continue;
-            } else if last_ch == '|' {
-                if !token.is_empty() {
-                    command.push_arg(token.into());
-                    token = String::new();
+            '|' if !state.in_string() => {
+                state.pipe_or(ch, chars.peek());
+            }
+            ';' if state.last_ch != '\\' && !state.in_string() => {
+                state.seq();
+            }
+            '&' if state.last_ch != '\\' && !state.in_string() => {
+                state.and(ch);
+            }
+            '\\' if !state.in_string() => {
+                if state.last_ch == '\\' {
+                    state.token().push('\\');
+                    state.last_ch = ' ';
+                } else {
+                    state.last_ch = ch;
                 }
-                if !command.is_empty() {
-                    push_next_seq_item(&mut ret, command, None, current_seq);
-                    command = CommandWithArgs::new();
+            }
+            ' ' if !state.in_string() => {
+                if !state.token().is_empty() {
+                    let token = state.take_token();
+                    state.command().push_arg(token.into());
                 }
-                current_seq = SeqType::Or;
-                last_ch = ' ';
-                continue;
             }
-            // If the next char is not a '|' then we have a pipe, else will loop and become an OR.
-            if let Some(&'|') = next_char {
-                last_ch = ch;
-                continue;
-            } else {
-                if !token.is_empty() {
-                    command.push_arg(token.into());
-                    token = String::new();
-                }
-                if !command.is_empty() {
-                    push_next_seq_item(&mut ret, command, None, current_seq);
-                    command = CommandWithArgs::new();
-                }
-                current_seq = SeqType::Pipe;
-                last_ch = ' ';
-                continue;
+            _ => {
+                state.token().push(ch);
+                state.last_ch = ch;
             }
-        }
-        if ch == ';' && last_ch != '\\' {
-            if !token.is_empty() {
-                command.push_arg(token.into());
-                token = String::new();
-            }
-            if !command.is_empty() {
-                push_next_seq_item(&mut ret, command, None, current_seq);
-                command = CommandWithArgs::new();
-            }
-            current_seq = SeqType::Sequence;
-            continue;
-        }
-        if ch == '&' {
-            if last_ch == '\\' {
-                token.push('&');
-                last_ch = ' ';
-                continue;
-            } else if last_ch == '&' {
-                if !token.is_empty() {
-                    command.push_arg(token.into());
-                    token = String::new();
-                }
-                if !command.is_empty() {
-                    push_next_seq_item(&mut ret, command, None, current_seq);
-                    command = CommandWithArgs::new();
-                }
-                current_seq = SeqType::And;
-                last_ch = ' ';
-                continue;
-            }
-            if !token.is_empty() {
-                command.push_arg(token.into());
-                token = String::new();
-            }
-            last_ch = ch;
-            continue;
-        }
-        if ch == '\\' {
-            if last_ch == '\\' {
-                token.push('\\');
-                last_ch = ' ';
-            } else {
-                last_ch = ch;
-            }
-            continue;
-        }
-        if in_string || in_stringd {
-            token.push(ch);
-        } else if ch == ' ' {
-            if !token.is_empty() {
-                command.push_arg(token.into());
-                token = String::new();
-            }
-        } else {
-            token.push(ch);
-        }
-        last_ch = ch;
-    }
-    if !token.is_empty() {
-        if token == "&" {
-            ret.set_background(true);
-        } else {
-            command.push_arg(token.into());
         }
     }
-    push_next_seq_item(&mut ret, command, None, current_seq);
-    ret
+    if !state.token().is_empty() {
+        if state.token() == "&" {
+            state.ret.set_background(true);
+        } else {
+            let token = state.take_token();
+            state.command().push_arg(token.into());
+        }
+    }
+    if let Some(command) = state.command.take() {
+        push_next_seq_item(&mut state.ret, command, None, state.current_seq);
+    }
+    state.into()
 }

@@ -6,9 +6,9 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::unix::io::FromRawFd;
 use std::ptr;
 
+use crate::command_data::{BoxedIos, CommandWithArgs, Run};
 use crate::glob::{expand_glob, GlobOutput};
 use crate::jobs::{Job, Jobs};
-use crate::parse::{BoxedIos, CommandWithArgs, Run};
 use crate::run_job;
 use crate::signals::test_clear_sigint;
 use nix::libc;
@@ -242,9 +242,9 @@ pub fn fork_exec(
     ios: &BoxedIos,
     job: &mut Job,
 ) -> Result<(), io::Error> {
-    let stdin = ios.as_ref().and_then(|io| io.stdin);
-    let stdout = ios.as_ref().and_then(|io| io.stdout);
-    let stderr = ios.as_ref().and_then(|io| io.stderr);
+    let stdin = ios.as_ref().and_then(|io| io.stdin());
+    let stdout = ios.as_ref().and_then(|io| io.stdout());
+    let stderr = ios.as_ref().and_then(|io| io.stderr());
     let program = if let Some(program) = command.command() {
         program
     } else {
