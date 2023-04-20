@@ -1,4 +1,7 @@
 use std::ffi::{OsStr, OsString};
+use std::fs::File;
+use std::os::fd::IntoRawFd;
+use std::path::PathBuf;
 
 /// Arg to a command, either a direct string or a sub command to run to get the arg.
 #[derive(Clone, Debug)]
@@ -13,22 +16,44 @@ pub struct StdIos {
     stdin: Option<i32>,
     stdout: Option<i32>,
     stderr: Option<i32>,
+    in_name: Option<Box<(PathBuf, bool)>>,
+    out_name: Option<Box<(PathBuf, bool)>>,
+    err_name: Option<Box<(PathBuf, bool)>>,
+}
+
+fn extract_fd(fd: &Option<i32>, file_info: Option<&(PathBuf, bool)>) -> Option<i32> {
+    if let Some(fd) = fd {
+        Some(*fd)
+    } else if let Some((name, overwrite)) = file_info {
+        let f = if *overwrite {
+            File::create(name)
+        } else {
+            File::open(name)
+        };
+        if let Ok(f) = f {
+            Some(f.into_raw_fd())
+        } else {
+            None
+        }
+    } else {
+        None
+    }
 }
 
 impl StdIos {
     /// Stdin file descriptor.
     pub fn stdin(&self) -> Option<i32> {
-        self.stdin
+        extract_fd(&self.stdin, self.in_name.as_deref())
     }
 
     /// Stdout file descriptor.
     pub fn stdout(&self) -> Option<i32> {
-        self.stdout
+        extract_fd(&self.stdout, self.out_name.as_deref())
     }
 
     /// Stderr file descriptor.
     pub fn stderr(&self) -> Option<i32> {
-        self.stderr
+        extract_fd(&self.stderr, self.err_name.as_deref())
     }
 }
 
@@ -344,6 +369,35 @@ impl Run {
                     stdin,
                     stdout,
                     stderr,
+                    in_name: None,
+                    out_name: None,
+                    err_name: None,
+                });
+                *ios = Some(nios);
+            }
+        }
+    }
+
+    fn set_io_inner_names(
+        ios: &mut BoxedIos,
+        in_name: Option<Box<(PathBuf, bool)>>,
+        out_name: Option<Box<(PathBuf, bool)>>,
+        err_name: Option<Box<(PathBuf, bool)>>,
+    ) {
+        match ios {
+            Some(ios) => {
+                ios.in_name = in_name;
+                ios.out_name = out_name;
+                ios.err_name = err_name;
+            }
+            None => {
+                let nios = Box::new(StdIos {
+                    stdin: None,
+                    stdout: None,
+                    stderr: None,
+                    in_name,
+                    out_name,
+                    err_name,
                 });
                 *ios = Some(nios);
             }
@@ -358,6 +412,43 @@ impl Run {
             Run::Sequence(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr),
             Run::And(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr),
             Run::Or(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr),
+            Run::Empty => {}
+        }
+    }
+
+    /// Set the stdin file name for this Run.
+    pub fn set_stdin_path(&mut self, stdin: PathBuf, overwrite: bool) {
+        let inner = Some(Box::new((stdin, overwrite)));
+        match self {
+            Run::Command(_, ios) => Self::set_io_inner_names(ios, inner, None, None),
+            Run::Pipe(_, ios) => Self::set_io_inner_names(ios, inner, None, None),
+            Run::Sequence(_, ios) => Self::set_io_inner_names(ios, inner, None, None),
+            Run::And(_, ios) => Self::set_io_inner_names(ios, inner, None, None),
+            Run::Or(_, ios) => Self::set_io_inner_names(ios, inner, None, None),
+            Run::Empty => {}
+        }
+    }
+    /// Set the stdout file name for this Run.
+    pub fn set_stdout_path(&mut self, stdin: PathBuf, overwrite: bool) {
+        let inner = Some(Box::new((stdin, overwrite)));
+        match self {
+            Run::Command(_, ios) => Self::set_io_inner_names(ios, None, inner, None),
+            Run::Pipe(_, ios) => Self::set_io_inner_names(ios, None, inner, None),
+            Run::Sequence(_, ios) => Self::set_io_inner_names(ios, None, inner, None),
+            Run::And(_, ios) => Self::set_io_inner_names(ios, None, inner, None),
+            Run::Or(_, ios) => Self::set_io_inner_names(ios, None, inner, None),
+            Run::Empty => {}
+        }
+    }
+    /// Set the stderr file name for this Run.
+    pub fn set_stderr_path(&mut self, stdin: PathBuf, overwrite: bool) {
+        let inner = Some(Box::new((stdin, overwrite)));
+        match self {
+            Run::Command(_, ios) => Self::set_io_inner_names(ios, None, None, inner),
+            Run::Pipe(_, ios) => Self::set_io_inner_names(ios, None, None, inner),
+            Run::Sequence(_, ios) => Self::set_io_inner_names(ios, None, None, inner),
+            Run::And(_, ios) => Self::set_io_inner_names(ios, None, None, inner),
+            Run::Or(_, ios) => Self::set_io_inner_names(ios, None, None, inner),
             Run::Empty => {}
         }
     }
