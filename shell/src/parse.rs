@@ -1,4 +1,5 @@
 use crate::command_data::{BoxedIos, CommandWithArgs, Run};
+use std::path::PathBuf;
 
 /// Type of the current sequence being parsed.
 #[derive(Copy, Clone, Debug)]
@@ -69,6 +70,26 @@ impl ParsedJob {
     pub fn commands(&self) -> &Run {
         self.commands.as_ref().expect("missing command")
     }
+
+    /// Slice of the individual commands in pipe order.
+    pub fn commands_mut(&mut self) -> &mut Run {
+        self.commands.as_mut().expect("missing command")
+    }
+
+    /// Set the stdin file name for this Run.
+    pub fn set_stdin_path(&mut self, stdin: PathBuf, overwrite: bool) {
+        self.commands_mut().set_stdin_path(stdin, overwrite);
+    }
+
+    /// Set the stdout file name for this Run.
+    pub fn set_stdout_path(&mut self, stdin: PathBuf, overwrite: bool) {
+        self.commands_mut().set_stdout_path(stdin, overwrite);
+    }
+
+    /// Set the stderr file name for this Run.
+    pub fn set_stderr_path(&mut self, stdin: PathBuf, overwrite: bool) {
+        self.commands_mut().set_stderr_path(stdin, overwrite);
+    }
 }
 
 fn push_next_seq_item(
@@ -96,6 +117,8 @@ struct ParseState {
     token: Option<String>,
     last_ch: char,
     current_seq: SeqType,
+    redir_create: bool,
+    redir_append: bool,
 }
 
 impl ParseState {
@@ -115,6 +138,8 @@ impl ParseState {
             token,
             last_ch,
             current_seq,
+            redir_create: false,
+            redir_append: false,
         }
     }
 
@@ -132,76 +157,71 @@ impl ParseState {
         result
     }
 
-    fn in_string(&self) -> bool {
-        self.in_string || self.in_stringd
-    }
-
-    fn str_single(&mut self, ch: char) {
-        self.in_string = !self.in_string;
-        if !self.in_string {
-            let token = self.take_token();
-            self.command().push_arg(token.into());
-        }
-        self.last_ch = ch;
-    }
-
-    fn str_double(&mut self, ch: char) {
-        self.in_stringd = !self.in_stringd;
-        if !self.in_stringd {
-            let token = self.take_token();
-            self.command().push_arg(token.into());
-        }
-        self.last_ch = ch;
-    }
-
-    fn pipe_or(&mut self, ch: char, next_char: Option<&char>) {
-        if self.last_ch == '\\' {
-            self.token().push('|');
-            self.last_ch = ' ';
-        } else if self.last_ch == '|' {
-            if !self.token().is_empty() {
-                let token = self.take_token();
+    fn proc_token(&mut self) {
+        let token = self.take_token();
+        if !token.is_empty() {
+            if self.redir_create {
+                self.ret.set_stdout_path(token.into(), true);
+                self.redir_create = false;
+                self.redir_append = false;
+            } else if self.redir_append {
+                self.ret.set_stdout_path(token.into(), false);
+                self.redir_append = false;
+            } else {
                 self.command().push_arg(token.into());
             }
-            if !self.command().is_empty() {
-                if let Some(command) = self.command.take() {
-                    push_next_seq_item(&mut self.ret, command, None, self.current_seq);
-                }
-                self.command = Some(CommandWithArgs::new());
-            }
-            self.current_seq = SeqType::Or;
-            self.last_ch = ' ';
-        }
-        // If the next char is not a '|' then we have a pipe, else will loop and become an OR.
-        if let Some(&'|') = next_char {
-            self.last_ch = ch;
-        } else {
-            if !self.token().is_empty() {
-                let token = self.take_token();
-                self.command().push_arg(token.into());
-            }
-            if !self.command().is_empty() {
-                if let Some(command) = self.command.take() {
-                    push_next_seq_item(&mut self.ret, command, None, self.current_seq);
-                }
-                self.command = Some(CommandWithArgs::new());
-            }
-            self.current_seq = SeqType::Pipe;
-            self.last_ch = ' ';
         }
     }
 
-    fn seq(&mut self) {
-        if !self.token().is_empty() {
-            let token = self.take_token();
-            self.command().push_arg(token.into());
-        }
+    fn end_command(&mut self) {
         if !self.command().is_empty() {
             if let Some(command) = self.command.take() {
                 push_next_seq_item(&mut self.ret, command, None, self.current_seq);
             }
             self.command = Some(CommandWithArgs::new());
         }
+    }
+
+    fn in_string(&self) -> bool {
+        self.in_string || self.in_stringd
+    }
+
+    fn str_single(&mut self, ch: char) {
+        self.in_string = !self.in_string;
+        self.proc_token();
+        self.last_ch = ch;
+    }
+
+    fn str_double(&mut self, ch: char) {
+        self.in_stringd = !self.in_stringd;
+        self.proc_token();
+        self.last_ch = ch;
+    }
+
+    fn pipe_or(&mut self, ch: char, next_char: char) {
+        if self.last_ch == '\\' {
+            self.token().push('|');
+            self.last_ch = ' ';
+        } else if self.last_ch == '|' {
+            self.proc_token();
+            self.end_command();
+            self.current_seq = SeqType::Or;
+            self.last_ch = ' ';
+        }
+        // If the next char is not a '|' then we have a pipe, else will loop and become an OR.
+        if let '|' = next_char {
+            self.last_ch = ch;
+        } else {
+            self.proc_token();
+            self.end_command();
+            self.current_seq = SeqType::Pipe;
+            self.last_ch = ' ';
+        }
+    }
+
+    fn seq(&mut self) {
+        self.proc_token();
+        self.end_command();
         self.current_seq = SeqType::Sequence;
     }
 
@@ -210,21 +230,12 @@ impl ParseState {
             self.token().push('&');
             ch = ' ';
         } else if self.last_ch == '&' {
-            if !self.token().is_empty() {
-                let token = self.take_token();
-                self.command().push_arg(token.into());
-            }
-            if !self.command().is_empty() {
-                if let Some(command) = self.command.take() {
-                    push_next_seq_item(&mut self.ret, command, None, self.current_seq);
-                }
-                self.command = Some(CommandWithArgs::new());
-            }
+            self.proc_token();
+            self.end_command();
             self.current_seq = SeqType::And;
             ch = ' ';
-        } else if !self.token().is_empty() {
-            let token = self.take_token();
-            self.command().push_arg(token.into());
+        } else {
+            self.proc_token();
         }
         self.last_ch = ch;
     }
@@ -240,39 +251,69 @@ pub fn parse_line(input: &str) -> ParsedJob {
     let mut chars = input.chars().peekable();
     let mut state = ParseState::new();
     while let Some(ch) = chars.next() {
-        match ch {
-            '\'' if state.last_ch != '\\' && !state.in_stringd => {
-                state.str_single(ch);
-            }
-            '"' if state.last_ch != '\\' && !state.in_string => {
-                state.str_double(ch);
-            }
-            '|' if !state.in_string() => {
-                state.pipe_or(ch, chars.peek());
-            }
-            ';' if state.last_ch != '\\' && !state.in_string() => {
-                state.seq();
-            }
-            '&' if state.last_ch != '\\' && !state.in_string() => {
-                state.and(ch);
-            }
-            '\\' if !state.in_string() => {
-                if state.last_ch == '\\' {
-                    state.token().push('\\');
-                    state.last_ch = ' ';
-                } else {
+        if state.in_string() {
+            match ch {
+                '\'' if state.last_ch != '\\' && !state.in_stringd => {
+                    state.str_single(ch);
+                }
+                '"' if state.last_ch != '\\' && !state.in_string => {
+                    state.str_double(ch);
+                }
+                _ => {
+                    state.token().push(ch);
                     state.last_ch = ch;
                 }
             }
-            ' ' if !state.in_string() => {
-                if !state.token().is_empty() {
-                    let token = state.take_token();
-                    state.command().push_arg(token.into());
+        } else {
+            let next_char = *chars.peek().unwrap_or(&' ');
+            match ch {
+                '\'' if state.last_ch != '\\' && !state.in_stringd => {
+                    state.str_single(ch);
                 }
-            }
-            _ => {
-                state.token().push(ch);
-                state.last_ch = ch;
+                '"' if state.last_ch != '\\' && !state.in_string => {
+                    state.str_double(ch);
+                }
+                '|' => {
+                    state.pipe_or(ch, next_char);
+                }
+                ';' if state.last_ch != '\\' => {
+                    state.seq();
+                }
+                '>' if state.last_ch == '\\' => {
+                    state.token().push('>');
+                    state.last_ch = ' ';
+                }
+                '>' if next_char == '>' => {
+                    state.proc_token();
+                    state.end_command();
+                    state.redir_append = true;
+                    chars.next();
+                    state.last_ch = ' ';
+                }
+                '>' => {
+                    state.proc_token();
+                    state.end_command();
+                    state.redir_create = true;
+                    state.last_ch = ' ';
+                }
+                '&' if state.last_ch != '\\' => {
+                    state.and(ch);
+                }
+                '\\' => {
+                    if state.last_ch == '\\' {
+                        state.token().push('\\');
+                        state.last_ch = ' ';
+                    } else {
+                        state.last_ch = ch;
+                    }
+                }
+                ' ' => {
+                    state.proc_token();
+                }
+                _ => {
+                    state.token().push(ch);
+                    state.last_ch = ch;
+                }
             }
         }
     }
@@ -280,12 +321,9 @@ pub fn parse_line(input: &str) -> ParsedJob {
         if state.token() == "&" {
             state.ret.set_background(true);
         } else {
-            let token = state.take_token();
-            state.command().push_arg(token.into());
+            state.proc_token();
+            state.end_command();
         }
-    }
-    if let Some(command) = state.command.take() {
-        push_next_seq_item(&mut state.ret, command, None, state.current_seq);
     }
     state.into()
 }

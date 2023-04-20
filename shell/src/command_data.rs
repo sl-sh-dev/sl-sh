@@ -28,7 +28,7 @@ fn extract_fd(fd: &Option<i32>, file_info: Option<&(PathBuf, bool)>) -> Option<i
         let f = if *overwrite {
             File::create(name)
         } else {
-            File::open(name)
+            File::options().append(true).create(true).open(name)
         };
         if let Ok(f) = f {
             Some(f.into_raw_fd())
@@ -386,9 +386,15 @@ impl Run {
     ) {
         match ios {
             Some(ios) => {
-                ios.in_name = in_name;
-                ios.out_name = out_name;
-                ios.err_name = err_name;
+                if in_name.is_some() {
+                    ios.in_name = in_name;
+                }
+                if out_name.is_some() {
+                    ios.out_name = out_name;
+                }
+                if err_name.is_some() {
+                    ios.err_name = err_name;
+                }
             }
             None => {
                 let nios = Box::new(StdIos {
@@ -422,33 +428,71 @@ impl Run {
         match self {
             Run::Command(_, ios) => Self::set_io_inner_names(ios, inner, None, None),
             Run::Pipe(_, ios) => Self::set_io_inner_names(ios, inner, None, None),
-            Run::Sequence(_, ios) => Self::set_io_inner_names(ios, inner, None, None),
-            Run::And(_, ios) => Self::set_io_inner_names(ios, inner, None, None),
-            Run::Or(_, ios) => Self::set_io_inner_names(ios, inner, None, None),
+            Run::Sequence(seq, _ios) => {
+                if let Some(last) = seq.last_mut() {
+                    last.set_stdin_path((*inner.unwrap()).0, overwrite);
+                }
+            }
+            Run::And(seq, _ios) => {
+                if let Some(last) = seq.last_mut() {
+                    last.set_stdin_path((*inner.unwrap()).0, overwrite);
+                }
+            }
+            Run::Or(seq, _ios) => {
+                if let Some(last) = seq.last_mut() {
+                    last.set_stdin_path((*inner.unwrap()).0, overwrite);
+                }
+            }
             Run::Empty => {}
         }
     }
+
     /// Set the stdout file name for this Run.
-    pub fn set_stdout_path(&mut self, stdin: PathBuf, overwrite: bool) {
-        let inner = Some(Box::new((stdin, overwrite)));
+    pub fn set_stdout_path(&mut self, stdout: PathBuf, overwrite: bool) {
+        let inner = Some(Box::new((stdout, overwrite)));
         match self {
             Run::Command(_, ios) => Self::set_io_inner_names(ios, None, inner, None),
             Run::Pipe(_, ios) => Self::set_io_inner_names(ios, None, inner, None),
-            Run::Sequence(_, ios) => Self::set_io_inner_names(ios, None, inner, None),
-            Run::And(_, ios) => Self::set_io_inner_names(ios, None, inner, None),
-            Run::Or(_, ios) => Self::set_io_inner_names(ios, None, inner, None),
+            Run::Sequence(seq, _ios) => {
+                if let Some(last) = seq.last_mut() {
+                    last.set_stdout_path((*inner.unwrap()).0, overwrite);
+                }
+            }
+            Run::And(seq, _ios) => {
+                if let Some(last) = seq.last_mut() {
+                    last.set_stdout_path((*inner.unwrap()).0, overwrite);
+                }
+            }
+            Run::Or(seq, _ios) => {
+                if let Some(last) = seq.last_mut() {
+                    last.set_stdout_path((*inner.unwrap()).0, overwrite);
+                }
+            }
             Run::Empty => {}
         }
     }
+
     /// Set the stderr file name for this Run.
-    pub fn set_stderr_path(&mut self, stdin: PathBuf, overwrite: bool) {
-        let inner = Some(Box::new((stdin, overwrite)));
+    pub fn set_stderr_path(&mut self, stderr: PathBuf, overwrite: bool) {
+        let inner = Some(Box::new((stderr, overwrite)));
         match self {
             Run::Command(_, ios) => Self::set_io_inner_names(ios, None, None, inner),
             Run::Pipe(_, ios) => Self::set_io_inner_names(ios, None, None, inner),
-            Run::Sequence(_, ios) => Self::set_io_inner_names(ios, None, None, inner),
-            Run::And(_, ios) => Self::set_io_inner_names(ios, None, None, inner),
-            Run::Or(_, ios) => Self::set_io_inner_names(ios, None, None, inner),
+            Run::Sequence(seq, _ios) => {
+                if let Some(last) = seq.last_mut() {
+                    last.set_stderr_path((*inner.unwrap()).0, overwrite);
+                }
+            }
+            Run::And(seq, _ios) => {
+                if let Some(last) = seq.last_mut() {
+                    last.set_stderr_path((*inner.unwrap()).0, overwrite);
+                }
+            }
+            Run::Or(seq, _ios) => {
+                if let Some(last) = seq.last_mut() {
+                    last.set_stderr_path((*inner.unwrap()).0, overwrite);
+                }
+            }
             Run::Empty => {}
         }
     }
