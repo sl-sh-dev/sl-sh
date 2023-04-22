@@ -20,6 +20,7 @@ use crate::parse::parse_line;
 use crate::signals::{install_sigint_handler, mask_signals};
 use crate::unix::{fork_exec, fork_pipe, restore_terminal, terminal_fd, wait_job};
 use nix::sys::termios;
+use nix::sys::termios::Termios;
 use nix::{
     libc,
     sys::signal::{self, Signal},
@@ -119,17 +120,29 @@ fn finish_run(
     }
 }
 
-pub fn run_job(run: &Run, background: bool, jobs: &mut Jobs) -> Result<i32, io::Error> {
-    let term_settings = termios::tcgetattr(libc::STDIN_FILENO).unwrap();
-    let terminal_fd = terminal_fd();
+pub fn run_job(
+    run: &Run,
+    background: bool,
+    jobs: &mut Jobs,
+    term_settings: Termios,
+    terminal_fd: i32,
+) -> Result<i32, io::Error> {
     let status = match run {
         Run::Command(command, ios) => {
             if let Some(command_name) = command.command() {
                 let mut args = command.args_iter();
                 if !run_builtin(command_name, &mut args, jobs) {
                     let mut job = jobs.new_job();
-                    fork_exec(command, ios, &mut job)?;
-                    finish_run(background, job, jobs, Some(&term_settings), terminal_fd)
+                    match fork_exec(command, ios, &mut job) {
+                        Ok(()) => {
+                            finish_run(background, job, jobs, Some(&term_settings), terminal_fd)
+                        }
+                        Err(err) => {
+                            // Make sure we restore the terminal...
+                            restore_terminal(Some(&term_settings), terminal_fd, &job);
+                            return Err(err);
+                        }
+                    }
                 } else {
                     0
                 }
@@ -137,18 +150,28 @@ pub fn run_job(run: &Run, background: bool, jobs: &mut Jobs) -> Result<i32, io::
                 0
             }
         }
-        Run::Pipe(pipe, ios) => {
+        Run::Pipe(pipe, _ios) => {
             let mut job = jobs.new_job();
-            let stdin = ios.as_ref().and_then(|io| io.stdin());
-            let stdout = ios.as_ref().and_then(|io| io.stdout());
-            let stderr = ios.as_ref().and_then(|io| io.stderr());
-            fork_pipe(stdin, stdout, stderr, &pipe[..], &mut job, jobs, background)?;
-            finish_run(background, job, jobs, Some(&term_settings), terminal_fd)
+            match fork_pipe(
+                &pipe[..],
+                &mut job,
+                jobs,
+                background,
+                term_settings.clone(),
+                terminal_fd,
+            ) {
+                Ok(()) => finish_run(background, job, jobs, Some(&term_settings), terminal_fd),
+                Err(err) => {
+                    // Make sure we restore the terminal...
+                    restore_terminal(Some(&term_settings), terminal_fd, &job);
+                    return Err(err);
+                }
+            }
         }
         Run::Sequence(seq, _) => {
             let mut status = 0;
             for r in seq {
-                status = run_job(r, background, jobs)?;
+                status = run_job(r, background, jobs, term_settings.clone(), terminal_fd)?;
             }
             status
         }
@@ -156,7 +179,7 @@ pub fn run_job(run: &Run, background: bool, jobs: &mut Jobs) -> Result<i32, io::
             // XXXX should background == true be an error?
             let mut status = 0;
             for r in seq {
-                status = run_job(r, false, jobs)?;
+                status = run_job(r, false, jobs, term_settings.clone(), terminal_fd)?;
                 if status != 0 {
                     break;
                 }
@@ -167,7 +190,7 @@ pub fn run_job(run: &Run, background: bool, jobs: &mut Jobs) -> Result<i32, io::
             // XXXX should background == true be an error?
             let mut status = 0;
             for r in seq {
-                status = run_job(r, false, jobs)?;
+                status = run_job(r, false, jobs, term_settings.clone(), terminal_fd)?;
                 if status == 0 {
                     break;
                 }
@@ -183,8 +206,16 @@ pub fn run_one_command(command: &str, jobs: &mut Jobs) -> Result<(), io::Error> 
     // Try to make sense out of whatever crap we get (looking at you fzf-tmux)
     // and make it work.
     let commands = parse_line(command);
+    let term_settings = termios::tcgetattr(libc::STDIN_FILENO).unwrap();
+    let terminal_fd = terminal_fd();
 
-    run_job(commands.commands(), commands.background(), jobs)?;
+    run_job(
+        commands.commands(),
+        commands.background(),
+        jobs,
+        term_settings,
+        terminal_fd,
+    )?;
     Ok(())
 }
 
@@ -225,8 +256,7 @@ pub fn start_interactive(is_tty: bool) -> i32 {
                     continue;
                 }
                 _ => {
-                    eprintln!("Error on input: {err}");
-                    continue;
+                    panic!("Error on input: {err}");
                 }
             },
         };

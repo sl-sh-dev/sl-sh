@@ -1,3 +1,4 @@
+use crate::unix::close_fd;
 use std::ffi::{OsStr, OsString};
 use std::fs::File;
 use std::os::fd::IntoRawFd;
@@ -354,17 +355,41 @@ impl Run {
         }
     }
 
+    /// Set the FDs this Ios.  Will NOT overwrite existing values (FDs or names), this is important
+    /// for the proper interaction of pipes and redirects.
     fn set_io_inner(
         ios: &mut BoxedIos,
         stdin: Option<i32>,
         stdout: Option<i32>,
         stderr: Option<i32>,
+        allow_overwrite: bool,
     ) {
         match ios {
             Some(ios) => {
-                ios.stdin = stdin;
-                ios.stdout = stdout;
-                ios.stderr = stderr;
+                if let Some(fd) = stdin {
+                    if allow_overwrite || (ios.stdin.is_none() && ios.in_name.is_none()) {
+                        ios.stdin = stdin;
+                    } else {
+                        // Not using this FD so close it.
+                        let _ = close_fd(fd);
+                    }
+                }
+                if let Some(fd) = stdout {
+                    if allow_overwrite || (ios.stdout.is_none() && ios.out_name.is_none()) {
+                        ios.stdout = stdout;
+                    } else {
+                        // Not using this FD so close it.
+                        let _ = close_fd(fd);
+                    }
+                }
+                if let Some(fd) = stderr {
+                    if allow_overwrite || (ios.stderr.is_none() && ios.err_name.is_none()) {
+                        ios.stderr = stderr;
+                    } else {
+                        // Not using this FD so close it.
+                        let _ = close_fd(fd);
+                    }
+                }
             }
             None => {
                 let nios = Box::new(StdIos {
@@ -415,11 +440,28 @@ impl Run {
     /// Set the IOs for this Run.
     pub fn set_io(&mut self, stdin: Option<i32>, stdout: Option<i32>, stderr: Option<i32>) {
         match self {
-            Run::Command(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr),
-            Run::Pipe(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr),
-            Run::Sequence(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr),
-            Run::And(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr),
-            Run::Or(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr),
+            Run::Command(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr, true),
+            Run::Pipe(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr, true),
+            Run::Sequence(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr, true),
+            Run::And(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr, true),
+            Run::Or(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr, true),
+            Run::Empty => {}
+        }
+    }
+
+    /// Set the IOs for this Run- do not overwrite existing values and close an FD that can not overwrite.
+    pub fn set_io_no_overwrite(
+        &mut self,
+        stdin: Option<i32>,
+        stdout: Option<i32>,
+        stderr: Option<i32>,
+    ) {
+        match self {
+            Run::Command(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr, false),
+            Run::Pipe(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr, false),
+            Run::Sequence(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr, false),
+            Run::And(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr, false),
+            Run::Or(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr, false),
             Run::Empty => {}
         }
     }
@@ -454,7 +496,11 @@ impl Run {
         let inner = Some(Box::new((stdout, overwrite)));
         match self {
             Run::Command(_, ios) => Self::set_io_inner_names(ios, None, inner, None),
-            Run::Pipe(_, ios) => Self::set_io_inner_names(ios, None, inner, None),
+            Run::Pipe(seq, _ios) => {
+                if let Some(last) = seq.last_mut() {
+                    last.set_stdout_path((*inner.unwrap()).0, overwrite);
+                }
+            }
             Run::Sequence(seq, _ios) => {
                 if let Some(last) = seq.last_mut() {
                     last.set_stdout_path((*inner.unwrap()).0, overwrite);

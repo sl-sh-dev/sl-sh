@@ -14,6 +14,7 @@ use crate::signals::test_clear_sigint;
 use nix::libc;
 use nix::sys::signal::{self, kill, SigHandler, Signal};
 use nix::sys::termios;
+use nix::sys::termios::Termios;
 use nix::sys::wait::{self, WaitPidFlag, WaitStatus};
 use nix::unistd::{self, Pid};
 
@@ -68,63 +69,13 @@ fn anon_pipe() -> Result<(i32, i32), io::Error> {
     }
 }
 
-/*
-fn replace_fd(new_fd: i32, fd: i32) -> Result<i32, io::Error> {
-    Ok(unsafe {
-        let old = cvt(libc::dup(fd))?;
-        cvt(libc::dup2(new_fd, fd))?;
-        cvt(libc::close(new_fd))?;
-        old
-    })
-}
-
-fn replace_stdin(new_stdin: i32) -> Result<i32, io::Error> {
-    replace_fd(new_stdin, 0)
-}
-
-fn replace_stdout(new_stdout: i32) -> Result<i32, io::Error> {
-    replace_fd(new_stdout, 1)
-}
-
-fn replace_stderr(new_stderr: i32) -> Result<i32, io::Error> {
-    replace_fd(new_stderr, 2)
-}
-
-fn dup_stdin(new_stdin: i32) -> Result<(), io::Error> {
-    unsafe {
-        cvt(libc::dup2(new_stdin, 0))?;
-        cvt(libc::close(new_stdin))?;
-    }
-    Ok(())
-}
-
-fn dup_stdout(new_stdout: i32) -> Result<(), io::Error> {
-    unsafe {
-        cvt(libc::dup2(new_stdout, 1))?;
-        cvt(libc::close(new_stdout))?;
-    }
-    Ok(())
-}
-
-fn dup_stderr(new_stderr: i32) -> Result<(), io::Error> {
-    unsafe {
-        cvt(libc::dup2(new_stderr, 2))?;
-        cvt(libc::close(new_stderr))?;
-    }
-    Ok(())
-}
-
-fn close_fd(fd: i32) -> Result<(), io::Error> {
+/// Close a raw Unix file descriptor.
+pub fn close_fd(fd: i32) -> Result<(), io::Error> {
     unsafe {
         cvt(libc::close(fd))?;
     }
     Ok(())
 }
-
-fn fd_to_file(fd: i32) -> File {
-    unsafe { File::from_raw_fd(fd) }
-}
- */
 
 fn os2c(s: &OsStr, saw_nul: &mut bool) -> CString {
     CString::new(s.as_bytes()).unwrap_or_else(|_e| {
@@ -187,46 +138,57 @@ where
 }
 
 pub fn fork_pipe(
-    stdin: Option<i32>,
-    stdout: Option<i32>,
-    stderr: Option<i32>,
     new_job: &[Run],
     job: &mut Job,
     jobs: &mut Jobs,
     background: bool,
+    term_settings: Termios,
+    terminal_fd: i32,
 ) -> Result<(), io::Error> {
     let progs = new_job.len();
     let mut fds: [i32; 2] = [0; 2];
     unsafe {
         cvt(libc::pipe(fds.as_mut_ptr()))?;
     }
-    let mut next_in = stdin;
+    let mut next_in = None;
     let mut next_out = Some(fds[1]);
-    let mut upcoming_in = Some(fds[0]);
+    let mut upcoming_in = fds[0];
     for (i, program) in new_job.iter().enumerate() {
         if i == (progs - 1) {
             let mut program = program.clone();
-            program.set_io(next_in, stdout, stderr);
+            program.set_io_no_overwrite(next_in, None, None);
             if let Run::Command(command, ios) = &program {
                 fork_exec(command, ios, job)?;
             } else {
-                run_job(&program, background, jobs)?;
+                run_job(
+                    &program,
+                    background,
+                    jobs,
+                    term_settings.clone(),
+                    terminal_fd,
+                )?;
             }
         } else {
             let mut program = program.clone();
-            program.set_io(next_in, next_out, None);
+            program.set_io_no_overwrite(next_in, next_out, None);
             if let Run::Command(command, ios) = &program {
                 fork_exec(command, ios, job)?;
             } else {
-                run_job(&program, background, jobs)?;
+                run_job(
+                    &program,
+                    background,
+                    jobs,
+                    term_settings.clone(),
+                    terminal_fd,
+                )?;
             }
-            next_in = upcoming_in;
+            next_in = Some(upcoming_in);
             if i < (progs - 1) {
                 unsafe {
                     cvt(libc::pipe(fds.as_mut_ptr()))?;
                 }
                 next_out = Some(fds[1]);
-                upcoming_in = Some(fds[0]);
+                upcoming_in = fds[0];
             }
         }
     }
@@ -235,6 +197,123 @@ pub fn fork_pipe(
     } else {
         Ok(())
     }
+}
+
+/// Setup the child process stdios (stdin/out/err).  Dups any handles into 0, 1, 2 and closes other
+/// higher number handles in prep.
+/// This is ONLY to be called shortly after forking a child process.
+/// SAFETY: This is entire function is a bunch of libc calls, hence the unsafe.
+/// If this function returns an err then the fork MUST notify the parent and exit.
+unsafe fn setup_child_stdio(
+    stdin: Option<i32>,
+    stdout: Option<i32>,
+    stderr: Option<i32>,
+) -> Result<(), io::Error> {
+    if let Some(stdin) = stdin {
+        if stdin != 0 {
+            // Sanity check we are not already stdin...
+            cvt(libc::dup2(stdin, 0))?;
+            // This would be very odd for stdin to be less than or equal to 2 but don't close if it is (?)...
+            if stdin > 2 {
+                cvt(libc::close(stdin))?;
+            }
+        }
+    }
+    if let Some(stdout) = stdout {
+        if stdout != 1 {
+            // Sanity check we are not already stdout...
+            cvt(libc::dup2(stdout, 1))?;
+        }
+    }
+    if let Some(stderr) = stderr {
+        if stderr != 2 {
+            // Sanity check we are not already stderr...
+            cvt(libc::dup2(stderr, 2))?;
+        }
+    }
+    if let Some(stdout) = stdout {
+        if stdout > 2 {
+            // Make sure we don't close a std IO by accident.
+            cvt(libc::close(stdout))?;
+        }
+        if let Some(stderr) = stderr {
+            // Don't close an existing stdio and don't double close stdout if equal stdout.
+            if stderr > 2 && stderr != stdout {
+                cvt(libc::close(stderr))?;
+            }
+        }
+    } else if let Some(stderr) = stderr {
+        if stderr > 2 {
+            // Make sure we don't close a std IO by accident.
+            cvt(libc::close(stderr))?;
+        }
+    }
+    Ok(())
+}
+
+/// If the parent (shell) has any open FDs for child stdio then close them.
+/// Log errors, we should not get any but if we do probably want to keep going- we have a child now...
+unsafe fn close_parent_stdio(stdin: Option<i32>, stdout: Option<i32>, stderr: Option<i32>) {
+    if let Some(stdin) = stdin {
+        if stdin > 2 {
+            // Don't close a stdio by accident.
+            if let Err(err) = cvt(libc::close(stdin)) {
+                eprintln!("Error closing child stdin ({stdin}) file descriptor: {err}");
+            }
+        }
+    }
+    // It's possible that stdout and stderr share a file descriptor so this weirdness accounts for that.
+    if let Some(stdout) = stdout {
+        if stdout > 2 {
+            // Don't close a stdio by accident.
+            if let Err(err) = cvt(libc::close(stdout)) {
+                eprintln!("Error closing child stdout ({stdout}) file descriptor: {err}");
+            }
+        }
+        if let Some(stderr) = stderr {
+            if stderr > 2 && stderr != stdout {
+                // Don't close a stdio by accident or double close stdout.
+                if let Err(err) = cvt(libc::close(stderr)) {
+                    eprintln!("Error closing child stderr ({stderr}) file descriptor: {err}");
+                }
+            }
+        }
+    } else if let Some(stderr) = stderr {
+        if stderr > 2 {
+            // Don't close a stdio by accident.
+            if let Err(err) = cvt(libc::close(stderr)) {
+                eprintln!("Error closing child stderr ({stderr}) file descriptor: {err}");
+            }
+        }
+    }
+}
+
+const CLOEXEC_MSG_FOOTER: [u8; 4] = *b"NOEX";
+
+/// Send an error code back tot he parent from a child process indicating it failed to fork.
+/// This function exits the child when done (i.e. never returns).
+/// ONLY call on error in a child process.
+/// SAFETY: this is doing "unsafe" libc/process stuff...
+unsafe fn send_error_to_parent(output: i32, err: io::Error) {
+    let errno = err.raw_os_error().unwrap_or(libc::EINVAL) as u32;
+    let errno = errno.to_be_bytes();
+    let bytes = [
+        errno[0],
+        errno[1],
+        errno[2],
+        errno[3],
+        CLOEXEC_MSG_FOOTER[0],
+        CLOEXEC_MSG_FOOTER[1],
+        CLOEXEC_MSG_FOOTER[2],
+        CLOEXEC_MSG_FOOTER[3],
+    ];
+    // pipe I/O up to PIPE_BUF bytes should be atomic, and then
+    // we want to be sure we *don't* run at_exit destructors as
+    // we're being torn down regardless
+    if let Err(e) = File::from_raw_fd(output).write_all(&bytes) {
+        eprintln!("Error on child reporting error (err) to parent: {e}");
+    }
+    libc::_exit(1);
 }
 
 pub fn fork_exec(
@@ -251,7 +330,6 @@ pub fn fork_exec(
         return Err(io::Error::new(ErrorKind::Other, "no program to execute"));
     };
     let args = command.args_iter();
-    const CLOEXEC_MSG_FOOTER: [u8; 4] = *b"NOEX";
     let (input, output) = anon_pipe()?;
     let result = unsafe { cvt(libc::fork())? };
 
@@ -259,46 +337,9 @@ pub fn fork_exec(
         match result {
             0 => {
                 libc::close(input);
-                if let Some(stdin) = stdin {
-                    if let Err(err) = cvt(libc::dup2(stdin, 0)) {
-                        eprintln!("Error setting up stdin (dup) in pipe: {}", err);
-                        libc::_exit(10);
-                    }
-                    if let Err(err) = cvt(libc::close(stdin)) {
-                        eprintln!("Error setting up stdin (close) in pipe: {}", err);
-                        libc::_exit(10);
-                    }
-                }
-                if let Some(stdout) = stdout {
-                    if let Err(err) = cvt(libc::dup2(stdout, 1)) {
-                        eprintln!("Error setting up stdout (dup) in pipe: {}", err);
-                        libc::_exit(10);
-                    }
-                }
-                if let Some(stderr) = stderr {
-                    if let Err(err) = cvt(libc::dup2(stderr, 2)) {
-                        eprintln!("Error setting up stderr (dup) in pipe: {}", err);
-                        libc::_exit(10);
-                    }
-                }
-                if let Some(stdout) = stdout {
-                    if let Err(err) = cvt(libc::close(stdout)) {
-                        eprintln!("Error setting up stdout (close) in pipe: {}", err);
-                        libc::_exit(10);
-                    }
-                    if let Some(stderr) = stderr {
-                        if stderr != stdout {
-                            if let Err(err) = cvt(libc::close(stderr)) {
-                                eprintln!("Error setting up stderr (close) in pipe: {}", err);
-                                libc::_exit(10);
-                            }
-                        }
-                    }
-                } else if let Some(stderr) = stderr {
-                    if let Err(err) = cvt(libc::close(stderr)) {
-                        eprintln!("Error setting up stderr (close) in pipe: {}", err);
-                        libc::_exit(10);
-                    }
+                if let Err(err) = setup_child_stdio(stdin, stdout, stderr) {
+                    // This call won't return.
+                    send_error_to_parent(output, err);
                 }
                 //XXXX if jobs.job_control() {
                 let pid = unistd::getpid();
@@ -317,38 +358,21 @@ pub fn fork_exec(
                 //}
 
                 let err = exec(program, args);
-                let errno = err.raw_os_error().unwrap_or(libc::EINVAL) as u32;
-                let errno = errno.to_be_bytes();
-                let bytes = [
-                    errno[0],
-                    errno[1],
-                    errno[2],
-                    errno[3],
-                    CLOEXEC_MSG_FOOTER[0],
-                    CLOEXEC_MSG_FOOTER[1],
-                    CLOEXEC_MSG_FOOTER[2],
-                    CLOEXEC_MSG_FOOTER[3],
-                ];
-                // pipe I/O up to PIPE_BUF bytes should be atomic, and then
-                // we want to be sure we *don't* run at_exit destructors as
-                // we're being torn down regardless
-                File::from_raw_fd(output).write_all(&bytes)?;
-                libc::_exit(1);
+                // This call won't return.
+                send_error_to_parent(output, err);
+                0
             }
             n => n,
         }
     };
     unsafe {
         libc::close(output);
-        if let Some(stdin) = stdin {
-            cvt(libc::close(stdin))?;
-        }
-        if let Some(stdout) = stdout {
-            cvt(libc::close(stdout))?;
-        }
+        // Close any FD for child stdio we don;t care about.
+        close_parent_stdio(stdin, stdout, stderr);
     }
     let mut bytes = [0; 8];
 
+    // Wait for a status message or closed pipe from the child.
     let mut input = unsafe { File::from_raw_fd(input) };
     // loop to handle EINTR
     loop {

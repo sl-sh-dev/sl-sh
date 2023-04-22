@@ -107,6 +107,7 @@ fn push_next_seq_item(
     }
 }
 
+#[derive(Debug)]
 struct ParseState {
     ret: ParsedJob,
     // Should not be None, is Option to allow ownership to change.
@@ -119,6 +120,8 @@ struct ParseState {
     current_seq: SeqType,
     redir_create: bool,
     redir_append: bool,
+    redir_err_create: bool,
+    redir_err_append: bool,
     redir_in: bool,
 }
 
@@ -141,6 +144,8 @@ impl ParseState {
             current_seq,
             redir_create: false,
             redir_append: false,
+            redir_err_create: false,
+            redir_err_append: false,
             redir_in: false,
         }
     }
@@ -159,22 +164,45 @@ impl ParseState {
         result
     }
 
+    fn clear_redirs(&mut self) {
+        self.redir_create = false;
+        self.redir_append = false;
+        self.redir_in = false;
+        self.redir_err_create = false;
+        self.redir_err_append = false;
+    }
+
     fn proc_token(&mut self) {
         let token = self.take_token();
         if !token.is_empty() {
-            if self.redir_create {
-                self.ret.set_stdout_path(token.into(), true);
-                self.redir_create = false;
-                self.redir_append = false;
+            let command = if self.redir_create {
+                self.ret.set_stdout_path(token.clone().into(), true);
+                false
             } else if self.redir_append {
-                self.ret.set_stdout_path(token.into(), false);
-                self.redir_append = false;
+                self.ret.set_stdout_path(token.clone().into(), false);
+                false
             } else if self.redir_in {
-                self.ret.set_stdin_path(token.into(), false);
-                self.redir_in = false;
+                self.ret.set_stdin_path(token.clone().into(), false);
+                false
             } else {
+                true
+            };
+            if self.redir_err_create {
+                if self.redir_create {
+                    self.ret.commands_mut().set_io(None, None, Some(1));
+                } else {
+                    self.ret.set_stderr_path(token.into(), true);
+                }
+            } else if self.redir_err_append {
+                if self.redir_append {
+                    self.ret.commands_mut().set_io(None, None, Some(1));
+                } else {
+                    self.ret.set_stderr_path(token.into(), false);
+                }
+            } else if command {
                 self.command().push_arg(token.into());
             }
+            self.clear_redirs();
         }
     }
 
@@ -256,13 +284,43 @@ impl ParseState {
         } else if next_char == '>' {
             self.proc_token();
             self.end_command();
-            self.redir_append = true;
+            if self.last_ch == '2' {
+                self.redir_err_append = true;
+            } else if self.last_ch == '1' {
+                self.redir_append = true;
+            } else if self.last_ch == '&' {
+                self.redir_err_append = true;
+                self.redir_append = true;
+            } else {
+                self.redir_append = true;
+            }
             chars.next();
             self.last_ch = ' ';
         } else {
             self.proc_token();
             self.end_command();
-            self.redir_create = true;
+            if self.last_ch == '2' {
+                if next_char == '1' {
+                    // '2>1'- stderr to stdout.
+                    chars.next(); // Consume the '1'.
+                    self.ret.commands_mut().set_io(None, None, Some(1));
+                } else {
+                    self.redir_err_create = true;
+                }
+            } else if self.last_ch == '1' {
+                if next_char == '1' {
+                    // '1>2'- stdout to stderr.
+                    chars.next(); // Consume the '2'.
+                    self.ret.commands_mut().set_io(None, Some(2), None);
+                } else {
+                    self.redir_create = true;
+                }
+            } else if self.last_ch == '&' {
+                self.redir_err_create = true;
+                self.redir_create = true;
+            } else {
+                self.redir_create = true;
+            }
             self.last_ch = ' ';
         }
     }
@@ -323,6 +381,19 @@ pub fn parse_line(input: &str) -> ParsedJob {
                 }
                 '<' => {
                     state.redir_in();
+                }
+                '&' if state.last_ch == '\\' => {
+                    state.token().push('&');
+                    state.last_ch = ' ';
+                }
+                '&' if next_char == '>' => {
+                    state.last_ch = '&';
+                }
+                '1' if next_char == '>' => {
+                    state.last_ch = '1';
+                }
+                '2' if next_char == '>' => {
+                    state.last_ch = '2';
                 }
                 '&' if state.last_ch != '\\' => {
                     state.and(ch);
