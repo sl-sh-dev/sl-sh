@@ -21,11 +21,13 @@ pub struct StdIos {
     err_name: Option<Box<(PathBuf, bool)>>,
 }
 
-fn extract_fd(fd: &Option<i32>, file_info: Option<&(PathBuf, bool)>) -> Option<i32> {
+fn extract_fd(fd: &Option<i32>, file_info: Option<&(PathBuf, bool)>, stdin: bool) -> Option<i32> {
     if let Some(fd) = fd {
         Some(*fd)
     } else if let Some((name, overwrite)) = file_info {
-        let f = if *overwrite {
+        let f = if stdin {
+            File::open(name)
+        } else if *overwrite {
             File::create(name)
         } else {
             File::options().append(true).create(true).open(name)
@@ -43,17 +45,17 @@ fn extract_fd(fd: &Option<i32>, file_info: Option<&(PathBuf, bool)>) -> Option<i
 impl StdIos {
     /// Stdin file descriptor.
     pub fn stdin(&self) -> Option<i32> {
-        extract_fd(&self.stdin, self.in_name.as_deref())
+        extract_fd(&self.stdin, self.in_name.as_deref(), true)
     }
 
     /// Stdout file descriptor.
     pub fn stdout(&self) -> Option<i32> {
-        extract_fd(&self.stdout, self.out_name.as_deref())
+        extract_fd(&self.stdout, self.out_name.as_deref(), false)
     }
 
     /// Stderr file descriptor.
     pub fn stderr(&self) -> Option<i32> {
-        extract_fd(&self.stderr, self.err_name.as_deref())
+        extract_fd(&self.stderr, self.err_name.as_deref(), false)
     }
 }
 

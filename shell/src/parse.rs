@@ -119,6 +119,7 @@ struct ParseState {
     current_seq: SeqType,
     redir_create: bool,
     redir_append: bool,
+    redir_in: bool,
 }
 
 impl ParseState {
@@ -140,6 +141,7 @@ impl ParseState {
             current_seq,
             redir_create: false,
             redir_append: false,
+            redir_in: false,
         }
     }
 
@@ -167,6 +169,9 @@ impl ParseState {
             } else if self.redir_append {
                 self.ret.set_stdout_path(token.into(), false);
                 self.redir_append = false;
+            } else if self.redir_in {
+                self.ret.set_stdin_path(token.into(), false);
+                self.redir_in = false;
             } else {
                 self.command().push_arg(token.into());
             }
@@ -188,13 +193,17 @@ impl ParseState {
 
     fn str_single(&mut self, ch: char) {
         self.in_string = !self.in_string;
-        self.proc_token();
+        if !self.in_string {
+            self.proc_token();
+        }
         self.last_ch = ch;
     }
 
     fn str_double(&mut self, ch: char) {
         self.in_stringd = !self.in_stringd;
-        self.proc_token();
+        if !self.in_stringd {
+            self.proc_token();
+        }
         self.last_ch = ch;
     }
 
@@ -239,6 +248,36 @@ impl ParseState {
         }
         self.last_ch = ch;
     }
+
+    fn redir_out(&mut self, next_char: char, chars: &mut dyn Iterator<Item = char>) {
+        if self.last_ch == '\\' {
+            self.token().push('>');
+            self.last_ch = ' ';
+        } else if next_char == '>' {
+            self.proc_token();
+            self.end_command();
+            self.redir_append = true;
+            chars.next();
+            self.last_ch = ' ';
+        } else {
+            self.proc_token();
+            self.end_command();
+            self.redir_create = true;
+            self.last_ch = ' ';
+        }
+    }
+
+    fn redir_in(&mut self) {
+        if self.last_ch == '\\' {
+            self.token().push('<');
+            self.last_ch = ' ';
+        } else {
+            self.proc_token();
+            self.end_command();
+            self.redir_in = true;
+            self.last_ch = ' ';
+        }
+    }
 }
 
 impl From<ParseState> for ParsedJob {
@@ -279,22 +318,11 @@ pub fn parse_line(input: &str) -> ParsedJob {
                 ';' if state.last_ch != '\\' => {
                     state.seq();
                 }
-                '>' if state.last_ch == '\\' => {
-                    state.token().push('>');
-                    state.last_ch = ' ';
-                }
-                '>' if next_char == '>' => {
-                    state.proc_token();
-                    state.end_command();
-                    state.redir_append = true;
-                    chars.next();
-                    state.last_ch = ' ';
-                }
                 '>' => {
-                    state.proc_token();
-                    state.end_command();
-                    state.redir_create = true;
-                    state.last_ch = ' ';
+                    state.redir_out(next_char, &mut chars);
+                }
+                '<' => {
+                    state.redir_in();
                 }
                 '&' if state.last_ch != '\\' => {
                     state.and(ch);
@@ -322,8 +350,8 @@ pub fn parse_line(input: &str) -> ParsedJob {
             state.ret.set_background(true);
         } else {
             state.proc_token();
-            state.end_command();
         }
     }
+    state.end_command();
     state.into()
 }
