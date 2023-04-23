@@ -308,7 +308,7 @@ impl ParseState {
                     self.redir_err_create = true;
                 }
             } else if self.last_ch == '1' {
-                if next_char == '1' {
+                if next_char == '2' {
                     // '1>2'- stdout to stderr.
                     chars.next(); // Consume the '2'.
                     self.ret.commands_mut().set_io(None, Some(2), None);

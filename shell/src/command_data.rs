@@ -1,8 +1,8 @@
-use crate::unix::close_fd;
+use crate::unix::{close_fd, dup_fd};
 use std::ffi::{OsStr, OsString};
 use std::fs::File;
 use std::os::fd::IntoRawFd;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Arg to a command, either a direct string or a sub command to run to get the arg.
 #[derive(Clone, Debug)]
@@ -11,52 +11,110 @@ pub enum Arg {
     Command(Run),
 }
 
+#[derive(Clone, Debug)]
+enum IoType {
+    FileDescriptor(i32),
+    FilePath(PathBuf, bool), //  Path, overwrite file?
+}
+
+#[derive(Clone, Debug)]
+enum StdIoType {
+    Stdin(IoType),
+    Stdout(IoType),
+    Stderr(IoType),
+}
+
 /// Optional file descriptors for standard in, out and error.
 #[derive(Clone, Debug)]
 pub struct StdIos {
-    stdin: Option<i32>,
-    stdout: Option<i32>,
-    stderr: Option<i32>,
-    in_name: Option<Box<(PathBuf, bool)>>,
-    out_name: Option<Box<(PathBuf, bool)>>,
-    err_name: Option<Box<(PathBuf, bool)>>,
+    redirects: Vec<StdIoType>,
 }
 
-fn extract_fd(fd: &Option<i32>, file_info: Option<&(PathBuf, bool)>, stdin: bool) -> Option<i32> {
-    if let Some(fd) = fd {
-        Some(*fd)
-    } else if let Some((name, overwrite)) = file_info {
-        let f = if stdin {
-            File::open(name)
-        } else if *overwrite {
-            File::create(name)
-        } else {
-            File::options().append(true).create(true).open(name)
-        };
-        if let Ok(f) = f {
-            Some(f.into_raw_fd())
-        } else {
+fn path_fd(name: &Path, overwrite: bool, is_stdin: bool) -> Option<i32> {
+    let f = if is_stdin {
+        File::open(name)
+    } else if overwrite {
+        File::create(name)
+    } else {
+        File::options().append(true).create(true).open(name)
+    };
+    match f {
+        Ok(f) => Some(f.into_raw_fd()),
+        Err(err) => {
+            eprintln!("Error opening {}: {err}", name.display());
             None
         }
-    } else {
-        None
     }
+}
+
+fn dup_stdio(fd: i32, std: Option<i32>) -> i32 {
+    if let Some(std_fd) = std {
+        if let Ok(new_fd) = dup_fd(std_fd) {
+            new_fd
+        } else {
+            fd
+        }
+    } else {
+        fd
+    }
+}
+
+fn set_io(stdio: &mut Option<i32>, fd: i32) {
+    if let Some(old_fd) = stdio {
+        // Close the previous FD.
+        let _ = close_fd(*old_fd);
+    }
+    *stdio = Some(fd);
 }
 
 impl StdIos {
-    /// Stdin file descriptor.
-    pub fn stdin(&self) -> Option<i32> {
-        extract_fd(&self.stdin, self.in_name.as_deref(), true)
-    }
+    pub fn stdio(&self) -> (Option<i32>, Option<i32>, Option<i32>) {
+        let mut stdin: Option<i32> = None;
+        let mut stdout: Option<i32> = None;
+        let mut stderr: Option<i32> = None;
 
-    /// Stdout file descriptor.
-    pub fn stdout(&self) -> Option<i32> {
-        extract_fd(&self.stdout, self.out_name.as_deref(), false)
-    }
-
-    /// Stderr file descriptor.
-    pub fn stderr(&self) -> Option<i32> {
-        extract_fd(&self.stderr, self.err_name.as_deref(), false)
+        for s in &self.redirects {
+            match s {
+                StdIoType::Stdin(IoType::FileDescriptor(fd)) => set_io(&mut stdin, *fd),
+                StdIoType::Stdout(IoType::FileDescriptor(fd)) => {
+                    let new_fd = if *fd == 2 {
+                        // Set equal to current stderr
+                        dup_stdio(*fd, stderr)
+                    } else {
+                        *fd
+                    };
+                    set_io(&mut stdout, new_fd);
+                }
+                StdIoType::Stderr(IoType::FileDescriptor(fd)) => {
+                    let new_fd = if *fd == 1 {
+                        // Set equal to current stdout
+                        dup_stdio(*fd, stdout)
+                    } else {
+                        *fd
+                    };
+                    set_io(&mut stderr, new_fd);
+                }
+                StdIoType::Stdin(IoType::FilePath(path, overwrite)) => {
+                    let new_fd = path_fd(path, *overwrite, true);
+                    if let Some(new_fd) = new_fd {
+                        set_io(&mut stdin, new_fd);
+                    }
+                }
+                StdIoType::Stdout(IoType::FilePath(path, overwrite)) => {
+                    let new_fd = path_fd(path, *overwrite, false);
+                    if let Some(new_fd) = new_fd {
+                        set_io(&mut stdout, new_fd);
+                    }
+                }
+                StdIoType::Stderr(IoType::FilePath(path, overwrite)) => {
+                    let new_fd = path_fd(path, *overwrite, false);
+                    if let Some(new_fd) = new_fd {
+                        set_io(&mut stderr, new_fd);
+                    }
+                }
+            }
+        }
+        (stdin, stdout, stderr)
     }
 }
 
@@ -319,39 +377,15 @@ impl Run {
         }
     }
 
-    /// Return the stdin for this Run.
-    pub fn stdin(&self) -> Option<i32> {
+    /// Return the stdios for this Run.
+    pub fn stdio(&self) -> (Option<i32>, Option<i32>, Option<i32>) {
         match self {
-            Run::Command(_, ios) => ios.as_ref().and_then(|io| io.stdin()),
-            Run::Pipe(_, ios) => ios.as_ref().and_then(|io| io.stdin()),
-            Run::Sequence(_, ios) => ios.as_ref().and_then(|io| io.stdin()),
-            Run::And(_, ios) => ios.as_ref().and_then(|io| io.stdin()),
-            Run::Or(_, ios) => ios.as_ref().and_then(|io| io.stdin()),
-            Run::Empty => None,
-        }
-    }
-
-    /// Return the stdout for this Run.
-    pub fn stdout(&self) -> Option<i32> {
-        match self {
-            Run::Command(_, ios) => ios.as_ref().and_then(|io| io.stdout()),
-            Run::Pipe(_, ios) => ios.as_ref().and_then(|io| io.stdout()),
-            Run::Sequence(_, ios) => ios.as_ref().and_then(|io| io.stdout()),
-            Run::And(_, ios) => ios.as_ref().and_then(|io| io.stdout()),
-            Run::Or(_, ios) => ios.as_ref().and_then(|io| io.stdout()),
-            Run::Empty => None,
-        }
-    }
-
-    /// Return the stderr for this Run.
-    pub fn stderr(&self) -> Option<i32> {
-        match self {
-            Run::Command(_, ios) => ios.as_ref().and_then(|io| io.stderr()),
-            Run::Pipe(_, ios) => ios.as_ref().and_then(|io| io.stderr()),
-            Run::Sequence(_, ios) => ios.as_ref().and_then(|io| io.stderr()),
-            Run::And(_, ios) => ios.as_ref().and_then(|io| io.stderr()),
-            Run::Or(_, ios) => ios.as_ref().and_then(|io| io.stderr()),
-            Run::Empty => None,
+            Run::Command(_, ios) => ios.as_ref().map(|io| io.stdio()).unwrap_or_default(),
+            Run::Pipe(_, ios) => ios.as_ref().map(|io| io.stdio()).unwrap_or_default(),
+            Run::Sequence(_, ios) => ios.as_ref().map(|io| io.stdio()).unwrap_or_default(),
+            Run::And(_, ios) => ios.as_ref().map(|io| io.stdio()).unwrap_or_default(),
+            Run::Or(_, ios) => ios.as_ref().map(|io| io.stdio()).unwrap_or_default(),
+            Run::Empty => (None, None, None),
         }
     }
 
@@ -362,45 +396,42 @@ impl Run {
         stdin: Option<i32>,
         stdout: Option<i32>,
         stderr: Option<i32>,
-        allow_overwrite: bool,
+        push_back: bool,
     ) {
         match ios {
             Some(ios) => {
                 if let Some(fd) = stdin {
-                    if allow_overwrite || (ios.stdin.is_none() && ios.in_name.is_none()) {
-                        ios.stdin = stdin;
+                    if push_back {
+                        ios.redirects
+                            .push(StdIoType::Stdin(IoType::FileDescriptor(fd)));
                     } else {
-                        // Not using this FD so close it.
-                        let _ = close_fd(fd);
+                        ios.redirects
+                            .insert(0, StdIoType::Stdin(IoType::FileDescriptor(fd)));
                     }
                 }
                 if let Some(fd) = stdout {
-                    if allow_overwrite || (ios.stdout.is_none() && ios.out_name.is_none()) {
-                        ios.stdout = stdout;
+                    if push_back {
+                        ios.redirects
+                            .push(StdIoType::Stdout(IoType::FileDescriptor(fd)));
                     } else {
-                        // Not using this FD so close it.
-                        let _ = close_fd(fd);
+                        ios.redirects
+                            .insert(0, StdIoType::Stdout(IoType::FileDescriptor(fd)));
                     }
                 }
                 if let Some(fd) = stderr {
-                    if allow_overwrite || (ios.stderr.is_none() && ios.err_name.is_none()) {
-                        ios.stderr = stderr;
+                    if push_back {
+                        ios.redirects
+                            .push(StdIoType::Stderr(IoType::FileDescriptor(fd)));
                     } else {
-                        // Not using this FD so close it.
-                        let _ = close_fd(fd);
+                        ios.redirects
+                            .insert(0, StdIoType::Stderr(IoType::FileDescriptor(fd)));
                     }
                 }
             }
             None => {
-                let nios = Box::new(StdIos {
-                    stdin,
-                    stdout,
-                    stderr,
-                    in_name: None,
-                    out_name: None,
-                    err_name: None,
-                });
+                let nios = Box::new(StdIos { redirects: vec![] });
                 *ios = Some(nios);
+                Self::set_io_inner(ios, stdin, stdout, stderr, push_back)
             }
         }
     }
@@ -413,26 +444,23 @@ impl Run {
     ) {
         match ios {
             Some(ios) => {
-                if in_name.is_some() {
-                    ios.in_name = in_name;
+                if let Some(name) = in_name {
+                    ios.redirects
+                        .push(StdIoType::Stdin(IoType::FilePath((*name).0, (*name).1)));
                 }
-                if out_name.is_some() {
-                    ios.out_name = out_name;
+                if let Some(name) = out_name {
+                    ios.redirects
+                        .push(StdIoType::Stdout(IoType::FilePath((*name).0, (*name).1)));
                 }
-                if err_name.is_some() {
-                    ios.err_name = err_name;
+                if let Some(name) = err_name {
+                    ios.redirects
+                        .push(StdIoType::Stderr(IoType::FilePath((*name).0, (*name).1)));
                 }
             }
             None => {
-                let nios = Box::new(StdIos {
-                    stdin: None,
-                    stdout: None,
-                    stderr: None,
-                    in_name,
-                    out_name,
-                    err_name,
-                });
+                let nios = Box::new(StdIos { redirects: vec![] });
                 *ios = Some(nios);
+                Self::set_io_inner_names(ios, in_name, out_name, err_name)
             }
         }
     }
@@ -449,13 +477,8 @@ impl Run {
         }
     }
 
-    /// Set the IOs for this Run- do not overwrite existing values and close an FD that can not overwrite.
-    pub fn set_io_no_overwrite(
-        &mut self,
-        stdin: Option<i32>,
-        stdout: Option<i32>,
-        stderr: Option<i32>,
-    ) {
+    /// Set the IOs for this Run- Put at front of the queue for pipes.
+    pub fn set_io_first(&mut self, stdin: Option<i32>, stdout: Option<i32>, stderr: Option<i32>) {
         match self {
             Run::Command(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr, false),
             Run::Pipe(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr, false),

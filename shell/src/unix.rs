@@ -156,7 +156,7 @@ pub fn fork_pipe(
     for (i, program) in new_job.iter().enumerate() {
         if i == (progs - 1) {
             let mut program = program.clone();
-            program.set_io_no_overwrite(next_in, None, None);
+            program.set_io_first(next_in, None, None);
             if let Run::Command(command, ios) = &program {
                 fork_exec(command, ios, job)?;
             } else {
@@ -170,7 +170,7 @@ pub fn fork_pipe(
             }
         } else {
             let mut program = program.clone();
-            program.set_io_no_overwrite(next_in, next_out, None);
+            program.set_io_first(next_in, next_out, None);
             if let Run::Command(command, ios) = &program {
                 fork_exec(command, ios, job)?;
             } else {
@@ -321,9 +321,7 @@ pub fn fork_exec(
     ios: &BoxedIos,
     job: &mut Job,
 ) -> Result<(), io::Error> {
-    let stdin = ios.as_ref().and_then(|io| io.stdin());
-    let stdout = ios.as_ref().and_then(|io| io.stdout());
-    let stderr = ios.as_ref().and_then(|io| io.stderr());
+    let (stdin, stdout, stderr) = ios.as_ref().map(|io| io.stdio()).unwrap_or_default();
     let program = if let Some(program) = command.command() {
         program
     } else {
@@ -502,4 +500,9 @@ pub fn terminal_fd() -> i32 {
     } else {
         0
     }
+}
+
+/// Duplicate a raw file descriptor.
+pub fn dup_fd(fd: i32) -> Result<i32, io::Error> {
+    unsafe { cvt(libc::dup(fd)) }
 }
