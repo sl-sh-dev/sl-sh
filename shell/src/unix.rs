@@ -506,3 +506,12 @@ pub fn terminal_fd() -> i32 {
 pub fn dup_fd(fd: i32) -> Result<i32, io::Error> {
     unsafe { cvt(libc::dup(fd)) }
 }
+
+/// Make an anon pipe, (read, write).
+pub fn pipe() -> Result<(i32, i32), io::Error> {
+    let mut fds: [i32; 2] = [0; 2];
+    unsafe {
+        cvt(libc::pipe(fds.as_mut_ptr()))?;
+    }
+    Ok((fds[0], fds[1]))
+}

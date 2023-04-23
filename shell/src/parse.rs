@@ -1,4 +1,8 @@
 use crate::command_data::{BoxedIos, CommandWithArgs, Run};
+use crate::unix::pipe;
+use std::fs::File;
+use std::io::Write;
+use std::os::fd::FromRawFd;
 use std::path::PathBuf;
 
 /// Type of the current sequence being parsed.
@@ -123,6 +127,7 @@ struct ParseState {
     redir_err_create: bool,
     redir_err_append: bool,
     redir_in: bool,
+    redir_in_direct: bool,
 }
 
 impl ParseState {
@@ -147,6 +152,7 @@ impl ParseState {
             redir_err_create: false,
             redir_err_append: false,
             redir_in: false,
+            redir_in_direct: false,
         }
     }
 
@@ -168,6 +174,7 @@ impl ParseState {
         self.redir_create = false;
         self.redir_append = false;
         self.redir_in = false;
+        self.redir_in_direct = false;
         self.redir_err_create = false;
         self.redir_err_append = false;
     }
@@ -183,6 +190,17 @@ impl ParseState {
                 false
             } else if self.redir_in {
                 self.ret.set_stdin_path(token.clone().into(), false);
+                false
+            } else if self.redir_in_direct {
+                if let Ok((pread, pwrite)) = pipe() {
+                    unsafe {
+                        let mut file = File::from_raw_fd(pwrite);
+                        if let Err(e) = file.write_all(token.as_bytes()) {
+                            eprintln!("Error writing {token} to stdin: {e}");
+                        }
+                    }
+                    self.ret.commands_mut().set_io(Some(pread), None, None);
+                }
                 false
             } else {
                 true
@@ -325,10 +343,16 @@ impl ParseState {
         }
     }
 
-    fn redir_in(&mut self) {
+    fn redir_in(&mut self, next_char: char, chars: &mut dyn Iterator<Item = char>) {
         if self.last_ch == '\\' {
             self.token().push('<');
             self.last_ch = ' ';
+        } else if next_char == '<' {
+            self.proc_token();
+            self.end_command();
+            chars.next();
+            self.last_ch = ' ';
+            self.redir_in_direct = true;
         } else {
             self.proc_token();
             self.end_command();
@@ -380,7 +404,7 @@ pub fn parse_line(input: &str) -> ParsedJob {
                     state.redir_out(next_char, &mut chars);
                 }
                 '<' => {
-                    state.redir_in();
+                    state.redir_in(next_char, &mut chars);
                 }
                 '&' if state.last_ch == '\\' => {
                     state.token().push('&');
