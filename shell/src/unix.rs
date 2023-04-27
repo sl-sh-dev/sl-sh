@@ -6,7 +6,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::unix::io::FromRawFd;
 use std::ptr;
 
-use crate::command_data::{BoxedIos, CommandWithArgs, Run};
+use crate::command_data::{CommandWithArgs, Run};
 use crate::glob::{expand_glob, GlobOutput};
 use crate::jobs::{Job, Jobs};
 use crate::run_job;
@@ -155,13 +155,13 @@ pub fn fork_pipe(
     let mut upcoming_in = fds[0];
     for (i, program) in new_job.iter().enumerate() {
         if i == (progs - 1) {
-            let mut program = program.clone();
-            program.set_io_first(next_in, None, None);
-            if let Run::Command(command, ios) = &program {
-                fork_exec(command, ios, job)?;
+            if let Run::Command(command) = program {
+                let mut command = command.clone();
+                command.push_stdin_front(next_in);
+                fork_exec(&command, job)?; //ios, job)?;
             } else {
                 run_job(
-                    &program,
+                    program,
                     background,
                     jobs,
                     term_settings.clone(),
@@ -169,13 +169,14 @@ pub fn fork_pipe(
                 )?;
             }
         } else {
-            let mut program = program.clone();
-            program.set_io_first(next_in, next_out, None);
-            if let Run::Command(command, ios) = &program {
-                fork_exec(command, ios, job)?;
+            if let Run::Command(command) = program {
+                let mut command = command.clone();
+                command.push_stdin_front(next_in);
+                command.push_stdout_front(next_out);
+                fork_exec(&command, job)?;
             } else {
                 run_job(
-                    &program,
+                    program,
                     background,
                     jobs,
                     term_settings.clone(),
@@ -318,10 +319,10 @@ unsafe fn send_error_to_parent(output: i32, err: io::Error) {
 
 pub fn fork_exec(
     command: &CommandWithArgs,
-    ios: &BoxedIos,
+    //ios: &BoxedIos,
     job: &mut Job,
 ) -> Result<(), io::Error> {
-    let (stdin, stdout, stderr) = ios.as_ref().map(|io| io.stdio()).unwrap_or_default();
+    let (stdin, stdout, stderr) = command.stdios(); //ios.as_ref().map(|io| io.stdio()).unwrap_or_default();
     let program = if let Some(program) = command.command() {
         program
     } else {

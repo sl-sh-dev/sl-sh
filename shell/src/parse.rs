@@ -1,9 +1,8 @@
-use crate::command_data::{BoxedIos, CommandWithArgs, Run};
+use crate::command_data::{CommandWithArgs, Run, StdIos};
 use crate::unix::pipe;
 use std::fs::File;
 use std::io::Write;
 use std::os::fd::FromRawFd;
-use std::path::PathBuf;
 
 /// Type of the current sequence being parsed.
 #[derive(Copy, Clone, Debug)]
@@ -31,33 +30,33 @@ impl ParsedJob {
         }
     }
 
-    fn push_command(&mut self, command: CommandWithArgs, ios: BoxedIos) {
+    fn push_command(&mut self, command: CommandWithArgs) {
         if let Some(run) = self.commands.take() {
-            self.commands = Some(run.push_command(command, ios));
+            self.commands = Some(run.push_command(command));
         }
     }
 
-    fn push_pipe(&mut self, command: CommandWithArgs, ios: BoxedIos) {
+    fn push_pipe(&mut self, command: CommandWithArgs) {
         if let Some(run) = self.commands.take() {
-            self.commands = Some(run.push_pipe(command, ios));
+            self.commands = Some(run.push_pipe(command));
         }
     }
 
-    fn push_sequence(&mut self, command: CommandWithArgs, ios: BoxedIos) {
+    fn push_sequence(&mut self, command: CommandWithArgs) {
         if let Some(run) = self.commands.take() {
-            self.commands = Some(run.push_sequence(command, ios));
+            self.commands = Some(run.push_sequence(command));
         }
     }
 
-    fn push_and(&mut self, command: CommandWithArgs, ios: BoxedIos) {
+    fn push_and(&mut self, command: CommandWithArgs) {
         if let Some(run) = self.commands.take() {
-            self.commands = Some(run.push_and(command, ios));
+            self.commands = Some(run.push_and(command));
         }
     }
 
-    fn push_or(&mut self, command: CommandWithArgs, ios: BoxedIos) {
+    fn push_or(&mut self, command: CommandWithArgs) {
         if let Some(run) = self.commands.take() {
-            self.commands = Some(run.push_or(command, ios));
+            self.commands = Some(run.push_or(command));
         }
     }
 
@@ -74,40 +73,15 @@ impl ParsedJob {
     pub fn commands(&self) -> &Run {
         self.commands.as_ref().expect("missing command")
     }
-
-    /// Slice of the individual commands in pipe order.
-    pub fn commands_mut(&mut self) -> &mut Run {
-        self.commands.as_mut().expect("missing command")
-    }
-
-    /// Set the stdin file name for this Run.
-    pub fn set_stdin_path(&mut self, stdin: PathBuf, overwrite: bool) {
-        self.commands_mut().set_stdin_path(stdin, overwrite);
-    }
-
-    /// Set the stdout file name for this Run.
-    pub fn set_stdout_path(&mut self, stdin: PathBuf, overwrite: bool) {
-        self.commands_mut().set_stdout_path(stdin, overwrite);
-    }
-
-    /// Set the stderr file name for this Run.
-    pub fn set_stderr_path(&mut self, stdin: PathBuf, overwrite: bool) {
-        self.commands_mut().set_stderr_path(stdin, overwrite);
-    }
 }
 
-fn push_next_seq_item(
-    job: &mut ParsedJob,
-    command: CommandWithArgs,
-    ios: BoxedIos,
-    seq_type: SeqType,
-) {
+fn push_next_seq_item(job: &mut ParsedJob, command: CommandWithArgs, seq_type: SeqType) {
     match seq_type {
-        SeqType::Command => job.push_command(command, ios),
-        SeqType::Pipe => job.push_pipe(command, ios),
-        SeqType::Sequence => job.push_sequence(command, ios),
-        SeqType::And => job.push_and(command, ios),
-        SeqType::Or => job.push_or(command, ios),
+        SeqType::Command => job.push_command(command),
+        SeqType::Pipe => job.push_pipe(command),
+        SeqType::Sequence => job.push_sequence(command),
+        SeqType::And => job.push_and(command),
+        SeqType::Or => job.push_or(command),
     }
 }
 
@@ -116,6 +90,7 @@ struct ParseState {
     ret: ParsedJob,
     // Should not be None, is Option to allow ownership to change.
     command: Option<CommandWithArgs>,
+    stdio: StdIos,
     in_string: bool,
     in_stringd: bool,
     // Should not be None, is Option to allow ownership to change.
@@ -142,6 +117,7 @@ impl ParseState {
         Self {
             ret,
             command,
+            stdio: StdIos::default(),
             in_string,
             in_stringd,
             token,
@@ -183,13 +159,13 @@ impl ParseState {
         let token = self.take_token();
         if !token.is_empty() {
             let command = if self.redir_create {
-                self.ret.set_stdout_path(token.clone().into(), true);
+                self.stdio.set_out_path(token.clone().into(), true);
                 false
             } else if self.redir_append {
-                self.ret.set_stdout_path(token.clone().into(), false);
+                self.stdio.set_out_path(token.clone().into(), false);
                 false
             } else if self.redir_in {
-                self.ret.set_stdin_path(token.clone().into(), false);
+                self.stdio.set_in_path(token.clone().into(), false);
                 false
             } else if self.redir_in_direct {
                 if let Ok((pread, pwrite)) = pipe() {
@@ -199,7 +175,7 @@ impl ParseState {
                             eprintln!("Error writing {token} to stdin: {e}");
                         }
                     }
-                    self.ret.commands_mut().set_io(Some(pread), None, None);
+                    self.stdio.set_in_fd(pread, true);
                 }
                 false
             } else {
@@ -207,15 +183,15 @@ impl ParseState {
             };
             if self.redir_err_create {
                 if self.redir_create {
-                    self.ret.commands_mut().set_io(None, None, Some(1));
+                    self.stdio.set_err_fd(1, true);
                 } else {
-                    self.ret.set_stderr_path(token.into(), true);
+                    self.stdio.set_err_path(token.into(), true);
                 }
             } else if self.redir_err_append {
                 if self.redir_append {
-                    self.ret.commands_mut().set_io(None, None, Some(1));
+                    self.stdio.set_err_fd(1, true);
                 } else {
-                    self.ret.set_stderr_path(token.into(), false);
+                    self.stdio.set_err_path(token.into(), false);
                 }
             } else if command {
                 self.command().push_arg(token.into());
@@ -226,8 +202,10 @@ impl ParseState {
 
     fn end_command(&mut self) {
         if !self.command().is_empty() {
-            if let Some(command) = self.command.take() {
-                push_next_seq_item(&mut self.ret, command, None, self.current_seq);
+            if let Some(mut command) = self.command.take() {
+                command.set_stdios(self.stdio.clone());
+                self.stdio.clear();
+                push_next_seq_item(&mut self.ret, command, self.current_seq);
             }
             self.command = Some(CommandWithArgs::new());
         }
@@ -301,7 +279,6 @@ impl ParseState {
             self.last_ch = ' ';
         } else if next_char == '>' {
             self.proc_token();
-            self.end_command();
             if self.last_ch == '2' {
                 self.redir_err_append = true;
             } else if self.last_ch == '1' {
@@ -316,12 +293,11 @@ impl ParseState {
             self.last_ch = ' ';
         } else {
             self.proc_token();
-            self.end_command();
             if self.last_ch == '2' {
                 if next_char == '1' {
                     // '2>1'- stderr to stdout.
                     chars.next(); // Consume the '1'.
-                    self.ret.commands_mut().set_io(None, None, Some(1));
+                    self.stdio.set_err_fd(1, true);
                 } else {
                     self.redir_err_create = true;
                 }
@@ -329,7 +305,7 @@ impl ParseState {
                 if next_char == '2' {
                     // '1>2'- stdout to stderr.
                     chars.next(); // Consume the '2'.
-                    self.ret.commands_mut().set_io(None, Some(2), None);
+                    self.stdio.set_out_fd(2, true);
                 } else {
                     self.redir_create = true;
                 }
@@ -349,13 +325,11 @@ impl ParseState {
             self.last_ch = ' ';
         } else if next_char == '<' {
             self.proc_token();
-            self.end_command();
             chars.next();
             self.last_ch = ' ';
             self.redir_in_direct = true;
         } else {
             self.proc_token();
-            self.end_command();
             self.redir_in = true;
             self.last_ch = ' ';
         }

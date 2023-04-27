@@ -128,12 +128,12 @@ pub fn run_job(
     terminal_fd: i32,
 ) -> Result<i32, io::Error> {
     let status = match run {
-        Run::Command(command, ios) => {
+        Run::Command(command) => {
             if let Some(command_name) = command.command() {
                 let mut args = command.args_iter();
                 if !run_builtin(command_name, &mut args, jobs) {
                     let mut job = jobs.new_job();
-                    match fork_exec(command, ios, &mut job) {
+                    match fork_exec(command, &mut job) {
                         Ok(()) => {
                             finish_run(background, job, jobs, Some(&term_settings), terminal_fd)
                         }
@@ -150,7 +150,7 @@ pub fn run_job(
                 0
             }
         }
-        Run::Pipe(pipe, _ios) => {
+        Run::Pipe(pipe) => {
             let mut job = jobs.new_job();
             match fork_pipe(
                 &pipe[..],
@@ -168,14 +168,14 @@ pub fn run_job(
                 }
             }
         }
-        Run::Sequence(seq, _) => {
+        Run::Sequence(seq) => {
             let mut status = 0;
             for r in seq {
                 status = run_job(r, background, jobs, term_settings.clone(), terminal_fd)?;
             }
             status
         }
-        Run::And(seq, _ios) => {
+        Run::And(seq) => {
             // XXXX should background == true be an error?
             let mut status = 0;
             for r in seq {
@@ -186,7 +186,7 @@ pub fn run_job(
             }
             status
         }
-        Run::Or(seq, _ios) => {
+        Run::Or(seq) => {
             // XXXX should background == true be an error?
             let mut status = 0;
             for r in seq {

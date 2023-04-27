@@ -68,6 +68,11 @@ fn set_io(stdio: &mut Option<i32>, fd: i32) {
 }
 
 impl StdIos {
+    /// Create a new IO redirect stack.
+    pub fn new() -> Self {
+        Self { redirects: vec![] }
+    }
+    /// Resolves teh redirect stack and returns the computed stdin, stdout and stderr.
     pub fn stdio(&self) -> (Option<i32>, Option<i32>, Option<i32>) {
         let mut stdin: Option<i32> = None;
         let mut stdout: Option<i32> = None;
@@ -116,6 +121,71 @@ impl StdIos {
         }
         (stdin, stdout, stderr)
     }
+
+    /// Push a stdin fd to the redirect stack.
+    /// If push_back is true then push to the end else put on the front (useful for pipes).
+    pub fn set_in_fd(&mut self, fd: i32, push_back: bool) {
+        if push_back {
+            self.redirects
+                .push(StdIoType::Stdin(IoType::FileDescriptor(fd)));
+        } else {
+            self.redirects
+                .insert(0, StdIoType::Stdin(IoType::FileDescriptor(fd)));
+        }
+    }
+
+    /// Push a stdout fd to the redirect stack.
+    /// If push_back is true then push to the end else put on the front (useful for pipes).
+    pub fn set_out_fd(&mut self, fd: i32, push_back: bool) {
+        if push_back {
+            self.redirects
+                .push(StdIoType::Stdout(IoType::FileDescriptor(fd)));
+        } else {
+            self.redirects
+                .insert(0, StdIoType::Stdout(IoType::FileDescriptor(fd)));
+        }
+    }
+
+    /// Push a stderr fd to the redirect stack.
+    /// If push_back is true then push to the end else put on the front (useful for pipes).
+    pub fn set_err_fd(&mut self, fd: i32, push_back: bool) {
+        if push_back {
+            self.redirects
+                .push(StdIoType::Stderr(IoType::FileDescriptor(fd)));
+        } else {
+            self.redirects
+                .insert(0, StdIoType::Stderr(IoType::FileDescriptor(fd)));
+        }
+    }
+
+    /// Push a stdin file path to the redirect stack.
+    pub fn set_in_path(&mut self, path: PathBuf, overwrite: bool) {
+        self.redirects
+            .push(StdIoType::Stdin(IoType::FilePath(path, overwrite)));
+    }
+
+    /// Push a stdin file path to the redirect stack.
+    pub fn set_out_path(&mut self, path: PathBuf, overwrite: bool) {
+        self.redirects
+            .push(StdIoType::Stdout(IoType::FilePath(path, overwrite)));
+    }
+
+    /// Push a stderr file path to the redirect stack.
+    pub fn set_err_path(&mut self, path: PathBuf, overwrite: bool) {
+        self.redirects
+            .push(StdIoType::Stderr(IoType::FilePath(path, overwrite)));
+    }
+
+    /// Clear the redirect stack.
+    pub fn clear(&mut self) {
+        self.redirects.clear();
+    }
+}
+
+impl Default for StdIos {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// An individual command with args.
@@ -123,12 +193,16 @@ impl StdIos {
 pub struct CommandWithArgs {
     /// args[0] is the command.
     args: Vec<Arg>,
+    stdios: Option<StdIos>,
 }
 
 impl CommandWithArgs {
     /// Create a new empty command and args.
     pub fn new() -> Self {
-        Self { args: vec![] }
+        Self {
+            args: vec![],
+            stdios: None,
+        }
     }
 
     /// Push a new arg onto the command, the first "arg" is the command itself.
@@ -167,6 +241,45 @@ impl CommandWithArgs {
             index: 0,
         }
     }
+
+    /// Set the stdio redirect stack for this command.
+    pub fn set_stdios(&mut self, stdios: StdIos) {
+        self.stdios = Some(stdios);
+    }
+
+    /// Resolve the stdios redirect stack and return stdin/out/err if they exist.
+    pub fn stdios(&self) -> (Option<i32>, Option<i32>, Option<i32>) {
+        self.stdios
+            .as_ref()
+            .map(|io| io.stdio())
+            .unwrap_or_default()
+    }
+
+    /// If fd is Some value then put it at the front of the redir queue for this command.
+    pub fn push_stdin_front(&mut self, fd: Option<i32>) {
+        if let Some(fd) = fd {
+            if let Some(stdios) = self.stdios.as_mut() {
+                stdios.set_in_fd(fd, false);
+            } else {
+                let mut stdios = StdIos::default();
+                stdios.set_in_fd(fd, true);
+                self.stdios = Some(stdios);
+            }
+        }
+    }
+
+    /// If fd is Some value then put it at the front of the redir queue for this command.
+    pub fn push_stdout_front(&mut self, fd: Option<i32>) {
+        if let Some(fd) = fd {
+            if let Some(stdios) = self.stdios.as_mut() {
+                stdios.set_out_fd(fd, false);
+            } else {
+                let mut stdios = StdIos::default();
+                stdios.set_out_fd(fd, true);
+                self.stdios = Some(stdios);
+            }
+        }
+    }
 }
 
 impl Default for CommandWithArgs {
@@ -189,7 +302,7 @@ impl<'args> Iterator for CommandArgs<'args> {
             let r = match &self.args[self.index] {
                 Arg::Str(s) => s.as_ref(),
                 Arg::Command(_run) => {
-                    self.temps.push("XXX".into());
+                    self.temps.push("XXXX".into());
                     self.last().unwrap()
                 }
             };
@@ -201,370 +314,94 @@ impl<'args> Iterator for CommandArgs<'args> {
     }
 }
 
-pub type BoxedIos = Option<Box<StdIos>>;
-
 /// Command(s) ready to run with context.
 #[derive(Clone, Debug)]
 pub enum Run {
-    Command(CommandWithArgs, BoxedIos),
-    Pipe(Vec<Run>, BoxedIos),
-    Sequence(Vec<Run>, BoxedIos),
-    And(Vec<Run>, BoxedIos),
-    Or(Vec<Run>, BoxedIos),
+    Command(CommandWithArgs),
+    Pipe(Vec<Run>),
+    Sequence(Vec<Run>),
+    And(Vec<Run>),
+    Or(Vec<Run>),
     Empty,
 }
 
 impl Run {
     /// Push a single command onto the Run.  If it is not the first command will add to or create a sequence.
-    pub fn push_command(self, command: CommandWithArgs, com_ios: BoxedIos) -> Self {
+    pub fn push_command(self, command: CommandWithArgs) -> Self {
         match self {
-            Run::Command(current, ios) => Run::Sequence(
-                vec![Run::Command(current, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Pipe(pipe, ios) => Run::Sequence(
-                vec![Run::Pipe(pipe, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Sequence(mut seq, ios) => {
-                seq.push(Run::Command(command, com_ios));
-                Run::Sequence(seq, ios)
+            Run::Command(current) => {
+                Run::Sequence(vec![Run::Command(current), Run::Command(command)])
             }
-            Run::And(seq, ios) => Run::Sequence(
-                vec![Run::And(seq, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Or(seq, ios) => Run::Sequence(
-                vec![Run::Or(seq, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Empty => Run::Command(command, com_ios),
-        }
-    }
-
-    /// Push onto the existing current sequence (creates a sequence if this is the second command).
-    pub fn _push_to_last(self, command: CommandWithArgs, com_ios: BoxedIos) -> Self {
-        match self {
-            Run::Command(current, ios) => Run::Sequence(
-                vec![Run::Command(current, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Pipe(mut pipe, ios) => {
-                pipe.push(Run::Command(command, com_ios));
-                Run::Pipe(pipe, ios)
+            Run::Pipe(pipe) => Run::Sequence(vec![Run::Pipe(pipe), Run::Command(command)]),
+            Run::Sequence(mut seq) => {
+                seq.push(Run::Command(command));
+                Run::Sequence(seq)
             }
-            Run::Sequence(mut seq, ios) => {
-                seq.push(Run::Command(command, com_ios));
-                Run::Sequence(seq, ios)
-            }
-            Run::And(mut seq, ios) => {
-                seq.push(Run::Command(command, com_ios));
-                Run::And(seq, ios)
-            }
-            Run::Or(mut seq, ios) => {
-                seq.push(Run::Command(command, com_ios));
-                Run::Or(seq, ios)
-            }
-            Run::Empty => Run::Command(command, com_ios),
+            Run::And(seq) => Run::Sequence(vec![Run::And(seq), Run::Command(command)]),
+            Run::Or(seq) => Run::Sequence(vec![Run::Or(seq), Run::Command(command)]),
+            Run::Empty => Run::Command(command),
         }
     }
 
     /// Push onto an existing or create a new pipe sequence.
-    pub fn push_pipe(self, command: CommandWithArgs, com_ios: BoxedIos) -> Self {
+    pub fn push_pipe(self, command: CommandWithArgs) -> Self {
         match self {
-            Run::Command(current, ios) => Run::Pipe(
-                vec![Run::Command(current, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Pipe(mut pipe, ios) => {
-                pipe.push(Run::Command(command, com_ios));
-                Run::Pipe(pipe, ios)
+            Run::Command(current) => Run::Pipe(vec![Run::Command(current), Run::Command(command)]),
+            Run::Pipe(mut pipe) => {
+                pipe.push(Run::Command(command));
+                Run::Pipe(pipe)
             }
-            Run::Sequence(seq, ios) => Run::Pipe(
-                vec![Run::Sequence(seq, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::And(seq, ios) => Run::Pipe(
-                vec![Run::And(seq, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Or(seq, ios) => Run::Pipe(
-                vec![Run::Or(seq, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Empty => Run::Command(command, com_ios),
+            Run::Sequence(seq) => Run::Pipe(vec![Run::Sequence(seq), Run::Command(command)]),
+            Run::And(seq) => Run::Pipe(vec![Run::And(seq), Run::Command(command)]),
+            Run::Or(seq) => Run::Pipe(vec![Run::Or(seq), Run::Command(command)]),
+            Run::Empty => Run::Command(command),
         }
     }
 
     /// Push onto an existing or create a new sequence.
-    pub fn push_sequence(self, command: CommandWithArgs, com_ios: BoxedIos) -> Self {
+    pub fn push_sequence(self, command: CommandWithArgs) -> Self {
         match self {
-            Run::Command(current, ios) => Run::Sequence(
-                vec![Run::Command(current, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Pipe(pipe, ios) => Run::Sequence(
-                vec![Run::Pipe(pipe, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Sequence(mut seq, ios) => {
-                seq.push(Run::Command(command, com_ios));
-                Run::Sequence(seq, ios)
+            Run::Command(current) => {
+                Run::Sequence(vec![Run::Command(current), Run::Command(command)])
             }
-            Run::And(seq, ios) => Run::Sequence(
-                vec![Run::And(seq, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Or(seq, ios) => Run::Sequence(
-                vec![Run::Or(seq, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Empty => Run::Command(command, com_ios),
+            Run::Pipe(pipe) => Run::Sequence(vec![Run::Pipe(pipe), Run::Command(command)]),
+            Run::Sequence(mut seq) => {
+                seq.push(Run::Command(command));
+                Run::Sequence(seq)
+            }
+            Run::And(seq) => Run::Sequence(vec![Run::And(seq), Run::Command(command)]),
+            Run::Or(seq) => Run::Sequence(vec![Run::Or(seq), Run::Command(command)]),
+            Run::Empty => Run::Command(command),
         }
     }
 
     /// Push onto an existing or create a new AND sequence.
-    pub fn push_and(self, command: CommandWithArgs, com_ios: BoxedIos) -> Self {
+    pub fn push_and(self, command: CommandWithArgs) -> Self {
         match self {
-            Run::Command(current, ios) => Run::And(
-                vec![Run::Command(current, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Pipe(pipe, ios) => Run::And(
-                vec![Run::Pipe(pipe, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Sequence(seq, ios) => Run::And(
-                vec![Run::Sequence(seq, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::And(mut seq, ios) => {
-                seq.push(Run::Command(command, com_ios));
-                Run::And(seq, ios)
+            Run::Command(current) => Run::And(vec![Run::Command(current), Run::Command(command)]),
+            Run::Pipe(pipe) => Run::And(vec![Run::Pipe(pipe), Run::Command(command)]),
+            Run::Sequence(seq) => Run::And(vec![Run::Sequence(seq), Run::Command(command)]),
+            Run::And(mut seq) => {
+                seq.push(Run::Command(command));
+                Run::And(seq)
             }
-            Run::Or(seq, ios) => Run::And(
-                vec![Run::Or(seq, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Empty => Run::Command(command, com_ios),
+            Run::Or(seq) => Run::And(vec![Run::Or(seq), Run::Command(command)]),
+            Run::Empty => Run::Command(command),
         }
     }
 
     /// Push onto an existing or create a new OR sequence.
-    pub fn push_or(self, command: CommandWithArgs, com_ios: BoxedIos) -> Self {
+    pub fn push_or(self, command: CommandWithArgs) -> Self {
         match self {
-            Run::Command(current, ios) => Run::Or(
-                vec![Run::Command(current, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Pipe(pipe, ios) => Run::Or(
-                vec![Run::Pipe(pipe, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Sequence(seq, ios) => Run::Or(
-                vec![Run::Or(seq, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::And(seq, ios) => Run::Or(
-                vec![Run::And(seq, ios), Run::Command(command, com_ios)],
-                None,
-            ),
-            Run::Or(mut seq, ios) => {
-                seq.push(Run::Command(command, com_ios));
-                Run::Or(seq, ios)
+            Run::Command(current) => Run::Or(vec![Run::Command(current), Run::Command(command)]),
+            Run::Pipe(pipe) => Run::Or(vec![Run::Pipe(pipe), Run::Command(command)]),
+            Run::Sequence(seq) => Run::Or(vec![Run::Or(seq), Run::Command(command)]),
+            Run::And(seq) => Run::Or(vec![Run::And(seq), Run::Command(command)]),
+            Run::Or(mut seq) => {
+                seq.push(Run::Command(command));
+                Run::Or(seq)
             }
-            Run::Empty => Run::Command(command, com_ios),
-        }
-    }
-
-    /// Return the stdios for this Run.
-    pub fn stdio(&self) -> (Option<i32>, Option<i32>, Option<i32>) {
-        match self {
-            Run::Command(_, ios) => ios.as_ref().map(|io| io.stdio()).unwrap_or_default(),
-            Run::Pipe(_, ios) => ios.as_ref().map(|io| io.stdio()).unwrap_or_default(),
-            Run::Sequence(_, ios) => ios.as_ref().map(|io| io.stdio()).unwrap_or_default(),
-            Run::And(_, ios) => ios.as_ref().map(|io| io.stdio()).unwrap_or_default(),
-            Run::Or(_, ios) => ios.as_ref().map(|io| io.stdio()).unwrap_or_default(),
-            Run::Empty => (None, None, None),
-        }
-    }
-
-    /// Set the FDs this Ios.  Will NOT overwrite existing values (FDs or names), this is important
-    /// for the proper interaction of pipes and redirects.
-    fn set_io_inner(
-        ios: &mut BoxedIos,
-        stdin: Option<i32>,
-        stdout: Option<i32>,
-        stderr: Option<i32>,
-        push_back: bool,
-    ) {
-        match ios {
-            Some(ios) => {
-                if let Some(fd) = stdin {
-                    if push_back {
-                        ios.redirects
-                            .push(StdIoType::Stdin(IoType::FileDescriptor(fd)));
-                    } else {
-                        ios.redirects
-                            .insert(0, StdIoType::Stdin(IoType::FileDescriptor(fd)));
-                    }
-                }
-                if let Some(fd) = stdout {
-                    if push_back {
-                        ios.redirects
-                            .push(StdIoType::Stdout(IoType::FileDescriptor(fd)));
-                    } else {
-                        ios.redirects
-                            .insert(0, StdIoType::Stdout(IoType::FileDescriptor(fd)));
-                    }
-                }
-                if let Some(fd) = stderr {
-                    if push_back {
-                        ios.redirects
-                            .push(StdIoType::Stderr(IoType::FileDescriptor(fd)));
-                    } else {
-                        ios.redirects
-                            .insert(0, StdIoType::Stderr(IoType::FileDescriptor(fd)));
-                    }
-                }
-            }
-            None => {
-                let nios = Box::new(StdIos { redirects: vec![] });
-                *ios = Some(nios);
-                Self::set_io_inner(ios, stdin, stdout, stderr, push_back)
-            }
-        }
-    }
-
-    fn set_io_inner_names(
-        ios: &mut BoxedIos,
-        in_name: Option<Box<(PathBuf, bool)>>,
-        out_name: Option<Box<(PathBuf, bool)>>,
-        err_name: Option<Box<(PathBuf, bool)>>,
-    ) {
-        match ios {
-            Some(ios) => {
-                if let Some(name) = in_name {
-                    ios.redirects
-                        .push(StdIoType::Stdin(IoType::FilePath((*name).0, (*name).1)));
-                }
-                if let Some(name) = out_name {
-                    ios.redirects
-                        .push(StdIoType::Stdout(IoType::FilePath((*name).0, (*name).1)));
-                }
-                if let Some(name) = err_name {
-                    ios.redirects
-                        .push(StdIoType::Stderr(IoType::FilePath((*name).0, (*name).1)));
-                }
-            }
-            None => {
-                let nios = Box::new(StdIos { redirects: vec![] });
-                *ios = Some(nios);
-                Self::set_io_inner_names(ios, in_name, out_name, err_name)
-            }
-        }
-    }
-
-    /// Set the IOs for this Run.
-    pub fn set_io(&mut self, stdin: Option<i32>, stdout: Option<i32>, stderr: Option<i32>) {
-        match self {
-            Run::Command(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr, true),
-            Run::Pipe(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr, true),
-            Run::Sequence(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr, true),
-            Run::And(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr, true),
-            Run::Or(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr, true),
-            Run::Empty => {}
-        }
-    }
-
-    /// Set the IOs for this Run- Put at front of the queue for pipes.
-    pub fn set_io_first(&mut self, stdin: Option<i32>, stdout: Option<i32>, stderr: Option<i32>) {
-        match self {
-            Run::Command(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr, false),
-            Run::Pipe(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr, false),
-            Run::Sequence(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr, false),
-            Run::And(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr, false),
-            Run::Or(_, ios) => Self::set_io_inner(ios, stdin, stdout, stderr, false),
-            Run::Empty => {}
-        }
-    }
-
-    /// Set the stdin file name for this Run.
-    pub fn set_stdin_path(&mut self, stdin: PathBuf, overwrite: bool) {
-        let inner = Some(Box::new((stdin, overwrite)));
-        match self {
-            Run::Command(_, ios) => Self::set_io_inner_names(ios, inner, None, None),
-            Run::Pipe(_, ios) => Self::set_io_inner_names(ios, inner, None, None),
-            Run::Sequence(seq, _ios) => {
-                if let Some(last) = seq.last_mut() {
-                    last.set_stdin_path((*inner.unwrap()).0, overwrite);
-                }
-            }
-            Run::And(seq, _ios) => {
-                if let Some(last) = seq.last_mut() {
-                    last.set_stdin_path((*inner.unwrap()).0, overwrite);
-                }
-            }
-            Run::Or(seq, _ios) => {
-                if let Some(last) = seq.last_mut() {
-                    last.set_stdin_path((*inner.unwrap()).0, overwrite);
-                }
-            }
-            Run::Empty => {}
-        }
-    }
-
-    /// Set the stdout file name for this Run.
-    pub fn set_stdout_path(&mut self, stdout: PathBuf, overwrite: bool) {
-        let inner = Some(Box::new((stdout, overwrite)));
-        match self {
-            Run::Command(_, ios) => Self::set_io_inner_names(ios, None, inner, None),
-            Run::Pipe(seq, _ios) => {
-                if let Some(last) = seq.last_mut() {
-                    last.set_stdout_path((*inner.unwrap()).0, overwrite);
-                }
-            }
-            Run::Sequence(seq, _ios) => {
-                if let Some(last) = seq.last_mut() {
-                    last.set_stdout_path((*inner.unwrap()).0, overwrite);
-                }
-            }
-            Run::And(seq, _ios) => {
-                if let Some(last) = seq.last_mut() {
-                    last.set_stdout_path((*inner.unwrap()).0, overwrite);
-                }
-            }
-            Run::Or(seq, _ios) => {
-                if let Some(last) = seq.last_mut() {
-                    last.set_stdout_path((*inner.unwrap()).0, overwrite);
-                }
-            }
-            Run::Empty => {}
-        }
-    }
-
-    /// Set the stderr file name for this Run.
-    pub fn set_stderr_path(&mut self, stderr: PathBuf, overwrite: bool) {
-        let inner = Some(Box::new((stderr, overwrite)));
-        match self {
-            Run::Command(_, ios) => Self::set_io_inner_names(ios, None, None, inner),
-            Run::Pipe(_, ios) => Self::set_io_inner_names(ios, None, None, inner),
-            Run::Sequence(seq, _ios) => {
-                if let Some(last) = seq.last_mut() {
-                    last.set_stderr_path((*inner.unwrap()).0, overwrite);
-                }
-            }
-            Run::And(seq, _ios) => {
-                if let Some(last) = seq.last_mut() {
-                    last.set_stderr_path((*inner.unwrap()).0, overwrite);
-                }
-            }
-            Run::Or(seq, _ios) => {
-                if let Some(last) = seq.last_mut() {
-                    last.set_stderr_path((*inner.unwrap()).0, overwrite);
-                }
-            }
-            Run::Empty => {}
+            Run::Empty => Run::Command(command),
         }
     }
 }
