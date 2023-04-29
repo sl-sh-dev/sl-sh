@@ -72,7 +72,8 @@ impl StdIos {
     pub fn new() -> Self {
         Self { redirects: vec![] }
     }
-    /// Resolves teh redirect stack and returns the computed stdin, stdout and stderr.
+
+    /// Resolves the redirect stack and returns the computed stdin, stdout and stderr.
     pub fn stdio(&self) -> (Option<i32>, Option<i32>, Option<i32>) {
         let mut stdin: Option<i32> = None;
         let mut stdout: Option<i32> = None;

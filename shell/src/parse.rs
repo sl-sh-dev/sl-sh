@@ -85,6 +85,19 @@ fn push_next_seq_item(job: &mut ParsedJob, command: CommandWithArgs, seq_type: S
     }
 }
 
+#[derive(Copy, Clone, Debug)]
+enum TokenState {
+    Normal,
+    StdInPath,
+    StdInDirect,
+    StdOutCreate,
+    StdOutAppend,
+    StdErrCreate,
+    StdErrAppend,
+    StdOutErrCreate,
+    StdOutErrAppend,
+}
+
 #[derive(Debug)]
 struct ParseState {
     ret: ParsedJob,
@@ -97,12 +110,7 @@ struct ParseState {
     token: Option<String>,
     last_ch: char,
     current_seq: SeqType,
-    redir_create: bool,
-    redir_append: bool,
-    redir_err_create: bool,
-    redir_err_append: bool,
-    redir_in: bool,
-    redir_in_direct: bool,
+    token_state: TokenState,
 }
 
 impl ParseState {
@@ -123,12 +131,7 @@ impl ParseState {
             token,
             last_ch,
             current_seq,
-            redir_create: false,
-            redir_append: false,
-            redir_err_create: false,
-            redir_err_append: false,
-            redir_in: false,
-            redir_in_direct: false,
+            token_state: TokenState::Normal,
         }
     }
 
@@ -146,57 +149,37 @@ impl ParseState {
         result
     }
 
-    fn clear_redirs(&mut self) {
-        self.redir_create = false;
-        self.redir_append = false;
-        self.redir_in = false;
-        self.redir_in_direct = false;
-        self.redir_err_create = false;
-        self.redir_err_append = false;
-    }
-
     fn proc_token(&mut self) {
         let token = self.take_token();
         if !token.is_empty() {
-            let command = if self.redir_create {
-                self.stdio.set_out_path(token.clone().into(), true);
-                false
-            } else if self.redir_append {
-                self.stdio.set_out_path(token.clone().into(), false);
-                false
-            } else if self.redir_in {
-                self.stdio.set_in_path(token.clone().into(), false);
-                false
-            } else if self.redir_in_direct {
-                if let Ok((pread, pwrite)) = pipe() {
-                    unsafe {
-                        let mut file = File::from_raw_fd(pwrite);
-                        if let Err(e) = file.write_all(token.as_bytes()) {
-                            eprintln!("Error writing {token} to stdin: {e}");
+            match self.token_state {
+                TokenState::Normal => self.command().push_arg(token.into()),
+                TokenState::StdInPath => self.stdio.set_in_path(token.into(), false),
+                TokenState::StdInDirect => {
+                    if let Ok((pread, pwrite)) = pipe() {
+                        unsafe {
+                            let mut file = File::from_raw_fd(pwrite);
+                            if let Err(e) = file.write_all(token.as_bytes()) {
+                                eprintln!("Error writing {token} to stdin: {e}");
+                            }
                         }
+                        self.stdio.set_in_fd(pread, true);
                     }
-                    self.stdio.set_in_fd(pread, true);
                 }
-                false
-            } else {
-                true
-            };
-            if self.redir_err_create {
-                if self.redir_create {
+                TokenState::StdOutCreate => self.stdio.set_out_path(token.into(), true),
+                TokenState::StdOutAppend => self.stdio.set_out_path(token.into(), false),
+                TokenState::StdErrCreate => self.stdio.set_err_path(token.into(), true),
+                TokenState::StdErrAppend => self.stdio.set_err_path(token.into(), false),
+                TokenState::StdOutErrCreate => {
+                    self.stdio.set_out_path(token.into(), true);
                     self.stdio.set_err_fd(1, true);
-                } else {
-                    self.stdio.set_err_path(token.into(), true);
                 }
-            } else if self.redir_err_append {
-                if self.redir_append {
+                TokenState::StdOutErrAppend => {
+                    self.stdio.set_out_path(token.into(), false);
                     self.stdio.set_err_fd(1, true);
-                } else {
-                    self.stdio.set_err_path(token.into(), false);
                 }
-            } else if command {
-                self.command().push_arg(token.into());
             }
-            self.clear_redirs();
+            self.token_state = TokenState::Normal;
         }
     }
 
@@ -280,14 +263,13 @@ impl ParseState {
         } else if next_char == '>' {
             self.proc_token();
             if self.last_ch == '2' {
-                self.redir_err_append = true;
+                self.token_state = TokenState::StdErrAppend;
             } else if self.last_ch == '1' {
-                self.redir_append = true;
+                self.token_state = TokenState::StdOutAppend;
             } else if self.last_ch == '&' {
-                self.redir_err_append = true;
-                self.redir_append = true;
+                self.token_state = TokenState::StdOutErrAppend;
             } else {
-                self.redir_append = true;
+                self.token_state = TokenState::StdOutAppend
             }
             chars.next();
             self.last_ch = ' ';
@@ -299,7 +281,7 @@ impl ParseState {
                     chars.next(); // Consume the '1'.
                     self.stdio.set_err_fd(1, true);
                 } else {
-                    self.redir_err_create = true;
+                    self.token_state = TokenState::StdErrCreate;
                 }
             } else if self.last_ch == '1' {
                 if next_char == '2' {
@@ -307,13 +289,12 @@ impl ParseState {
                     chars.next(); // Consume the '2'.
                     self.stdio.set_out_fd(2, true);
                 } else {
-                    self.redir_create = true;
+                    self.token_state = TokenState::StdOutCreate
                 }
             } else if self.last_ch == '&' {
-                self.redir_err_create = true;
-                self.redir_create = true;
+                self.token_state = TokenState::StdOutErrCreate
             } else {
-                self.redir_create = true;
+                self.token_state = TokenState::StdOutCreate
             }
             self.last_ch = ' ';
         }
@@ -327,10 +308,10 @@ impl ParseState {
             self.proc_token();
             chars.next();
             self.last_ch = ' ';
-            self.redir_in_direct = true;
+            self.token_state = TokenState::StdInDirect;
         } else {
             self.proc_token();
-            self.redir_in = true;
+            self.token_state = TokenState::StdInPath;
             self.last_ch = ' ';
         }
     }
