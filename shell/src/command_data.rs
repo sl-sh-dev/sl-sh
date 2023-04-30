@@ -1,5 +1,6 @@
 use crate::unix::{close_fd, dup_fd};
 use std::ffi::{OsStr, OsString};
+use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::os::fd::IntoRawFd;
 use std::path::{Path, PathBuf};
@@ -9,6 +10,15 @@ use std::path::{Path, PathBuf};
 pub enum Arg {
     Str(OsString),
     Command(Run),
+}
+
+impl Display for Arg {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Str(os_str) => write!(f, "{}", os_str.to_string_lossy()),
+            Self::Command(run) => write!(f, "$({run})"),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -24,10 +34,34 @@ enum StdIoType {
     Stderr(IoType),
 }
 
+impl Display for StdIoType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Stdin(IoType::FileDescriptor(fd)) => write!(f, "<{fd}"),
+            Self::Stdin(IoType::FilePath(path, _overwrite)) => write!(f, "<{}", path.display()),
+            Self::Stdout(IoType::FileDescriptor(fd)) => write!(f, "1>{fd}"),
+            Self::Stdout(IoType::FilePath(path, true)) => write!(f, ">{}", path.display()),
+            Self::Stdout(IoType::FilePath(path, false)) => write!(f, ">>{}", path.display()),
+            Self::Stderr(IoType::FileDescriptor(fd)) => write!(f, "2>{fd}"),
+            Self::Stderr(IoType::FilePath(path, true)) => write!(f, "2>{}", path.display()),
+            Self::Stderr(IoType::FilePath(path, false)) => write!(f, "2>>{}", path.display()),
+        }
+    }
+}
+
 /// Optional file descriptors for standard in, out and error.
 #[derive(Clone, Debug)]
 pub struct StdIos {
     redirects: Vec<StdIoType>,
+}
+
+impl Display for StdIos {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        for redir in &self.redirects {
+            write!(f, " {redir}")?;
+        }
+        Ok(())
+    }
 }
 
 fn path_fd(name: &Path, overwrite: bool, is_stdin: bool) -> Option<i32> {
@@ -197,6 +231,24 @@ pub struct CommandWithArgs {
     stdios: Option<StdIos>,
 }
 
+impl Display for CommandWithArgs {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut first = true;
+        for arg in &self.args {
+            if first {
+                write!(f, "{arg}")?;
+                first = false;
+            } else {
+                write!(f, " {arg}")?;
+            }
+        }
+        if let Some(ios) = &self.stdios {
+            write!(f, "{ios}")?;
+        }
+        Ok(())
+    }
+}
+
 impl CommandWithArgs {
     /// Create a new empty command and args.
     pub fn new() -> Self {
@@ -324,6 +376,33 @@ pub enum Run {
     And(Vec<Run>),
     Or(Vec<Run>),
     Empty,
+}
+
+fn write_seq(f: &mut Formatter<'_>, seq: &[Run], sep: &str) -> std::fmt::Result {
+    let mut first = true;
+    for s in seq {
+        if first {
+            write!(f, "{s}")?;
+            first = false;
+        } else {
+            write!(f, " {sep} {s}")?;
+        }
+    }
+    Ok(())
+}
+
+impl Display for Run {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Command(command) => write!(f, "{command}")?,
+            Self::Pipe(seq) => write_seq(f, &seq[..], "|")?,
+            Self::Sequence(seq) => write_seq(f, &seq[..], ";")?,
+            Self::And(seq) => write_seq(f, &seq[..], "&&")?,
+            Self::Or(seq) => write_seq(f, &seq[..], "||")?,
+            Self::Empty => {}
+        }
+        Ok(())
+    }
 }
 
 impl Run {
