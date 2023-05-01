@@ -814,7 +814,7 @@ dependencies = [
 
 [[package]]
 name = "sl-sh"
-version = "0.9.69"
+version = "0.9.70"
 dependencies = [
  "cfg-if",
  "chrono",
@@ -837,7 +837,6 @@ dependencies = [
 [[package]]
 name = "sl-sh-proc-macros"
 version = "0.3.1"
-source = "git+https://github.com/sl-sh-dev/sl-sh-proc-macros.git#920aaeee289df9f63616070ae924440d4ebffecf"
 dependencies = [
  "quote",
  "static_assertions",
