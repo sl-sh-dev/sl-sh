@@ -92,7 +92,7 @@ impl TryFrom<Expression> for CharString {
     fn try_from(value: Expression) -> Result<Self, Self::Error> {
         let val = value.get();
         match &val.data {
-            ExpEnum::Char(char_string) => Ok(CharString(char_string.to_owned())),
+            ExpEnum::Char(char_string) => Ok(CharString(char_string.clone())),
             _ => Err(LispError::new("Can only convert Char from ExpEnum::Char")),
         }
     }
@@ -393,7 +393,7 @@ where
         let got = self.0.display_type();
         match &self.0.get().data {
             ExpEnum::Char(str) => {
-                let sym = CharString(str.to_owned());
+                let sym = CharString(str.clone());
                 fun(sym)
             }
             _ => Err(LispError::new(ErrorStrings::mismatched_type(
@@ -427,7 +427,7 @@ where
 
 pub struct Symbol(&'static str, SymLoc);
 
-impl<'a, F> RustProcedureRefMut<Symbol, F> for TypedWrapper<'_, Symbol, Expression>
+impl<F> RustProcedureRefMut<Symbol, F> for TypedWrapper<'_, Symbol, Expression>
 where
     F: FnOnce(&mut Symbol) -> LispResult<Expression>,
 {
@@ -512,7 +512,7 @@ where
     F: FnOnce(&str) -> LispResult<Expression>,
 {
     fn apply(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
-        try_inner_string!(fn_name, &self.0, arg, fun(arg))
+        try_inner_string!(fn_name, self.0, arg, fun(arg))
     }
 }
 
@@ -521,7 +521,7 @@ where
     F: FnOnce(String) -> LispResult<Expression>,
 {
     fn apply(&self, fn_name: &str, fun: F) -> LispResult<Expression> {
-        try_inner_string!(fn_name, &self.0, arg, {
+        try_inner_string!(fn_name, self.0, arg, {
             let arg = arg.to_string();
             fun(arg)
         })
@@ -533,7 +533,7 @@ where
     F: FnOnce(&mut String) -> LispResult<Expression>,
 {
     fn apply_ref_mut(&mut self, fn_name: &str, fun: F) -> LispResult<Expression> {
-        try_inner_string!(fn_name, &self.0, arg, {
+        try_inner_string!(fn_name, self.0, arg, {
             let arg = &mut arg.to_string();
             fun(arg)
         })
@@ -584,22 +584,20 @@ where
         match self.0.get().data {
             ExpEnum::Int(name) => {
                 if name < 0 {
-                    return Err(LispError::new(ErrorStrings::positive_integer(
+                    Err(LispError::new(ErrorStrings::positive_integer(
                         fn_name,
                         &ExpEnum::Int(Default::default()).to_string(),
                         &self.0.to_string(),
-                    )));
+                    )))
                 } else {
                     fun(name as usize)
                 }
             }
-            _ => {
-                return Err(LispError::new(ErrorStrings::mismatched_type(
-                    fn_name,
-                    &ExpEnum::Int(Default::default()).to_string(),
-                    &self.0.to_string(),
-                )))
-            }
+            _ => Err(LispError::new(ErrorStrings::mismatched_type(
+                fn_name,
+                &ExpEnum::Int(Default::default()).to_string(),
+                &self.0.to_string(),
+            ))),
         }
     }
 }

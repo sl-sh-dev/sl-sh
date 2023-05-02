@@ -221,7 +221,7 @@ fn str_cat_list(
 #[sl_sh_fn(fn_name = "str-sub")]
 fn str_sub(s: &str, start: usize, length: Option<usize>) -> LispResult<String> {
     let len = if let Some(length) = length {
-        length as usize
+        length
     } else {
         0usize
     };
@@ -378,7 +378,7 @@ fn str_bytes(string: &str) -> usize {
 /// (test::assert-false (str-starts-with "StaU" "Stausomething"))
 #[sl_sh_fn(fn_name = "str-starts-with")]
 fn str_starts_with(pat: &str, text: &str) -> bool {
-    text.starts_with(&pat)
+    text.starts_with(pat)
 }
 
 /// Usage: (str-contains pattern string) -> t/nil
@@ -397,7 +397,7 @@ fn str_starts_with(pat: &str, text: &str) -> bool {
 /// (test::assert-true (str-contains "someΣ" "StausomeΣthing"))
 #[sl_sh_fn(fn_name = "str-contains")]
 fn str_contains(pat: &str, text: &str) -> bool {
-    text.contains(&pat)
+    text.contains(pat)
 }
 
 /// Usage: (str-push! string arg0 ... argN) -> string
@@ -732,10 +732,7 @@ fn char_int(target: &str) -> LispResult<i64> {
 /// (test::assert-equal (vec (str \"\\\" \"u{61}\")) (codepoints #\\a))
 #[sl_sh_fn(fn_name = "codepoints")]
 fn codepoints(target: &str) -> LispResult<Vec<Codepoint>> {
-    Ok(target
-        .chars()
-        .map(|c| Codepoint(c))
-        .collect::<Vec<Codepoint>>())
+    Ok(target.chars().map(Codepoint).collect::<Vec<Codepoint>>())
 }
 
 /// Usage: (str->float s)
