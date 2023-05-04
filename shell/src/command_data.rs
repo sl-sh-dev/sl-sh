@@ -371,6 +371,7 @@ impl<'args> Iterator for CommandArgs<'args> {
 #[derive(Clone, Debug)]
 pub enum Run {
     Command(CommandWithArgs),
+    BackgroundCommand(CommandWithArgs),
     Pipe(Vec<Run>),
     Sequence(Vec<Run>),
     And(Vec<Run>),
@@ -395,6 +396,7 @@ impl Display for Run {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Command(command) => write!(f, "{command}")?,
+            Self::BackgroundCommand(command) => write!(f, "{command} &")?,
             Self::Pipe(seq) => write_seq(f, &seq[..], "|")?,
             Self::Sequence(seq) => write_seq(f, &seq[..], ";")?,
             Self::And(seq) => write_seq(f, &seq[..], "&&")?,
@@ -407,81 +409,117 @@ impl Display for Run {
 
 impl Run {
     /// Push a single command onto the Run.  If it is not the first command will add to or create a sequence.
-    pub fn push_command(self, command: CommandWithArgs) -> Self {
+    pub fn push_command(self, command: CommandWithArgs, background: bool) -> Self {
+        let new_run = if background {
+            Run::BackgroundCommand(command)
+        } else {
+            Run::Command(command)
+        };
         match self {
-            Run::Command(current) => {
-                Run::Sequence(vec![Run::Command(current), Run::Command(command)])
+            Run::Command(current) => Run::Sequence(vec![Run::Command(current), new_run]),
+            Run::BackgroundCommand(current) => {
+                Run::Sequence(vec![Run::BackgroundCommand(current), new_run])
             }
-            Run::Pipe(pipe) => Run::Sequence(vec![Run::Pipe(pipe), Run::Command(command)]),
+            Run::Pipe(pipe) => Run::Sequence(vec![Run::Pipe(pipe), new_run]),
             Run::Sequence(mut seq) => {
-                seq.push(Run::Command(command));
+                seq.push(new_run);
                 Run::Sequence(seq)
             }
-            Run::And(seq) => Run::Sequence(vec![Run::And(seq), Run::Command(command)]),
-            Run::Or(seq) => Run::Sequence(vec![Run::Or(seq), Run::Command(command)]),
-            Run::Empty => Run::Command(command),
+            Run::And(seq) => Run::Sequence(vec![Run::And(seq), new_run]),
+            Run::Or(seq) => Run::Sequence(vec![Run::Or(seq), new_run]),
+            Run::Empty => new_run,
         }
     }
 
     /// Push onto an existing or create a new pipe sequence.
-    pub fn push_pipe(self, command: CommandWithArgs) -> Self {
+    pub fn push_pipe(self, command: CommandWithArgs, background: bool) -> Self {
+        let new_run = if background {
+            Run::BackgroundCommand(command)
+        } else {
+            Run::Command(command)
+        };
         match self {
-            Run::Command(current) => Run::Pipe(vec![Run::Command(current), Run::Command(command)]),
+            Run::Command(current) => Run::Pipe(vec![Run::Command(current), new_run]),
+            Run::BackgroundCommand(current) => {
+                Run::Pipe(vec![Run::BackgroundCommand(current), new_run])
+            }
             Run::Pipe(mut pipe) => {
-                pipe.push(Run::Command(command));
+                pipe.push(new_run);
                 Run::Pipe(pipe)
             }
-            Run::Sequence(seq) => Run::Pipe(vec![Run::Sequence(seq), Run::Command(command)]),
-            Run::And(seq) => Run::Pipe(vec![Run::And(seq), Run::Command(command)]),
-            Run::Or(seq) => Run::Pipe(vec![Run::Or(seq), Run::Command(command)]),
-            Run::Empty => Run::Command(command),
+            Run::Sequence(seq) => Run::Pipe(vec![Run::Sequence(seq), new_run]),
+            Run::And(seq) => Run::Pipe(vec![Run::And(seq), new_run]),
+            Run::Or(seq) => Run::Pipe(vec![Run::Or(seq), new_run]),
+            Run::Empty => new_run,
         }
     }
 
     /// Push onto an existing or create a new sequence.
-    pub fn push_sequence(self, command: CommandWithArgs) -> Self {
+    pub fn push_sequence(self, command: CommandWithArgs, background: bool) -> Self {
+        let new_run = if background {
+            Run::BackgroundCommand(command)
+        } else {
+            Run::Command(command)
+        };
         match self {
-            Run::Command(current) => {
-                Run::Sequence(vec![Run::Command(current), Run::Command(command)])
+            Run::Command(current) => Run::Sequence(vec![Run::Command(current), new_run]),
+            Run::BackgroundCommand(current) => {
+                Run::Sequence(vec![Run::BackgroundCommand(current), new_run])
             }
-            Run::Pipe(pipe) => Run::Sequence(vec![Run::Pipe(pipe), Run::Command(command)]),
+            Run::Pipe(pipe) => Run::Sequence(vec![Run::Pipe(pipe), new_run]),
             Run::Sequence(mut seq) => {
-                seq.push(Run::Command(command));
+                seq.push(new_run);
                 Run::Sequence(seq)
             }
-            Run::And(seq) => Run::Sequence(vec![Run::And(seq), Run::Command(command)]),
-            Run::Or(seq) => Run::Sequence(vec![Run::Or(seq), Run::Command(command)]),
-            Run::Empty => Run::Command(command),
+            Run::And(seq) => Run::Sequence(vec![Run::And(seq), new_run]),
+            Run::Or(seq) => Run::Sequence(vec![Run::Or(seq), new_run]),
+            Run::Empty => new_run,
         }
     }
 
     /// Push onto an existing or create a new AND sequence.
-    pub fn push_and(self, command: CommandWithArgs) -> Self {
+    pub fn push_and(self, command: CommandWithArgs, background: bool) -> Self {
+        let new_run = if background {
+            Run::BackgroundCommand(command)
+        } else {
+            Run::Command(command)
+        };
         match self {
-            Run::Command(current) => Run::And(vec![Run::Command(current), Run::Command(command)]),
-            Run::Pipe(pipe) => Run::And(vec![Run::Pipe(pipe), Run::Command(command)]),
-            Run::Sequence(seq) => Run::And(vec![Run::Sequence(seq), Run::Command(command)]),
+            Run::Command(current) => Run::And(vec![Run::Command(current), new_run]),
+            Run::BackgroundCommand(current) => {
+                Run::And(vec![Run::BackgroundCommand(current), new_run])
+            }
+            Run::Pipe(pipe) => Run::And(vec![Run::Pipe(pipe), new_run]),
+            Run::Sequence(seq) => Run::And(vec![Run::Sequence(seq), new_run]),
             Run::And(mut seq) => {
-                seq.push(Run::Command(command));
+                seq.push(new_run);
                 Run::And(seq)
             }
-            Run::Or(seq) => Run::And(vec![Run::Or(seq), Run::Command(command)]),
-            Run::Empty => Run::Command(command),
+            Run::Or(seq) => Run::And(vec![Run::Or(seq), new_run]),
+            Run::Empty => new_run,
         }
     }
 
     /// Push onto an existing or create a new OR sequence.
-    pub fn push_or(self, command: CommandWithArgs) -> Self {
+    pub fn push_or(self, command: CommandWithArgs, background: bool) -> Self {
+        let new_run = if background {
+            Run::BackgroundCommand(command)
+        } else {
+            Run::Command(command)
+        };
         match self {
-            Run::Command(current) => Run::Or(vec![Run::Command(current), Run::Command(command)]),
-            Run::Pipe(pipe) => Run::Or(vec![Run::Pipe(pipe), Run::Command(command)]),
-            Run::Sequence(seq) => Run::Or(vec![Run::Or(seq), Run::Command(command)]),
-            Run::And(seq) => Run::Or(vec![Run::And(seq), Run::Command(command)]),
+            Run::Command(current) => Run::Or(vec![Run::Command(current), new_run]),
+            Run::BackgroundCommand(current) => {
+                Run::Or(vec![Run::BackgroundCommand(current), new_run])
+            }
+            Run::Pipe(pipe) => Run::Or(vec![Run::Pipe(pipe), new_run]),
+            Run::Sequence(seq) => Run::Or(vec![Run::Or(seq), new_run]),
+            Run::And(seq) => Run::Or(vec![Run::And(seq), new_run]),
             Run::Or(mut seq) => {
-                seq.push(Run::Command(command));
+                seq.push(new_run);
                 Run::Or(seq)
             }
-            Run::Empty => Run::Command(command),
+            Run::Empty => new_run,
         }
     }
 }

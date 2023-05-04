@@ -141,10 +141,9 @@ pub fn fork_pipe(
     new_job: &[Run],
     job: &mut Job,
     jobs: &mut Jobs,
-    background: bool,
     term_settings: Termios,
     terminal_fd: i32,
-) -> Result<(), io::Error> {
+) -> Result<bool, io::Error> {
     let progs = new_job.len();
     let mut fds: [i32; 2] = [0; 2];
     unsafe {
@@ -153,35 +152,37 @@ pub fn fork_pipe(
     let mut next_in = None;
     let mut next_out = Some(fds[1]);
     let mut upcoming_in = fds[0];
+    let mut background = false;
     for (i, program) in new_job.iter().enumerate() {
         if i == (progs - 1) {
             if let Run::Command(command) = program {
                 let mut command = command.clone();
                 command.push_stdin_front(next_in);
                 fork_exec(&command, job)?; //ios, job)?;
+                background = false;
+            } else if let Run::BackgroundCommand(command) = program {
+                let mut command = command.clone();
+                command.push_stdin_front(next_in);
+                fork_exec(&command, job)?; //ios, job)?;
+                background = true;
             } else {
-                run_job(
-                    program,
-                    background,
-                    jobs,
-                    term_settings.clone(),
-                    terminal_fd,
-                )?;
+                run_job(program, jobs, term_settings.clone(), terminal_fd)?;
             }
         } else {
             if let Run::Command(command) = program {
                 let mut command = command.clone();
                 command.push_stdin_front(next_in);
                 command.push_stdout_front(next_out);
+                background = false;
+                fork_exec(&command, job)?;
+            } else if let Run::BackgroundCommand(command) = program {
+                let mut command = command.clone();
+                command.push_stdin_front(next_in);
+                command.push_stdout_front(next_out);
+                background = true;
                 fork_exec(&command, job)?;
             } else {
-                run_job(
-                    program,
-                    background,
-                    jobs,
-                    term_settings.clone(),
-                    terminal_fd,
-                )?;
+                run_job(program, jobs, term_settings.clone(), terminal_fd)?;
             }
             next_in = Some(upcoming_in);
             if i < (progs - 1) {
@@ -196,7 +197,7 @@ pub fn fork_pipe(
     if job.is_empty() {
         Err(io::Error::new(io::ErrorKind::Other, "no processes execed"))
     } else {
-        Ok(())
+        Ok(background)
     }
 }
 

@@ -20,16 +20,12 @@ enum SeqType {
 pub struct ParsedJob {
     // Only wrapped in an optional to use take() in push methods, must always be Some.
     commands: Option<Run>,
-    background: bool,
 }
 
 impl Display for ParsedJob {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if let Some(run) = &self.commands {
             write!(f, "{run}")?;
-            if self.background {
-                write!(f, " &")?;
-            }
         }
         Ok(())
     }
@@ -39,47 +35,37 @@ impl ParsedJob {
     fn new() -> Self {
         Self {
             commands: Some(Run::Empty),
-            background: false,
         }
     }
 
-    fn push_command(&mut self, command: CommandWithArgs) {
+    fn push_command(&mut self, command: CommandWithArgs, background: bool) {
         if let Some(run) = self.commands.take() {
-            self.commands = Some(run.push_command(command));
+            self.commands = Some(run.push_command(command, background));
         }
     }
 
-    fn push_pipe(&mut self, command: CommandWithArgs) {
+    fn push_pipe(&mut self, command: CommandWithArgs, background: bool) {
         if let Some(run) = self.commands.take() {
-            self.commands = Some(run.push_pipe(command));
+            self.commands = Some(run.push_pipe(command, background));
         }
     }
 
-    fn push_sequence(&mut self, command: CommandWithArgs) {
+    fn push_sequence(&mut self, command: CommandWithArgs, background: bool) {
         if let Some(run) = self.commands.take() {
-            self.commands = Some(run.push_sequence(command));
+            self.commands = Some(run.push_sequence(command, background));
         }
     }
 
-    fn push_and(&mut self, command: CommandWithArgs) {
+    fn push_and(&mut self, command: CommandWithArgs, background: bool) {
         if let Some(run) = self.commands.take() {
-            self.commands = Some(run.push_and(command));
+            self.commands = Some(run.push_and(command, background));
         }
     }
 
-    fn push_or(&mut self, command: CommandWithArgs) {
+    fn push_or(&mut self, command: CommandWithArgs, background: bool) {
         if let Some(run) = self.commands.take() {
-            self.commands = Some(run.push_or(command));
+            self.commands = Some(run.push_or(command, background));
         }
-    }
-
-    fn set_background(&mut self, background: bool) {
-        self.background = background;
-    }
-
-    /// Should this job run in the background?
-    pub fn background(&self) -> bool {
-        self.background
     }
 
     /// Slice of the individual commands in pipe order.
@@ -88,13 +74,18 @@ impl ParsedJob {
     }
 }
 
-fn push_next_seq_item(job: &mut ParsedJob, command: CommandWithArgs, seq_type: SeqType) {
+fn push_next_seq_item(
+    job: &mut ParsedJob,
+    command: CommandWithArgs,
+    seq_type: SeqType,
+    background: bool,
+) {
     match seq_type {
-        SeqType::Command => job.push_command(command),
-        SeqType::Pipe => job.push_pipe(command),
-        SeqType::Sequence => job.push_sequence(command),
-        SeqType::And => job.push_and(command),
-        SeqType::Or => job.push_or(command),
+        SeqType::Command => job.push_command(command, background),
+        SeqType::Pipe => job.push_pipe(command, background),
+        SeqType::Sequence => job.push_sequence(command, background),
+        SeqType::And => job.push_and(command, background),
+        SeqType::Or => job.push_or(command, background),
     }
 }
 
@@ -196,12 +187,12 @@ impl ParseState {
         }
     }
 
-    fn end_command(&mut self) {
+    fn end_command(&mut self, background: bool) {
         if !self.command().is_empty() {
             if let Some(mut command) = self.command.take() {
                 command.set_stdios(self.stdio.clone());
                 self.stdio.clear();
-                push_next_seq_item(&mut self.ret, command, self.current_seq);
+                push_next_seq_item(&mut self.ret, command, self.current_seq, background);
             }
             self.command = Some(CommandWithArgs::new());
         }
@@ -233,7 +224,7 @@ impl ParseState {
             self.last_ch = ' ';
         } else if self.last_ch == '|' {
             self.proc_token();
-            self.end_command();
+            self.end_command(false);
             self.current_seq = SeqType::Or;
             self.last_ch = ' ';
         } else if next_char == '|' {
@@ -241,7 +232,7 @@ impl ParseState {
             self.last_ch = ch;
         } else {
             self.proc_token();
-            self.end_command();
+            self.end_command(false);
             self.current_seq = SeqType::Pipe;
             self.last_ch = ' ';
         }
@@ -249,23 +240,15 @@ impl ParseState {
 
     fn seq(&mut self) {
         self.proc_token();
-        self.end_command();
+        self.end_command(false);
         self.current_seq = SeqType::Sequence;
     }
 
-    fn and(&mut self, mut ch: char) {
-        if self.last_ch == '\\' {
-            self.token().push('&');
-            ch = ' ';
-        } else if self.last_ch == '&' {
-            self.proc_token();
-            self.end_command();
-            self.current_seq = SeqType::And;
-            ch = ' ';
-        } else {
-            self.proc_token();
-        }
-        self.last_ch = ch;
+    fn and(&mut self) {
+        self.proc_token();
+        self.end_command(false);
+        self.current_seq = SeqType::And;
+        self.last_ch = ' ';
     }
 
     fn redir_out(&mut self, next_char: char, chars: &mut dyn Iterator<Item = char>) {
@@ -377,17 +360,22 @@ pub fn parse_line(input: &str) -> ParsedJob {
                     state.token().push('&');
                     state.last_ch = ' ';
                 }
-                '&' if next_char == '>' => {
+                '&' if next_char == '>' || next_char == '&' => {
                     state.last_ch = '&';
+                }
+                '&' if state.last_ch == '&' => {
+                    state.and();
+                }
+                '&' => {
+                    state.proc_token();
+                    state.end_command(true);
+                    state.last_ch = ' ';
                 }
                 '1' if next_char == '>' => {
                     state.last_ch = '1';
                 }
                 '2' if next_char == '>' => {
                     state.last_ch = '2';
-                }
-                '&' if state.last_ch != '\\' => {
-                    state.and(ch);
                 }
                 '\\' => {
                     if state.last_ch == '\\' {
@@ -407,14 +395,8 @@ pub fn parse_line(input: &str) -> ParsedJob {
             }
         }
     }
-    if !state.token().is_empty() {
-        if state.token() == "&" {
-            state.ret.set_background(true);
-        } else {
-            state.proc_token();
-        }
-    }
-    state.end_command();
+    state.proc_token();
+    state.end_command(false);
     state.into()
 }
 

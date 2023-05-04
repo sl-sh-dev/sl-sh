@@ -13,7 +13,7 @@ mod unix;
 //static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 use crate::builtins::run_builtin;
-use crate::command_data::Run;
+use crate::command_data::{CommandWithArgs, Run};
 use crate::config::get_config;
 use crate::jobs::{Job, Jobs};
 use crate::parse::parse_line;
@@ -120,35 +120,43 @@ fn finish_run(
     }
 }
 
+fn run_command(
+    command: &CommandWithArgs,
+    jobs: &mut Jobs,
+    background: bool,
+    term_settings: Termios,
+    terminal_fd: i32,
+) -> Result<i32, io::Error> {
+    Ok(if let Some(command_name) = command.command() {
+        let mut args = command.args_iter();
+        if !run_builtin(command_name, &mut args, jobs) {
+            let mut job = jobs.new_job();
+            match fork_exec(command, &mut job) {
+                Ok(()) => finish_run(background, job, jobs, Some(&term_settings), terminal_fd),
+                Err(err) => {
+                    // Make sure we restore the terminal...
+                    restore_terminal(Some(&term_settings), terminal_fd, &job);
+                    return Err(err);
+                }
+            }
+        } else {
+            0
+        }
+    } else {
+        0
+    })
+}
+
 pub fn run_job(
     run: &Run,
-    background: bool,
     jobs: &mut Jobs,
     term_settings: Termios,
     terminal_fd: i32,
 ) -> Result<i32, io::Error> {
     let status = match run {
-        Run::Command(command) => {
-            if let Some(command_name) = command.command() {
-                let mut args = command.args_iter();
-                if !run_builtin(command_name, &mut args, jobs) {
-                    let mut job = jobs.new_job();
-                    match fork_exec(command, &mut job) {
-                        Ok(()) => {
-                            finish_run(background, job, jobs, Some(&term_settings), terminal_fd)
-                        }
-                        Err(err) => {
-                            // Make sure we restore the terminal...
-                            restore_terminal(Some(&term_settings), terminal_fd, &job);
-                            return Err(err);
-                        }
-                    }
-                } else {
-                    0
-                }
-            } else {
-                0
-            }
+        Run::Command(command) => run_command(command, jobs, false, term_settings, terminal_fd)?,
+        Run::BackgroundCommand(command) => {
+            run_command(command, jobs, true, term_settings, terminal_fd)?
         }
         Run::Pipe(pipe) => {
             let mut job = jobs.new_job();
@@ -156,11 +164,12 @@ pub fn run_job(
                 &pipe[..],
                 &mut job,
                 jobs,
-                background,
                 term_settings.clone(),
                 terminal_fd,
             ) {
-                Ok(()) => finish_run(background, job, jobs, Some(&term_settings), terminal_fd),
+                Ok(background) => {
+                    finish_run(background, job, jobs, Some(&term_settings), terminal_fd)
+                }
                 Err(err) => {
                     // Make sure we restore the terminal...
                     restore_terminal(Some(&term_settings), terminal_fd, &job);
@@ -171,7 +180,7 @@ pub fn run_job(
         Run::Sequence(seq) => {
             let mut status = 0;
             for r in seq {
-                status = run_job(r, background, jobs, term_settings.clone(), terminal_fd)?;
+                status = run_job(r, jobs, term_settings.clone(), terminal_fd)?;
             }
             status
         }
@@ -179,7 +188,7 @@ pub fn run_job(
             // XXXX should background == true be an error?
             let mut status = 0;
             for r in seq {
-                status = run_job(r, false, jobs, term_settings.clone(), terminal_fd)?;
+                status = run_job(r, jobs, term_settings.clone(), terminal_fd)?;
                 if status != 0 {
                     break;
                 }
@@ -190,7 +199,7 @@ pub fn run_job(
             // XXXX should background == true be an error?
             let mut status = 0;
             for r in seq {
-                status = run_job(r, false, jobs, term_settings.clone(), terminal_fd)?;
+                status = run_job(r, jobs, term_settings.clone(), terminal_fd)?;
                 if status == 0 {
                     break;
                 }
@@ -209,13 +218,7 @@ pub fn run_one_command(command: &str, jobs: &mut Jobs) -> Result<(), io::Error> 
     let term_settings = termios::tcgetattr(libc::STDIN_FILENO).unwrap();
     let terminal_fd = terminal_fd();
 
-    run_job(
-        commands.commands(),
-        commands.background(),
-        jobs,
-        term_settings,
-        terminal_fd,
-    )?;
+    run_job(commands.commands(), jobs, term_settings, terminal_fd)?;
     Ok(())
 }
 
