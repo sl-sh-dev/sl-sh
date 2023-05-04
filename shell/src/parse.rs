@@ -422,81 +422,45 @@ pub fn parse_line(input: &str) -> ParsedJob {
 mod tests {
     use super::*;
 
+    fn test_parse(input: &str, expected: &str) {
+        let pj = parse_line(input);
+        let pj_str = pj.to_string();
+        assert_eq!(&pj_str, expected);
+        let pj = parse_line(&pj_str);
+        assert_eq!(&pj.to_string(), expected);
+    }
+
     #[test]
     fn test_basic_parse() {
-        let pj = parse_line("ls");
-        assert_eq!(&pj.to_string(), "ls");
-        let pj = parse_line("ls -al");
-        assert_eq!(&pj.to_string(), "ls -al");
-        let pj = parse_line("ls -al|grep lisp");
-        assert_eq!(&pj.to_string(), "ls -al | grep lisp");
-        let pj = parse_line(&pj.to_string());
-        assert_eq!(&pj.to_string(), "ls -al | grep lisp");
-        let pj = parse_line("<in_file ls -al|grep lisp");
-        assert_eq!(&pj.to_string(), "ls -al <in_file | grep lisp");
-        let pj = parse_line(&pj.to_string());
-        assert_eq!(&pj.to_string(), "ls -al <in_file | grep lisp");
+        test_parse("ls", "ls");
+        test_parse("ls -al", "ls -al");
+        test_parse("ls -al|grep lisp", "ls -al | grep lisp");
+        test_parse("<in_file ls -al|grep lisp", "ls -al <in_file | grep lisp");
 
-        let pj = parse_line("ls -al;grep lisp");
-        assert_eq!(&pj.to_string(), "ls -al ; grep lisp");
-        let pj = parse_line(&pj.to_string());
-        assert_eq!(&pj.to_string(), "ls -al ; grep lisp");
+        test_parse("ls -al;grep lisp", "ls -al ; grep lisp");
 
-        let pj = parse_line("ls -al&&grep lisp");
-        assert_eq!(&pj.to_string(), "ls -al && grep lisp");
-        let pj = parse_line(&pj.to_string());
-        assert_eq!(&pj.to_string(), "ls -al && grep lisp");
+        test_parse("ls -al&&grep lisp", "ls -al && grep lisp");
 
-        let pj = parse_line("ls -al||grep lisp");
-        assert_eq!(&pj.to_string(), "ls -al || grep lisp");
-        let pj = parse_line(&pj.to_string());
-        assert_eq!(&pj.to_string(), "ls -al || grep lisp");
+        test_parse("ls -al||grep lisp", "ls -al || grep lisp");
 
-        let pj = parse_line("</some/file grep test|grep lisp>/out_file");
-        assert_eq!(
-            &pj.to_string(),
-            "grep test </some/file | grep lisp >/out_file"
-        );
-        let pj = parse_line(&pj.to_string());
-        assert_eq!(
-            &pj.to_string(),
-            "grep test </some/file | grep lisp >/out_file"
+        test_parse(
+            "</some/file grep test|grep lisp>/out_file",
+            "grep test </some/file | grep lisp >/out_file",
         );
 
-        let pj = parse_line("</some/file > out_file grep test;<in_file grep lisp>/out_file;ls");
-        assert_eq!(
-            &pj.to_string(),
-            "grep test </some/file >out_file ; grep lisp <in_file >/out_file ; ls"
-        );
-        let pj = parse_line(&pj.to_string());
-        assert_eq!(
-            &pj.to_string(),
-            "grep test </some/file >out_file ; grep lisp <in_file >/out_file ; ls"
+        test_parse(
+            "</some/file > out_file grep test;<in_file grep lisp>/out_file;ls",
+            "grep test </some/file >out_file ; grep lisp <in_file >/out_file ; ls",
         );
 
-        let pj =
-            parse_line("</some/file 2>1 > out_file grep test;<in_file grep lisp 1>2 >/out_file;ls");
-        assert_eq!(
-            &pj.to_string(),
-            "grep test </some/file 2>1 >out_file ; grep lisp <in_file 1>2 >/out_file ; ls"
-        );
-        let pj = parse_line(&pj.to_string());
-        assert_eq!(
-            &pj.to_string(),
-            "grep test </some/file 2>1 >out_file ; grep lisp <in_file 1>2 >/out_file ; ls"
+        test_parse(
+            "</some/file 2>1 > out_file grep test;<in_file grep lisp 1>2 >/out_file;ls",
+            "grep test </some/file 2>1 >out_file ; grep lisp <in_file 1>2 >/out_file ; ls",
         );
 
-        let pj = parse_line(
+        test_parse(
             "</some/file 2>1 > out_file grep test;ls|<in_file grep lisp 1>2 >/out_file;ls",
-        );
-        assert_eq!(
-            &pj.to_string(),
-            "grep test </some/file 2>1 >out_file ; ls | grep lisp <in_file 1>2 >/out_file ; ls"
-        );
-        let pj = parse_line(&pj.to_string());
-        assert_eq!(
-            &pj.to_string(),
-            "grep test </some/file 2>1 >out_file ; ls | grep lisp <in_file 1>2 >/out_file ; ls"
+            "grep test </some/file 2>1 >out_file ; ls | grep lisp <in_file 1>2 >/out_file ; ls",
         );
     }
 }
