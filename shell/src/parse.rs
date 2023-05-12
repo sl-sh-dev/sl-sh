@@ -3,7 +3,9 @@ use crate::unix::pipe;
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io::Write;
+use std::iter::Peekable;
 use std::os::fd::FromRawFd;
+use std::str::Chars;
 
 /// Type of the current sequence being parsed.
 #[derive(Copy, Clone, Debug)]
@@ -38,33 +40,33 @@ impl ParsedJob {
         }
     }
 
-    fn push_command(&mut self, command: CommandWithArgs, background: bool) {
+    fn push_command(&mut self, new_run: Run) {
         if let Some(run) = self.commands.take() {
-            self.commands = Some(run.push_command(command, background));
+            self.commands = Some(run.push_run(new_run));
         }
     }
 
-    fn push_pipe(&mut self, command: CommandWithArgs, background: bool) {
+    fn push_pipe(&mut self, new_run: Run) {
         if let Some(run) = self.commands.take() {
-            self.commands = Some(run.push_pipe(command, background));
+            self.commands = Some(run.push_pipe(new_run));
         }
     }
 
-    fn push_sequence(&mut self, command: CommandWithArgs, background: bool) {
+    fn push_sequence(&mut self, new_run: Run) {
         if let Some(run) = self.commands.take() {
-            self.commands = Some(run.push_sequence(command, background));
+            self.commands = Some(run.push_sequence(new_run));
         }
     }
 
-    fn push_and(&mut self, command: CommandWithArgs, background: bool) {
+    fn push_and(&mut self, new_run: Run) {
         if let Some(run) = self.commands.take() {
-            self.commands = Some(run.push_and(command, background));
+            self.commands = Some(run.push_and(new_run));
         }
     }
 
-    fn push_or(&mut self, command: CommandWithArgs, background: bool) {
+    fn push_or(&mut self, new_run: Run) {
         if let Some(run) = self.commands.take() {
-            self.commands = Some(run.push_or(command, background));
+            self.commands = Some(run.push_or(new_run));
         }
     }
 
@@ -74,18 +76,33 @@ impl ParsedJob {
     }
 }
 
+fn push_next_seq_run(job: &mut ParsedJob, new_run: Run, seq_type: SeqType) {
+    match seq_type {
+        SeqType::Command => job.push_command(new_run),
+        SeqType::Pipe => job.push_pipe(new_run),
+        SeqType::Sequence => job.push_sequence(new_run),
+        SeqType::And => job.push_and(new_run),
+        SeqType::Or => job.push_or(new_run),
+    }
+}
+
 fn push_next_seq_item(
     job: &mut ParsedJob,
     command: CommandWithArgs,
     seq_type: SeqType,
     background: bool,
 ) {
+    let new_run = if background {
+        Run::BackgroundCommand(command)
+    } else {
+        Run::Command(command)
+    };
     match seq_type {
-        SeqType::Command => job.push_command(command, background),
-        SeqType::Pipe => job.push_pipe(command, background),
-        SeqType::Sequence => job.push_sequence(command, background),
-        SeqType::And => job.push_and(command, background),
-        SeqType::Or => job.push_or(command, background),
+        SeqType::Command => job.push_command(new_run),
+        SeqType::Pipe => job.push_pipe(new_run),
+        SeqType::Sequence => job.push_sequence(new_run),
+        SeqType::And => job.push_and(new_run),
+        SeqType::Or => job.push_or(new_run),
     }
 }
 
@@ -318,8 +335,7 @@ impl From<ParseState> for ParsedJob {
     }
 }
 
-pub fn parse_line(input: &str) -> ParsedJob {
-    let mut chars = input.chars().peekable();
+fn parse_line_inner(chars: &mut Peekable<Chars>, end_char: Option<char>) -> ParsedJob {
     let mut state = ParseState::new();
     while let Some(ch) = chars.next() {
         if state.in_string() {
@@ -336,6 +352,11 @@ pub fn parse_line(input: &str) -> ParsedJob {
                 }
             }
         } else {
+            if let Some(end_ch) = end_char {
+                if ch == end_ch {
+                    break;
+                }
+            }
             let next_char = *chars.peek().unwrap_or(&' ');
             match ch {
                 '\'' if state.last_ch != '\\' && !state.in_stringd => {
@@ -351,10 +372,10 @@ pub fn parse_line(input: &str) -> ParsedJob {
                     state.seq();
                 }
                 '>' => {
-                    state.redir_out(next_char, &mut chars);
+                    state.redir_out(next_char, chars);
                 }
                 '<' => {
-                    state.redir_in(next_char, &mut chars);
+                    state.redir_in(next_char, chars);
                 }
                 '&' if state.last_ch == '\\' => {
                     state.token().push('&');
@@ -388,6 +409,18 @@ pub fn parse_line(input: &str) -> ParsedJob {
                 ' ' => {
                     state.proc_token();
                 }
+                '(' => {
+                    state.proc_token();
+                    state.end_command(false);
+                    let mut sub = parse_line_inner(chars, Some(')'));
+                    if let Some(sub) = sub.commands.take() {
+                        push_next_seq_run(
+                            &mut state.ret,
+                            Run::Subshell(Box::new(sub)),
+                            state.current_seq,
+                        );
+                    }
+                }
                 _ => {
                     state.token().push(ch);
                     state.last_ch = ch;
@@ -398,6 +431,11 @@ pub fn parse_line(input: &str) -> ParsedJob {
     state.proc_token();
     state.end_command(false);
     state.into()
+}
+
+pub fn parse_line(input: &str) -> ParsedJob {
+    let mut chars = input.chars().peekable();
+    parse_line_inner(&mut chars, None)
 }
 
 #[cfg(test)]
@@ -444,5 +482,15 @@ mod tests {
             "</some/file 2>1 > out_file grep test;ls|<in_file grep lisp 1>2 >/out_file;ls",
             "grep test </some/file 2>1 >out_file ; ls | grep lisp <in_file 1>2 >/out_file ; ls",
         );
+    }
+
+    #[test]
+    fn test_subshell_parse() {
+        test_parse("(ls -al)", "(ls -al)");
+        test_parse("(ls -al)|grep May", "(ls -al) | grep May");
+        test_parse(
+            "(ls -al)|(grep May|grep 7)|grep 00",
+            "(ls -al) | (grep May | grep 7) | grep 00",
+        )
     }
 }

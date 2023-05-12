@@ -376,6 +376,7 @@ pub enum Run {
     Sequence(Vec<Run>),
     And(Vec<Run>),
     Or(Vec<Run>),
+    Subshell(Box<Run>),
     Empty,
 }
 
@@ -401,6 +402,7 @@ impl Display for Run {
             Self::Sequence(seq) => write_seq(f, &seq[..], ";")?,
             Self::And(seq) => write_seq(f, &seq[..], "&&")?,
             Self::Or(seq) => write_seq(f, &seq[..], "||")?,
+            Self::Subshell(sub_run) => write!(f, "({sub_run})")?,
             Self::Empty => {}
         }
         Ok(())
@@ -408,13 +410,8 @@ impl Display for Run {
 }
 
 impl Run {
-    /// Push a single command onto the Run.  If it is not the first command will add to or create a sequence.
-    pub fn push_command(self, command: CommandWithArgs, background: bool) -> Self {
-        let new_run = if background {
-            Run::BackgroundCommand(command)
-        } else {
-            Run::Command(command)
-        };
+    /// Push a new Run onto the Run.  If it is not the first command will add to or create a sequence.
+    pub fn push_run(self, new_run: Run) -> Self {
         match self {
             Run::Command(current) => Run::Sequence(vec![Run::Command(current), new_run]),
             Run::BackgroundCommand(current) => {
@@ -427,17 +424,13 @@ impl Run {
             }
             Run::And(seq) => Run::Sequence(vec![Run::And(seq), new_run]),
             Run::Or(seq) => Run::Sequence(vec![Run::Or(seq), new_run]),
+            Run::Subshell(current) => Run::Sequence(vec![Run::Subshell(current), new_run]),
             Run::Empty => new_run,
         }
     }
 
-    /// Push onto an existing or create a new pipe sequence.
-    pub fn push_pipe(self, command: CommandWithArgs, background: bool) -> Self {
-        let new_run = if background {
-            Run::BackgroundCommand(command)
-        } else {
-            Run::Command(command)
-        };
+    /// Push Run onto an existing or create a new pipe sequence.
+    pub fn push_pipe(self, new_run: Run) -> Self {
         match self {
             Run::Command(current) => Run::Pipe(vec![Run::Command(current), new_run]),
             Run::BackgroundCommand(current) => {
@@ -450,17 +443,13 @@ impl Run {
             Run::Sequence(seq) => Run::Pipe(vec![Run::Sequence(seq), new_run]),
             Run::And(seq) => Run::Pipe(vec![Run::And(seq), new_run]),
             Run::Or(seq) => Run::Pipe(vec![Run::Or(seq), new_run]),
+            Run::Subshell(current) => Run::Pipe(vec![Run::Subshell(current), new_run]),
             Run::Empty => new_run,
         }
     }
 
-    /// Push onto an existing or create a new sequence.
-    pub fn push_sequence(self, command: CommandWithArgs, background: bool) -> Self {
-        let new_run = if background {
-            Run::BackgroundCommand(command)
-        } else {
-            Run::Command(command)
-        };
+    /// Push new Run onto an existing or create a new sequence.
+    pub fn push_sequence(self, new_run: Run) -> Self {
         match self {
             Run::Command(current) => Run::Sequence(vec![Run::Command(current), new_run]),
             Run::BackgroundCommand(current) => {
@@ -473,17 +462,13 @@ impl Run {
             }
             Run::And(seq) => Run::Sequence(vec![Run::And(seq), new_run]),
             Run::Or(seq) => Run::Sequence(vec![Run::Or(seq), new_run]),
+            Run::Subshell(current) => Run::Sequence(vec![Run::Subshell(current), new_run]),
             Run::Empty => new_run,
         }
     }
 
-    /// Push onto an existing or create a new AND sequence.
-    pub fn push_and(self, command: CommandWithArgs, background: bool) -> Self {
-        let new_run = if background {
-            Run::BackgroundCommand(command)
-        } else {
-            Run::Command(command)
-        };
+    /// Push new Run onto an existing or create a new AND sequence.
+    pub fn push_and(self, new_run: Run) -> Self {
         match self {
             Run::Command(current) => Run::And(vec![Run::Command(current), new_run]),
             Run::BackgroundCommand(current) => {
@@ -496,17 +481,13 @@ impl Run {
                 Run::And(seq)
             }
             Run::Or(seq) => Run::And(vec![Run::Or(seq), new_run]),
+            Run::Subshell(current) => Run::And(vec![Run::Subshell(current), new_run]),
             Run::Empty => new_run,
         }
     }
 
-    /// Push onto an existing or create a new OR sequence.
-    pub fn push_or(self, command: CommandWithArgs, background: bool) -> Self {
-        let new_run = if background {
-            Run::BackgroundCommand(command)
-        } else {
-            Run::Command(command)
-        };
+    /// Push new Run onto an existing or create a new OR sequence.
+    pub fn push_or(self, new_run: Run) -> Self {
         match self {
             Run::Command(current) => Run::Or(vec![Run::Command(current), new_run]),
             Run::BackgroundCommand(current) => {
@@ -519,7 +500,48 @@ impl Run {
                 seq.push(new_run);
                 Run::Or(seq)
             }
+            Run::Subshell(current) => Run::Or(vec![Run::Subshell(current), new_run]),
             Run::Empty => new_run,
+        }
+    }
+
+    /// If fd is Some value then put it at the front of the redir queue for the first command in the Run.
+    pub fn push_stdin_front(&mut self, fd: Option<i32>) {
+        if let Some(fd) = fd {
+            match self {
+                Run::Command(current) => current.push_stdin_front(Some(fd)),
+                Run::BackgroundCommand(current) => current.push_stdin_front(Some(fd)),
+                Run::Pipe(ref mut seq)
+                | Run::Sequence(ref mut seq)
+                | Run::And(ref mut seq)
+                | Run::Or(ref mut seq) => {
+                    if let Some(run) = seq.first_mut() {
+                        run.push_stdin_front(Some(fd));
+                    }
+                }
+                Run::Subshell(ref mut current) => current.push_stdin_front(Some(fd)),
+                Run::Empty => {}
+            }
+        }
+    }
+
+    /// If fd is Some value then put it at the front of the redir queue for the last command in the Run.
+    pub fn push_stdout_front(&mut self, fd: Option<i32>) {
+        if let Some(fd) = fd {
+            match self {
+                Run::Command(current) => current.push_stdout_front(Some(fd)),
+                Run::BackgroundCommand(current) => current.push_stdout_front(Some(fd)),
+                Run::Pipe(ref mut seq)
+                | Run::Sequence(ref mut seq)
+                | Run::And(ref mut seq)
+                | Run::Or(ref mut seq) => {
+                    if let Some(run) = seq.last_mut() {
+                        run.push_stdout_front(Some(fd));
+                    }
+                }
+                Run::Subshell(ref mut current) => current.push_stdout_front(Some(fd)),
+                Run::Empty => {}
+            }
         }
     }
 }

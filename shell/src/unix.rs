@@ -149,54 +149,75 @@ pub fn fork_pipe(
     unsafe {
         cvt(libc::pipe(fds.as_mut_ptr()))?;
     }
-    let mut next_in = None;
-    let mut next_out = Some(fds[1]);
-    let mut upcoming_in = fds[0];
+    let mut next_in = Some(fds[0]);
+    let mut next_out = None;
+    let mut upcoming_out = fds[1];
     let mut background = false;
-    for (i, program) in new_job.iter().enumerate() {
-        if i == (progs - 1) {
-            if let Run::Command(command) = program {
-                let mut command = command.clone();
-                command.push_stdin_front(next_in);
-                fork_exec(&command, job)?; //ios, job)?;
-                background = false;
-            } else if let Run::BackgroundCommand(command) = program {
-                let mut command = command.clone();
-                command.push_stdin_front(next_in);
-                fork_exec(&command, job)?; //ios, job)?;
-                background = true;
-            } else {
-                run_job(program, jobs, term_settings.clone(), terminal_fd)?;
-            }
-        } else {
-            if let Run::Command(command) = program {
+    for (i, program) in new_job.iter().rev().enumerate() {
+        match program {
+            Run::Command(command) => {
                 let mut command = command.clone();
                 command.push_stdin_front(next_in);
                 command.push_stdout_front(next_out);
-                background = false;
                 fork_exec(&command, job)?;
-            } else if let Run::BackgroundCommand(command) = program {
+            }
+            Run::BackgroundCommand(command) => {
                 let mut command = command.clone();
                 command.push_stdin_front(next_in);
                 command.push_stdout_front(next_out);
-                background = true;
-                fork_exec(&command, job)?;
-            } else {
-                run_job(program, jobs, term_settings.clone(), terminal_fd)?;
-            }
-            next_in = Some(upcoming_in);
-            if i < (progs - 1) {
-                unsafe {
-                    cvt(libc::pipe(fds.as_mut_ptr()))?;
+                if i == 0 {
+                    background = true;
                 }
-                next_out = Some(fds[1]);
-                upcoming_in = fds[0];
+                fork_exec(&command, job)?;
             }
+            Run::Subshell(_) => {
+                let mut program = program.clone();
+                program.push_stdin_front(next_in);
+                program.push_stdout_front(next_out);
+                if let Run::Subshell(sub_run) = &mut program {
+                    match fork_run(
+                        &*sub_run,
+                        job,
+                        jobs,
+                        term_settings.clone(),
+                        terminal_fd,
+                        true,
+                    ) {
+                        Ok(()) => {
+                            restore_terminal(Some(&term_settings), terminal_fd, job);
+                        }
+                        Err(err) => {
+                            // Make sure we restore the terminal...
+                            restore_terminal(Some(&term_settings), terminal_fd, job);
+                            return Err(err);
+                        }
+                    }
+                }
+            }
+            Run::Pipe(_) | Run::Sequence(_) | Run::And(_) | Run::Or(_) => {
+                // Don't think this is expressible with the parser and maybe should be an error?
+                let mut program = program.clone();
+                program.push_stdin_front(next_in);
+                program.push_stdout_front(next_out);
+                run_job(&program, jobs, term_settings.clone(), terminal_fd, true)?;
+            }
+            Run::Empty => {}
+        }
+        next_out = Some(upcoming_out);
+        if i < (progs - 1) {
+            unsafe {
+                cvt(libc::pipe(fds.as_mut_ptr()))?;
+            }
+            upcoming_out = fds[1];
+            next_in = Some(fds[0]);
+        } else {
+            next_in = None;
         }
     }
     if job.is_empty() {
-        Err(io::Error::new(io::ErrorKind::Other, "no processes execed"))
+        Err(io::Error::new(io::ErrorKind::Other, "no processes started"))
     } else {
+        job.reverse();
         Ok(background)
     }
 }
@@ -290,6 +311,30 @@ unsafe fn close_parent_stdio(stdin: Option<i32>, stdout: Option<i32>, stderr: Op
     }
 }
 
+fn close_parent_run_stdios(run: &Run) {
+    match run {
+        Run::Command(command) => {
+            let (stdin, stdout, stderr) = command.stdios();
+            unsafe {
+                close_parent_stdio(stdin, stdout, stderr);
+            }
+        }
+        Run::BackgroundCommand(command) => {
+            let (stdin, stdout, stderr) = command.stdios();
+            unsafe {
+                close_parent_stdio(stdin, stdout, stderr);
+            }
+        }
+        Run::Pipe(seq) | Run::Sequence(seq) | Run::And(seq) | Run::Or(seq) => {
+            for run in seq {
+                close_parent_run_stdios(run);
+            }
+        }
+        Run::Subshell(run) => close_parent_run_stdios(run),
+        Run::Empty => {}
+    }
+}
+
 const CLOEXEC_MSG_FOOTER: [u8; 4] = *b"NOEX";
 
 /// Send an error code back tot he parent from a child process indicating it failed to fork.
@@ -318,12 +363,52 @@ unsafe fn send_error_to_parent(output: i32, err: io::Error) {
     libc::_exit(1);
 }
 
-pub fn fork_exec(
-    command: &CommandWithArgs,
-    //ios: &BoxedIos,
+pub fn fork_run(
+    run: &Run,
     job: &mut Job,
+    jobs: &mut Jobs,
+    term_settings: Termios,
+    terminal_fd: i32,
+    force_background: bool,
 ) -> Result<(), io::Error> {
-    let (stdin, stdout, stderr) = command.stdios(); //ios.as_ref().map(|io| io.stdio()).unwrap_or_default();
+    let result = unsafe { cvt(libc::fork())? };
+    let pid = unsafe {
+        match result {
+            0 => {
+                //XXXX if jobs.job_control() {
+                let pid = unistd::getpid();
+                let pgid = if job.is_empty() {
+                    pid
+                } else {
+                    Pid::from_raw(job.pgid())
+                };
+                if let Err(_err) = unistd::setpgid(pid, pgid) {
+                    // Ignore, do in parent and child.
+                }
+                // XXXX only if foreground
+                if let Err(_err) = unistd::tcsetpgrp(libc::STDIN_FILENO, pgid) {
+                    // Ignore, do in parent and child.
+                }
+                //}
+
+                match run_job(run, jobs, term_settings, terminal_fd, force_background) {
+                    Ok(status) => libc::_exit(status),
+                    Err(e) => {
+                        eprintln!("Error running subshell: {e}");
+                        libc::_exit(1);
+                    }
+                }
+            }
+            n => n,
+        }
+    };
+    close_parent_run_stdios(run);
+    job.add_process(pid, format!("{run}"));
+    Ok(())
+}
+
+pub fn fork_exec(command: &CommandWithArgs, job: &mut Job) -> Result<(), io::Error> {
+    let (stdin, stdout, stderr) = command.stdios();
     let program = if let Some(program) = command.command() {
         program
     } else {
@@ -340,6 +425,10 @@ pub fn fork_exec(
                 if let Err(err) = setup_child_stdio(stdin, stdout, stderr) {
                     // This call won't return.
                     send_error_to_parent(output, err);
+                }
+                let fd_max = libc::sysconf(libc::_SC_OPEN_MAX) as i32;
+                for fd in 4..fd_max {
+                    libc::close(fd);
                 }
                 //XXXX if jobs.job_control() {
                 let pid = unistd::getpid();
@@ -367,7 +456,7 @@ pub fn fork_exec(
     };
     unsafe {
         libc::close(output);
-        // Close any FD for child stdio we don;t care about.
+        // Close any FD for child stdio we don't care about.
         close_parent_stdio(stdin, stdout, stderr);
     }
     let mut bytes = [0; 8];

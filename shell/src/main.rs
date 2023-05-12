@@ -18,7 +18,7 @@ use crate::config::get_config;
 use crate::jobs::{Job, Jobs};
 use crate::parse::parse_line;
 use crate::signals::{install_sigint_handler, mask_signals};
-use crate::unix::{fork_exec, fork_pipe, restore_terminal, terminal_fd, wait_job};
+use crate::unix::{fork_exec, fork_pipe, fork_run, restore_terminal, terminal_fd, wait_job};
 use nix::sys::termios;
 use nix::sys::termios::Termios;
 use nix::{
@@ -31,6 +31,39 @@ use std::ffi::OsString;
 use std::io::ErrorKind;
 use std::{env, io};
 
+fn setup_shell_tty(shell_terminal: i32) {
+    /* Loop until we are in the foreground.  */
+    let mut shell_pgid = unistd::getpgrp();
+    while unistd::tcgetpgrp(shell_terminal) != Ok(shell_pgid) {
+        if let Err(err) = signal::kill(shell_pgid, Signal::SIGTTIN) {
+            eprintln!("Error sending sigttin: {}.", err);
+        }
+        shell_pgid = unistd::getpgrp();
+    }
+
+    mask_signals();
+
+    /* Put ourselves in our own process group.  */
+    let pgid = unistd::getpid();
+    if let Err(err) = unistd::setpgid(pgid, pgid) {
+        match err {
+            nix::errno::Errno::EPERM => { /* ignore */ }
+            _ => {
+                eprintln!("Couldn't put the shell in its own process group: {}\n", err)
+            }
+        }
+    }
+    /* Grab control of the terminal.  */
+    if let Err(err) = unistd::tcsetpgrp(shell_terminal, pgid) {
+        let msg = format!("Couldn't grab control of terminal: {}\n", err);
+        eprintln!("{}", msg);
+        return;
+    }
+
+    if !install_sigint_handler() {
+        std::process::exit(1)
+    }
+}
 fn main() {
     if let Some(config) = get_config() {
         let shell_terminal = libc::STDIN_FILENO;
@@ -38,38 +71,7 @@ fn main() {
         let is_tty = unistd::isatty(shell_terminal).unwrap_or(false);
         if config.command.is_none() && config.script.is_none() {
             if is_tty {
-                /* Loop until we are in the foreground.  */
-                let mut shell_pgid = unistd::getpgrp();
-                while unistd::tcgetpgrp(shell_terminal) != Ok(shell_pgid) {
-                    if let Err(err) = signal::kill(shell_pgid, Signal::SIGTTIN) {
-                        eprintln!("Error sending sigttin: {}.", err);
-                    }
-                    shell_pgid = unistd::getpgrp();
-                }
-
-                mask_signals();
-
-                /* Put ourselves in our own process group.  */
-                let pgid = unistd::getpid();
-                if let Err(err) = unistd::setpgid(pgid, pgid) {
-                    match err {
-                        nix::errno::Errno::EPERM => { /* ignore */ }
-                        _ => {
-                            eprintln!("Couldn't put the shell in its own process group: {}\n", err)
-                        }
-                    }
-                }
-                /* Grab control of the terminal.  */
-                if let Err(err) = unistd::tcsetpgrp(shell_terminal, pgid) {
-                    let msg = format!("Couldn't grab control of terminal: {}\n", err);
-                    eprintln!("{}", msg);
-                    return;
-                }
-
-                if !install_sigint_handler() {
-                    std::process::exit(1)
-                }
-
+                setup_shell_tty(shell_terminal);
                 let code = start_interactive(true);
                 std::process::exit(code);
             } else {
@@ -82,15 +84,13 @@ fn main() {
             command.push(' ');
             command.push_str(&config.args.join(" "));
             let mut jobs = Jobs::new();
+            if is_tty {
+                setup_shell_tty(shell_terminal);
+            }
             if let Err(err) = run_one_command(&command, &mut jobs) {
                 eprintln!("Error running {}: {}", command, err);
                 return;
             }
-            /*} else if config.script.is_some() {
-               let script = config.script.unwrap();
-               let code = run_one_script(&script, &config.args);
-               std::process::exit(code);
-            */
         }
     }
 }
@@ -152,9 +152,12 @@ pub fn run_job(
     jobs: &mut Jobs,
     term_settings: Termios,
     terminal_fd: i32,
+    force_background: bool,
 ) -> Result<i32, io::Error> {
     let status = match run {
-        Run::Command(command) => run_command(command, jobs, false, term_settings, terminal_fd)?,
+        Run::Command(command) => {
+            run_command(command, jobs, force_background, term_settings, terminal_fd)?
+        }
         Run::BackgroundCommand(command) => {
             run_command(command, jobs, true, term_settings, terminal_fd)?
         }
@@ -180,7 +183,13 @@ pub fn run_job(
         Run::Sequence(seq) => {
             let mut status = 0;
             for r in seq {
-                status = run_job(r, jobs, term_settings.clone(), terminal_fd)?;
+                status = run_job(
+                    r,
+                    jobs,
+                    term_settings.clone(),
+                    terminal_fd,
+                    force_background,
+                )?;
             }
             status
         }
@@ -188,7 +197,13 @@ pub fn run_job(
             // XXXX should background == true be an error?
             let mut status = 0;
             for r in seq {
-                status = run_job(r, jobs, term_settings.clone(), terminal_fd)?;
+                status = run_job(
+                    r,
+                    jobs,
+                    term_settings.clone(),
+                    terminal_fd,
+                    force_background,
+                )?;
                 if status != 0 {
                     break;
                 }
@@ -199,12 +214,36 @@ pub fn run_job(
             // XXXX should background == true be an error?
             let mut status = 0;
             for r in seq {
-                status = run_job(r, jobs, term_settings.clone(), terminal_fd)?;
+                status = run_job(
+                    r,
+                    jobs,
+                    term_settings.clone(),
+                    terminal_fd,
+                    force_background,
+                )?;
                 if status == 0 {
                     break;
                 }
             }
             status
+        }
+        Run::Subshell(sub_run) => {
+            let mut job = jobs.new_job();
+            match fork_run(
+                sub_run,
+                &mut job,
+                jobs,
+                term_settings.clone(),
+                terminal_fd,
+                force_background,
+            ) {
+                Ok(()) => finish_run(false, job, jobs, Some(&term_settings), terminal_fd),
+                Err(err) => {
+                    // Make sure we restore the terminal...
+                    restore_terminal(Some(&term_settings), terminal_fd, &job);
+                    return Err(err);
+                }
+            }
         }
         Run::Empty => 0,
     };
@@ -218,7 +257,7 @@ pub fn run_one_command(command: &str, jobs: &mut Jobs) -> Result<(), io::Error> 
     let term_settings = termios::tcgetattr(libc::STDIN_FILENO).unwrap();
     let terminal_fd = terminal_fd();
 
-    run_job(commands.commands(), jobs, term_settings, terminal_fd)?;
+    run_job(commands.commands(), jobs, term_settings, terminal_fd, false)?;
     Ok(())
 }
 

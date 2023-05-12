@@ -181,6 +181,12 @@ impl Job {
         }
         panic!("process {pid} not part of job");
     }
+
+    /// Reverse the list of pids in the job.
+    pub fn reverse(&mut self) {
+        self.pids.reverse();
+        self.names.reverse();
+    }
 }
 
 impl Display for Job {
