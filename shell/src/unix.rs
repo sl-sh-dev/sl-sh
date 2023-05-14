@@ -13,8 +13,6 @@ use crate::run_job;
 use crate::signals::test_clear_sigint;
 use nix::libc;
 use nix::sys::signal::{self, kill, SigHandler, Signal};
-use nix::sys::termios;
-use nix::sys::termios::Termios;
 use nix::sys::wait::{self, WaitPidFlag, WaitStatus};
 use nix::unistd::{self, Pid};
 
@@ -137,13 +135,7 @@ where
     io::Error::last_os_error()
 }
 
-pub fn fork_pipe(
-    new_job: &[Run],
-    job: &mut Job,
-    jobs: &mut Jobs,
-    term_settings: Termios,
-    terminal_fd: i32,
-) -> Result<bool, io::Error> {
+pub fn fork_pipe(new_job: &[Run], job: &mut Job, jobs: &mut Jobs) -> Result<bool, io::Error> {
     let progs = new_job.len();
     let mut fds: [i32; 2] = [0; 2];
     unsafe {
@@ -175,20 +167,13 @@ pub fn fork_pipe(
                 program.push_stdin_front(next_in);
                 program.push_stdout_front(next_out);
                 if let Run::Subshell(sub_run) = &mut program {
-                    match fork_run(
-                        &*sub_run,
-                        job,
-                        jobs,
-                        term_settings.clone(),
-                        terminal_fd,
-                        true,
-                    ) {
+                    match fork_run(&*sub_run, job, jobs) {
                         Ok(()) => {
-                            restore_terminal(Some(&term_settings), terminal_fd, job);
+                            jobs.restore_terminal();
                         }
                         Err(err) => {
                             // Make sure we restore the terminal...
-                            restore_terminal(Some(&term_settings), terminal_fd, job);
+                            jobs.restore_terminal();
                             return Err(err);
                         }
                     }
@@ -199,7 +184,7 @@ pub fn fork_pipe(
                 let mut program = program.clone();
                 program.push_stdin_front(next_in);
                 program.push_stdout_front(next_out);
-                run_job(&program, jobs, term_settings.clone(), terminal_fd, true)?;
+                run_job(&program, jobs, true)?;
             }
             Run::Empty => {}
         }
@@ -363,35 +348,30 @@ unsafe fn send_error_to_parent(output: i32, err: io::Error) {
     libc::_exit(1);
 }
 
-pub fn fork_run(
-    run: &Run,
-    job: &mut Job,
-    jobs: &mut Jobs,
-    term_settings: Termios,
-    terminal_fd: i32,
-    force_background: bool,
-) -> Result<(), io::Error> {
+unsafe fn close_extra_fds() {
+    let fd_max = libc::sysconf(libc::_SC_OPEN_MAX) as i32;
+    for fd in 4..fd_max {
+        libc::close(fd);
+    }
+}
+
+pub fn fork_run(run: &Run, job: &mut Job, jobs: &mut Jobs) -> Result<(), io::Error> {
     let result = unsafe { cvt(libc::fork())? };
     let pid = unsafe {
         match result {
             0 => {
-                //XXXX if jobs.job_control() {
-                let pid = unistd::getpid();
-                let pgid = if job.is_empty() {
-                    pid
-                } else {
-                    Pid::from_raw(job.pgid())
-                };
-                if let Err(_err) = unistd::setpgid(pid, pgid) {
-                    // Ignore, do in parent and child.
-                }
-                // XXXX only if foreground
-                if let Err(_err) = unistd::tcsetpgrp(libc::STDIN_FILENO, pgid) {
-                    // Ignore, do in parent and child.
-                }
-                //}
+                job.setup_group_term(unistd::getpid().into());
 
-                match run_job(run, jobs, term_settings, terminal_fd, force_background) {
+                let redir_fds = run.get_redir_fds();
+                let fd_max = libc::sysconf(libc::_SC_OPEN_MAX) as i32;
+                for fd in 4..fd_max {
+                    if !redir_fds.contains(&fd) {
+                        libc::close(fd);
+                    }
+                }
+                jobs.set_interactive(false);
+                jobs.set_no_tty();
+                match run_job(run, jobs, false) {
                     Ok(status) => libc::_exit(status),
                     Err(e) => {
                         eprintln!("Error running subshell: {e}");
@@ -402,6 +382,7 @@ pub fn fork_run(
             n => n,
         }
     };
+    job.setup_group_term(pid);
     close_parent_run_stdios(run);
     job.add_process(pid, format!("{run}"));
     Ok(())
@@ -426,25 +407,8 @@ pub fn fork_exec(command: &CommandWithArgs, job: &mut Job) -> Result<(), io::Err
                     // This call won't return.
                     send_error_to_parent(output, err);
                 }
-                let fd_max = libc::sysconf(libc::_SC_OPEN_MAX) as i32;
-                for fd in 4..fd_max {
-                    libc::close(fd);
-                }
-                //XXXX if jobs.job_control() {
-                let pid = unistd::getpid();
-                let pgid = if job.is_empty() {
-                    pid
-                } else {
-                    Pid::from_raw(job.pgid())
-                };
-                if let Err(_err) = unistd::setpgid(pid, pgid) {
-                    // Ignore, do in parent and child.
-                }
-                // XXXX only if foreground
-                if let Err(_err) = unistd::tcsetpgrp(libc::STDIN_FILENO, pgid) {
-                    // Ignore, do in parent and child.
-                }
-                //}
+                close_extra_fds();
+                job.setup_group_term(unistd::getpid().into());
 
                 let err = exec(program, args);
                 // This call won't return.
@@ -454,6 +418,7 @@ pub fn fork_exec(command: &CommandWithArgs, job: &mut Job) -> Result<(), io::Err
             n => n,
         }
     };
+    job.setup_group_term(pid);
     unsafe {
         libc::close(output);
         // Close any FD for child stdio we don't care about.
@@ -526,11 +491,7 @@ pub fn try_wait_pid(pid: i32, job: &mut Job) -> (bool, Option<i32>) {
     }
 }
 
-pub fn wait_job(
-    job: &mut Job,
-    term_settings: Option<&termios::Termios>,
-    terminal_fd: i32,
-) -> Option<i32> {
+pub fn wait_job(job: &mut Job) -> Option<i32> {
     let mut result: Option<i32> = None;
     let mut int_cnt = 0;
     let pgid = job.pgid();
@@ -561,36 +522,7 @@ pub fn wait_job(
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
     }
-    restore_terminal(term_settings, terminal_fd, job);
     result
-}
-
-pub fn restore_terminal(term_settings: Option<&termios::Termios>, terminal_fd: i32, job: &Job) {
-    // If we were given terminal settings restore them.
-    if let Some(settings) = term_settings {
-        if let Err(err) = termios::tcsetattr(terminal_fd, termios::SetArg::TCSANOW, settings) {
-            eprintln!("Error resetting shell terminal settings: {}", err);
-        }
-    }
-    // Move the shell back into the foreground.
-    if job.is_tty() {
-        let pid = unistd::getpid();
-        if let Err(err) = unistd::tcsetpgrp(terminal_fd, pid) {
-            // XXX TODO- be more specific with this (ie only turn off tty if that is the error)?
-            eprintln!(
-                "Error making shell (stop pretending to be a tty?) {} foreground: {}",
-                pid, err
-            );
-        }
-    }
-}
-
-pub fn terminal_fd() -> i32 {
-    if let Ok(fd) = unsafe { cvt(libc::dup(0)) } {
-        fd
-    } else {
-        0
-    }
 }
 
 /// Duplicate a raw file descriptor.

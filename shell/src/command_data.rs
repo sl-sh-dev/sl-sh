@@ -1,4 +1,5 @@
 use crate::unix::{close_fd, dup_fd};
+use std::collections::HashSet;
 use std::ffi::{OsStr, OsString};
 use std::fmt::{Display, Formatter};
 use std::fs::File;
@@ -215,6 +216,19 @@ impl StdIos {
     pub fn clear(&mut self) {
         self.redirects.clear();
     }
+
+    fn collect_fds(&self, fd_set: &mut HashSet<i32>) {
+        for r in &self.redirects {
+            match r {
+                StdIoType::Stdin(io) | StdIoType::Stdout(io) | StdIoType::Stderr(io) => match io {
+                    IoType::FileDescriptor(fd) => {
+                        fd_set.insert(*fd);
+                    }
+                    IoType::FilePath(_, _) => {}
+                },
+            }
+        }
+    }
 }
 
 impl Default for StdIos {
@@ -331,6 +345,12 @@ impl CommandWithArgs {
                 stdios.set_out_fd(fd, true);
                 self.stdios = Some(stdios);
             }
+        }
+    }
+
+    fn collect_fds(&self, fd_set: &mut HashSet<i32>) {
+        if let Some(stdios) = &self.stdios {
+            stdios.collect_fds(fd_set);
         }
     }
 }
@@ -543,5 +563,25 @@ impl Run {
                 Run::Empty => {}
             }
         }
+    }
+
+    fn collect_fds(&self, fd_set: &mut HashSet<i32>) {
+        match self {
+            Run::Command(current) => current.collect_fds(fd_set),
+            Run::BackgroundCommand(current) => current.collect_fds(fd_set),
+            Run::Pipe(ref seq) | Run::Sequence(ref seq) | Run::And(ref seq) | Run::Or(ref seq) => {
+                for run in seq {
+                    run.collect_fds(fd_set);
+                }
+            }
+            Run::Subshell(ref current) => current.collect_fds(fd_set),
+            Run::Empty => {}
+        }
+    }
+
+    pub fn get_redir_fds(&self) -> HashSet<i32> {
+        let mut res = HashSet::new();
+        self.collect_fds(&mut res);
+        res
     }
 }

@@ -1,4 +1,4 @@
-use crate::unix::{terminal_fd, try_wait_pid, wait_job};
+use crate::unix::{try_wait_pid, wait_job};
 use nix::{
     libc,
     sys::{
@@ -61,23 +61,25 @@ impl PidStatus {
 #[derive(Clone, Debug)]
 pub struct Job {
     id: u32,
+    shell_pid: i32,
     pgid: i32,
     pids: Vec<PidStatus>,
     names: Vec<String>,
     status: JobStatus,
-    tty: bool,
+    interactive: bool,
 }
 
 impl Job {
     /// Create a new empty job with id.
-    fn new(id: u32, tty: bool) -> Self {
+    fn new(id: u32, shell_pid: i32, interactive: bool) -> Self {
         Self {
             id,
+            shell_pid,
             pgid: 1,
             pids: vec![],
             names: vec![],
             status: JobStatus::New,
-            tty,
+            interactive,
         }
     }
 
@@ -114,11 +116,6 @@ impl Job {
     /// Status of this job.
     pub fn status(&self) -> JobStatus {
         self.status
-    }
-
-    /// True if this job was stated with a tty.
-    pub fn is_tty(&self) -> bool {
-        self.tty
     }
 
     /// Mark the job as stopped.
@@ -187,6 +184,31 @@ impl Job {
         self.pids.reverse();
         self.names.reverse();
     }
+
+    /// Setup the process group for the current pid as well term if interactive.
+    /// Call from both the parent and child proc to avoid race conditions.
+    pub fn setup_group_term(&self, pid: i32) {
+        let pid = Pid::from_raw(pid);
+        let pgid = if self.is_empty() {
+            pid
+        } else {
+            Pid::from_raw(self.pgid())
+        };
+        if self.interactive {
+            if let Err(_err) = unistd::setpgid(pid, pgid) {
+                // Ignore, do in parent and child.
+            }
+            // XXXX only if foreground
+            if let Err(_err) = unistd::tcsetpgrp(libc::STDIN_FILENO, pgid) {
+                // Ignore, do in parent and child.
+            }
+        } else {
+            // If not interactive then put all procs into the shells process group.
+            if let Err(_err) = unistd::setpgid(pid, Pid::from_raw(self.shell_pid)) {
+                // Ignore, do in parent and child.
+            }
+        }
+    }
 }
 
 impl Display for Job {
@@ -202,17 +224,29 @@ impl Display for Job {
 pub struct Jobs {
     next_job: u32,
     jobs: Vec<Job>,
-    job_control: bool,
-    is_tty: bool,
+    shell_pid: i32,
+    interactive: bool,
+    term_settings: Option<termios::Termios>,
 }
 
 impl Jobs {
-    pub fn new() -> Self {
+    pub fn new(interactive: bool) -> Self {
+        let shell_pid: i32 = unistd::getpid().into();
+        let term_settings = if interactive {
+            if let Ok(term_setting) = termios::tcgetattr(libc::STDIN_FILENO) {
+                Some(term_setting)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
         Self {
             next_job: 0,
             jobs: vec![],
-            job_control: true,
-            is_tty: true,
+            shell_pid,
+            interactive,
+            term_settings,
         }
     }
 
@@ -224,7 +258,7 @@ impl Jobs {
         }
         // Job numbers/ids always start at 1.
         self.next_job += 1;
-        Job::new(self.next_job, self.is_tty)
+        Job::new(self.next_job, self.shell_pid, self.interactive)
     }
 
     /// Push job onto the list of jobs.
@@ -234,17 +268,22 @@ impl Jobs {
 
     /// Are we running on a tty?
     pub fn is_tty(&self) -> bool {
-        self.is_tty
+        self.term_settings.is_some()
     }
 
-    /// Sets whether we are on a tty or not.
-    pub fn set_tty(&mut self, is_tty: bool) {
-        self.is_tty = is_tty;
+    /// Set not on a tty.
+    pub fn set_no_tty(&mut self) {
+        self.term_settings = None;
     }
 
     /// Is job control active?  Note that Jobs will be used for bookkeeping even if job control is off.
-    pub fn job_control(&self) -> bool {
-        self.job_control
+    pub fn interactive(&self) -> bool {
+        self.interactive
+    }
+
+    /// Sets whether we are interactive or not.
+    pub fn set_interactive(&mut self, interactive: bool) {
+        self.interactive = interactive;
     }
 
     /// Get the job for job_id if it exists.
@@ -288,31 +327,32 @@ impl Jobs {
 
     /// Move the job for job_num to te foreground.
     pub fn foreground_job(&mut self, job_num: u32) {
-        let job = self
-            .get_job_mut(job_num)
-            .expect("job number {job_num} is invalid");
-        let pgid = job.pgid();
-        if let JobStatus::Stopped = job.status() {
-            let term_settings = termios::tcgetattr(libc::STDIN_FILENO).unwrap();
-            let ppgid = Pid::from_raw(-pgid);
-            if let Err(err) = signal::kill(ppgid, Signal::SIGCONT) {
-                eprintln!("Error sending sigcont to wake up process: {}.", err);
+        if let Some(job) = self.get_job_mut(job_num) {
+            let pgid = job.pgid();
+            if let JobStatus::Stopped = job.status() {
+                let ppgid = Pid::from_raw(-pgid);
+                if let Err(err) = signal::kill(ppgid, Signal::SIGCONT) {
+                    eprintln!("Error sending sigcont to wake up process: {}.", err);
+                } else {
+                    let ppgid = Pid::from_raw(pgid);
+                    if let Err(err) = unistd::tcsetpgrp(libc::STDIN_FILENO, ppgid) {
+                        eprintln!("Error making {pgid} foreground in parent: {err}");
+                    }
+                    job.mark_running();
+                    wait_job(job);
+                    self.restore_terminal();
+                }
             } else {
                 let ppgid = Pid::from_raw(pgid);
+                // The job is running, so no sig cont needed...
                 if let Err(err) = unistd::tcsetpgrp(libc::STDIN_FILENO, ppgid) {
                     eprintln!("Error making {pgid} foreground in parent: {err}");
                 }
-                job.mark_running();
-                wait_job(job, Some(&term_settings), terminal_fd());
+                wait_job(job);
+                self.restore_terminal();
             }
         } else {
-            let ppgid = Pid::from_raw(pgid);
-            // The job is running, so no sig cont needed...
-            let term_settings = termios::tcgetattr(libc::STDIN_FILENO).unwrap();
-            if let Err(err) = unistd::tcsetpgrp(libc::STDIN_FILENO, ppgid) {
-                eprintln!("Error making {pgid} foreground in parent: {err}");
-            }
-            wait_job(job, Some(&term_settings), terminal_fd());
+            eprintln!("job number {job_num} is invalid");
         }
     }
 
@@ -331,6 +371,25 @@ impl Jobs {
             }
         }
     }
+
+    /// Restore terminal settings and put the shell back into the foreground.
+    pub fn restore_terminal(&self) {
+        // This assumes file descriptor 0 (STDIN) is the terminal.
+        // Move the shell back into the foreground.
+        if let Some(term_settings) = &self.term_settings {
+            // Restore terminal settings.
+            if let Err(err) = termios::tcsetattr(0, termios::SetArg::TCSANOW, term_settings) {
+                eprintln!("Error resetting shell terminal settings: {}", err);
+            }
+            if let Err(err) = unistd::tcsetpgrp(0, Pid::from_raw(self.shell_pid)) {
+                // XXX TODO- be more specific with this (ie only turn off tty if that is the error)?
+                eprintln!(
+                    "Error making shell (stop pretending to be a tty?) {} foreground: {}",
+                    self.shell_pid, err
+                );
+            }
+        }
+    }
 }
 
 impl Display for Jobs {
@@ -339,11 +398,5 @@ impl Display for Jobs {
             writeln!(f, "{job}")?;
         }
         Ok(())
-    }
-}
-
-impl Default for Jobs {
-    fn default() -> Self {
-        Self::new()
     }
 }

@@ -18,11 +18,8 @@ use crate::config::get_config;
 use crate::jobs::{Job, Jobs};
 use crate::parse::parse_line;
 use crate::signals::{install_sigint_handler, mask_signals};
-use crate::unix::{fork_exec, fork_pipe, fork_run, restore_terminal, terminal_fd, wait_job};
-use nix::sys::termios;
-use nix::sys::termios::Termios;
+use crate::unix::{fork_exec, fork_pipe, fork_run, wait_job};
 use nix::{
-    libc,
     sys::signal::{self, Signal},
     unistd::{self, gethostname, Uid},
 };
@@ -64,29 +61,44 @@ fn setup_shell_tty(shell_terminal: i32) {
         std::process::exit(1)
     }
 }
+
 fn main() {
     if let Some(config) = get_config() {
-        let shell_terminal = libc::STDIN_FILENO;
+        let shell_terminal = 0;
         // See if we are running interactively.
         let is_tty = unistd::isatty(shell_terminal).unwrap_or(false);
         if config.command.is_none() && config.script.is_none() {
             if is_tty {
                 setup_shell_tty(shell_terminal);
-                let code = start_interactive(true);
+                let code = start_interactive();
                 std::process::exit(code);
             } else {
                 // No tty, just read stdin and do something with it..
-                let code = start_interactive(false);
+                /* XXXX TODO
+                jobs.reap_procs();
+                if let Err(err) = run_one_command(&res, &mut jobs) {
+                    eprintln!("ERROR executing {res}: {err}");
+                }
                 std::process::exit(code);
+                */
             }
         } else if config.command.is_some() {
             let mut command = config.command.unwrap();
             command.push(' ');
             command.push_str(&config.args.join(" "));
-            let mut jobs = Jobs::new();
-            if is_tty {
-                setup_shell_tty(shell_terminal);
+            let mut jobs = Jobs::new(false);
+
+            /* Put ourselves in our own process group.  */
+            let pgid = unistd::getpid();
+            if let Err(err) = unistd::setpgid(pgid, pgid) {
+                match err {
+                    nix::errno::Errno::EPERM => { /* ignore */ }
+                    _ => {
+                        eprintln!("Couldn't put the shell in its own process group: {}\n", err)
+                    }
+                }
             }
+
             if let Err(err) = run_one_command(&command, &mut jobs) {
                 eprintln!("Error running {}: {}", command, err);
                 return;
@@ -95,16 +107,10 @@ fn main() {
     }
 }
 
-fn finish_run(
-    background: bool,
-    mut job: Job,
-    jobs: &mut Jobs,
-    term_settings: Option<&termios::Termios>,
-    terminal_fd: i32,
-) -> i32 {
+fn finish_run(background: bool, mut job: Job, jobs: &mut Jobs) -> i32 {
     job.mark_running();
-    if !background {
-        if let Some(status) = wait_job(&mut job, term_settings, terminal_fd) {
+    let status = if !background {
+        if let Some(status) = wait_job(&mut job) {
             env::set_var("LAST_STATUS", format!("{}", status));
             status
         } else {
@@ -113,29 +119,28 @@ fn finish_run(
             -66
         }
     } else {
-        restore_terminal(term_settings, terminal_fd, &job);
         env::set_var("LAST_STATUS", format!("{}", 0));
         jobs.push_job(job);
         0
-    }
+    };
+    jobs.restore_terminal();
+    status
 }
 
 fn run_command(
     command: &CommandWithArgs,
     jobs: &mut Jobs,
     background: bool,
-    term_settings: Termios,
-    terminal_fd: i32,
 ) -> Result<i32, io::Error> {
     Ok(if let Some(command_name) = command.command() {
         let mut args = command.args_iter();
         if !run_builtin(command_name, &mut args, jobs) {
             let mut job = jobs.new_job();
             match fork_exec(command, &mut job) {
-                Ok(()) => finish_run(background, job, jobs, Some(&term_settings), terminal_fd),
+                Ok(()) => finish_run(background, job, jobs),
                 Err(err) => {
                     // Make sure we restore the terminal...
-                    restore_terminal(Some(&term_settings), terminal_fd, &job);
+                    jobs.restore_terminal();
                     return Err(err);
                 }
             }
@@ -147,35 +152,17 @@ fn run_command(
     })
 }
 
-pub fn run_job(
-    run: &Run,
-    jobs: &mut Jobs,
-    term_settings: Termios,
-    terminal_fd: i32,
-    force_background: bool,
-) -> Result<i32, io::Error> {
+pub fn run_job(run: &Run, jobs: &mut Jobs, force_background: bool) -> Result<i32, io::Error> {
     let status = match run {
-        Run::Command(command) => {
-            run_command(command, jobs, force_background, term_settings, terminal_fd)?
-        }
-        Run::BackgroundCommand(command) => {
-            run_command(command, jobs, true, term_settings, terminal_fd)?
-        }
+        Run::Command(command) => run_command(command, jobs, force_background)?,
+        Run::BackgroundCommand(command) => run_command(command, jobs, true)?,
         Run::Pipe(pipe) => {
             let mut job = jobs.new_job();
-            match fork_pipe(
-                &pipe[..],
-                &mut job,
-                jobs,
-                term_settings.clone(),
-                terminal_fd,
-            ) {
-                Ok(background) => {
-                    finish_run(background, job, jobs, Some(&term_settings), terminal_fd)
-                }
+            match fork_pipe(&pipe[..], &mut job, jobs) {
+                Ok(background) => finish_run(background, job, jobs),
                 Err(err) => {
                     // Make sure we restore the terminal...
-                    restore_terminal(Some(&term_settings), terminal_fd, &job);
+                    jobs.restore_terminal();
                     return Err(err);
                 }
             }
@@ -183,13 +170,7 @@ pub fn run_job(
         Run::Sequence(seq) => {
             let mut status = 0;
             for r in seq {
-                status = run_job(
-                    r,
-                    jobs,
-                    term_settings.clone(),
-                    terminal_fd,
-                    force_background,
-                )?;
+                status = run_job(r, jobs, force_background)?;
             }
             status
         }
@@ -197,13 +178,7 @@ pub fn run_job(
             // XXXX should background == true be an error?
             let mut status = 0;
             for r in seq {
-                status = run_job(
-                    r,
-                    jobs,
-                    term_settings.clone(),
-                    terminal_fd,
-                    force_background,
-                )?;
+                status = run_job(r, jobs, force_background)?;
                 if status != 0 {
                     break;
                 }
@@ -214,13 +189,7 @@ pub fn run_job(
             // XXXX should background == true be an error?
             let mut status = 0;
             for r in seq {
-                status = run_job(
-                    r,
-                    jobs,
-                    term_settings.clone(),
-                    terminal_fd,
-                    force_background,
-                )?;
+                status = run_job(r, jobs, force_background)?;
                 if status == 0 {
                     break;
                 }
@@ -229,18 +198,11 @@ pub fn run_job(
         }
         Run::Subshell(sub_run) => {
             let mut job = jobs.new_job();
-            match fork_run(
-                sub_run,
-                &mut job,
-                jobs,
-                term_settings.clone(),
-                terminal_fd,
-                force_background,
-            ) {
-                Ok(()) => finish_run(false, job, jobs, Some(&term_settings), terminal_fd),
+            match fork_run(sub_run, &mut job, jobs) {
+                Ok(()) => finish_run(false, job, jobs),
                 Err(err) => {
                     // Make sure we restore the terminal...
-                    restore_terminal(Some(&term_settings), terminal_fd, &job);
+                    jobs.restore_terminal();
                     return Err(err);
                 }
             }
@@ -254,14 +216,12 @@ pub fn run_one_command(command: &str, jobs: &mut Jobs) -> Result<(), io::Error> 
     // Try to make sense out of whatever crap we get (looking at you fzf-tmux)
     // and make it work.
     let commands = parse_line(command);
-    let term_settings = termios::tcgetattr(libc::STDIN_FILENO).unwrap();
-    let terminal_fd = terminal_fd();
 
-    run_job(commands.commands(), jobs, term_settings, terminal_fd, false)?;
+    run_job(commands.commands(), jobs, false)?;
     Ok(())
 }
 
-pub fn start_interactive(is_tty: bool) -> i32 {
+pub fn start_interactive() -> i32 {
     let uid = Uid::current();
     let euid = Uid::effective();
     env::set_var("UID", format!("{}", uid));
@@ -285,8 +245,7 @@ pub fn start_interactive(is_tty: bool) -> i32 {
     if let Err(e) = con.history.set_file_name_and_load_history(".shell-history") {
         eprintln!("Error loading history: {e}");
     }
-    let mut jobs = Jobs::new();
-    jobs.set_tty(is_tty);
+    let mut jobs = Jobs::new(true);
     loop {
         let res = match con.read_line(Prompt::from("shell> "), None) {
             Ok(input) => input,
