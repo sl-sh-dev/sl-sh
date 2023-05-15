@@ -117,6 +117,7 @@ enum TokenState {
     StdErrAppend,
     StdOutErrCreate,
     StdOutErrAppend,
+    EnvVar,
 }
 
 #[derive(Debug)]
@@ -175,6 +176,7 @@ impl ParseState {
         if !token.is_empty() {
             match self.token_state {
                 TokenState::Normal => self.command().push_arg(token.into()),
+                TokenState::EnvVar => self.command().push_env_var_arg(token.into()),
                 TokenState::StdInPath => self.stdio.set_in_path(token.into(), false),
                 TokenState::StdInDirect => {
                     if let Ok((pread, pwrite)) = pipe() {
@@ -421,6 +423,15 @@ fn parse_line_inner(chars: &mut Peekable<Chars>, end_char: Option<char>) -> Pars
                         );
                     }
                 }
+                '$' if next_char == '(' => {
+                    chars.next();
+                    state.proc_token();
+                    let mut sub = parse_line_inner(chars, Some(')'));
+                    if let Some(sub) = sub.commands.take() {
+                        state.command().push_run_arg(sub);
+                    }
+                }
+                '$' => state.token_state = TokenState::EnvVar,
                 _ => {
                     state.token().push(ch);
                     state.last_ch = ch;

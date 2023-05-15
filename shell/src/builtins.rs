@@ -1,3 +1,4 @@
+use crate::command_data::Arg;
 use crate::jobs::Jobs;
 use std::env;
 use std::ffi::{OsStr, OsString};
@@ -101,15 +102,15 @@ fn cd_expand_all_dots(cd: PathBuf) -> PathBuf {
     }
 }
 
-pub fn run_builtin<I, S>(command: &OsStr, args: &mut I, jobs: &mut Jobs) -> bool
+pub fn run_builtin<'arg, I>(command: &OsStr, args: &mut I, jobs: &mut Jobs) -> bool
 where
-    I: Iterator<Item = S>,
-    S: AsRef<OsStr>,
+    I: Iterator<Item = &'arg Arg>,
 {
+    let mut args = args.map(|v| v.resolve_arg(jobs).unwrap_or_default());
     if command == "cd" {
         let arg = args.next();
         if args.next().is_none() {
-            cd(arg.map(|s| s.as_ref().into()));
+            cd(arg.map(|s| s.into()));
         } else {
             eprintln!("cd: too many arguments!");
         }
@@ -117,7 +118,7 @@ where
     } else if command == "fg" {
         if let Some(arg) = args.next() {
             if args.next().is_none() {
-                if let Some(Ok(job_num)) = arg.as_ref().to_str().map(|s| s.parse()) {
+                if let Some(Ok(job_num)) = arg.to_str().map(|s| s.parse()) {
                     jobs.foreground_job(job_num);
                 }
             } else {
@@ -130,7 +131,7 @@ where
     } else if command == "bg" {
         if let Some(arg) = args.next() {
             if args.next().is_none() {
-                if let Some(Ok(job_num)) = arg.as_ref().to_str().map(|s| s.parse()) {
+                if let Some(Ok(job_num)) = arg.to_str().map(|s| s.parse()) {
                     jobs.background_job(job_num);
                 }
             } else {

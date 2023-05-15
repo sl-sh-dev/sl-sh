@@ -6,7 +6,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::unix::io::FromRawFd;
 use std::ptr;
 
-use crate::command_data::{CommandWithArgs, Run};
+use crate::command_data::{Arg, CommandWithArgs, Run};
 use crate::glob::{expand_glob, GlobOutput};
 use crate::jobs::{Job, Jobs};
 use crate::run_job;
@@ -38,7 +38,8 @@ fn cvt<T: IsMinusOne>(t: T) -> Result<T, io::Error> {
     }
 }
 
-fn anon_pipe() -> Result<(i32, i32), io::Error> {
+/// Return the input and output file descriptors for an anonymous pipe.
+pub fn anon_pipe() -> Result<(i32, i32), io::Error> {
     // Adapted from sys/unix/pipe.rs in std lib.
     let mut fds = [0; 2];
 
@@ -98,10 +99,9 @@ fn arg_into_args<S: AsRef<OsStr>>(
     args_t.push(arg);
 }
 
-fn exec<I, S, P>(program: P, args: I) -> io::Error
+fn exec<'arg, I, P>(program: P, args: I, jobs: &mut Jobs) -> Result<(), io::Error>
 where
-    I: IntoIterator<Item = S>,
-    S: AsRef<OsStr>,
+    I: IntoIterator<Item = &'arg Arg>,
     P: AsRef<OsStr>,
 {
     let mut saw_nul = false;
@@ -109,7 +109,7 @@ where
     let mut argv = vec![program.as_ptr(), ptr::null()];
     let mut args_t = vec![program.clone()];
     for arg in args {
-        match expand_glob(arg.as_ref()) {
+        match expand_glob(arg.resolve_arg(jobs)?) {
             GlobOutput::Arg(arg) => arg_into_args(arg, &mut argv, &mut args_t, &mut saw_nul),
             GlobOutput::Args(args) => {
                 for arg in args {
@@ -132,7 +132,7 @@ where
         signal::signal(Signal::SIGCHLD, SigHandler::SigDfl).unwrap();
         libc::execvp(program.as_ptr(), argv.as_ptr());
     }
-    io::Error::last_os_error()
+    Err(io::Error::last_os_error())
 }
 
 pub fn fork_pipe(new_job: &[Run], job: &mut Job, jobs: &mut Jobs) -> Result<bool, io::Error> {
@@ -151,7 +151,7 @@ pub fn fork_pipe(new_job: &[Run], job: &mut Job, jobs: &mut Jobs) -> Result<bool
                 let mut command = command.clone();
                 command.push_stdin_front(next_in);
                 command.push_stdout_front(next_out);
-                fork_exec(&command, job)?;
+                fork_exec(&command, job, jobs)?;
             }
             Run::BackgroundCommand(command) => {
                 let mut command = command.clone();
@@ -160,7 +160,7 @@ pub fn fork_pipe(new_job: &[Run], job: &mut Job, jobs: &mut Jobs) -> Result<bool
                 if i == 0 {
                     background = true;
                 }
-                fork_exec(&command, job)?;
+                fork_exec(&command, job, jobs)?;
             }
             Run::Subshell(_) => {
                 let mut program = program.clone();
@@ -388,10 +388,14 @@ pub fn fork_run(run: &Run, job: &mut Job, jobs: &mut Jobs) -> Result<(), io::Err
     Ok(())
 }
 
-pub fn fork_exec(command: &CommandWithArgs, job: &mut Job) -> Result<(), io::Error> {
+pub fn fork_exec(
+    command: &CommandWithArgs,
+    job: &mut Job,
+    jobs: &mut Jobs,
+) -> Result<(), io::Error> {
     let (stdin, stdout, stderr) = command.stdios();
-    let program = if let Some(program) = command.command() {
-        program
+    let program = if let Some(program) = command.command(jobs) {
+        program?
     } else {
         return Err(io::Error::new(ErrorKind::Other, "no program to execute"));
     };
@@ -410,9 +414,10 @@ pub fn fork_exec(command: &CommandWithArgs, job: &mut Job) -> Result<(), io::Err
                 close_extra_fds();
                 job.setup_group_term(unistd::getpid().into());
 
-                let err = exec(program, args);
+                let err = exec(&program, args, jobs);
                 // This call won't return.
-                send_error_to_parent(output, err);
+                // If exec returns then it is an error so can unwrap it...
+                send_error_to_parent(output, err.unwrap_err());
                 0
             }
             n => n,

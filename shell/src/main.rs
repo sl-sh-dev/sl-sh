@@ -132,11 +132,12 @@ fn run_command(
     jobs: &mut Jobs,
     background: bool,
 ) -> Result<i32, io::Error> {
-    Ok(if let Some(command_name) = command.command() {
+    Ok(if let Some(command_name) = command.command(jobs) {
+        let command_name = command_name?;
         let mut args = command.args_iter();
-        if !run_builtin(command_name, &mut args, jobs) {
+        if !run_builtin(&command_name, &mut args, jobs) {
             let mut job = jobs.new_job();
-            match fork_exec(command, &mut job) {
+            match fork_exec(command, &mut job, jobs) {
                 Ok(()) => finish_run(background, job, jobs),
                 Err(err) => {
                     // Make sure we restore the terminal...

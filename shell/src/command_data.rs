@@ -1,16 +1,52 @@
-use crate::unix::{close_fd, dup_fd};
+use crate::jobs::Jobs;
+use crate::unix::{anon_pipe, close_fd, dup_fd, fork_run};
 use std::collections::HashSet;
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsString;
 use std::fmt::{Display, Formatter};
 use std::fs::File;
-use std::os::fd::IntoRawFd;
+use std::io::BufRead;
+use std::os::fd::{FromRawFd, IntoRawFd};
 use std::path::{Path, PathBuf};
+use std::{env, io};
 
 /// Arg to a command, either a direct string or a sub command to run to get the arg.
 #[derive(Clone, Debug)]
 pub enum Arg {
     Str(OsString),
     Command(Run),
+    Var(OsString),
+}
+
+impl Arg {
+    pub fn resolve_arg(&self, jobs: &mut Jobs) -> io::Result<OsString> {
+        match self {
+            Self::Str(val) => Ok(val.clone()),
+            Self::Command(run) => {
+                let (input, output) = anon_pipe()?;
+                let mut run = run.clone();
+                run.push_stdout_front(Some(output));
+                let mut job = jobs.new_job();
+                fork_run(&run, &mut job, jobs)?;
+                let lines = io::BufReader::new(unsafe { File::from_raw_fd(input) }).lines();
+                let mut val = String::new();
+                for (i, line) in lines.enumerate() {
+                    if i > 0 {
+                        val.push(' ');
+                    }
+                    let line = line?;
+                    val.push_str(line.trim());
+                }
+                Ok(val.into())
+            }
+            Self::Var(var_name) => {
+                if let Some(val) = env::var_os(var_name) {
+                    Ok(val)
+                } else {
+                    Ok("".into())
+                }
+            }
+        }
+    }
 }
 
 impl Display for Arg {
@@ -18,6 +54,7 @@ impl Display for Arg {
         match self {
             Self::Str(os_str) => write!(f, "{}", os_str.to_string_lossy()),
             Self::Command(run) => write!(f, "$({run})"),
+            Self::Var(var) => write!(f, "${}", var.to_string_lossy()),
         }
     }
 }
@@ -277,18 +314,24 @@ impl CommandWithArgs {
         self.args.push(Arg::Str(arg));
     }
 
+    /// Push a new env var arg onto the command, the first "arg" is the command itself.
+    pub fn push_env_var_arg(&mut self, arg: OsString) {
+        self.args.push(Arg::Var(arg));
+    }
+
+    /// Push a new env var arg onto the command, the first "arg" is the command itself.
+    pub fn push_run_arg(&mut self, run: Run) {
+        self.args.push(Arg::Command(run));
+    }
+
     /// Empty, not even the command is set.
     pub fn is_empty(&self) -> bool {
         self.args.is_empty()
     }
 
     /// Command name, None if no command name set (args are empty).
-    pub fn command(&self) -> Option<&OsStr> {
-        if let Some(Arg::Str(command)) = self.args.get(0) {
-            Some(command)
-        } else {
-            None
-        }
+    pub fn command(&self, jobs: &mut Jobs) -> Option<io::Result<OsString>> {
+        self.args.get(0).map(|v| v.resolve_arg(jobs))
     }
 
     /// Args to the command.
@@ -300,11 +343,10 @@ impl CommandWithArgs {
         }
     }
 
-    /// Iterator over the argumants for the command.
+    /// Iterator over the arguments for the command.
     pub fn args_iter(&self) -> CommandArgs {
         CommandArgs {
             args: self.args(),
-            temps: vec![],
             index: 0,
         }
     }
@@ -363,22 +405,15 @@ impl Default for CommandWithArgs {
 
 pub struct CommandArgs<'args> {
     args: &'args [Arg],
-    temps: Vec<OsString>,
     index: usize,
 }
 
 impl<'args> Iterator for CommandArgs<'args> {
-    type Item = &'args OsStr;
+    type Item = &'args Arg;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.index < self.args.len() {
-            let r = match &self.args[self.index] {
-                Arg::Str(s) => s.as_ref(),
-                Arg::Command(_run) => {
-                    self.temps.push("XXXX".into());
-                    self.last().unwrap()
-                }
-            };
+            let r = &self.args[self.index];
             self.index += 1;
             Some(r)
         } else {
