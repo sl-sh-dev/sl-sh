@@ -258,7 +258,9 @@ pub fn start_interactive() -> i32 {
                     continue;
                 }
                 _ => {
-                    panic!("Error on input: {err}");
+                    // Usually can just restore the tty and be back in action.
+                    jobs.restore_terminal();
+                    continue;
                 }
             },
         };

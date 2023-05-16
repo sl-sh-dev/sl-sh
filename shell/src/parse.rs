@@ -117,7 +117,6 @@ enum TokenState {
     StdErrAppend,
     StdOutErrCreate,
     StdOutErrAppend,
-    EnvVar,
 }
 
 #[derive(Debug)]
@@ -175,8 +174,10 @@ impl ParseState {
         let token = self.take_token();
         if !token.is_empty() {
             match self.token_state {
-                TokenState::Normal => self.command().push_arg(token.into()),
-                TokenState::EnvVar => self.command().push_env_var_arg(token.into()),
+                TokenState::Normal => {
+                    self.command().push_arg(token.into());
+                    self.command().stop_compound_arg();
+                }
                 TokenState::StdInPath => self.stdio.set_in_path(token.into(), false),
                 TokenState::StdInDirect => {
                     if let Ok((pread, pwrite)) = pipe() {
@@ -329,12 +330,58 @@ impl ParseState {
             self.last_ch = ' ';
         }
     }
+
+    fn special_arg(&mut self, chars: &mut Peekable<Chars>, end_char: Option<char>) {
+        if let Some('(') = chars.peek() {
+            // Subshell to capture
+            chars.next();
+            self.proc_token();
+            let mut sub = parse_line_inner(chars, Some(')'));
+            if let Some(sub) = sub.commands.take() {
+                self.command().push_run_arg(sub);
+            }
+            if chars.peek().unwrap_or(&' ').is_whitespace() {
+                self.command().stop_compound_arg();
+            } else {
+                self.command().start_compound_arg();
+            }
+        } else {
+            // Env var
+            self.proc_token();
+            let name = read_env_var_name(chars, end_char);
+            if !name.is_empty() {
+                self.command().push_env_var_arg(name.into());
+            }
+            if chars.peek().unwrap_or(&' ').is_whitespace() {
+                self.command().stop_compound_arg();
+            } else {
+                self.command().start_compound_arg();
+            }
+        }
+    }
 }
 
 impl From<ParseState> for ParsedJob {
     fn from(value: ParseState) -> Self {
         value.ret
     }
+}
+
+fn read_env_var_name(chars: &mut Peekable<Chars>, end_char: Option<char>) -> String {
+    let end_char = end_char.unwrap_or(' ');
+    let mut res = String::new();
+    let mut next_ch = chars.peek();
+    while let Some(ch) = next_ch {
+        let ch = *ch;
+        if !ch.is_whitespace() && ch != '=' && ch != '/' && ch != end_char {
+            chars.next();
+            res.push(ch);
+            next_ch = chars.peek();
+        } else {
+            next_ch = None;
+        }
+    }
+    res
 }
 
 fn parse_line_inner(chars: &mut Peekable<Chars>, end_char: Option<char>) -> ParsedJob {
@@ -360,81 +407,74 @@ fn parse_line_inner(chars: &mut Peekable<Chars>, end_char: Option<char>) -> Pars
                 }
             }
             let next_char = *chars.peek().unwrap_or(&' ');
-            match ch {
-                '\'' if state.last_ch != '\\' && !state.in_stringd => {
-                    state.str_single(ch);
-                }
-                '"' if state.last_ch != '\\' && !state.in_string => {
-                    state.str_double(ch);
-                }
-                '|' => {
-                    state.pipe_or(ch, next_char);
-                }
-                ';' if state.last_ch != '\\' => {
-                    state.seq();
-                }
-                '>' => {
-                    state.redir_out(next_char, chars);
-                }
-                '<' => {
-                    state.redir_in(next_char, chars);
-                }
-                '&' if state.last_ch == '\\' => {
-                    state.token().push('&');
-                    state.last_ch = ' ';
-                }
-                '&' if next_char == '>' || next_char == '&' => {
-                    state.last_ch = '&';
-                }
-                '&' if state.last_ch == '&' => {
-                    state.and();
-                }
-                '&' => {
-                    state.proc_token();
-                    state.end_command(true);
-                    state.last_ch = ' ';
-                }
-                '1' if next_char == '>' => {
-                    state.last_ch = '1';
-                }
-                '2' if next_char == '>' => {
-                    state.last_ch = '2';
-                }
-                '\\' => {
-                    if state.last_ch == '\\' {
-                        state.token().push('\\');
+            if ch.is_whitespace() {
+                state.proc_token();
+            } else {
+                match ch {
+                    '\'' if state.last_ch != '\\' && !state.in_stringd => {
+                        state.str_single(ch);
+                    }
+                    '"' if state.last_ch != '\\' && !state.in_string => {
+                        state.str_double(ch);
+                    }
+                    '|' => {
+                        state.pipe_or(ch, next_char);
+                    }
+                    ';' if state.last_ch != '\\' => {
+                        state.seq();
+                    }
+                    '>' => {
+                        state.redir_out(next_char, chars);
+                    }
+                    '<' => {
+                        state.redir_in(next_char, chars);
+                    }
+                    '&' if state.last_ch == '\\' => {
+                        state.token().push('&');
                         state.last_ch = ' ';
-                    } else {
+                    }
+                    '&' if next_char == '>' || next_char == '&' => {
+                        state.last_ch = '&';
+                    }
+                    '&' if state.last_ch == '&' => {
+                        state.and();
+                    }
+                    '&' => {
+                        state.proc_token();
+                        state.end_command(true);
+                        state.last_ch = ' ';
+                    }
+                    '1' if next_char == '>' => {
+                        state.last_ch = '1';
+                    }
+                    '2' if next_char == '>' => {
+                        state.last_ch = '2';
+                    }
+                    '\\' => {
+                        if state.last_ch == '\\' {
+                            state.token().push('\\');
+                            state.last_ch = ' ';
+                        } else {
+                            state.last_ch = ch;
+                        }
+                    }
+                    '(' => {
+                        state.proc_token();
+                        state.end_command(false);
+                        let mut sub = parse_line_inner(chars, Some(')'));
+                        if let Some(sub) = sub.commands.take() {
+                            push_next_seq_run(
+                                &mut state.ret,
+                                Run::Subshell(Box::new(sub)),
+                                state.current_seq,
+                            );
+                        }
+                    }
+                    '$' => state.special_arg(chars, end_char),
+                    _ => {
+                        state.token().push(ch);
                         state.last_ch = ch;
                     }
-                }
-                ' ' => {
-                    state.proc_token();
-                }
-                '(' => {
-                    state.proc_token();
-                    state.end_command(false);
-                    let mut sub = parse_line_inner(chars, Some(')'));
-                    if let Some(sub) = sub.commands.take() {
-                        push_next_seq_run(
-                            &mut state.ret,
-                            Run::Subshell(Box::new(sub)),
-                            state.current_seq,
-                        );
-                    }
-                }
-                '$' if next_char == '(' => {
-                    chars.next();
-                    state.proc_token();
-                    let mut sub = parse_line_inner(chars, Some(')'));
-                    if let Some(sub) = sub.commands.take() {
-                        state.command().push_run_arg(sub);
-                    }
-                }
-                '$' => state.token_state = TokenState::EnvVar,
-                _ => {
-                    state.token().push(ch);
-                    state.last_ch = ch;
                 }
             }
         }

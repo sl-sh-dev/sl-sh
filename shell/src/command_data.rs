@@ -12,9 +12,14 @@ use std::{env, io};
 /// Arg to a command, either a direct string or a sub command to run to get the arg.
 #[derive(Clone, Debug)]
 pub enum Arg {
+    /// Single string arg.
     Str(OsString),
+    /// A command to run to get the string arg.
     Command(Run),
+    /// Env variable to use to set the arg.
     Var(OsString),
+    /// List of args that will be concatenated to make the arg.
+    Compound(Vec<Arg>),
 }
 
 impl Arg {
@@ -45,6 +50,13 @@ impl Arg {
                     Ok("".into())
                 }
             }
+            Self::Compound(cargs) => {
+                let mut val = String::new();
+                for a in cargs {
+                    val.push_str(a.resolve_arg(jobs)?.to_string_lossy().as_ref());
+                }
+                Ok(val.into())
+            }
         }
     }
 }
@@ -55,6 +67,12 @@ impl Display for Arg {
             Self::Str(os_str) => write!(f, "{}", os_str.to_string_lossy()),
             Self::Command(run) => write!(f, "$({run})"),
             Self::Var(var) => write!(f, "${}", var.to_string_lossy()),
+            Self::Compound(cargs) => {
+                for a in cargs {
+                    write!(f, "{a}")?;
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -280,6 +298,8 @@ pub struct CommandWithArgs {
     /// args[0] is the command.
     args: Vec<Arg>,
     stdios: Option<StdIos>,
+    /// Building a compound arg if true.
+    in_compound_arg: bool,
 }
 
 impl Display for CommandWithArgs {
@@ -306,22 +326,63 @@ impl CommandWithArgs {
         Self {
             args: vec![],
             stdios: None,
+            in_compound_arg: false,
         }
+    }
+
+    /// Start building a compound args, the various arg push functions will push to this now.
+    /// Note that the last arg will be incorporated into the new compound arg.
+    pub fn start_compound_arg(&mut self) {
+        if let Some(arg) = self.args.pop() {
+            self.args.push(Arg::Compound(vec![arg]));
+        } else {
+            self.args.push(Arg::Compound(vec![]));
+        }
+        self.in_compound_arg = true;
+    }
+
+    /// Stop building a compound arg.
+    pub fn stop_compound_arg(&mut self) {
+        self.in_compound_arg = false;
     }
 
     /// Push a new arg onto the command, the first "arg" is the command itself.
     pub fn push_arg(&mut self, arg: OsString) {
-        self.args.push(Arg::Str(arg));
+        if self.in_compound_arg {
+            if let Some(Arg::Compound(carg)) = self.args.last_mut() {
+                carg.push(Arg::Str(arg));
+            } else {
+                panic!("invalid use of push_arg, expected compound arg but one not available")
+            }
+        } else {
+            self.args.push(Arg::Str(arg));
+        }
     }
 
     /// Push a new env var arg onto the command, the first "arg" is the command itself.
     pub fn push_env_var_arg(&mut self, arg: OsString) {
-        self.args.push(Arg::Var(arg));
+        if self.in_compound_arg {
+            if let Some(Arg::Compound(carg)) = self.args.last_mut() {
+                carg.push(Arg::Var(arg));
+            } else {
+                panic!("invalid use of push_arg, expected compound arg but one not available")
+            }
+        } else {
+            self.args.push(Arg::Var(arg));
+        }
     }
 
     /// Push a new env var arg onto the command, the first "arg" is the command itself.
     pub fn push_run_arg(&mut self, run: Run) {
-        self.args.push(Arg::Command(run));
+        if self.in_compound_arg {
+            if let Some(Arg::Compound(carg)) = self.args.last_mut() {
+                carg.push(Arg::Command(run));
+            } else {
+                panic!("invalid use of push_arg, expected compound arg but one not available")
+            }
+        } else {
+            self.args.push(Arg::Command(run));
+        }
     }
 
     /// Empty, not even the command is set.
