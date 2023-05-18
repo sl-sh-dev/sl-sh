@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::convert::TryInto;
 use std::ffi::{c_char, CString, OsStr};
 use std::fs::File;
@@ -207,119 +208,6 @@ pub fn fork_pipe(new_job: &[Run], job: &mut Job, jobs: &mut Jobs) -> Result<bool
     }
 }
 
-/// Setup the child process stdios (stdin/out/err).  Dups any handles into 0, 1, 2 and closes other
-/// higher number handles in prep.
-/// This is ONLY to be called shortly after forking a child process.
-/// SAFETY: This is entire function is a bunch of libc calls, hence the unsafe.
-/// If this function returns an err then the fork MUST notify the parent and exit.
-unsafe fn setup_child_stdio(
-    stdin: Option<i32>,
-    stdout: Option<i32>,
-    stderr: Option<i32>,
-) -> Result<(), io::Error> {
-    if let Some(stdin) = stdin {
-        if stdin != 0 {
-            // Sanity check we are not already stdin...
-            cvt(libc::dup2(stdin, 0))?;
-            // This would be very odd for stdin to be less than or equal to 2 but don't close if it is (?)...
-            if stdin > 2 {
-                cvt(libc::close(stdin))?;
-            }
-        }
-    }
-    if let Some(stdout) = stdout {
-        if stdout != 1 {
-            // Sanity check we are not already stdout...
-            cvt(libc::dup2(stdout, 1))?;
-        }
-    }
-    if let Some(stderr) = stderr {
-        if stderr != 2 {
-            // Sanity check we are not already stderr...
-            cvt(libc::dup2(stderr, 2))?;
-        }
-    }
-    if let Some(stdout) = stdout {
-        if stdout > 2 {
-            // Make sure we don't close a std IO by accident.
-            cvt(libc::close(stdout))?;
-        }
-        if let Some(stderr) = stderr {
-            // Don't close an existing stdio and don't double close stdout if equal stdout.
-            if stderr > 2 && stderr != stdout {
-                cvt(libc::close(stderr))?;
-            }
-        }
-    } else if let Some(stderr) = stderr {
-        if stderr > 2 {
-            // Make sure we don't close a std IO by accident.
-            cvt(libc::close(stderr))?;
-        }
-    }
-    Ok(())
-}
-
-/// If the parent (shell) has any open FDs for child stdio then close them.
-/// Log errors, we should not get any but if we do probably want to keep going- we have a child now...
-unsafe fn close_parent_stdio(stdin: Option<i32>, stdout: Option<i32>, stderr: Option<i32>) {
-    if let Some(stdin) = stdin {
-        if stdin > 2 {
-            // Don't close a stdio by accident.
-            if let Err(err) = cvt(libc::close(stdin)) {
-                eprintln!("Error closing child stdin ({stdin}) file descriptor: {err}");
-            }
-        }
-    }
-    // It's possible that stdout and stderr share a file descriptor so this weirdness accounts for that.
-    if let Some(stdout) = stdout {
-        if stdout > 2 {
-            // Don't close a stdio by accident.
-            if let Err(err) = cvt(libc::close(stdout)) {
-                eprintln!("Error closing child stdout ({stdout}) file descriptor: {err}");
-            }
-        }
-        if let Some(stderr) = stderr {
-            if stderr > 2 && stderr != stdout {
-                // Don't close a stdio by accident or double close stdout.
-                if let Err(err) = cvt(libc::close(stderr)) {
-                    eprintln!("Error closing child stderr ({stderr}) file descriptor: {err}");
-                }
-            }
-        }
-    } else if let Some(stderr) = stderr {
-        if stderr > 2 {
-            // Don't close a stdio by accident.
-            if let Err(err) = cvt(libc::close(stderr)) {
-                eprintln!("Error closing child stderr ({stderr}) file descriptor: {err}");
-            }
-        }
-    }
-}
-
-fn close_parent_run_stdios(run: &Run) {
-    match run {
-        Run::Command(command) => {
-            let (stdin, stdout, stderr) = command.stdios();
-            unsafe {
-                close_parent_stdio(stdin, stdout, stderr);
-            }
-        }
-        Run::BackgroundCommand(command) => {
-            let (stdin, stdout, stderr) = command.stdios();
-            unsafe {
-                close_parent_stdio(stdin, stdout, stderr);
-            }
-        }
-        Run::Pipe(seq) | Run::Sequence(seq) | Run::And(seq) | Run::Or(seq) => {
-            for run in seq {
-                close_parent_run_stdios(run);
-            }
-        }
-        Run::Subshell(run) => close_parent_run_stdios(run),
-        Run::Empty => {}
-    }
-}
-
 const CLOEXEC_MSG_FOOTER: [u8; 4] = *b"NOEX";
 
 /// Send an error code back tot he parent from a child process indicating it failed to fork.
@@ -348,10 +236,12 @@ unsafe fn send_error_to_parent(output: i32, err: io::Error) {
     libc::_exit(1);
 }
 
-unsafe fn close_extra_fds() {
+unsafe fn close_extra_fds(opened: &HashSet<i32>) {
     let fd_max = libc::sysconf(libc::_SC_OPEN_MAX) as i32;
-    for fd in 4..fd_max {
-        libc::close(fd);
+    for fd in 3..fd_max {
+        if !opened.contains(&fd) {
+            libc::close(fd);
+        }
     }
 }
 
@@ -362,13 +252,8 @@ pub fn fork_run(run: &Run, job: &mut Job, jobs: &mut Jobs) -> Result<(), io::Err
             0 => {
                 job.setup_group_term(unistd::getpid().into());
 
-                let redir_fds = run.get_redir_fds();
-                let fd_max = libc::sysconf(libc::_SC_OPEN_MAX) as i32;
-                for fd in 4..fd_max {
-                    if !redir_fds.contains(&fd) {
-                        libc::close(fd);
-                    }
-                }
+                let redir_fds = run.get_internal_fds();
+                close_extra_fds(&redir_fds);
                 jobs.set_interactive(false);
                 jobs.set_no_tty();
                 match run_job(run, jobs, false) {
@@ -383,7 +268,13 @@ pub fn fork_run(run: &Run, job: &mut Job, jobs: &mut Jobs) -> Result<(), io::Err
         }
     };
     job.setup_group_term(pid);
-    close_parent_run_stdios(run);
+    // Close any internal FDs (from pipes for instance) in this process.
+    let redir_fds = run.get_internal_fds();
+    for fd in redir_fds {
+        if fd > 3 {
+            let _ = close_fd(fd);
+        }
+    }
     job.add_process(pid, format!("{run}"));
     Ok(())
 }
@@ -393,7 +284,6 @@ pub fn fork_exec(
     job: &mut Job,
     jobs: &mut Jobs,
 ) -> Result<(), io::Error> {
-    let (stdin, stdout, stderr) = command.stdios();
     let program = if let Some(program) = command.command(jobs) {
         program?
     } else {
@@ -407,11 +297,14 @@ pub fn fork_exec(
         match result {
             0 => {
                 libc::close(input);
-                if let Err(err) = setup_child_stdio(stdin, stdout, stderr) {
-                    // This call won't return.
-                    send_error_to_parent(output, err);
+                jobs.set_no_tty();
+                jobs.set_interactive(false);
+                match command.process_redirects(jobs) {
+                    Ok(fds) => {
+                        close_extra_fds(&fds);
+                    }
+                    Err(err) => send_error_to_parent(output, err), // This call won't return.
                 }
-                close_extra_fds();
                 job.setup_group_term(unistd::getpid().into());
 
                 let err = exec(&program, args, jobs);
@@ -427,7 +320,13 @@ pub fn fork_exec(
     unsafe {
         libc::close(output);
         // Close any FD for child stdio we don't care about.
-        close_parent_stdio(stdin, stdout, stderr);
+        // This means any FDs we opened for pipes etc.
+        let redir_fds = command.get_internal_fds();
+        for fd in redir_fds {
+            if fd > 3 {
+                let _ = close_fd(fd);
+            }
+        }
     }
     let mut bytes = [0; 8];
 
@@ -530,9 +429,9 @@ pub fn wait_job(job: &mut Job) -> Option<i32> {
     result
 }
 
-/// Duplicate a raw file descriptor.
-pub fn dup_fd(fd: i32) -> Result<i32, io::Error> {
-    unsafe { cvt(libc::dup(fd)) }
+/// Duplicate a raw file descriptor to another file descriptor.
+pub fn dup2_fd(src_fd: i32, dst_fd: i32) -> Result<i32, io::Error> {
+    unsafe { cvt(libc::dup2(src_fd, dst_fd)) }
 }
 
 /// Make an anon pipe, (read, write).

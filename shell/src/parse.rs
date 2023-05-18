@@ -1,4 +1,4 @@
-use crate::command_data::{CommandWithArgs, Run, StdIos};
+use crate::command_data::{CommandWithArgs, Redirects, Run};
 use crate::unix::pipe;
 use std::fmt::{Display, Formatter};
 use std::fs::File;
@@ -124,7 +124,7 @@ struct ParseState {
     ret: ParsedJob,
     // Should not be None, is Option to allow ownership to change.
     command: Option<CommandWithArgs>,
-    stdio: StdIos,
+    stdio: Redirects,
     in_string: bool,
     in_stringd: bool,
     // Should not be None, is Option to allow ownership to change.
@@ -146,7 +146,7 @@ impl ParseState {
         Self {
             ret,
             command,
-            stdio: StdIos::default(),
+            stdio: Redirects::default(),
             in_string,
             in_stringd,
             token,
@@ -178,7 +178,7 @@ impl ParseState {
                     self.command().push_arg(token.into());
                     self.command().stop_compound_arg();
                 }
-                TokenState::StdInPath => self.stdio.set_in_path(token.into(), false),
+                TokenState::StdInPath => self.stdio.set_in_path(0, token.into()),
                 TokenState::StdInDirect => {
                     if let Ok((pread, pwrite)) = pipe() {
                         unsafe {
@@ -187,20 +187,20 @@ impl ParseState {
                                 eprintln!("Error writing {token} to stdin: {e}");
                             }
                         }
-                        self.stdio.set_in_fd(pread, true);
+                        self.stdio.set_in_internal_fd(0, pread, true);
                     }
                 }
-                TokenState::StdOutCreate => self.stdio.set_out_path(token.into(), true),
-                TokenState::StdOutAppend => self.stdio.set_out_path(token.into(), false),
-                TokenState::StdErrCreate => self.stdio.set_err_path(token.into(), true),
-                TokenState::StdErrAppend => self.stdio.set_err_path(token.into(), false),
+                TokenState::StdOutCreate => self.stdio.set_out_path(1, token.into(), true),
+                TokenState::StdOutAppend => self.stdio.set_out_path(1, token.into(), false),
+                TokenState::StdErrCreate => self.stdio.set_out_path(2, token.into(), true),
+                TokenState::StdErrAppend => self.stdio.set_out_path(2, token.into(), false),
                 TokenState::StdOutErrCreate => {
-                    self.stdio.set_out_path(token.into(), true);
-                    self.stdio.set_err_fd(1, true);
+                    self.stdio.set_out_path(1, token.into(), true);
+                    self.stdio.set_out_internal_fd(2, 1, true);
                 }
                 TokenState::StdOutErrAppend => {
-                    self.stdio.set_out_path(token.into(), false);
-                    self.stdio.set_err_fd(1, true);
+                    self.stdio.set_out_path(1, token.into(), false);
+                    self.stdio.set_out_internal_fd(2, 1, true);
                 }
             }
             self.token_state = TokenState::Normal;
@@ -294,7 +294,7 @@ impl ParseState {
                 if next_char == '1' {
                     // '2>1'- stderr to stdout.
                     chars.next(); // Consume the '1'.
-                    self.stdio.set_err_fd(1, true);
+                    self.stdio.set_out_internal_fd(2, 1, true);
                 } else {
                     self.token_state = TokenState::StdErrCreate;
                 }
@@ -302,7 +302,7 @@ impl ParseState {
                 if next_char == '2' {
                     // '1>2'- stdout to stderr.
                     chars.next(); // Consume the '2'.
-                    self.stdio.set_out_fd(2, true);
+                    self.stdio.set_out_internal_fd(1, 2, true);
                 } else {
                     self.token_state = TokenState::StdOutCreate
                 }
