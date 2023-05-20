@@ -1,10 +1,8 @@
-use crate::command_data::{CommandWithArgs, Redirects, Run};
-use crate::unix::pipe;
+use crate::command_data::{Arg, CommandWithArgs, Redirects, Run};
 use std::fmt::{Display, Formatter};
-use std::fs::File;
-use std::io::Write;
+use std::io;
+use std::io::ErrorKind;
 use std::iter::Peekable;
-use std::os::fd::FromRawFd;
 use std::str::Chars;
 
 /// Type of the current sequence being parsed.
@@ -106,40 +104,22 @@ fn push_next_seq_item(
     }
 }
 
-#[derive(Copy, Clone, Debug)]
-enum TokenState {
-    Normal,
-    StdInPath,
-    StdInDirect,
-    StdOutCreate,
-    StdOutAppend,
-    StdErrCreate,
-    StdErrAppend,
-    StdOutErrCreate,
-    StdOutErrAppend,
-}
-
 #[derive(Debug)]
 struct ParseState {
     ret: ParsedJob,
     // Should not be None, is Option to allow ownership to change.
     command: Option<CommandWithArgs>,
     stdio: Redirects,
-    in_string: bool,
-    in_stringd: bool,
     // Should not be None, is Option to allow ownership to change.
     token: Option<String>,
     last_ch: char,
     current_seq: SeqType,
-    token_state: TokenState,
 }
 
 impl ParseState {
     fn new() -> Self {
         let ret = ParsedJob::new();
         let command = Some(CommandWithArgs::new());
-        let in_string = false;
-        let in_stringd = false;
         let token = Some(String::new());
         let last_ch = ' ';
         let current_seq = SeqType::Command;
@@ -147,12 +127,9 @@ impl ParseState {
             ret,
             command,
             stdio: Redirects::default(),
-            in_string,
-            in_stringd,
             token,
             last_ch,
             current_seq,
-            token_state: TokenState::Normal,
         }
     }
 
@@ -173,37 +150,8 @@ impl ParseState {
     fn proc_token(&mut self) {
         let token = self.take_token();
         if !token.is_empty() {
-            match self.token_state {
-                TokenState::Normal => {
-                    self.command().push_arg(token.into());
-                    self.command().stop_compound_arg();
-                }
-                TokenState::StdInPath => self.stdio.set_in_path(0, token.into()),
-                TokenState::StdInDirect => {
-                    if let Ok((pread, pwrite)) = pipe() {
-                        unsafe {
-                            let mut file = File::from_raw_fd(pwrite);
-                            if let Err(e) = file.write_all(token.as_bytes()) {
-                                eprintln!("Error writing {token} to stdin: {e}");
-                            }
-                        }
-                        self.stdio.set_in_internal_fd(0, pread, true);
-                    }
-                }
-                TokenState::StdOutCreate => self.stdio.set_out_path(1, token.into(), true),
-                TokenState::StdOutAppend => self.stdio.set_out_path(1, token.into(), false),
-                TokenState::StdErrCreate => self.stdio.set_out_path(2, token.into(), true),
-                TokenState::StdErrAppend => self.stdio.set_out_path(2, token.into(), false),
-                TokenState::StdOutErrCreate => {
-                    self.stdio.set_out_path(1, token.into(), true);
-                    self.stdio.set_out_internal_fd(2, 1, true);
-                }
-                TokenState::StdOutErrAppend => {
-                    self.stdio.set_out_path(1, token.into(), false);
-                    self.stdio.set_out_internal_fd(2, 1, true);
-                }
-            }
-            self.token_state = TokenState::Normal;
+            self.command().push_arg(token.into());
+            self.command().stop_compound_arg();
         }
     }
 
@@ -216,26 +164,6 @@ impl ParseState {
             }
             self.command = Some(CommandWithArgs::new());
         }
-    }
-
-    fn in_string(&self) -> bool {
-        self.in_string || self.in_stringd
-    }
-
-    fn str_single(&mut self, ch: char) {
-        self.in_string = !self.in_string;
-        if !self.in_string {
-            self.proc_token();
-        }
-        self.last_ch = ch;
-    }
-
-    fn str_double(&mut self, ch: char) {
-        self.in_stringd = !self.in_stringd;
-        if !self.in_stringd {
-            self.proc_token();
-        }
-        self.last_ch = ch;
     }
 
     fn pipe_or(&mut self, ch: char, next_char: char) {
@@ -271,72 +199,124 @@ impl ParseState {
         self.last_ch = ' ';
     }
 
-    fn redir_out(&mut self, next_char: char, chars: &mut dyn Iterator<Item = char>) {
+    fn redir_out(
+        &mut self,
+        chars: &mut Peekable<Chars>,
+        end_char: Option<char>,
+    ) -> Result<(), io::Error> {
         if self.last_ch == '\\' {
             self.token().push('>');
             self.last_ch = ' ';
-        } else if next_char == '>' {
-            self.proc_token();
-            if self.last_ch == '2' {
-                self.token_state = TokenState::StdErrAppend;
-            } else if self.last_ch == '1' {
-                self.token_state = TokenState::StdOutAppend;
-            } else if self.last_ch == '&' {
-                self.token_state = TokenState::StdOutErrAppend;
+            return Ok(());
+        }
+        let mut amp = false;
+        let out_fd = if let Some(token) = &self.token {
+            if token == "&" {
+                self.take_token();
+                amp = true;
+                1
+            } else if let Ok(fd) = token.parse::<i32>() {
+                if fd >= 0 {
+                    self.take_token();
+                    fd
+                } else {
+                    self.proc_token();
+                    1
+                }
             } else {
-                self.token_state = TokenState::StdOutAppend
+                self.proc_token();
+                1
             }
-            chars.next();
-            self.last_ch = ' ';
         } else {
             self.proc_token();
-            if self.last_ch == '2' {
-                if next_char == '1' {
-                    // '2>1'- stderr to stdout.
-                    chars.next(); // Consume the '1'.
-                    self.stdio.set_out_internal_fd(2, 1, true);
-                } else {
-                    self.token_state = TokenState::StdErrCreate;
-                }
-            } else if self.last_ch == '1' {
-                if next_char == '2' {
-                    // '1>2'- stdout to stderr.
-                    chars.next(); // Consume the '2'.
-                    self.stdio.set_out_internal_fd(1, 2, true);
-                } else {
-                    self.token_state = TokenState::StdOutCreate
-                }
-            } else if self.last_ch == '&' {
-                self.token_state = TokenState::StdOutErrCreate
+            1
+        };
+        let next_char = *chars.peek().unwrap_or(&' ');
+        if next_char == '>' {
+            chars.next();
+            consume_whitespace(chars);
+            let fd_arg = read_arg(chars, end_char)?;
+            self.stdio.set_out_path(out_fd, fd_arg, false);
+            self.last_ch = ' ';
+        } else {
+            if next_char == '&' {
+                chars.next(); // Consume the &
+            }
+            consume_whitespace(chars);
+            let fd_arg = read_arg(chars, end_char)?;
+            if next_char == '&' {
+                self.stdio.set_out_fd(out_fd, fd_arg, true);
             } else {
-                self.token_state = TokenState::StdOutCreate
+                self.stdio.set_out_path(out_fd, fd_arg, true);
             }
             self.last_ch = ' ';
         }
+        if amp {
+            self.stdio.set_out_internal_fd(2, out_fd, true);
+        }
+        Ok(())
     }
 
-    fn redir_in(&mut self, next_char: char, chars: &mut dyn Iterator<Item = char>) {
+    fn redir_in(
+        &mut self,
+        chars: &mut Peekable<Chars>,
+        end_char: Option<char>,
+    ) -> Result<(), io::Error> {
         if self.last_ch == '\\' {
             self.token().push('<');
             self.last_ch = ' ';
-        } else if next_char == '<' {
-            self.proc_token();
-            chars.next();
-            self.last_ch = ' ';
-            self.token_state = TokenState::StdInDirect;
+            return Ok(());
+        }
+        let in_fd = if let Some(token) = &self.token {
+            if let Ok(fd) = token.parse::<i32>() {
+                if fd >= 0 {
+                    self.take_token();
+                    fd
+                } else {
+                    self.proc_token();
+                    0
+                }
+            } else {
+                self.proc_token();
+                0
+            }
         } else {
             self.proc_token();
-            self.token_state = TokenState::StdInPath;
+            0
+        };
+        let next_char = *chars.peek().unwrap_or(&' ');
+        if next_char == '<' {
+            chars.next();
+            consume_whitespace(chars);
+            let fd_arg = read_arg(chars, end_char)?;
             self.last_ch = ' ';
+            self.stdio.set_in_direct(in_fd, fd_arg);
+        } else {
+            if next_char == '&' {
+                chars.next(); // Consume the &
+            }
+            consume_whitespace(chars);
+            let fd_arg = read_arg(chars, end_char)?;
+            self.last_ch = ' ';
+            if next_char == '&' {
+                self.stdio.set_in_fd(in_fd, fd_arg, true);
+            } else {
+                self.stdio.set_in_path(in_fd, fd_arg);
+            }
         }
+        Ok(())
     }
 
-    fn special_arg(&mut self, chars: &mut Peekable<Chars>, end_char: Option<char>) {
+    fn special_arg(
+        &mut self,
+        chars: &mut Peekable<Chars>,
+        end_char: Option<char>,
+    ) -> Result<(), io::Error> {
         if let Some('(') = chars.peek() {
             // Subshell to capture
             chars.next();
             self.proc_token();
-            let mut sub = parse_line_inner(chars, Some(')'));
+            let mut sub = parse_line_inner(chars, Some(')'))?;
             if let Some(sub) = sub.commands.take() {
                 self.command().push_run_arg(sub);
             }
@@ -348,7 +328,17 @@ impl ParseState {
         } else {
             // Env var
             self.proc_token();
-            let name = read_env_var_name(chars, end_char);
+            let name = if let Some('{') = chars.peek() {
+                chars.next();
+                let r = read_token(chars, Some('}'));
+                if let Some('}') = chars.peek() {
+                    r
+                } else {
+                    return Err(io::Error::new(ErrorKind::Other, "bad substitution"));
+                }
+            } else {
+                read_token(chars, end_char)
+            };
             if !name.is_empty() {
                 self.command().push_env_var_arg(name.into());
             }
@@ -358,6 +348,7 @@ impl ParseState {
                 self.command().start_compound_arg();
             }
         }
+        Ok(())
     }
 }
 
@@ -367,13 +358,42 @@ impl From<ParseState> for ParsedJob {
     }
 }
 
-fn read_env_var_name(chars: &mut Peekable<Chars>, end_char: Option<char>) -> String {
+fn consume_whitespace(chars: &mut Peekable<Chars>) {
+    while let Some(ch) = chars.peek() {
+        if ch.is_whitespace() {
+            chars.next();
+        } else {
+            break;
+        }
+    }
+}
+
+/// Read string surrounded by quote (typically " or ').  Assumes chars is on the open quote and
+/// consumes the end quote.
+fn read_string(chars: &mut Peekable<Chars>, quote: char) -> Result<String, io::Error> {
+    let mut res = String::new();
+    let mut next_ch = chars.peek().copied();
+    while let Some(ch) = next_ch {
+        if ch == quote {
+            chars.next();
+            return Ok(res);
+        } else {
+            chars.next();
+            res.push(ch);
+            next_ch = chars.peek().copied();
+        }
+    }
+    Err(io::Error::new(ErrorKind::Other, "unclosed string"))
+}
+
+fn read_token(chars: &mut Peekable<Chars>, end_char: Option<char>) -> String {
     let end_char = end_char.unwrap_or(' ');
+    let end_set = ['"', '\'', '$', '|', ';', '&', '<', '>', '(', end_char];
     let mut res = String::new();
     let mut next_ch = chars.peek();
     while let Some(ch) = next_ch {
         let ch = *ch;
-        if !ch.is_whitespace() && ch != '=' && ch != '/' && ch != end_char {
+        if !ch.is_whitespace() && !end_set.contains(&ch) {
             chars.next();
             res.push(ch);
             next_ch = chars.peek();
@@ -384,107 +404,168 @@ fn read_env_var_name(chars: &mut Peekable<Chars>, end_char: Option<char>) -> Str
     res
 }
 
-fn parse_line_inner(chars: &mut Peekable<Chars>, end_char: Option<char>) -> ParsedJob {
+fn read_arg(chars: &mut Peekable<Chars>, end_char_in: Option<char>) -> Result<Arg, io::Error> {
+    let mut args = vec![];
+    let end_char = end_char_in.unwrap_or(' ');
+    let end_set = ['$', '|', ';', '&', '<', '>', '(', end_char];
+    let mut res = String::new();
+    let mut next_ch = chars.peek().copied();
+    while let Some(ch) = next_ch {
+        let ch = ch;
+        if ch == '$' {
+            args.push(Arg::Str(res.clone().into()));
+            res.clear();
+            chars.next();
+            let next_arg = read_special_arg(chars, end_char_in)?;
+            if let Arg::Compound(mut nargs) = next_arg {
+                args.append(&mut nargs);
+            } else {
+                args.push(next_arg);
+            }
+        } else if ch == '"' || ch == '\'' {
+            chars.next(); // Consume opening quote.
+            args.push(Arg::Str(read_string(chars, ch)?.into()));
+            next_ch = chars.peek().copied();
+        } else if !ch.is_whitespace() && !end_set.contains(&ch) {
+            chars.next();
+            res.push(ch);
+            next_ch = chars.peek().copied();
+        } else {
+            next_ch = None;
+        }
+    }
+    args.push(Arg::Str(res.into()));
+    Ok(if args.len() == 1 {
+        args.pop().expect("we had one element...")
+    } else {
+        Arg::Compound(args)
+    })
+}
+
+fn read_special_arg(chars: &mut Peekable<Chars>, end_char: Option<char>) -> Result<Arg, io::Error> {
+    let mut args = vec![];
+    if let Some('(') = chars.peek() {
+        // Subshell to capture
+        chars.next();
+        let mut sub = parse_line_inner(chars, Some(')'))?;
+        if let Some(sub) = sub.commands.take() {
+            args.push(Arg::Command(sub));
+        }
+    } else {
+        // Env var
+        let name = if let Some('{') = chars.peek() {
+            chars.next();
+            let r = read_token(chars, Some('}'));
+            if let Some('}') = chars.peek() {
+                r
+            } else {
+                return Err(io::Error::new(ErrorKind::Other, "bad substitution"));
+            }
+        } else {
+            read_token(chars, end_char)
+        };
+        if !name.is_empty() {
+            args.push(Arg::Var(name.into()));
+        }
+    }
+    if !chars.peek().unwrap_or(&' ').is_whitespace() {
+        let next_arg = read_arg(chars, end_char)?;
+        if let Arg::Compound(mut nargs) = next_arg {
+            args.append(&mut nargs);
+        } else {
+            args.push(next_arg);
+        }
+    }
+    Ok(if args.len() == 1 {
+        args.pop().expect("we had one element...")
+    } else {
+        Arg::Compound(args)
+    })
+}
+
+fn parse_line_inner(
+    chars: &mut Peekable<Chars>,
+    end_char: Option<char>,
+) -> Result<ParsedJob, io::Error> {
     let mut state = ParseState::new();
     while let Some(ch) = chars.next() {
-        if state.in_string() {
+        if let Some(end_ch) = end_char {
+            if ch == end_ch {
+                break;
+            }
+        }
+        let next_char = *chars.peek().unwrap_or(&' ');
+        if ch.is_whitespace() {
+            state.proc_token();
+        } else {
             match ch {
-                '\'' if state.last_ch != '\\' && !state.in_stringd => {
-                    state.str_single(ch);
+                '\'' | '"' if state.last_ch != '\\' => {
+                    state.proc_token();
+                    let str_arg = read_string(chars, ch)?;
+                    state.command().push_arg(str_arg.into());
+                    state.command().stop_compound_arg();
                 }
-                '"' if state.last_ch != '\\' && !state.in_string => {
-                    state.str_double(ch);
+                '|' => {
+                    state.pipe_or(ch, next_char);
                 }
+                ';' if state.last_ch != '\\' => {
+                    state.seq();
+                }
+                '>' => {
+                    state.redir_out(chars, end_char)?;
+                }
+                '<' => {
+                    state.redir_in(chars, end_char)?;
+                }
+                '&' if state.last_ch == '\\' => {
+                    state.token().push('&');
+                    state.last_ch = ' ';
+                }
+                '&' if next_char == '>' || next_char == '&' => {
+                    state.last_ch = '&';
+                }
+                '&' if state.last_ch == '&' => {
+                    state.and();
+                }
+                '&' => {
+                    state.proc_token();
+                    state.end_command(true);
+                    state.last_ch = ' ';
+                }
+                '\\' => {
+                    if state.last_ch == '\\' {
+                        state.token().push('\\');
+                        state.last_ch = ' ';
+                    } else {
+                        state.last_ch = ch;
+                    }
+                }
+                '(' => {
+                    state.proc_token();
+                    state.end_command(false);
+                    let mut sub = parse_line_inner(chars, Some(')'))?;
+                    if let Some(sub) = sub.commands.take() {
+                        push_next_seq_run(
+                            &mut state.ret,
+                            Run::Subshell(Box::new(sub)),
+                            state.current_seq,
+                        );
+                    }
+                }
+                '$' => state.special_arg(chars, end_char)?,
                 _ => {
                     state.token().push(ch);
                     state.last_ch = ch;
-                }
-            }
-        } else {
-            if let Some(end_ch) = end_char {
-                if ch == end_ch {
-                    break;
-                }
-            }
-            let next_char = *chars.peek().unwrap_or(&' ');
-            if ch.is_whitespace() {
-                state.proc_token();
-            } else {
-                match ch {
-                    '\'' if state.last_ch != '\\' && !state.in_stringd => {
-                        state.str_single(ch);
-                    }
-                    '"' if state.last_ch != '\\' && !state.in_string => {
-                        state.str_double(ch);
-                    }
-                    '|' => {
-                        state.pipe_or(ch, next_char);
-                    }
-                    ';' if state.last_ch != '\\' => {
-                        state.seq();
-                    }
-                    '>' => {
-                        state.redir_out(next_char, chars);
-                    }
-                    '<' => {
-                        state.redir_in(next_char, chars);
-                    }
-                    '&' if state.last_ch == '\\' => {
-                        state.token().push('&');
-                        state.last_ch = ' ';
-                    }
-                    '&' if next_char == '>' || next_char == '&' => {
-                        state.last_ch = '&';
-                    }
-                    '&' if state.last_ch == '&' => {
-                        state.and();
-                    }
-                    '&' => {
-                        state.proc_token();
-                        state.end_command(true);
-                        state.last_ch = ' ';
-                    }
-                    '1' if next_char == '>' => {
-                        state.last_ch = '1';
-                    }
-                    '2' if next_char == '>' => {
-                        state.last_ch = '2';
-                    }
-                    '\\' => {
-                        if state.last_ch == '\\' {
-                            state.token().push('\\');
-                            state.last_ch = ' ';
-                        } else {
-                            state.last_ch = ch;
-                        }
-                    }
-                    '(' => {
-                        state.proc_token();
-                        state.end_command(false);
-                        let mut sub = parse_line_inner(chars, Some(')'));
-                        if let Some(sub) = sub.commands.take() {
-                            push_next_seq_run(
-                                &mut state.ret,
-                                Run::Subshell(Box::new(sub)),
-                                state.current_seq,
-                            );
-                        }
-                    }
-                    '$' => state.special_arg(chars, end_char),
-                    _ => {
-                        state.token().push(ch);
-                        state.last_ch = ch;
-                    }
                 }
             }
         }
     }
     state.proc_token();
     state.end_command(false);
-    state.into()
+    Ok(state.into())
 }
 
-pub fn parse_line(input: &str) -> ParsedJob {
+pub fn parse_line(input: &str) -> Result<ParsedJob, io::Error> {
     let mut chars = input.chars().peekable();
     parse_line_inner(&mut chars, None)
 }
@@ -494,10 +575,10 @@ mod tests {
     use super::*;
 
     fn test_parse(input: &str, expected: &str) {
-        let pj = parse_line(input);
+        let pj = parse_line(input).unwrap();
         let pj_str = pj.to_string();
         assert_eq!(&pj_str, expected);
-        let pj = parse_line(&pj_str);
+        let pj = parse_line(&pj_str).unwrap();
         assert_eq!(&pj.to_string(), expected);
     }
 
@@ -506,7 +587,7 @@ mod tests {
         test_parse("ls", "ls");
         test_parse("ls -al", "ls -al");
         test_parse("ls -al|grep lisp", "ls -al | grep lisp");
-        test_parse("<in_file ls -al|grep lisp", "ls -al <in_file | grep lisp");
+        test_parse("<in_file ls -al|grep lisp", "ls -al 0<in_file | grep lisp");
 
         test_parse("ls -al;grep lisp", "ls -al ; grep lisp");
 
@@ -516,22 +597,22 @@ mod tests {
 
         test_parse(
             "</some/file grep test|grep lisp>/out_file",
-            "grep test </some/file | grep lisp >/out_file",
+            "grep test 0</some/file | grep lisp 1>/out_file",
         );
 
         test_parse(
             "</some/file > out_file grep test;<in_file grep lisp>/out_file;ls",
-            "grep test </some/file >out_file ; grep lisp <in_file >/out_file ; ls",
+            "grep test 0</some/file 1>out_file ; grep lisp 0<in_file 1>/out_file ; ls",
         );
 
         test_parse(
-            "</some/file 2>1 > out_file grep test;<in_file grep lisp 1>2 >/out_file;ls",
-            "grep test </some/file 2>1 >out_file ; grep lisp <in_file 1>2 >/out_file ; ls",
+            "</some/file 2>&1 > out_file grep test;<in_file grep lisp 1>&2 >/out_file;ls",
+            "grep test 0</some/file 2>&1 1>out_file ; grep lisp 0<in_file 1>&2 1>/out_file ; ls",
         );
 
         test_parse(
-            "</some/file 2>1 > out_file grep test;ls|<in_file grep lisp 1>2 >/out_file;ls",
-            "grep test </some/file 2>1 >out_file ; ls | grep lisp <in_file 1>2 >/out_file ; ls",
+            "</some/file 2>&1 > out_file grep test;ls|<in_file grep lisp 1>&2 >/out_file;ls",
+            "grep test 0</some/file 2>&1 1>out_file ; ls | grep lisp 0<in_file 1>&2 1>/out_file ; ls",
         );
     }
 

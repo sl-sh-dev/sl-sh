@@ -1,12 +1,11 @@
 use crate::jobs::Jobs;
-use crate::unix::{anon_pipe, close_fd, dup2_fd, fork_run};
+use crate::unix::{anon_pipe, close_fd, dup2_fd, fork_run, pipe};
 use std::collections::HashSet;
 use std::ffi::OsString;
 use std::fmt::{Display, Formatter};
 use std::fs::File;
-use std::io::{BufRead, ErrorKind};
-use std::os::fd::{FromRawFd, IntoRawFd};
-use std::path::PathBuf;
+use std::io::{BufRead, ErrorKind, Write};
+use std::os::fd::{AsRawFd, FromRawFd};
 use std::{env, io};
 
 /// Arg to a command, either a direct string or a sub command to run to get the arg.
@@ -103,6 +102,8 @@ impl Display for RedirArg {
 enum RedirType {
     /// An input file to open and dup to fd.
     In(i32, RedirArg),
+    /// Inject Arg as data into the fd.
+    InDirect(i32, Arg),
     /// An output file to open (append) and dup to fd.
     Out(i32, RedirArg),
     /// An output file to open (create/trunc) and dup to fd.
@@ -114,10 +115,11 @@ enum RedirType {
 impl Display for RedirType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            RedirType::In(fd, arg) => write!(f, "{fd}<{arg}"),
-            RedirType::Out(fd, arg) => write!(f, "{fd}>>{arg}"),
-            RedirType::OutTrunc(fd, arg) => write!(f, "{fd}>{arg}"),
-            RedirType::InOut(fd, arg) => write!(f, "{fd}<>{arg}"),
+            RedirType::In(fd, arg) => write!(f, " {fd}<{arg}"),
+            RedirType::InDirect(fd, arg) => write!(f, " {fd}<<{arg}"),
+            RedirType::Out(fd, arg) => write!(f, " {fd}>>{arg}"),
+            RedirType::OutTrunc(fd, arg) => write!(f, " {fd}>{arg}"),
+            RedirType::InOut(fd, arg) => write!(f, " {fd}<>{arg}"),
         }
     }
 }
@@ -129,6 +131,15 @@ impl RedirType {
         if source_fd == "-" {
             close_fd(dest_fd)?;
             Ok(dest_fd)
+        } else if source_fd.ends_with('-') {
+            match source_fd[0..source_fd.len() - 1].parse::<i32>() {
+                Ok(source_fd) => {
+                    dup2_fd(source_fd, dest_fd)?;
+                    close_fd(source_fd)?;
+                    Ok(dest_fd)
+                }
+                Err(err) => Err(io::Error::new(ErrorKind::Other, err)),
+            }
         } else {
             match source_fd.parse::<i32>() {
                 Ok(source_fd) => dup2_fd(source_fd, dest_fd),
@@ -142,17 +153,34 @@ impl RedirType {
             RedirType::In(fd, RedirArg::Path(arg)) => {
                 let path = arg.resolve_arg(jobs)?;
                 let f = File::open(path)?;
-                dup2_fd(f.into_raw_fd(), *fd)?;
+                // Use as_raw_fd ot nto_raw_fd so f will close when dropped.
+                dup2_fd(f.as_raw_fd(), *fd)?;
                 Ok(*fd)
             }
             RedirType::In(fd, RedirArg::Fd(arg)) => Self::process_source_fd(*fd, arg, jobs),
+            RedirType::InDirect(fd, arg) => {
+                let tdata = arg.resolve_arg(jobs)?;
+                let data = tdata.to_string_lossy();
+                if let Ok((pread, pwrite)) = pipe() {
+                    dup2_fd(pread, *fd)?;
+                    close_fd(pread)?;
+                    unsafe {
+                        let mut file = File::from_raw_fd(pwrite);
+                        if let Err(e) = file.write_all(data.as_bytes()) {
+                            eprintln!("Error writing {data} to fd {fd}: {e}");
+                        }
+                    }
+                }
+                Ok(*fd)
+            }
             RedirType::In(dest_fd, RedirArg::InternalFd(source_fd)) => {
                 dup2_fd(*source_fd, *dest_fd)
             }
             RedirType::Out(fd, RedirArg::Path(arg)) => {
                 let path = arg.resolve_arg(jobs)?;
                 let f = File::options().append(true).create(true).open(path)?;
-                dup2_fd(f.into_raw_fd(), *fd)?;
+                // Use as_raw_fd ot nto_raw_fd so f will close when dropped.
+                dup2_fd(f.as_raw_fd(), *fd)?;
                 Ok(*fd)
             }
             RedirType::Out(fd, RedirArg::Fd(arg)) => Self::process_source_fd(*fd, arg, jobs),
@@ -162,7 +190,8 @@ impl RedirType {
             RedirType::OutTrunc(fd, RedirArg::Path(arg)) => {
                 let path = arg.resolve_arg(jobs)?;
                 let f = File::create(path)?;
-                dup2_fd(f.into_raw_fd(), *fd)?;
+                // Use as_raw_fd ot nto_raw_fd so f will close when dropped.
+                dup2_fd(f.as_raw_fd(), *fd)?;
                 Ok(*fd)
             }
             RedirType::OutTrunc(fd, RedirArg::Fd(arg)) => Self::process_source_fd(*fd, arg, jobs),
@@ -177,7 +206,8 @@ impl RedirType {
                     .read(true)
                     .write(true)
                     .open(path)?;
-                dup2_fd(f.into_raw_fd(), *fd)?;
+                // Use as_raw_fd ot nto_raw_fd so f will close when dropped.
+                dup2_fd(f.as_raw_fd(), *fd)?;
                 Ok(*fd)
             }
             RedirType::InOut(fd, RedirArg::Fd(arg)) => Self::process_source_fd(*fd, arg, jobs),
@@ -248,11 +278,8 @@ impl Redirects {
 
     /// Push a fd to fd redirect onto the stack.
     /// If push_back is true then push to the end else put on the front (useful for pipes).
-    pub fn set_in_fd(&mut self, dest_fd: i32, source_fd: i32, push_back: bool) {
-        let redir = RedirType::In(
-            dest_fd,
-            RedirArg::Fd(Arg::Str(format!("{source_fd}").into())),
-        );
+    pub fn set_in_fd(&mut self, dest_fd: i32, source_fd: Arg, push_back: bool) {
+        let redir = RedirType::In(dest_fd, RedirArg::Fd(source_fd));
         if push_back {
             self.redir_stack.push(redir);
         } else {
@@ -262,11 +289,8 @@ impl Redirects {
 
     /// Push a fd to fd redirect onto the stack.
     /// If push_back is true then push to the end else put on the front (useful for pipes).
-    pub fn set_out_fd(&mut self, dest_fd: i32, source_fd: i32, push_back: bool) {
-        let redir = RedirType::Out(
-            dest_fd,
-            RedirArg::Fd(Arg::Str(format!("{source_fd}").into())),
-        );
+    pub fn set_out_fd(&mut self, dest_fd: i32, source_fd: Arg, push_back: bool) {
+        let redir = RedirType::OutTrunc(dest_fd, RedirArg::Fd(source_fd));
         if push_back {
             self.redir_stack.push(redir);
         } else {
@@ -275,26 +299,29 @@ impl Redirects {
     }
 
     /// Push a fd to fd redirect onto the stack.
-    pub fn set_in_out_fd(&mut self, dest_fd: i32, source_fd: i32) {
-        let redir = RedirType::InOut(
-            dest_fd,
-            RedirArg::Fd(Arg::Str(format!("{source_fd}").into())),
-        );
+    pub fn set_in_out_fd(&mut self, dest_fd: i32, source_fd: Arg) {
+        let redir = RedirType::InOut(dest_fd, RedirArg::Fd(source_fd));
         self.redir_stack.push(redir);
     }
 
     /// Push an input file path to the redirect stack for fd.
-    pub fn set_in_path(&mut self, dest_fd: i32, path: PathBuf) {
-        let redir = RedirType::In(dest_fd, RedirArg::Path(Arg::Str(path.into())));
+    pub fn set_in_path(&mut self, dest_fd: i32, path: Arg) {
+        let redir = RedirType::In(dest_fd, RedirArg::Path(path));
+        self.redir_stack.push(redir);
+    }
+
+    /// Push input data to the redirect stack for fd.
+    pub fn set_in_direct(&mut self, dest_fd: i32, data: Arg) {
+        let redir = RedirType::InDirect(dest_fd, data);
         self.redir_stack.push(redir);
     }
 
     /// Push an output file path to the redirect stack for fd.
-    pub fn set_out_path(&mut self, dest_fd: i32, path: PathBuf, overwrite: bool) {
+    pub fn set_out_path(&mut self, dest_fd: i32, path: Arg, overwrite: bool) {
         let redir = if overwrite {
-            RedirType::OutTrunc(dest_fd, RedirArg::Path(Arg::Str(path.into())))
+            RedirType::OutTrunc(dest_fd, RedirArg::Path(path))
         } else {
-            RedirType::Out(dest_fd, RedirArg::Path(Arg::Str(path.into())))
+            RedirType::Out(dest_fd, RedirArg::Path(path))
         };
         self.redir_stack.push(redir);
     }
@@ -311,6 +338,7 @@ impl Redirects {
                     fd_set.insert(*fd);
                 }
                 RedirType::In(_, _) => {}
+                RedirType::InDirect(_, _) => {}
                 RedirType::Out(_, RedirArg::InternalFd(fd)) => {
                     fd_set.insert(*fd);
                 }
