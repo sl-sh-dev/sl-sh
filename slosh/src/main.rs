@@ -1,6 +1,7 @@
 extern crate sl_liner;
 
 use std::cell::RefCell;
+use std::env::VarError;
 use std::ffi::OsString;
 use std::fs::File;
 use std::io::{BufRead, ErrorKind};
@@ -166,6 +167,32 @@ fn sh_str(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
             val.push_str(line.trim());
         }
         Ok(vm.alloc_string(val))
+    } else {
+        Err(VMError::new_compile(
+            "$sh: wrong number of args, expected one",
+        ))
+    }
+}
+
+fn env_var(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    if let (Some(name), None) = (registers.get(0), registers.get(1)) {
+        let name = match name {
+            Value::String(h) => vm.get_string(*h),
+            Value::StringConst(i) => vm.get_interned(*i),
+            Value::Symbol(i) => vm.get_interned(*i),
+            _ => {
+                return Err(VMError::new_compile(
+                    "env: requires string or symbol argument",
+                ))
+            }
+        };
+        match env::var(name) {
+            Ok(val) => Ok(vm.alloc_string(val)),
+            Err(VarError::NotPresent) => Ok(vm.alloc_string("".to_string())),
+            Err(err) => Err(VMError::new_compile(format!(
+                "env: error finding env var {name}: {err}"
+            ))),
+        }
     } else {
         Err(VMError::new_compile(
             "$sh: wrong number of args, expected one",
@@ -410,6 +437,7 @@ Example:
         sh_str,
         "Runs a shell command and returns a string of the output with newlines removed.",
     );
+    add_builtin(env, "env", env_var, "Retrieves and environment variable.");
     add_builtin(
         env,
         "version",
