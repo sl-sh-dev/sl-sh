@@ -67,6 +67,7 @@ pub struct Job {
     names: Vec<String>,
     status: JobStatus,
     interactive: bool,
+    stealth: bool, // If true don't report when background job ends.
 }
 
 impl Job {
@@ -80,17 +81,8 @@ impl Job {
             names: vec![],
             status: JobStatus::New,
             interactive,
+            stealth: false,
         }
-    }
-
-    /// Job id/number.  Unique while job is active but will be reused once not active.
-    pub fn id(&self) -> u32 {
-        self.id
-    }
-
-    /// Number of processes in this job.
-    pub fn len(&self) -> usize {
-        self.pids.len()
     }
 
     /// True if this job is empty (contains no processes).
@@ -106,11 +98,6 @@ impl Job {
     /// Pids with status that make up a job.
     pub fn pids(&self) -> &[PidStatus] {
         &self.pids[..]
-    }
-
-    /// THe names of the processes (without args) that make up the job.
-    pub fn names(&self) -> &[String] {
-        &self.names[..]
     }
 
     /// Status of this job.
@@ -209,6 +196,16 @@ impl Job {
             }
         }
     }
+
+    /// Set the stealth flag, if true then do NOT print out when a background job ends (be stealthy...).
+    pub fn set_stealth(&mut self, stealth: bool) {
+        self.stealth = stealth;
+    }
+
+    /// Is this a stealth job (do not report when complete if in the background)?
+    pub fn stealth(&self) -> bool {
+        self.stealth
+    }
 }
 
 impl Display for Job {
@@ -250,6 +247,14 @@ impl Jobs {
         }
     }
 
+    pub fn cap_term(&mut self) {
+        self.term_settings = if let Ok(term_setting) = termios::tcgetattr(libc::STDIN_FILENO) {
+            Some(term_setting)
+        } else {
+            None
+        };
+    }
+
     /// Create a new job with the next job number.
     /// Note, this new job is NOT in the jobs list.
     pub fn new_job(&mut self) -> Job {
@@ -266,29 +271,14 @@ impl Jobs {
         self.jobs.push(job);
     }
 
-    /// Are we running on a tty?
-    pub fn is_tty(&self) -> bool {
-        self.term_settings.is_some()
-    }
-
     /// Set not on a tty.
     pub fn set_no_tty(&mut self) {
         self.term_settings = None;
     }
 
-    /// Is job control active?  Note that Jobs will be used for bookkeeping even if job control is off.
-    pub fn interactive(&self) -> bool {
-        self.interactive
-    }
-
     /// Sets whether we are interactive or not.
     pub fn set_interactive(&mut self, interactive: bool) {
         self.interactive = interactive;
-    }
-
-    /// Get the job for job_id if it exists.
-    pub fn get_job(&self, job_id: u32) -> Option<&Job> {
-        self.jobs.iter().find(|job| job.id == job_id)
     }
 
     /// Get the mutable job for job_id if it exists.
@@ -319,7 +309,9 @@ impl Jobs {
         let jobs_len = self.jobs.len();
         for i in (0..jobs_len).rev() {
             if let JobStatus::Done = self.jobs[i].status() {
-                eprintln!("{}", self.jobs[i]);
+                if !self.jobs[i].stealth() {
+                    eprintln!("{}", self.jobs[i]);
+                }
                 self.jobs.remove(i);
             }
         }

@@ -208,6 +208,8 @@ fn compile_list(
                 compile_or(env, state, cdr, result)?;
             }
             Value::Symbol(i) if i == env.specials().str_ => {
+                let tail = state.tail;
+                state.tail = false;
                 let mut max = 0;
                 for (i, v) in cdr.iter().enumerate() {
                     compile(env, state, *v, result + i + 1)?;
@@ -220,6 +222,7 @@ fn compile_list(
                     max as u16,
                     env.own_line(),
                 )?;
+                state.tail = tail;
             }
             Value::Symbol(i) if i == env.specials().let_ => {
                 compile_let(env, state, cdr, result)?;

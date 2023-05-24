@@ -72,6 +72,11 @@ impl ParsedJob {
     pub fn commands(&self) -> &Run {
         self.commands.as_ref().expect("missing command")
     }
+
+    /// Consume and produce the inner ['Run'].
+    pub fn into_run(mut self) -> Run {
+        self.commands.take().expect("invalid empty command")
+    }
 }
 
 fn push_next_seq_run(job: &mut ParsedJob, new_run: Run, seq_type: SeqType) {
@@ -291,6 +296,21 @@ impl ParseState {
             let fd_arg = read_arg(chars, end_char)?;
             self.last_ch = ' ';
             self.stdio.set_in_direct(in_fd, fd_arg);
+        } else if next_char == '>' {
+            // <> bidirectional fd.
+            chars.next();
+            let next_char = *chars.peek().unwrap_or(&' ');
+            if next_char == '&' {
+                chars.next(); // Consume the &
+            }
+            consume_whitespace(chars);
+            let fd_arg = read_arg(chars, end_char)?;
+            self.last_ch = ' ';
+            if next_char == '&' {
+                self.stdio.set_in_out_fd(in_fd, fd_arg);
+            } else {
+                self.stdio.set_in_out_path(in_fd, fd_arg);
+            }
         } else {
             if next_char == '&' {
                 chars.next(); // Consume the &

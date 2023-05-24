@@ -311,7 +311,7 @@ impl<ENV> GVm<ENV> {
         Ok(val)
     }
 
-    /// Runs a lambda.  Will save and restore the VM state even or error, chunk is expected to be a
+    /// Runs a lambda.  Will save and restore the VM state even on error, chunk is expected to be a
     /// callable with params and any captures (closure) in caps.
     /// This is useful for macro expansion, eval and things like that.  It can be safely used while
     /// the VM is currently executing bytecode.

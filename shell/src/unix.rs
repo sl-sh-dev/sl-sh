@@ -10,7 +10,7 @@ use std::ptr;
 use crate::command_data::{Arg, CommandWithArgs, Run};
 use crate::glob::{expand_glob, GlobOutput};
 use crate::jobs::{Job, Jobs};
-use crate::run_job;
+use crate::run::run_job;
 use crate::signals::test_clear_sigint;
 use nix::libc;
 use nix::sys::signal::{self, kill, SigHandler, Signal};
@@ -300,7 +300,8 @@ pub fn fork_exec(
                 jobs.set_no_tty();
                 jobs.set_interactive(false);
                 match command.process_redirects(jobs) {
-                    Ok(fds) => {
+                    Ok(mut fds) => {
+                        fds.insert(output);
                         close_extra_fds(&fds);
                     }
                     Err(err) => send_error_to_parent(output, err), // This call won't return.

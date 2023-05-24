@@ -1,7 +1,14 @@
 extern crate sl_liner;
 
-use std::io::ErrorKind;
+use std::cell::RefCell;
+use std::ffi::OsString;
+use std::fs::File;
+use std::io::{BufRead, ErrorKind};
+use std::os::fd::FromRawFd;
 use std::sync::Arc;
+use std::{env, io};
+
+use nix::unistd::{gethostname, Uid};
 
 use slvm::error::*;
 use slvm::opcodes::*;
@@ -13,6 +20,7 @@ use sl_compiler::reader::*;
 
 use builtins::collections::{make_hash, vec_slice, vec_to_list};
 use builtins::print::{dasm, display_value, pr, prn};
+use builtins::string::{str_contains, str_ltrim, str_replace, str_rtrim, str_trim};
 use builtins::{gensym, get_prop, set_prop, sizeof_heap_object, sizeof_value};
 use sl_liner::{Context, Prompt};
 use slvm::Chunk;
@@ -23,6 +31,12 @@ pub mod debug;
 use config::*;
 use debug::*;
 use sl_compiler::pass1::pass1;
+use slvm::Value;
+
+thread_local! {
+    /// Env (job control status, etc) for the shell.
+    pub static SHELL_ENV: RefCell<shell::jobs::Jobs> = RefCell::new(shell::jobs::Jobs::new(true));
+}
 
 fn load_one_expression(
     vm: &mut SloshVm,
@@ -118,9 +132,52 @@ fn eval(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         Ok(vm.do_call(chunk, &[Value::Nil], None)?)
     } else {
         Err(VMError::new_compile(
-            "compile: wrong number of args, expected one",
+            "eval: wrong number of args, expected one",
         ))
     }
+}
+
+fn sh_str(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    if let (Some(exp), None) = (registers.get(0), registers.get(1)) {
+        let run = match exp {
+            Value::String(h) => vm.get_string(*h),
+            Value::StringConst(i) => vm.get_interned(*i),
+            _ => return Err(VMError::new_compile("$sh: requires string argument")),
+        };
+        let mut run = shell::parse::parse_line(run)
+            .map_err(|e| VMError::new_compile(format!("$sh: {e}")))?
+            .into_run();
+        let (input, output) = shell::unix::anon_pipe()?;
+        run.push_stdout_front(Some(output));
+        let mut fork_res = Ok(0);
+        SHELL_ENV.with(|jobs| {
+            //let mut job = jobs.borrow_mut().new_job();
+            //fork_res = shell::unix::fork_run(&run, &mut job, &mut *jobs.borrow_mut());
+            fork_res = shell::run::run_job(&run, &mut jobs.borrow_mut(), true);
+        });
+        fork_res.map_err(|e| VMError::new_compile(format!("$sh: {e}")))?;
+        let lines = io::BufReader::new(unsafe { File::from_raw_fd(input) }).lines();
+        let mut val = String::new();
+        for (i, line) in lines.enumerate() {
+            if i > 0 {
+                val.push(' ');
+            }
+            let line = line?;
+            val.push_str(line.trim());
+        }
+        Ok(vm.alloc_string(val))
+    } else {
+        Err(VMError::new_compile(
+            "$sh: wrong number of args, expected one",
+        ))
+    }
+}
+
+fn version(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    if !registers.is_empty() {
+        return Err(VMError::new_compile("version: requires no argument"));
+    }
+    Ok(vm.alloc_string(VERSION_STRING.to_string()))
 }
 
 const PROMPT_FN: &str = "prompt";
@@ -347,6 +404,43 @@ Example:
 (test::assert-equal '(4 1 5 6 2 3) test-insert-nth-vec)
 ",
     );
+    add_builtin(
+        env,
+        "$sh",
+        sh_str,
+        "Runs a shell command and returns a string of the output with newlines removed.",
+    );
+    add_builtin(
+        env,
+        "version",
+        version,
+        "Return the software version string.",
+    );
+}
+
+fn get_prompt(env: &mut SloshVm) -> String {
+    let i_val = env.intern("__prompt");
+    if let Some(idx) = env.global_intern_slot(i_val) {
+        match env.get_global(idx) {
+            Value::Lambda(h) => {
+                let l = env.get_lambda(h);
+                match env.do_call(l, &[], None) {
+                    Ok(v) => match v {
+                        Value::StringConst(i) => env.get_interned(i).to_string(),
+                        Value::String(h) => env.get_string(h).to_string(),
+                        _ => v.display_value(env),
+                    },
+                    Err(e) => {
+                        eprintln!("Error getting prompt: {e}");
+                        "slosh> ".to_string()
+                    }
+                }
+            }
+            _ => env.get_global(idx).display_value(env),
+        }
+    } else {
+        "slosh> ".to_string()
+    }
 }
 
 fn main() {
@@ -364,14 +458,41 @@ fn main() {
         env.set_global_builtin("sizeof-heap-object", sizeof_heap_object);
         env.set_global_builtin("sizeof-value", sizeof_value);
         env.set_global_builtin("gensym", gensym);
+        env.set_global_builtin("str-replace", str_replace);
+        env.set_global_builtin("str-trim", str_trim);
+        env.set_global_builtin("str-rtrim", str_rtrim);
+        env.set_global_builtin("str-ltrim", str_ltrim);
+        env.set_global_builtin("str-contains", str_contains);
+        let uid = Uid::current();
+        let euid = Uid::effective();
+        env::set_var("UID", format!("{}", uid));
+        env::set_var("EUID", format!("{}", euid));
+        env.set_named_global("*uid*", Value::UInt32(uid.into()));
+        env.set_named_global("*euid*", Value::UInt32(euid.into()));
+        env.set_named_global("*last-status*", Value::Int32(0));
+        // Initialize the HOST variable
+        let host: OsString = gethostname().ok().unwrap_or_else(|| "???".into());
+        env::set_var("HOST", &host);
+        if let Ok(dir) = env::current_dir() {
+            env::set_var("PWD", dir);
+        }
         if config.command.is_none() && config.script.is_none() {
             let mut con = Context::new();
 
             if let Err(e) = con.history.set_file_name_and_load_history("history") {
                 println!("Error loading history: {e}");
             }
+            shell::run::setup_shell_tty(0);
+            //let mut jobs = shell::jobs::Jobs::new(true);
+            SHELL_ENV.with(|jobs| {
+                jobs.borrow_mut().cap_term();
+            });
             loop {
-                let res = match con.read_line(Prompt::from("slosh> "), None) {
+                SHELL_ENV.with(|jobs| {
+                    jobs.borrow_mut().reap_procs();
+                });
+                let prompt = get_prompt(&mut env);
+                let res = match con.read_line(Prompt::from(prompt), None) {
                     Ok(input) => input,
                     Err(err) => match err.kind() {
                         ErrorKind::UnexpectedEof => {
@@ -381,6 +502,10 @@ fn main() {
                             continue;
                         }
                         _ => {
+                            // Usually can just restore the tty and be back in action.
+                            SHELL_ENV.with(|jobs| {
+                                jobs.borrow_mut().restore_terminal();
+                            });
                             eprintln!("Error on input: {err}");
                             continue;
                         }
@@ -392,42 +517,17 @@ fn main() {
                 }
 
                 con.history.push(&res).expect("Failed to push history.");
-                let reader = Reader::from_string(res, &mut env, "", 1, 0);
-                let exps: Result<Vec<Value>, ReadError> = reader.collect();
-                match exps {
-                    Ok(exps) => {
-                        for exp in exps {
-                            let line_num = env.line_num();
-                            let mut state = CompileState::new_state(PROMPT_FN, line_num, None);
-                            if let Err(e) = pass1(&mut env, &mut state, exp) {
-                                println!("Compile error, line {}: {}", env.line_num(), e);
+                if res.starts_with('(') {
+                    exec_expression(res, &mut env);
+                } else {
+                    SHELL_ENV.with(|jobs| {
+                        match shell::run::run_one_command(&res, &mut jobs.borrow_mut()) {
+                            Ok(status) => {
+                                env.set_named_global("*last-status*", Value::Int32(status));
                             }
-                            if let Err(e) = compile(&mut env, &mut state, exp, 0) {
-                                println!("Compile error, line {}: {}", env.line_num(), e);
-                            }
-                            if let Err(e) = state.chunk.encode0(RET, env.own_line()) {
-                                println!("Compile error, line {}: {}", env.line_num(), e);
-                            }
-                            let chunk = Arc::new(state.chunk.clone());
-                            if let Err(err) = env.execute(chunk.clone()) {
-                                println!("ERROR: {}", err.display(&env));
-                                if let Some(err_frame) = env.err_frame() {
-                                    let line = err_frame.current_line().unwrap_or(0);
-                                    println!(
-                                        "{} line: {} ip: {:#010x}",
-                                        err_frame.chunk.file_name,
-                                        line,
-                                        err_frame.current_offset()
-                                    );
-                                }
-                                debug(&mut env);
-                            } else {
-                                let reg = env.get_stack(0);
-                                println!("{}", display_value(&env, reg));
-                            }
+                            Err(err) => eprintln!("ERROR executing {res}: {err}"),
                         }
-                    }
-                    Err(err) => println!("Reader error: {err}"),
+                    });
                 }
             }
         } else if let Some(script) = config.script {
@@ -438,5 +538,45 @@ fn main() {
                 Err(err) => println!("ERROR: {err}"),
             }
         }
+    }
+}
+
+fn exec_expression(res: String, env: &mut SloshVm) {
+    let reader = Reader::from_string(res, env, "", 1, 0);
+    let exps: Result<Vec<Value>, ReadError> = reader.collect();
+    match exps {
+        Ok(exps) => {
+            for exp in exps {
+                let line_num = env.line_num();
+                let mut state = CompileState::new_state(PROMPT_FN, line_num, None);
+                if let Err(e) = pass1(env, &mut state, exp) {
+                    println!("Compile error, line {}: {}", env.line_num(), e);
+                }
+                if let Err(e) = compile(env, &mut state, exp, 0) {
+                    println!("Compile error, line {}: {}", env.line_num(), e);
+                }
+                if let Err(e) = state.chunk.encode0(RET, env.own_line()) {
+                    println!("Compile error, line {}: {}", env.line_num(), e);
+                }
+                let chunk = Arc::new(state.chunk.clone());
+                if let Err(err) = env.execute(chunk.clone()) {
+                    println!("ERROR: {}", err.display(env));
+                    if let Some(err_frame) = env.err_frame() {
+                        let line = err_frame.current_line().unwrap_or(0);
+                        println!(
+                            "{} line: {} ip: {:#010x}",
+                            err_frame.chunk.file_name,
+                            line,
+                            err_frame.current_offset()
+                        );
+                    }
+                    debug(env);
+                } else {
+                    let reg = env.get_stack(0);
+                    println!("{}", display_value(env, reg));
+                }
+            }
+        }
+        Err(err) => println!("Reader error: {err}"),
     }
 }

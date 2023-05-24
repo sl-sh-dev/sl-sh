@@ -305,6 +305,12 @@ impl Redirects {
     }
 
     /// Push an input file path to the redirect stack for fd.
+    pub fn set_in_out_path(&mut self, dest_fd: i32, path: Arg) {
+        let redir = RedirType::InOut(dest_fd, RedirArg::Path(path));
+        self.redir_stack.push(redir);
+    }
+
+    /// Push an input file path to the redirect stack for fd.
     pub fn set_in_path(&mut self, dest_fd: i32, path: Arg) {
         let redir = RedirType::In(dest_fd, RedirArg::Path(path));
         self.redir_stack.push(redir);
