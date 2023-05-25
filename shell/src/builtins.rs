@@ -102,6 +102,30 @@ fn cd_expand_all_dots(cd: PathBuf) -> PathBuf {
     }
 }
 
+fn export(arg: OsString, arg2: Option<OsString>) {
+    let arg = arg.to_string_lossy();
+    if !arg.contains('=') {
+        eprintln!("export: VAR_NAME=VALUE");
+        return;
+    }
+    let mut key_val = arg.split('=');
+    if let Some(key) = key_val.next() {
+        if let Some(val) = key_val.next() {
+            if val.is_empty() {
+                if let Some(val) = arg2 {
+                    env::set_var(key, val);
+                }
+            } else {
+                env::set_var(key, val);
+            }
+        } else {
+            eprintln!("export: VAR_NAME=VALUE");
+        }
+    } else {
+        eprintln!("export: VAR_NAME=VALUE");
+    }
+}
+
 pub fn run_builtin<'arg, I>(command: &OsStr, args: &mut I, jobs: &mut Jobs) -> bool
 where
     I: Iterator<Item = &'arg Arg>,
@@ -146,6 +170,13 @@ where
             eprintln!("jobs: too many arguments!");
         } else {
             println!("{jobs}");
+        }
+        true
+    } else if command == "export" {
+        if let Some(arg) = args.next() {
+            export(arg, args.next());
+        } else {
+            eprintln!("export: VAR_NAME=VALUE");
         }
         true
     } else {

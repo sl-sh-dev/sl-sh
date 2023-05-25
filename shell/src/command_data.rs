@@ -423,15 +423,15 @@ impl CommandWithArgs {
     }
 
     /// Push a new arg onto the command, the first "arg" is the command itself.
-    pub fn push_arg(&mut self, arg: OsString) {
+    pub fn push_arg(&mut self, arg: Arg) {
         if self.in_compound_arg {
             if let Some(Arg::Compound(carg)) = self.args.last_mut() {
-                carg.push(Arg::Str(arg));
+                carg.push(arg);
             } else {
                 panic!("invalid use of push_arg, expected compound arg but one not available")
             }
         } else {
-            self.args.push(Arg::Str(arg));
+            self.args.push(arg);
         }
     }
 

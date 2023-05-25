@@ -155,7 +155,7 @@ impl ParseState {
     fn proc_token(&mut self) {
         let token = self.take_token();
         if !token.is_empty() {
-            self.command().push_arg(token.into());
+            self.command().push_arg(Arg::Str(token.into()));
             self.command().stop_compound_arg();
         }
     }
@@ -352,6 +352,7 @@ impl ParseState {
                 chars.next();
                 let r = read_token(chars, Some('}'));
                 if let Some('}') = chars.peek() {
+                    chars.next();
                     r
                 } else {
                     return Err(io::Error::new(ErrorKind::Other, "bad substitution"));
@@ -390,13 +391,41 @@ fn consume_whitespace(chars: &mut Peekable<Chars>) {
 
 /// Read string surrounded by quote (typically " or ').  Assumes chars is on the open quote and
 /// consumes the end quote.
-fn read_string(chars: &mut Peekable<Chars>, quote: char) -> Result<String, io::Error> {
+fn read_string(chars: &mut Peekable<Chars>, quote: char) -> Result<Arg, io::Error> {
     let mut res = String::new();
+    let mut arg = None;
     let mut next_ch = chars.peek().copied();
     while let Some(ch) = next_ch {
         if ch == quote {
             chars.next();
-            return Ok(res);
+            if let Some(Arg::Compound(mut args)) = arg {
+                if !res.is_empty() {
+                    args.push(Arg::Str(res.into()));
+                }
+                return Ok(Arg::Compound(args));
+            } else {
+                return Ok(Arg::Str(res.into()));
+            }
+        } else if ch == '$' && quote == '"' {
+            chars.next();
+            let spec_arg = read_special_arg(chars, Some(quote))?;
+            if let Some(Arg::Compound(mut args)) = arg {
+                if !res.is_empty() {
+                    args.push(Arg::Str(res.into()));
+                }
+                args.push(spec_arg);
+                res = String::new();
+                arg = Some(Arg::Compound(args));
+            } else {
+                let args = if !res.is_empty() {
+                    vec![Arg::Str(res.into()), spec_arg]
+                } else {
+                    vec![spec_arg]
+                };
+                res = String::new();
+                arg = Some(Arg::Compound(args));
+            }
+            next_ch = chars.peek().copied();
         } else {
             chars.next();
             res.push(ch);
@@ -442,9 +471,10 @@ fn read_arg(chars: &mut Peekable<Chars>, end_char_in: Option<char>) -> Result<Ar
             } else {
                 args.push(next_arg);
             }
-        } else if ch == '"' || ch == '\'' {
+            next_ch = chars.peek().copied();
+        } else if (ch == '"' || ch == '\'') && ch != end_char {
             chars.next(); // Consume opening quote.
-            args.push(Arg::Str(read_string(chars, ch)?.into()));
+            args.push(read_string(chars, ch)?);
             next_ch = chars.peek().copied();
         } else if !ch.is_whitespace() && !end_set.contains(&ch) {
             chars.next();
@@ -488,7 +518,7 @@ fn read_special_arg(chars: &mut Peekable<Chars>, end_char: Option<char>) -> Resu
             args.push(Arg::Var(name.into()));
         }
     }
-    if !chars.peek().unwrap_or(&' ').is_whitespace() {
+    if !chars.peek().unwrap_or(&' ').is_whitespace() && chars.peek().copied() != end_char {
         let next_arg = read_arg(chars, end_char)?;
         if let Arg::Compound(mut nargs) = next_arg {
             args.append(&mut nargs);
@@ -522,7 +552,7 @@ fn parse_line_inner(
                 '\'' | '"' if state.last_ch != '\\' => {
                     state.proc_token();
                     let str_arg = read_string(chars, ch)?;
-                    state.command().push_arg(str_arg.into());
+                    state.command().push_arg(str_arg);
                     state.command().stop_compound_arg();
                 }
                 '|' => {

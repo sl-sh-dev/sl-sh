@@ -23,7 +23,7 @@ use builtins::collections::{make_hash, vec_slice, vec_to_list};
 use builtins::print::{dasm, display_value, pr, prn};
 use builtins::string::{str_contains, str_ltrim, str_replace, str_rtrim, str_trim};
 use builtins::{gensym, get_prop, set_prop, sizeof_heap_object, sizeof_value};
-use sl_liner::{Context, Prompt};
+use sl_liner::{Context, FilenameCompleter, Prompt};
 use slvm::Chunk;
 
 mod config;
@@ -138,40 +138,64 @@ fn eval(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-fn sh_str(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
-    if let (Some(exp), None) = (registers.get(0), registers.get(1)) {
-        let run = match exp {
-            Value::String(h) => vm.get_string(*h),
-            Value::StringConst(i) => vm.get_interned(*i),
-            _ => return Err(VMError::new_compile("$sh: requires string argument")),
-        };
-        let mut run = shell::parse::parse_line(run)
-            .map_err(|e| VMError::new_compile(format!("$sh: {e}")))?
-            .into_run();
-        let (input, output) = shell::unix::anon_pipe()?;
-        run.push_stdout_front(Some(output));
-        let mut fork_res = Ok(0);
-        SHELL_ENV.with(|jobs| {
-            //let mut job = jobs.borrow_mut().new_job();
-            //fork_res = shell::unix::fork_run(&run, &mut job, &mut *jobs.borrow_mut());
-            fork_res = shell::run::run_job(&run, &mut jobs.borrow_mut(), true);
-        });
-        fork_res.map_err(|e| VMError::new_compile(format!("$sh: {e}")))?;
-        let lines = io::BufReader::new(unsafe { File::from_raw_fd(input) }).lines();
-        let mut val = String::new();
-        for (i, line) in lines.enumerate() {
-            if i > 0 {
-                val.push(' ');
-            }
-            let line = line?;
-            val.push_str(line.trim());
+fn sh(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    let mut command = String::new();
+    for exp in registers {
+        match exp {
+            Value::String(h) => command.push_str(vm.get_string(*h)),
+            Value::StringConst(i) => command.push_str(vm.get_interned(*i)),
+            _ => command.push_str(&exp.display_value(vm)),
         }
-        Ok(vm.alloc_string(val))
-    } else {
-        Err(VMError::new_compile(
-            "$sh: wrong number of args, expected one",
-        ))
+        command.push(' ');
     }
+    if command.is_empty() {
+        return Err(VMError::new_compile("sh: empty command"));
+    }
+    let run = shell::parse::parse_line(&command)
+        .map_err(|e| VMError::new_compile(format!("sh: {e}")))?
+        .into_run();
+    let mut fork_res = Ok(0);
+    SHELL_ENV.with(|jobs| {
+        fork_res = shell::run::run_job(&run, &mut jobs.borrow_mut(), false);
+    });
+    fork_res
+        .map(Value::Int32)
+        .map_err(|e| VMError::new_compile(format!("sh: {e}")))
+}
+
+fn sh_str(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    let mut command = String::new();
+    for exp in registers {
+        match exp {
+            Value::String(h) => command.push_str(vm.get_string(*h)),
+            Value::StringConst(i) => command.push_str(vm.get_interned(*i)),
+            _ => command.push_str(&exp.display_value(vm)),
+        }
+        command.push(' ');
+    }
+    if command.is_empty() {
+        return Err(VMError::new_compile("$sh: empty command"));
+    }
+    let mut run = shell::parse::parse_line(&command)
+        .map_err(|e| VMError::new_compile(format!("$sh: {e}")))?
+        .into_run();
+    let (input, output) = shell::unix::anon_pipe()?;
+    run.push_stdout_front(Some(output));
+    let mut fork_res = Ok(0);
+    SHELL_ENV.with(|jobs| {
+        fork_res = shell::run::run_job(&run, &mut jobs.borrow_mut(), true);
+    });
+    fork_res.map_err(|e| VMError::new_compile(format!("$sh: {e}")))?;
+    let lines = io::BufReader::new(unsafe { File::from_raw_fd(input) }).lines();
+    let mut val = String::new();
+    for (i, line) in lines.enumerate() {
+        if i > 0 {
+            val.push(' ');
+        }
+        let line = line?;
+        val.push_str(line.trim());
+    }
+    Ok(vm.alloc_string(val))
 }
 
 fn env_var(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
@@ -437,6 +461,12 @@ Example:
         sh_str,
         "Runs a shell command and returns a string of the output with newlines removed.",
     );
+    add_builtin(
+        env,
+        "sh",
+        sh,
+        "Runs a shell command and returns it's status.",
+    );
     add_builtin(env, "env", env_var, "Retrieves and environment variable.");
     add_builtin(
         env,
@@ -506,6 +536,7 @@ fn main() {
         }
         if config.command.is_none() && config.script.is_none() {
             let mut con = Context::new();
+            con.set_completer(Box::new(FilenameCompleter::new(Some("."))));
 
             if let Err(e) = con.history.set_file_name_and_load_history("history") {
                 println!("Error loading history: {e}");
