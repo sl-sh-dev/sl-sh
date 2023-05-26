@@ -429,6 +429,7 @@ dependencies = [
  "sl-compiler",
  "sl-liner",
  "slvm",
+ "unicode-width",
  "unicode_reader",
 ]
 

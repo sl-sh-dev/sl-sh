@@ -23,12 +23,15 @@ use builtins::collections::{make_hash, vec_slice, vec_to_list};
 use builtins::print::{dasm, display_value, pr, prn};
 use builtins::string::{str_contains, str_ltrim, str_replace, str_rtrim, str_trim};
 use builtins::{gensym, get_prop, set_prop, sizeof_heap_object, sizeof_value};
-use sl_liner::{Context, FilenameCompleter, Prompt};
+use sl_liner::vi::AlphanumericAndVariableKeywordRule;
+use sl_liner::{keymap, Context, FilenameCompleter, Prompt};
 use slvm::Chunk;
 
 mod config;
 pub mod debug;
+mod liner_rules;
 
+use crate::liner_rules::make_editor_rules;
 use config::*;
 use debug::*;
 use sl_compiler::pass1::pass1;
@@ -537,6 +540,21 @@ fn main() {
         if config.command.is_none() && config.script.is_none() {
             let mut con = Context::new();
             con.set_completer(Box::new(FilenameCompleter::new(Some("."))));
+            con.set_editor_rules(make_editor_rules());
+            let mut vi = keymap::Vi::new();
+            let vi_keywords = vec!["_", "-"];
+            vi.set_keyword_rule(Box::new(AlphanumericAndVariableKeywordRule::new(
+                vi_keywords,
+            )));
+            /*if let Some((ch1, ch2, timeout)) = repl_settings.vi_esc_sequence {
+                vi.set_esc_sequence(ch1, ch2, timeout);
+            }
+            vi.set_normal_prompt_prefix(repl_settings.vi_normal_prompt_prefix.clone());
+            vi.set_normal_prompt_suffix(repl_settings.vi_normal_prompt_suffix.clone());
+            vi.set_insert_prompt_prefix(repl_settings.vi_insert_prompt_prefix.clone());
+            vi.set_insert_prompt_suffix(repl_settings.vi_insert_prompt_suffix.clone());*/
+            //Box::new(keymap::Emacs::new())
+            con.set_keymap(Box::new(vi));
 
             if let Err(e) = con.history.set_file_name_and_load_history("history") {
                 println!("Error loading history: {e}");
@@ -575,6 +593,11 @@ fn main() {
                     continue;
                 }
 
+                let res = if res.contains("\\\n") {
+                    res.replace("\\\n", "")
+                } else {
+                    res
+                };
                 con.history.push(&res).expect("Failed to push history.");
                 if res.starts_with('(') {
                     exec_expression(res, &mut env);

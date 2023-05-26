@@ -426,6 +426,10 @@ fn read_string(chars: &mut Peekable<Chars>, quote: char) -> Result<Arg, io::Erro
                 arg = Some(Arg::Compound(args));
             }
             next_ch = chars.peek().copied();
+        } else if ch == '\\' && chars.peek().copied() == Some('\n') {
+            // Consume \newline.
+            chars.next();
+            next_ch = chars.peek().copied();
         } else {
             chars.next();
             res.push(ch);
@@ -601,6 +605,9 @@ fn parse_line_inner(
                             state.current_seq,
                         );
                     }
+                }
+                '\n' if state.last_ch == '\\' => {
+                    state.last_ch = ' ';
                 }
                 '$' => state.special_arg(chars, end_char)?,
                 _ => {

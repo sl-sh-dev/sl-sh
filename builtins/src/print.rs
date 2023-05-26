@@ -176,7 +176,7 @@ pub fn pretty_value(vm: &SloshVm, val: Value) -> String {
 
 pub fn pr(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     for v in registers {
-        println!("[{}]", pretty_value(vm, *v));
+        print!("{}", pretty_value(vm, *v));
     }
     Ok(Value::Nil)
 }
