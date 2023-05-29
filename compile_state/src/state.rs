@@ -377,6 +377,7 @@ pub trait SloshVmTrait {
     fn set_named_global(&mut self, string: &str, value: Value) -> u32;
     fn set_global_builtin(&mut self, string: &str, func: CallFuncSig<CompileEnvironment>) -> u32;
     fn dump_globals(&self);
+    fn globals(&self) -> &HashMap<Interned, usize>;
     fn own_line(&self) -> Option<u32>;
     fn set_line_num(&mut self, line_num: u32);
     fn line_num(&self) -> u32;
@@ -443,6 +444,10 @@ impl SloshVmTrait for SloshVm {
             );
         }
         println!();
+    }
+
+    fn globals(&self) -> &HashMap<Interned, usize> {
+        &self.env().global_map
     }
 
     fn own_line(&self) -> Option<u32> {

@@ -424,6 +424,7 @@ dependencies = [
  "builtins",
  "chrono",
  "compile_state",
+ "glob",
  "nix",
  "shell",
  "sl-compiler",

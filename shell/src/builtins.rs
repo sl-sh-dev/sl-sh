@@ -77,6 +77,22 @@ pub fn expand_tilde(path: PathBuf) -> PathBuf {
     }
 }
 
+/// If path start with HOME then replace with ~.
+pub fn compress_tilde(path: &str) -> Option<String> {
+    if let Ok(mut home) = env::var("HOME") {
+        if home.ends_with('/') {
+            home.pop();
+        }
+        if path.starts_with(&home) {
+            Some(path.replace(&home, "~"))
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
 fn cd_expand_all_dots(cd: PathBuf) -> PathBuf {
     let mut all_dots = false;
     let cd_ref = cd.to_string_lossy();

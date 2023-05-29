@@ -24,13 +24,15 @@ use builtins::print::{dasm, display_value, pr, prn};
 use builtins::string::{str_contains, str_ltrim, str_replace, str_rtrim, str_trim};
 use builtins::{gensym, get_prop, set_prop, sizeof_heap_object, sizeof_value};
 use sl_liner::vi::AlphanumericAndVariableKeywordRule;
-use sl_liner::{keymap, Context, FilenameCompleter, Prompt};
+use sl_liner::{keymap, Context, Prompt};
 use slvm::Chunk;
 
+mod completions;
 mod config;
 pub mod debug;
 mod liner_rules;
 
+use crate::completions::ShellCompleter;
 use crate::liner_rules::make_editor_rules;
 use config::*;
 use debug::*;
@@ -40,6 +42,11 @@ use slvm::Value;
 thread_local! {
     /// Env (job control status, etc) for the shell.
     pub static SHELL_ENV: RefCell<shell::jobs::Jobs> = RefCell::new(shell::jobs::Jobs::new(true));
+}
+
+thread_local! {
+    /// Env (job control status, etc) for the shell.
+    pub static ENV: RefCell<SloshVm> = RefCell::new(new_slosh_vm());
 }
 
 fn load_one_expression(
@@ -507,39 +514,43 @@ fn get_prompt(env: &mut SloshVm) -> String {
 fn main() {
     if let Some(config) = get_config() {
         let mut env = new_slosh_vm();
-        setup_vecs(&mut env);
-        env.set_global_builtin("pr", pr);
-        env.set_global_builtin("prn", prn);
-        env.set_global_builtin("dasm", dasm);
-        env.set_global_builtin("load", load);
-        env.set_global_builtin("make-hash", make_hash);
-        env.set_global_builtin("get-prop", get_prop);
-        env.set_global_builtin("set-prop", set_prop);
-        env.set_global_builtin("eval", eval);
-        env.set_global_builtin("sizeof-heap-object", sizeof_heap_object);
-        env.set_global_builtin("sizeof-value", sizeof_value);
-        env.set_global_builtin("gensym", gensym);
-        env.set_global_builtin("str-replace", str_replace);
-        env.set_global_builtin("str-trim", str_trim);
-        env.set_global_builtin("str-rtrim", str_rtrim);
-        env.set_global_builtin("str-ltrim", str_ltrim);
-        env.set_global_builtin("str-contains", str_contains);
-        let uid = Uid::current();
-        let euid = Uid::effective();
-        env::set_var("UID", format!("{}", uid));
-        env::set_var("EUID", format!("{}", euid));
-        env.set_named_global("*uid*", Value::UInt32(uid.into()));
-        env.set_named_global("*euid*", Value::UInt32(euid.into()));
-        env.set_named_global("*last-status*", Value::Int32(0));
-        // Initialize the HOST variable
-        let host: OsString = gethostname().ok().unwrap_or_else(|| "???".into());
-        env::set_var("HOST", &host);
-        if let Ok(dir) = env::current_dir() {
-            env::set_var("PWD", dir);
-        }
+        ENV.with(|renv| {
+            let mut env = renv.borrow_mut();
+            setup_vecs(&mut env);
+            env.set_global_builtin("pr", pr);
+            env.set_global_builtin("prn", prn);
+            env.set_global_builtin("dasm", dasm);
+            env.set_global_builtin("load", load);
+            env.set_global_builtin("make-hash", make_hash);
+            env.set_global_builtin("get-prop", get_prop);
+            env.set_global_builtin("set-prop", set_prop);
+            env.set_global_builtin("eval", eval);
+            env.set_global_builtin("sizeof-heap-object", sizeof_heap_object);
+            env.set_global_builtin("sizeof-value", sizeof_value);
+            env.set_global_builtin("gensym", gensym);
+            env.set_global_builtin("str-replace", str_replace);
+            env.set_global_builtin("str-trim", str_trim);
+            env.set_global_builtin("str-rtrim", str_rtrim);
+            env.set_global_builtin("str-ltrim", str_ltrim);
+            env.set_global_builtin("str-contains", str_contains);
+            let uid = Uid::current();
+            let euid = Uid::effective();
+            env::set_var("UID", format!("{}", uid));
+            env::set_var("EUID", format!("{}", euid));
+            env.set_named_global("*uid*", Value::UInt32(uid.into()));
+            env.set_named_global("*euid*", Value::UInt32(euid.into()));
+            env.set_named_global("*last-status*", Value::Int32(0));
+            // Initialize the HOST variable
+            let host: OsString = gethostname().ok().unwrap_or_else(|| "???".into());
+            env::set_var("HOST", host);
+            if let Ok(dir) = env::current_dir() {
+                env::set_var("PWD", dir);
+            }
+        });
         if config.command.is_none() && config.script.is_none() {
             let mut con = Context::new();
-            con.set_completer(Box::new(FilenameCompleter::new(Some("."))));
+            //con.set_completer(Box::new(FilenameCompleter::new(Some("."))));
+            con.set_completer(Box::new(ShellCompleter::new()));
             con.set_editor_rules(make_editor_rules());
             let mut vi = keymap::Vi::new();
             let vi_keywords = vec!["_", "-"];
@@ -568,7 +579,7 @@ fn main() {
                 SHELL_ENV.with(|jobs| {
                     jobs.borrow_mut().reap_procs();
                 });
-                let prompt = get_prompt(&mut env);
+                let prompt = ENV.with(|env| get_prompt(&mut env.borrow_mut()));
                 let res = match con.read_line(Prompt::from(prompt), None) {
                     Ok(input) => input,
                     Err(err) => match err.kind() {
@@ -600,7 +611,9 @@ fn main() {
                 };
                 con.history.push(&res).expect("Failed to push history.");
                 if res.starts_with('(') {
-                    exec_expression(res, &mut env);
+                    ENV.with(|env| {
+                        exec_expression(res, &mut env.borrow_mut());
+                    });
                 } else {
                     SHELL_ENV.with(|jobs| {
                         match shell::run::run_one_command(&res, &mut jobs.borrow_mut()) {
@@ -613,12 +626,15 @@ fn main() {
                 }
             }
         } else if let Some(script) = config.script {
-            let script = env.intern(&script);
-            let script = env.get_interned(script);
-            match load_internal(&mut env, script) {
-                Ok(res) => println!("{}", res.display_value(&env)),
-                Err(err) => println!("ERROR: {err}"),
-            }
+            ENV.with(|renv| {
+                let mut env = renv.borrow_mut();
+                let script = env.intern(&script);
+                let script = env.get_interned(script);
+                match load_internal(&mut env, script) {
+                    Ok(res) => println!("{}", res.display_value(&env)),
+                    Err(err) => println!("ERROR: {err}"),
+                }
+            });
         }
     }
 }
