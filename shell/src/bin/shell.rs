@@ -1,22 +1,7 @@
-mod builtins;
-mod command_data;
-mod config;
-mod glob;
-mod jobs;
-mod parse;
-mod run;
-mod signals;
-mod unix;
-
-//extern crate jemallocator;
-
-//#[global_allocator]
-//static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
-
-use crate::config::get_config;
-use crate::jobs::Jobs;
-use crate::run::{run_one_command, setup_shell_tty};
 use nix::unistd::{self, gethostname, Uid};
+use shell::config::get_config;
+use shell::jobs::Jobs;
+use shell::run::{run_one_command, setup_shell_tty};
 use sl_liner::Prompt;
 use std::env;
 use std::ffi::OsString;
