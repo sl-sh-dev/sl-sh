@@ -337,6 +337,11 @@ impl Redirects {
         self.redir_stack.clear();
     }
 
+    /// Extend this redir stack with the redirs from other.
+    pub fn extend(&mut self, other: &Redirects) {
+        self.redir_stack.extend(other.redir_stack.iter().cloned());
+    }
+
     fn collect_internal_fds(&self, fd_set: &mut HashSet<i32>) {
         for r in &self.redir_stack {
             match r {
@@ -491,6 +496,18 @@ impl CommandWithArgs {
     /// Set the stdio redirect stack for this command.
     pub fn set_stdios(&mut self, stdios: Redirects) {
         self.stdios = Some(stdios);
+    }
+
+    /// Set the stdio redirect stack for this command.
+    pub fn stdios(&self) -> &Option<Redirects> {
+        &self.stdios
+    }
+
+    /// Extend the redirect stack for this command with stdio.
+    pub fn extend_stdios(&mut self, stdios: &Redirects) {
+        let mut current_stdios = self.stdios.take().unwrap_or_default();
+        current_stdios.extend(stdios);
+        self.stdios = Some(current_stdios);
     }
 
     /// If fd is Some value then put it at the front of the redir queue for this command.
@@ -764,5 +781,41 @@ impl Run {
         let mut res = HashSet::new();
         self.collect_internal_fds(&mut res);
         res
+    }
+
+    /// If fd is Some value then put it at the front of the redir queue for the last command in the Run.
+    pub fn push_arg_end(&mut self, arg: Arg) {
+        match self {
+            Run::Command(current) => current.push_arg(arg),
+            Run::BackgroundCommand(current) => current.push_arg(arg),
+            Run::Pipe(ref mut seq)
+            | Run::Sequence(ref mut seq)
+            | Run::And(ref mut seq)
+            | Run::Or(ref mut seq) => {
+                if let Some(run) = seq.last_mut() {
+                    run.push_arg_end(arg);
+                }
+            }
+            Run::Subshell(ref mut current) => current.push_arg_end(arg),
+            Run::Empty => {}
+        }
+    }
+
+    /// If fd is Some value then put it at the front of the redir queue for the last command in the Run.
+    pub fn extend_redirs_end(&mut self, redirs: &Redirects) {
+        match self {
+            Run::Command(current) => current.extend_stdios(redirs),
+            Run::BackgroundCommand(current) => current.extend_stdios(redirs),
+            Run::Pipe(ref mut seq)
+            | Run::Sequence(ref mut seq)
+            | Run::And(ref mut seq)
+            | Run::Or(ref mut seq) => {
+                if let Some(run) = seq.last_mut() {
+                    run.extend_redirs_end(redirs);
+                }
+            }
+            Run::Subshell(ref mut current) => current.extend_redirs_end(redirs),
+            Run::Empty => {}
+        }
     }
 }

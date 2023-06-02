@@ -72,20 +72,30 @@ fn run_command(
 ) -> Result<i32, io::Error> {
     Ok(if let Some(command_name) = command.command(jobs) {
         let command_name = command_name?;
-        let mut args = command.args_iter();
-        if !run_builtin(&command_name, &mut args, jobs) {
-            let mut job = jobs.new_job();
-            job.set_stealth(stealth);
-            match fork_exec(command, &mut job, jobs) {
-                Ok(()) => finish_run(background, job, jobs),
-                Err(err) => {
-                    // Make sure we restore the terminal...
-                    jobs.restore_terminal();
-                    return Err(err);
-                }
+        if let Some(mut alias_run) = jobs.get_alias(command_name.to_string_lossy()) {
+            for arg in command.args_iter() {
+                alias_run.push_arg_end(arg.clone());
             }
+            if let Some(stdios) = command.stdios() {
+                alias_run.extend_redirs_end(stdios)
+            }
+            run_job(&alias_run, jobs, background)?
         } else {
-            0
+            let mut args = command.args_iter();
+            if !run_builtin(&command_name, &mut args, jobs) {
+                let mut job = jobs.new_job();
+                job.set_stealth(stealth);
+                match fork_exec(command, &mut job, jobs) {
+                    Ok(()) => finish_run(background, job, jobs),
+                    Err(err) => {
+                        // Make sure we restore the terminal...
+                        jobs.restore_terminal();
+                        return Err(err);
+                    }
+                }
+            } else {
+                0
+            }
         }
     } else {
         0

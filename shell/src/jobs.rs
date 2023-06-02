@@ -1,3 +1,5 @@
+use crate::command_data::Run;
+use crate::parse::parse_line;
 use crate::unix::{try_wait_pid, wait_job};
 use nix::{
     libc,
@@ -7,8 +9,9 @@ use nix::{
     },
     unistd::{self, Pid},
 };
-use std::fmt;
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
+use std::{fmt, io};
 
 /// Status of a Job.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -224,6 +227,7 @@ pub struct Jobs {
     shell_pid: i32,
     interactive: bool,
     term_settings: Option<termios::Termios>,
+    alias: HashMap<String, Run>,
 }
 
 impl Jobs {
@@ -244,6 +248,7 @@ impl Jobs {
             shell_pid,
             interactive,
             term_settings,
+            alias: HashMap::new(),
         }
     }
 
@@ -380,6 +385,34 @@ impl Jobs {
                     self.shell_pid, err
                 );
             }
+        }
+    }
+
+    /// Gets an alias.
+    pub fn get_alias<S: AsRef<str>>(&self, name: S) -> Option<Run> {
+        self.alias.get(name.as_ref()).cloned()
+    }
+
+    /// Add an alias.
+    pub fn add_alias(&mut self, name: String, value: String) -> Result<(), io::Error> {
+        let runj = parse_line(&value)?;
+        self.alias.insert(name, runj.commands().clone());
+        Ok(())
+    }
+
+    /// Print a the alias for name if set.
+    pub fn print_alias(&self, name: String) {
+        if let Some(value) = self.alias.get(&name) {
+            println!("alias {name}='{value}'");
+        } else {
+            eprintln!("no alias set for: {name}");
+        }
+    }
+
+    /// Print all the defined aliases.
+    pub fn print_all_alias(&self) {
+        for (name, value) in &self.alias {
+            println!("alias {name}='{value}'");
         }
     }
 }

@@ -142,6 +142,41 @@ fn export(arg: OsString, arg2: Option<OsString>) {
     }
 }
 
+fn alias<I>(args: I, jobs: &mut Jobs)
+where
+    I: Iterator<Item = OsString>,
+{
+    let mut empty = true;
+    let mut args = args.map(|a| a.to_string_lossy().to_string());
+    while let Some(a) = args.next() {
+        empty = false;
+        if a.contains('=') {
+            let mut key_val = a.split('=');
+            if let (Some(key), val, None) = (key_val.next(), key_val.next(), key_val.next()) {
+                let val = if let Some(val) = val {
+                    if val.is_empty() {
+                        args.next().unwrap_or_default()
+                    } else {
+                        val.to_string()
+                    }
+                } else {
+                    args.next().unwrap_or_default()
+                };
+                if let Err(e) = jobs.add_alias(key.to_string(), val) {
+                    eprintln!("alias: error setting {key}: {e}");
+                }
+            } else {
+                eprintln!("alias: invalid arg {a}, use ALIAS_NAME=\"command\"");
+            }
+        } else {
+            jobs.print_alias(a.to_string());
+        }
+    }
+    if empty {
+        jobs.print_all_alias();
+    }
+}
+
 pub fn run_builtin<'arg, I>(command: &OsStr, args: &mut I, jobs: &mut Jobs) -> bool
 where
     I: Iterator<Item = &'arg Arg>,
@@ -194,6 +229,10 @@ where
         } else {
             eprintln!("export: VAR_NAME=VALUE");
         }
+        true
+    } else if command == "alias" {
+        let args: Vec<OsString> = args.collect();
+        alias(args.into_iter(), jobs);
         true
     } else {
         false

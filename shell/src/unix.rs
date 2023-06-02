@@ -136,6 +136,42 @@ where
     Err(io::Error::last_os_error())
 }
 
+fn pipe_command(
+    command: &CommandWithArgs,
+    next_in: Option<i32>,
+    next_out: Option<i32>,
+    job: &mut Job,
+    jobs: &mut Jobs,
+) -> Result<(), io::Error> {
+    let mut command = command.clone();
+    if let Some(command_name) = command.command(jobs) {
+        let command_name = command_name?;
+        if let Some(mut alias_run) = jobs.get_alias(command_name.to_string_lossy()) {
+            alias_run.push_stdin_front(next_in);
+            alias_run.push_stdout_front(next_out);
+            for arg in command.args_iter() {
+                alias_run.push_arg_end(arg.clone());
+            }
+            if let Some(stdios) = command.stdios() {
+                alias_run.extend_redirs_end(stdios)
+            }
+            match alias_run {
+                Run::Command(command) | Run::BackgroundCommand(command) => {
+                    fork_exec(&command, job, jobs)?;
+                }
+                _ => {
+                    fork_run(&alias_run, job, jobs)?;
+                }
+            }
+        } else {
+            command.push_stdin_front(next_in);
+            command.push_stdout_front(next_out);
+            fork_exec(&command, job, jobs)?;
+        }
+    }
+    Ok(())
+}
+
 pub fn fork_pipe(new_job: &[Run], job: &mut Job, jobs: &mut Jobs) -> Result<bool, io::Error> {
     let progs = new_job.len();
     let mut fds: [i32; 2] = [0; 2];
@@ -149,19 +185,13 @@ pub fn fork_pipe(new_job: &[Run], job: &mut Job, jobs: &mut Jobs) -> Result<bool
     for (i, program) in new_job.iter().rev().enumerate() {
         match program {
             Run::Command(command) => {
-                let mut command = command.clone();
-                command.push_stdin_front(next_in);
-                command.push_stdout_front(next_out);
-                fork_exec(&command, job, jobs)?;
+                pipe_command(command, next_in, next_out, job, jobs)?;
             }
             Run::BackgroundCommand(command) => {
-                let mut command = command.clone();
-                command.push_stdin_front(next_in);
-                command.push_stdout_front(next_out);
+                pipe_command(command, next_in, next_out, job, jobs)?;
                 if i == 0 {
                     background = true;
                 }
-                fork_exec(&command, job, jobs)?;
             }
             Run::Subshell(_) => {
                 let mut program = program.clone();
