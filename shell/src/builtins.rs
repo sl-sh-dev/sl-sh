@@ -177,6 +177,20 @@ where
     }
 }
 
+fn unalias<I>(args: I, jobs: &mut Jobs)
+where
+    I: Iterator<Item = OsString>,
+{
+    for arg in args {
+        let arg = arg.to_string_lossy();
+        if arg == "-a" {
+            jobs.clear_aliases();
+        } else {
+            jobs.remove_alias(&arg)
+        }
+    }
+}
+
 pub fn run_builtin<'arg, I>(command: &OsStr, args: &mut I, jobs: &mut Jobs) -> bool
 where
     I: Iterator<Item = &'arg Arg>,
@@ -233,6 +247,10 @@ where
     } else if command == "alias" {
         let args: Vec<OsString> = args.collect();
         alias(args.into_iter(), jobs);
+        true
+    } else if command == "unalias" {
+        let args: Vec<OsString> = args.collect();
+        unalias(args.into_iter(), jobs);
         true
     } else {
         false
