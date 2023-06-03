@@ -513,7 +513,6 @@ fn get_prompt(env: &mut SloshVm) -> String {
 
 fn main() {
     if let Some(config) = get_config() {
-        let mut env = new_slosh_vm();
         ENV.with(|renv| {
             let mut env = renv.borrow_mut();
             setup_vecs(&mut env);
@@ -615,14 +614,19 @@ fn main() {
                         exec_expression(res, &mut env.borrow_mut());
                     });
                 } else {
-                    SHELL_ENV.with(|jobs| {
+                    let status = SHELL_ENV.with(|jobs| {
                         match shell::run::run_one_command(&res, &mut jobs.borrow_mut()) {
-                            Ok(status) => {
-                                env.set_named_global("*last-status*", Value::Int32(status));
+                            Ok(status) => status,
+                            Err(err) => {
+                                eprintln!("ERROR executing {res}: {err}");
+                                1
                             }
-                            Err(err) => eprintln!("ERROR executing {res}: {err}"),
                         }
                     });
+                    ENV.with(|env| {
+                        env.borrow_mut()
+                            .set_named_global("*last-status*", Value::Int32(status));
+                    })
                 }
             }
         } else if let Some(script) = config.script {

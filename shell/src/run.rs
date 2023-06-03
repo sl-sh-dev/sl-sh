@@ -82,19 +82,20 @@ fn run_command(
             run_job(&alias_run, jobs, background)?
         } else {
             let mut args = command.args_iter();
-            if !run_builtin(&command_name, &mut args, jobs) {
-                let mut job = jobs.new_job();
-                job.set_stealth(stealth);
-                match fork_exec(command, &mut job, jobs) {
-                    Ok(()) => finish_run(background, job, jobs),
-                    Err(err) => {
-                        // Make sure we restore the terminal...
-                        jobs.restore_terminal();
-                        return Err(err);
+            match run_builtin(&command_name, &mut args, jobs) {
+                Some(status) => status,
+                None => {
+                    let mut job = jobs.new_job();
+                    job.set_stealth(stealth);
+                    match fork_exec(command, &mut job, jobs) {
+                        Ok(()) => finish_run(background, job, jobs),
+                        Err(err) => {
+                            // Make sure we restore the terminal...
+                            jobs.restore_terminal();
+                            return Err(err);
+                        }
                     }
                 }
-            } else {
-                0
             }
         }
     } else {

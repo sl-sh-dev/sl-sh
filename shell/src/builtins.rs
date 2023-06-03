@@ -118,11 +118,11 @@ fn cd_expand_all_dots(cd: PathBuf) -> PathBuf {
     }
 }
 
-fn export(arg: OsString, arg2: Option<OsString>) {
+fn export(arg: OsString, arg2: Option<OsString>) -> i32 {
     let arg = arg.to_string_lossy();
     if !arg.contains('=') {
         eprintln!("export: VAR_NAME=VALUE");
-        return;
+        return 1;
     }
     let mut key_val = arg.split('=');
     if let Some(key) = key_val.next() {
@@ -134,18 +134,22 @@ fn export(arg: OsString, arg2: Option<OsString>) {
             } else {
                 env::set_var(key, val);
             }
+            0
         } else {
             eprintln!("export: VAR_NAME=VALUE");
+            1
         }
     } else {
         eprintln!("export: VAR_NAME=VALUE");
+        1
     }
 }
 
-fn alias<I>(args: I, jobs: &mut Jobs)
+fn alias<I>(args: I, jobs: &mut Jobs) -> i32
 where
     I: Iterator<Item = OsString>,
 {
+    let mut status = 0;
     let mut empty = true;
     let mut args = args.map(|a| a.to_string_lossy().to_string());
     while let Some(a) = args.next() {
@@ -164,9 +168,11 @@ where
                 };
                 if let Err(e) = jobs.add_alias(key.to_string(), val) {
                     eprintln!("alias: error setting {key}: {e}");
+                    status = 1;
                 }
             } else {
                 eprintln!("alias: invalid arg {a}, use ALIAS_NAME=\"command\"");
+                status = 1;
             }
         } else {
             jobs.print_alias(a.to_string());
@@ -175,9 +181,10 @@ where
     if empty {
         jobs.print_all_alias();
     }
+    status
 }
 
-fn unalias<I>(args: I, jobs: &mut Jobs)
+fn unalias<I>(args: I, jobs: &mut Jobs) -> i32
 where
     I: Iterator<Item = OsString>,
 {
@@ -189,70 +196,82 @@ where
             jobs.remove_alias(&arg)
         }
     }
+    0
 }
 
-pub fn run_builtin<'arg, I>(command: &OsStr, args: &mut I, jobs: &mut Jobs) -> bool
+pub fn run_builtin<'arg, I>(command: &OsStr, args: &mut I, jobs: &mut Jobs) -> Option<i32>
 where
     I: Iterator<Item = &'arg Arg>,
 {
     let mut args = args.map(|v| v.resolve_arg(jobs).unwrap_or_default());
-    if command == "cd" {
-        let arg = args.next();
-        if args.next().is_none() {
-            cd(arg.map(|s| s.into()));
-        } else {
-            eprintln!("cd: too many arguments!");
-        }
-        true
-    } else if command == "fg" {
-        if let Some(arg) = args.next() {
+    let status = match &*command.to_string_lossy() {
+        "cd" => {
+            let arg = args.next();
             if args.next().is_none() {
-                if let Some(Ok(job_num)) = arg.to_str().map(|s| s.parse()) {
-                    jobs.foreground_job(job_num);
+                cd(arg.map(|s| s.into()))
+            } else {
+                eprintln!("cd: too many arguments!");
+                1
+            }
+        }
+        "fg" => {
+            if let Some(arg) = args.next() {
+                if args.next().is_none() {
+                    if let Some(Ok(job_num)) = arg.to_str().map(|s| s.parse()) {
+                        jobs.foreground_job(job_num);
+                    }
+                    0
+                } else {
+                    eprintln!("fg: takes one argument!");
+                    1
                 }
             } else {
                 eprintln!("fg: takes one argument!");
+                1
             }
-        } else {
-            eprintln!("fg: takes one argument!");
         }
-        true
-    } else if command == "bg" {
-        if let Some(arg) = args.next() {
-            if args.next().is_none() {
-                if let Some(Ok(job_num)) = arg.to_str().map(|s| s.parse()) {
-                    jobs.background_job(job_num);
+        "bg" => {
+            if let Some(arg) = args.next() {
+                if args.next().is_none() {
+                    if let Some(Ok(job_num)) = arg.to_str().map(|s| s.parse()) {
+                        jobs.background_job(job_num);
+                    }
+                    0
+                } else {
+                    eprintln!("fg: takes one argument!");
+                    1
                 }
             } else {
                 eprintln!("fg: takes one argument!");
+                1
             }
-        } else {
-            eprintln!("fg: takes one argument!");
         }
-        true
-    } else if command == "jobs" {
-        if args.next().is_some() {
-            eprintln!("jobs: too many arguments!");
-        } else {
-            println!("{jobs}");
+        "jobs" => {
+            if args.next().is_some() {
+                eprintln!("jobs: too many arguments!");
+                1
+            } else {
+                println!("{jobs}");
+                0
+            }
         }
-        true
-    } else if command == "export" {
-        if let Some(arg) = args.next() {
-            export(arg, args.next());
-        } else {
-            eprintln!("export: VAR_NAME=VALUE");
+        "export" => {
+            if let Some(arg) = args.next() {
+                export(arg, args.next())
+            } else {
+                eprintln!("export: VAR_NAME=VALUE");
+                1
+            }
         }
-        true
-    } else if command == "alias" {
-        let args: Vec<OsString> = args.collect();
-        alias(args.into_iter(), jobs);
-        true
-    } else if command == "unalias" {
-        let args: Vec<OsString> = args.collect();
-        unalias(args.into_iter(), jobs);
-        true
-    } else {
-        false
-    }
+        "alias" => {
+            let args: Vec<OsString> = args.collect();
+            alias(args.into_iter(), jobs)
+        }
+        "unalias" => {
+            let args: Vec<OsString> = args.collect();
+            unalias(args.into_iter(), jobs)
+        }
+        _ => return None,
+    };
+    Some(status)
 }
