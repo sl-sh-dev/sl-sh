@@ -1,9 +1,10 @@
 use crate::command_data::{Arg, CommandWithArgs, Redirects, Run};
+use crate::unix::{FileDesc, STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use std::fmt::{Display, Formatter};
 use std::io;
 use std::io::ErrorKind;
 use std::iter::Peekable;
-use std::str::Chars;
+use std::str::{Chars, FromStr};
 
 /// Type of the current sequence being parsed.
 #[derive(Copy, Clone, Debug)]
@@ -219,22 +220,22 @@ impl ParseState {
             if token == "&" {
                 self.take_token();
                 amp = true;
-                1
-            } else if let Ok(fd) = token.parse::<i32>() {
-                if fd >= 0 {
+                STDOUT_FILENO
+            } else if let Ok(fd) = FileDesc::from_str(token) {
+                if fd >= STDIN_FILENO {
                     self.take_token();
                     fd
                 } else {
                     self.proc_token();
-                    1
+                    STDOUT_FILENO
                 }
             } else {
                 self.proc_token();
-                1
+                STDOUT_FILENO
             }
         } else {
             self.proc_token();
-            1
+            STDOUT_FILENO
         };
         let next_char = *chars.peek().unwrap_or(&' ');
         if next_char == '>' {
@@ -257,7 +258,7 @@ impl ParseState {
             self.last_ch = ' ';
         }
         if amp {
-            self.stdio.set_out_internal_fd(2, out_fd, true);
+            self.stdio.set_out_internal_fd(STDERR_FILENO, out_fd, true);
         }
         Ok(())
     }
@@ -273,21 +274,21 @@ impl ParseState {
             return Ok(());
         }
         let in_fd = if let Some(token) = &self.token {
-            if let Ok(fd) = token.parse::<i32>() {
-                if fd >= 0 {
+            if let Ok(fd) = FileDesc::from_str(token) {
+                if fd >= STDIN_FILENO {
                     self.take_token();
                     fd
                 } else {
                     self.proc_token();
-                    0
+                    STDIN_FILENO
                 }
             } else {
                 self.proc_token();
-                0
+                STDIN_FILENO
             }
         } else {
             self.proc_token();
-            0
+            STDIN_FILENO
         };
         let next_char = *chars.peek().unwrap_or(&' ');
         if next_char == '<' {

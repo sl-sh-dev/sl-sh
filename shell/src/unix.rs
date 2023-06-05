@@ -1,11 +1,14 @@
 use std::collections::HashSet;
 use std::convert::TryInto;
 use std::ffi::{c_char, CString, OsStr, OsString};
+use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io::{self, ErrorKind, Read, Write};
+use std::os::fd::{IntoRawFd, RawFd};
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::io::FromRawFd;
 use std::ptr;
+use std::str::FromStr;
 
 use crate::command_data::{Arg, CommandWithArgs, Run};
 use crate::glob::{expand_glob, GlobOutput};
@@ -18,9 +21,48 @@ use nix::sys::termios;
 use nix::sys::wait::{self, WaitPidFlag, WaitStatus};
 use nix::unistd::{self, Pid, Uid};
 
-pub const STDIN_FILENO: i32 = 0;
-pub const STDOUT_FILENO: i32 = 1;
-pub const STDERR_FILENO: i32 = 2;
+/// Raw file descriptor for the target platform.
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Hash, Debug)]
+pub struct FileDesc(RawFd);
+
+impl FromStr for FileDesc {
+    type Err = io::Error;
+
+    fn from_str(fd_str: &str) -> Result<Self, Self::Err> {
+        match fd_str.parse::<i32>() {
+            Ok(fd) => Ok(Self(fd)),
+            Err(err) => Err(io::Error::new(ErrorKind::Other, err)),
+        }
+    }
+}
+
+/// Trait to turn a FileDesc into another object (like File).
+pub trait FromFileDesc {
+    /// Constructs a new instance of Self from the given FileDesc.
+    /// # Safety
+    /// The fd passed in must be a valid and open file descriptor.
+    unsafe fn from_file_desc(fd: FileDesc) -> Self;
+}
+
+impl Display for FileDesc {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+impl From<File> for FileDesc {
+    fn from(file: File) -> Self {
+        Self(file.into_raw_fd())
+    }
+}
+impl FromFileDesc for File {
+    unsafe fn from_file_desc(fd: FileDesc) -> Self {
+        File::from_raw_fd(fd.0)
+    }
+}
+
+pub const STDIN_FILENO: FileDesc = FileDesc(0);
+pub const STDOUT_FILENO: FileDesc = FileDesc(1);
+pub const STDERR_FILENO: FileDesc = FileDesc(2);
 
 trait IsMinusOne {
     fn is_minus_one(&self) -> bool;
@@ -52,8 +94,8 @@ pub type OsSignal = i32;
 pub struct TermSettings(termios::Termios);
 
 /// If terminal is a terminal then get it's term settings.
-pub fn get_term_settings(terminal: i32) -> Result<TermSettings, io::Error> {
-    Ok(TermSettings(termios::tcgetattr(terminal)?))
+pub fn get_term_settings(terminal: FileDesc) -> Result<TermSettings, io::Error> {
+    Ok(TermSettings(termios::tcgetattr(terminal.0)?))
 }
 
 /// Restore terminal settings and put the shell back into the foreground.
@@ -66,10 +108,10 @@ pub fn restore_terminal(term_settings: &TermSettings, shell_pid: i32) -> Result<
 
 /// Put terminal in the foreground, loop until this succeeds.
 /// Used during shell startup.
-pub fn terminal_foreground(terminal: i32) {
+pub fn terminal_foreground(terminal: FileDesc) {
     /* Loop until we are in the foreground.  */
     let mut shell_pgid = unistd::getpgrp();
-    while unistd::tcgetpgrp(terminal) != Ok(shell_pgid) {
+    while unistd::tcgetpgrp(terminal.0) != Ok(shell_pgid) {
         if let Err(err) = signal::kill(shell_pgid, Signal::SIGTTIN) {
             eprintln!("Error sending sigttin: {}.", err);
         }
@@ -93,14 +135,14 @@ pub fn set_self_pgroup() -> Result<(), io::Error> {
 
 /// Grab control of terminal.
 /// Used for shell startup.
-pub fn grab_terminal(terminal: i32) -> Result<(), io::Error> {
+pub fn grab_terminal(terminal: FileDesc) -> Result<(), io::Error> {
     /* Grab control of the terminal.  */
     let pgid = unistd::getpid();
-    Ok(unistd::tcsetpgrp(terminal, pgid)?)
+    Ok(unistd::tcsetpgrp(terminal.0, pgid)?)
 }
 
 /// Return the input and output file descriptors for an anonymous pipe.
-pub fn anon_pipe() -> Result<(i32, i32), io::Error> {
+pub fn anon_pipe() -> Result<(FileDesc, FileDesc), io::Error> {
     // Adapted from sys/unix/pipe.rs in std lib.
     let mut fds = [0; 2];
 
@@ -117,22 +159,22 @@ pub fn anon_pipe() -> Result<(i32, i32), io::Error> {
             target_os = "redox"
         ))] {
             cvt(unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_CLOEXEC) })?;
-            Ok((fds[0], fds[1]))
+            Ok((FileDesc(fds[0]), FileDesc(fds[1])))
         } else {
             unsafe {
                 cvt(libc::pipe(fds.as_mut_ptr()))?;
                 cvt(libc::fcntl(fds[0], libc::F_SETFD, libc::O_CLOEXEC))?;
                 cvt(libc::fcntl(fds[1], libc::F_SETFD, libc::O_CLOEXEC))?;
             }
-            Ok((fds[0], fds[1]))
+            Ok((FileDesc(fds[0]), FileDesc(fds[1])))
         }
     }
 }
 
 /// Close a raw Unix file descriptor.
-pub fn close_fd(fd: i32) -> Result<(), io::Error> {
+pub fn close_fd(fd: FileDesc) -> Result<(), io::Error> {
     unsafe {
-        cvt(libc::close(fd))?;
+        cvt(libc::close(fd.0))?;
     }
     Ok(())
 }
@@ -224,10 +266,10 @@ unsafe fn send_error_to_parent(output: i32, err: io::Error) {
     libc::_exit(1);
 }
 
-unsafe fn close_extra_fds(opened: &HashSet<i32>) {
+unsafe fn close_extra_fds(opened: &HashSet<FileDesc>) {
     let fd_max = libc::sysconf(libc::_SC_OPEN_MAX) as i32;
     for fd in 3..fd_max {
-        if !opened.contains(&fd) {
+        if !opened.contains(&FileDesc(fd)) {
             libc::close(fd);
         }
     }
@@ -259,7 +301,7 @@ pub fn fork_run(run: &Run, job: &mut Job, jobs: &mut Jobs) -> Result<(), io::Err
     // Close any internal FDs (from pipes for instance) in this process.
     let redir_fds = run.get_internal_fds();
     for fd in redir_fds {
-        if fd > 3 {
+        if fd > STDERR_FILENO {
             let _ = close_fd(fd);
         }
     }
@@ -278,7 +320,7 @@ pub fn fork_exec(
         return Err(io::Error::new(ErrorKind::Other, "no program to execute"));
     };
     let args = command.args_iter();
-    let (input, output) = anon_pipe()?;
+    let (FileDesc(input), FileDesc(output)) = anon_pipe()?;
     let result = unsafe { cvt(libc::fork())? };
 
     let pid = unsafe {
@@ -289,7 +331,7 @@ pub fn fork_exec(
                 jobs.set_interactive(false);
                 match command.process_redirects(jobs) {
                     Ok(mut fds) => {
-                        fds.insert(output);
+                        fds.insert(FileDesc(output));
                         close_extra_fds(&fds);
                     }
                     Err(err) => send_error_to_parent(output, err), // This call won't return.
@@ -312,7 +354,7 @@ pub fn fork_exec(
         // This means any FDs we opened for pipes etc.
         let redir_fds = command.get_internal_fds();
         for fd in redir_fds {
-            if fd > 3 {
+            if fd > STDERR_FILENO {
                 let _ = close_fd(fd);
             }
         }
@@ -428,7 +470,7 @@ pub fn foreground_job(
         let ppgid = Pid::from_raw(-pgid);
         signal::kill(ppgid, Signal::SIGCONT)?;
         let ppgid = Pid::from_raw(pgid);
-        unistd::tcsetpgrp(STDIN_FILENO, ppgid)?;
+        unistd::tcsetpgrp(libc::STDIN_FILENO, ppgid)?;
         job.mark_running();
         wait_job(job);
         if let Some(term_settings) = term_settings {
@@ -458,17 +500,8 @@ pub fn background_job(job: &mut Job) -> Result<(), io::Error> {
 }
 
 /// Duplicate a raw file descriptor to another file descriptor.
-pub fn dup2_fd(src_fd: i32, dst_fd: i32) -> Result<i32, io::Error> {
-    unsafe { cvt(libc::dup2(src_fd, dst_fd)) }
-}
-
-/// Make an anon pipe, (read, write).
-pub fn pipe() -> Result<(i32, i32), io::Error> {
-    let mut fds: [i32; 2] = [0; 2];
-    unsafe {
-        cvt(libc::pipe(fds.as_mut_ptr()))?;
-    }
-    Ok((fds[0], fds[1]))
+pub fn dup2_fd(src_fd: FileDesc, dst_fd: FileDesc) -> Result<FileDesc, io::Error> {
+    Ok(FileDesc(unsafe { cvt(libc::dup2(src_fd.0, dst_fd.0))? }))
 }
 
 /// Get the current PID.
@@ -491,8 +524,8 @@ pub fn effective_uid() -> u32 {
     Uid::effective().into()
 }
 
-pub fn is_tty(terminal: i32) -> bool {
-    unistd::isatty(terminal).unwrap_or(false)
+pub fn is_tty(terminal: FileDesc) -> bool {
+    unistd::isatty(terminal.0).unwrap_or(false)
 }
 
 /// Setup the process group for the current pid as well term if interactive.

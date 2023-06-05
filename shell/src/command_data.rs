@@ -1,11 +1,13 @@
 use crate::jobs::Jobs;
-use crate::unix::{anon_pipe, close_fd, dup2_fd, fork_run, pipe};
+use crate::unix::{
+    anon_pipe, close_fd, dup2_fd, fork_run, FileDesc, FromFileDesc, STDIN_FILENO, STDOUT_FILENO,
+};
 use std::collections::HashSet;
 use std::ffi::OsString;
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io::{BufRead, ErrorKind, Write};
-use std::os::fd::{AsRawFd, FromRawFd};
+use std::str::FromStr;
 use std::{env, io};
 
 /// Arg to a command, either a direct string or a sub command to run to get the arg.
@@ -31,7 +33,7 @@ impl Arg {
                 run.push_stdout_front(Some(output));
                 let mut job = jobs.new_job();
                 fork_run(&run, &mut job, jobs)?;
-                let lines = io::BufReader::new(unsafe { File::from_raw_fd(input) }).lines();
+                let lines = io::BufReader::new(unsafe { File::from_file_desc(input) }).lines();
                 let mut val = String::new();
                 for (i, line) in lines.enumerate() {
                     if i > 0 {
@@ -84,7 +86,7 @@ enum RedirArg {
     /// Arg should resolve to file descriptor (positive integer or '-' to close).
     Fd(Arg),
     /// A file descriptor created and managed by the shell (for instance for pipes).
-    InternalFd(i32),
+    InternalFd(FileDesc),
 }
 
 impl Display for RedirArg {
@@ -101,15 +103,15 @@ impl Display for RedirArg {
 #[derive(Clone, Debug)]
 enum RedirType {
     /// An input file to open and dup to fd.
-    In(i32, RedirArg),
+    In(FileDesc, RedirArg),
     /// Inject Arg as data into the fd.
-    InDirect(i32, Arg),
+    InDirect(FileDesc, Arg),
     /// An output file to open (append) and dup to fd.
-    Out(i32, RedirArg),
+    Out(FileDesc, RedirArg),
     /// An output file to open (create/trunc) and dup to fd.
-    OutTrunc(i32, RedirArg),
+    OutTrunc(FileDesc, RedirArg),
     /// An input/output file to open (append) and dup to fd.
-    InOut(i32, RedirArg),
+    InOut(FileDesc, RedirArg),
 }
 
 impl Display for RedirType {
@@ -125,14 +127,18 @@ impl Display for RedirType {
 }
 
 impl RedirType {
-    fn process_source_fd(dest_fd: i32, arg: &Arg, jobs: &mut Jobs) -> Result<i32, io::Error> {
+    fn process_source_fd(
+        dest_fd: FileDesc,
+        arg: &Arg,
+        jobs: &mut Jobs,
+    ) -> Result<FileDesc, io::Error> {
         let targ = arg.resolve_arg(jobs)?;
         let source_fd = targ.to_string_lossy();
         if source_fd == "-" {
             close_fd(dest_fd)?;
             Ok(dest_fd)
         } else if source_fd.ends_with('-') {
-            match source_fd[0..source_fd.len() - 1].parse::<i32>() {
+            match FileDesc::from_str(&source_fd[0..source_fd.len() - 1]) {
                 Ok(source_fd) => {
                     dup2_fd(source_fd, dest_fd)?;
                     close_fd(source_fd)?;
@@ -141,31 +147,31 @@ impl RedirType {
                 Err(err) => Err(io::Error::new(ErrorKind::Other, err)),
             }
         } else {
-            match source_fd.parse::<i32>() {
+            match FileDesc::from_str(&source_fd) {
                 Ok(source_fd) => dup2_fd(source_fd, dest_fd),
                 Err(err) => Err(io::Error::new(ErrorKind::Other, err)),
             }
         }
     }
 
-    fn process(&self, jobs: &mut Jobs) -> Result<i32, io::Error> {
+    fn process(&self, jobs: &mut Jobs) -> Result<FileDesc, io::Error> {
         match self {
             RedirType::In(fd, RedirArg::Path(arg)) => {
                 let path = arg.resolve_arg(jobs)?;
                 let f = File::open(path)?;
                 // Use as_raw_fd ot nto_raw_fd so f will close when dropped.
-                dup2_fd(f.as_raw_fd(), *fd)?;
+                dup2_fd(f.into(), *fd)?;
                 Ok(*fd)
             }
             RedirType::In(fd, RedirArg::Fd(arg)) => Self::process_source_fd(*fd, arg, jobs),
             RedirType::InDirect(fd, arg) => {
                 let tdata = arg.resolve_arg(jobs)?;
                 let data = tdata.to_string_lossy();
-                if let Ok((pread, pwrite)) = pipe() {
+                if let Ok((pread, pwrite)) = anon_pipe() {
                     dup2_fd(pread, *fd)?;
                     close_fd(pread)?;
                     unsafe {
-                        let mut file = File::from_raw_fd(pwrite);
+                        let mut file = File::from_file_desc(pwrite);
                         if let Err(e) = file.write_all(data.as_bytes()) {
                             eprintln!("Error writing {data} to fd {fd}: {e}");
                         }
@@ -180,7 +186,7 @@ impl RedirType {
                 let path = arg.resolve_arg(jobs)?;
                 let f = File::options().append(true).create(true).open(path)?;
                 // Use as_raw_fd ot nto_raw_fd so f will close when dropped.
-                dup2_fd(f.as_raw_fd(), *fd)?;
+                dup2_fd(f.into(), *fd)?;
                 Ok(*fd)
             }
             RedirType::Out(fd, RedirArg::Fd(arg)) => Self::process_source_fd(*fd, arg, jobs),
@@ -191,7 +197,7 @@ impl RedirType {
                 let path = arg.resolve_arg(jobs)?;
                 let f = File::create(path)?;
                 // Use as_raw_fd ot nto_raw_fd so f will close when dropped.
-                dup2_fd(f.as_raw_fd(), *fd)?;
+                dup2_fd(f.into(), *fd)?;
                 Ok(*fd)
             }
             RedirType::OutTrunc(fd, RedirArg::Fd(arg)) => Self::process_source_fd(*fd, arg, jobs),
@@ -207,7 +213,7 @@ impl RedirType {
                     .write(true)
                     .open(path)?;
                 // Use as_raw_fd ot nto_raw_fd so f will close when dropped.
-                dup2_fd(f.as_raw_fd(), *fd)?;
+                dup2_fd(f.into(), *fd)?;
                 Ok(*fd)
             }
             RedirType::InOut(fd, RedirArg::Fd(arg)) => Self::process_source_fd(*fd, arg, jobs),
@@ -244,7 +250,7 @@ impl Redirects {
 
     /// Process the stack in order and setup all the requested file descriptors.
     /// Returns a Set containing all the file descriptors setup (to avoid closing them on process start).
-    pub fn process(&self, jobs: &mut Jobs) -> Result<HashSet<i32>, io::Error> {
+    pub fn process(&self, jobs: &mut Jobs) -> Result<HashSet<FileDesc>, io::Error> {
         let mut fd_set = HashSet::new();
         for r in &self.redir_stack {
             fd_set.insert(r.process(jobs)?);
@@ -255,7 +261,7 @@ impl Redirects {
     /// Push a fd to fd redirect onto the stack.
     /// This is for internally managed source FDs (for pipes etc).
     /// If push_back is true then push to the end else put on the front (useful for pipes).
-    pub fn set_in_internal_fd(&mut self, dest_fd: i32, source_fd: i32, push_back: bool) {
+    pub fn set_in_internal_fd(&mut self, dest_fd: FileDesc, source_fd: FileDesc, push_back: bool) {
         let redir = RedirType::In(dest_fd, RedirArg::InternalFd(source_fd));
         if push_back {
             self.redir_stack.push(redir);
@@ -267,7 +273,7 @@ impl Redirects {
     /// Push a fd to fd redirect onto the stack.
     /// This is for internally managed source FDs (for pipes etc).
     /// If push_back is true then push to the end else put on the front (useful for pipes).
-    pub fn set_out_internal_fd(&mut self, dest_fd: i32, source_fd: i32, push_back: bool) {
+    pub fn set_out_internal_fd(&mut self, dest_fd: FileDesc, source_fd: FileDesc, push_back: bool) {
         let redir = RedirType::Out(dest_fd, RedirArg::InternalFd(source_fd));
         if push_back {
             self.redir_stack.push(redir);
@@ -278,7 +284,7 @@ impl Redirects {
 
     /// Push a fd to fd redirect onto the stack.
     /// If push_back is true then push to the end else put on the front (useful for pipes).
-    pub fn set_in_fd(&mut self, dest_fd: i32, source_fd: Arg, push_back: bool) {
+    pub fn set_in_fd(&mut self, dest_fd: FileDesc, source_fd: Arg, push_back: bool) {
         let redir = RedirType::In(dest_fd, RedirArg::Fd(source_fd));
         if push_back {
             self.redir_stack.push(redir);
@@ -289,7 +295,7 @@ impl Redirects {
 
     /// Push a fd to fd redirect onto the stack.
     /// If push_back is true then push to the end else put on the front (useful for pipes).
-    pub fn set_out_fd(&mut self, dest_fd: i32, source_fd: Arg, push_back: bool) {
+    pub fn set_out_fd(&mut self, dest_fd: FileDesc, source_fd: Arg, push_back: bool) {
         let redir = RedirType::OutTrunc(dest_fd, RedirArg::Fd(source_fd));
         if push_back {
             self.redir_stack.push(redir);
@@ -299,31 +305,31 @@ impl Redirects {
     }
 
     /// Push a fd to fd redirect onto the stack.
-    pub fn set_in_out_fd(&mut self, dest_fd: i32, source_fd: Arg) {
+    pub fn set_in_out_fd(&mut self, dest_fd: FileDesc, source_fd: Arg) {
         let redir = RedirType::InOut(dest_fd, RedirArg::Fd(source_fd));
         self.redir_stack.push(redir);
     }
 
     /// Push an input file path to the redirect stack for fd.
-    pub fn set_in_out_path(&mut self, dest_fd: i32, path: Arg) {
+    pub fn set_in_out_path(&mut self, dest_fd: FileDesc, path: Arg) {
         let redir = RedirType::InOut(dest_fd, RedirArg::Path(path));
         self.redir_stack.push(redir);
     }
 
     /// Push an input file path to the redirect stack for fd.
-    pub fn set_in_path(&mut self, dest_fd: i32, path: Arg) {
+    pub fn set_in_path(&mut self, dest_fd: FileDesc, path: Arg) {
         let redir = RedirType::In(dest_fd, RedirArg::Path(path));
         self.redir_stack.push(redir);
     }
 
     /// Push input data to the redirect stack for fd.
-    pub fn set_in_direct(&mut self, dest_fd: i32, data: Arg) {
+    pub fn set_in_direct(&mut self, dest_fd: FileDesc, data: Arg) {
         let redir = RedirType::InDirect(dest_fd, data);
         self.redir_stack.push(redir);
     }
 
     /// Push an output file path to the redirect stack for fd.
-    pub fn set_out_path(&mut self, dest_fd: i32, path: Arg, overwrite: bool) {
+    pub fn set_out_path(&mut self, dest_fd: FileDesc, path: Arg, overwrite: bool) {
         let redir = if overwrite {
             RedirType::OutTrunc(dest_fd, RedirArg::Path(path))
         } else {
@@ -342,7 +348,7 @@ impl Redirects {
         self.redir_stack.extend(other.redir_stack.iter().cloned());
     }
 
-    fn collect_internal_fds(&self, fd_set: &mut HashSet<i32>) {
+    fn collect_internal_fds(&self, fd_set: &mut HashSet<FileDesc>) {
         for r in &self.redir_stack {
             match r {
                 RedirType::In(_, RedirArg::InternalFd(fd)) => {
@@ -511,33 +517,33 @@ impl CommandWithArgs {
     }
 
     /// If fd is Some value then put it at the front of the redir queue for this command.
-    pub fn push_stdin_front(&mut self, fd: Option<i32>) {
+    pub fn push_stdin_front(&mut self, fd: Option<FileDesc>) {
         if let Some(fd) = fd {
             if let Some(stdios) = self.stdios.as_mut() {
-                stdios.set_in_internal_fd(0, fd, false);
+                stdios.set_in_internal_fd(STDIN_FILENO, fd, false);
             } else {
                 let mut stdios = Redirects::default();
-                stdios.set_in_internal_fd(0, fd, true);
+                stdios.set_in_internal_fd(STDIN_FILENO, fd, true);
                 self.stdios = Some(stdios);
             }
         }
     }
 
     /// If fd is Some value then put it at the front of the redir queue for this command.
-    pub fn push_stdout_front(&mut self, fd: Option<i32>) {
+    pub fn push_stdout_front(&mut self, fd: Option<FileDesc>) {
         if let Some(fd) = fd {
             if let Some(stdios) = self.stdios.as_mut() {
-                stdios.set_out_internal_fd(1, fd, false);
+                stdios.set_out_internal_fd(STDOUT_FILENO, fd, false);
             } else {
                 let mut stdios = Redirects::default();
-                stdios.set_out_internal_fd(1, fd, true);
+                stdios.set_out_internal_fd(STDOUT_FILENO, fd, true);
                 self.stdios = Some(stdios);
             }
         }
     }
 
     /// Process redirects.
-    pub fn process_redirects(&self, jobs: &mut Jobs) -> Result<HashSet<i32>, io::Error> {
+    pub fn process_redirects(&self, jobs: &mut Jobs) -> Result<HashSet<FileDesc>, io::Error> {
         if let Some(redirects) = &self.stdios {
             redirects.process(jobs)
         } else {
@@ -545,14 +551,14 @@ impl CommandWithArgs {
         }
     }
 
-    fn collect_internal_fds(&self, fd_set: &mut HashSet<i32>) {
+    fn collect_internal_fds(&self, fd_set: &mut HashSet<FileDesc>) {
         if let Some(stdios) = &self.stdios {
             stdios.collect_internal_fds(fd_set);
         }
     }
 
     /// Return a set of all the 'internal' file descriptors (for pipes etc).
-    pub fn get_internal_fds(&self) -> HashSet<i32> {
+    pub fn get_internal_fds(&self) -> HashSet<FileDesc> {
         let mut res = HashSet::new();
         self.collect_internal_fds(&mut res);
         res
@@ -723,7 +729,7 @@ impl Run {
     }
 
     /// If fd is Some value then put it at the front of the redir queue for the first command in the Run.
-    pub fn push_stdin_front(&mut self, fd: Option<i32>) {
+    pub fn push_stdin_front(&mut self, fd: Option<FileDesc>) {
         if let Some(fd) = fd {
             match self {
                 Run::Command(current) => current.push_stdin_front(Some(fd)),
@@ -743,7 +749,7 @@ impl Run {
     }
 
     /// If fd is Some value then put it at the front of the redir queue for the last command in the Run.
-    pub fn push_stdout_front(&mut self, fd: Option<i32>) {
+    pub fn push_stdout_front(&mut self, fd: Option<FileDesc>) {
         if let Some(fd) = fd {
             match self {
                 Run::Command(current) => current.push_stdout_front(Some(fd)),
@@ -762,7 +768,7 @@ impl Run {
         }
     }
 
-    fn collect_internal_fds(&self, fd_set: &mut HashSet<i32>) {
+    fn collect_internal_fds(&self, fd_set: &mut HashSet<FileDesc>) {
         match self {
             Run::Command(current) => current.collect_internal_fds(fd_set),
             Run::BackgroundCommand(current) => current.collect_internal_fds(fd_set),
@@ -777,7 +783,7 @@ impl Run {
     }
 
     /// Return a set of all the 'internal' file descriptors (for pipes etc).
-    pub fn get_internal_fds(&self) -> HashSet<i32> {
+    pub fn get_internal_fds(&self) -> HashSet<FileDesc> {
         let mut res = HashSet::new();
         self.collect_internal_fds(&mut res);
         res

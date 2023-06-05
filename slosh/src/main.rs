@@ -5,7 +5,6 @@ use std::env::VarError;
 use std::ffi::OsString;
 use std::fs::File;
 use std::io::{BufRead, ErrorKind};
-use std::os::fd::FromRawFd;
 use std::sync::Arc;
 use std::{env, io};
 
@@ -34,7 +33,7 @@ use crate::completions::ShellCompleter;
 use crate::liner_rules::make_editor_rules;
 use config::*;
 use debug::*;
-use shell::unix::{current_uid, effective_uid, gethostname};
+use shell::unix::{current_uid, effective_uid, gethostname, FromFileDesc, STDIN_FILENO};
 use sl_compiler::pass1::pass1;
 use slvm::Value;
 
@@ -195,7 +194,7 @@ fn sh_str(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         fork_res = shell::run::run_job(&run, &mut jobs.borrow_mut(), true);
     });
     fork_res.map_err(|e| VMError::new_compile(format!("$sh: {e}")))?;
-    let lines = io::BufReader::new(unsafe { File::from_raw_fd(input) }).lines();
+    let lines = io::BufReader::new(unsafe { File::from_file_desc(input) }).lines();
     let mut val = String::new();
     for (i, line) in lines.enumerate() {
         if i > 0 {
@@ -568,7 +567,7 @@ fn main() {
             if let Err(e) = con.history.set_file_name_and_load_history("history") {
                 println!("Error loading history: {e}");
             }
-            shell::run::setup_shell_tty(0);
+            shell::run::setup_shell_tty(STDIN_FILENO);
             //let mut jobs = shell::jobs::Jobs::new(true);
             SHELL_ENV.with(|jobs| {
                 jobs.borrow_mut().cap_term();

@@ -1,7 +1,7 @@
 use shell::config::get_config;
 use shell::jobs::Jobs;
 use shell::run::{run_one_command, setup_shell_tty};
-use shell::unix::{current_uid, effective_uid, gethostname, is_tty, set_self_pgroup};
+use shell::unix::{current_uid, effective_uid, gethostname, is_tty, set_self_pgroup, STDIN_FILENO};
 use sl_liner::Prompt;
 use std::env;
 use std::ffi::OsString;
@@ -9,7 +9,7 @@ use std::io::ErrorKind;
 
 fn main() {
     if let Some(config) = get_config() {
-        let shell_terminal = 0;
+        let shell_terminal = STDIN_FILENO;
         // See if we are running interactively.
         let is_tty = is_tty(shell_terminal);
         if config.command.is_none() && config.script.is_none() {

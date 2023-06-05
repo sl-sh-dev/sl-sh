@@ -5,10 +5,11 @@ use crate::parse::parse_line;
 use crate::signals::{install_sigint_handler, mask_signals};
 use crate::unix::{
     anon_pipe, fork_exec, fork_run, grab_terminal, set_self_pgroup, terminal_foreground, wait_job,
+    FileDesc,
 };
 use std::{env, io};
 
-pub fn setup_shell_tty(shell_terminal: i32) {
+pub fn setup_shell_tty(shell_terminal: FileDesc) {
     terminal_foreground(shell_terminal);
 
     mask_signals();
@@ -158,8 +159,8 @@ pub fn run_one_command(command: &str, jobs: &mut Jobs) -> Result<i32, io::Error>
 
 fn pipe_command(
     command: &CommandWithArgs,
-    next_in: Option<i32>,
-    next_out: Option<i32>,
+    next_in: Option<FileDesc>,
+    next_out: Option<FileDesc>,
     job: &mut Job,
     jobs: &mut Jobs,
 ) -> Result<(), io::Error> {
