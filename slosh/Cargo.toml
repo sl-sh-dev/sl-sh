@@ -13,7 +13,6 @@ slvm = { path = "../vm" }
 builtins = { path = "../builtins" }
 compile_state = { path = "../compile_state" }
 shell = { path = "../shell" }
-nix = "0.26.2"
 unicode-width = "0.1"
 glob = "0.3"
 

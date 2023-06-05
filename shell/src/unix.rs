@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use std::convert::TryInto;
-use std::ffi::{c_char, CString, OsStr};
+use std::ffi::{c_char, CString, OsStr, OsString};
 use std::fs::File;
 use std::io::{self, ErrorKind, Read, Write};
 use std::os::unix::ffi::OsStrExt;
@@ -9,13 +9,18 @@ use std::ptr;
 
 use crate::command_data::{Arg, CommandWithArgs, Run};
 use crate::glob::{expand_glob, GlobOutput};
-use crate::jobs::{Job, Jobs};
+use crate::jobs::{Job, JobStatus, Jobs};
 use crate::run::run_job;
 use crate::signals::test_clear_sigint;
 use nix::libc;
 use nix::sys::signal::{self, kill, SigHandler, Signal};
+use nix::sys::termios;
 use nix::sys::wait::{self, WaitPidFlag, WaitStatus};
-use nix::unistd::{self, Pid};
+use nix::unistd::{self, Pid, Uid};
+
+pub const STDIN_FILENO: i32 = 0;
+pub const STDOUT_FILENO: i32 = 1;
+pub const STDERR_FILENO: i32 = 2;
 
 trait IsMinusOne {
     fn is_minus_one(&self) -> bool;
@@ -37,6 +42,61 @@ fn cvt<T: IsMinusOne>(t: T) -> Result<T, io::Error> {
     } else {
         Ok(t)
     }
+}
+
+/// An OS signal.
+pub type OsSignal = i32;
+
+/// Saved terminal settings.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TermSettings(termios::Termios);
+
+/// If terminal is a terminal then get it's term settings.
+pub fn get_term_settings(terminal: i32) -> Result<TermSettings, io::Error> {
+    Ok(TermSettings(termios::tcgetattr(terminal)?))
+}
+
+/// Restore terminal settings and put the shell back into the foreground.
+pub fn restore_terminal(term_settings: &TermSettings, shell_pid: i32) -> Result<(), io::Error> {
+    termios::tcsetattr(0, termios::SetArg::TCSANOW, &term_settings.0)?;
+    // XXX TODO- be more specific if the next line fails (ie only turn off tty if that is the error)?
+    unistd::tcsetpgrp(0, Pid::from_raw(shell_pid))?;
+    Ok(())
+}
+
+/// Put terminal in the foreground, loop until this succeeds.
+/// Used during shell startup.
+pub fn terminal_foreground(terminal: i32) {
+    /* Loop until we are in the foreground.  */
+    let mut shell_pgid = unistd::getpgrp();
+    while unistd::tcgetpgrp(terminal) != Ok(shell_pgid) {
+        if let Err(err) = signal::kill(shell_pgid, Signal::SIGTTIN) {
+            eprintln!("Error sending sigttin: {}.", err);
+        }
+        shell_pgid = unistd::getpgrp();
+    }
+}
+
+/// Puts the running process into its own process group.
+/// Do this during shell initialization.
+pub fn set_self_pgroup() -> Result<(), io::Error> {
+    /* Put ourselves in our own process group.  */
+    let pgid = unistd::getpid();
+    if let Err(err) = unistd::setpgid(pgid, pgid) {
+        match err {
+            nix::errno::Errno::EPERM => { /* ignore */ }
+            _ => return Err(err.into()),
+        }
+    }
+    Ok(())
+}
+
+/// Grab control of terminal.
+/// Used for shell startup.
+pub fn grab_terminal(terminal: i32) -> Result<(), io::Error> {
+    /* Grab control of the terminal.  */
+    let pgid = unistd::getpid();
+    Ok(unistd::tcsetpgrp(terminal, pgid)?)
 }
 
 /// Return the input and output file descriptors for an anonymous pipe.
@@ -136,108 +196,6 @@ where
     Err(io::Error::last_os_error())
 }
 
-fn pipe_command(
-    command: &CommandWithArgs,
-    next_in: Option<i32>,
-    next_out: Option<i32>,
-    job: &mut Job,
-    jobs: &mut Jobs,
-) -> Result<(), io::Error> {
-    let mut command = command.clone();
-    if let Some(command_name) = command.command(jobs) {
-        let command_name = command_name?;
-        if let Some(mut alias_run) = jobs.get_alias(command_name.to_string_lossy()) {
-            alias_run.push_stdin_front(next_in);
-            alias_run.push_stdout_front(next_out);
-            for arg in command.args_iter() {
-                alias_run.push_arg_end(arg.clone());
-            }
-            if let Some(stdios) = command.stdios() {
-                alias_run.extend_redirs_end(stdios)
-            }
-            match alias_run {
-                Run::Command(command) | Run::BackgroundCommand(command) => {
-                    fork_exec(&command, job, jobs)?;
-                }
-                _ => {
-                    fork_run(&alias_run, job, jobs)?;
-                }
-            }
-        } else {
-            command.push_stdin_front(next_in);
-            command.push_stdout_front(next_out);
-            fork_exec(&command, job, jobs)?;
-        }
-    }
-    Ok(())
-}
-
-pub fn fork_pipe(new_job: &[Run], job: &mut Job, jobs: &mut Jobs) -> Result<bool, io::Error> {
-    let progs = new_job.len();
-    let mut fds: [i32; 2] = [0; 2];
-    unsafe {
-        cvt(libc::pipe(fds.as_mut_ptr()))?;
-    }
-    let mut next_in = Some(fds[0]);
-    let mut next_out = None;
-    let mut upcoming_out = fds[1];
-    let mut background = false;
-    for (i, program) in new_job.iter().rev().enumerate() {
-        match program {
-            Run::Command(command) => {
-                pipe_command(command, next_in, next_out, job, jobs)?;
-            }
-            Run::BackgroundCommand(command) => {
-                pipe_command(command, next_in, next_out, job, jobs)?;
-                if i == 0 {
-                    background = true;
-                }
-            }
-            Run::Subshell(_) => {
-                let mut program = program.clone();
-                program.push_stdin_front(next_in);
-                program.push_stdout_front(next_out);
-                if let Run::Subshell(sub_run) = &mut program {
-                    match fork_run(&*sub_run, job, jobs) {
-                        Ok(()) => {
-                            jobs.restore_terminal();
-                        }
-                        Err(err) => {
-                            // Make sure we restore the terminal...
-                            jobs.restore_terminal();
-                            return Err(err);
-                        }
-                    }
-                }
-            }
-            Run::Pipe(_) | Run::Sequence(_) | Run::And(_) | Run::Or(_) => {
-                // Don't think this is expressible with the parser and maybe should be an error?
-                let mut program = program.clone();
-                program.push_stdin_front(next_in);
-                program.push_stdout_front(next_out);
-                run_job(&program, jobs, true)?;
-            }
-            Run::Empty => {}
-        }
-        next_out = Some(upcoming_out);
-        if i < (progs - 1) {
-            unsafe {
-                cvt(libc::pipe(fds.as_mut_ptr()))?;
-            }
-            upcoming_out = fds[1];
-            next_in = Some(fds[0]);
-        } else {
-            next_in = None;
-        }
-    }
-    if job.is_empty() {
-        Err(io::Error::new(io::ErrorKind::Other, "no processes started"))
-    } else {
-        job.reverse();
-        Ok(background)
-    }
-}
-
 const CLOEXEC_MSG_FOOTER: [u8; 4] = *b"NOEX";
 
 /// Send an error code back tot he parent from a child process indicating it failed to fork.
@@ -280,7 +238,7 @@ pub fn fork_run(run: &Run, job: &mut Job, jobs: &mut Jobs) -> Result<(), io::Err
     let pid = unsafe {
         match result {
             0 => {
-                job.setup_group_term(unistd::getpid().into());
+                setup_group_term(unistd::getpid().into(), job);
 
                 let redir_fds = run.get_internal_fds();
                 close_extra_fds(&redir_fds);
@@ -297,7 +255,7 @@ pub fn fork_run(run: &Run, job: &mut Job, jobs: &mut Jobs) -> Result<(), io::Err
             n => n,
         }
     };
-    job.setup_group_term(pid);
+    setup_group_term(pid, job);
     // Close any internal FDs (from pipes for instance) in this process.
     let redir_fds = run.get_internal_fds();
     for fd in redir_fds {
@@ -336,7 +294,7 @@ pub fn fork_exec(
                     }
                     Err(err) => send_error_to_parent(output, err), // This call won't return.
                 }
-                job.setup_group_term(unistd::getpid().into());
+                setup_group_term(unistd::getpid().into(), job);
 
                 let err = exec(&program, args, jobs);
                 // This call won't return.
@@ -347,7 +305,7 @@ pub fn fork_exec(
             n => n,
         }
     };
-    job.setup_group_term(pid);
+    setup_group_term(pid, job);
     unsafe {
         libc::close(output);
         // Close any FD for child stdio we don't care about.
@@ -416,7 +374,7 @@ pub fn try_wait_pid(pid: i32, job: &mut Job) -> (bool, Option<i32>) {
             (true, None)
         }
         Ok(WaitStatus::Signaled(pid, signal, _core_dumped)) => {
-            job.process_signaled(pid.into(), signal);
+            job.process_signaled(pid.into(), signal as i32);
             (true, None)
         }
         Ok(WaitStatus::Continued(_)) => (false, None),
@@ -460,6 +418,45 @@ pub fn wait_job(job: &mut Job) -> Option<i32> {
     result
 }
 
+/// Move the job for job_num to te foreground.
+pub fn foreground_job(
+    job: &mut Job,
+    term_settings: &Option<TermSettings>,
+) -> Result<(), io::Error> {
+    let pgid = job.pgid();
+    if let JobStatus::Stopped = job.status() {
+        let ppgid = Pid::from_raw(-pgid);
+        signal::kill(ppgid, Signal::SIGCONT)?;
+        let ppgid = Pid::from_raw(pgid);
+        unistd::tcsetpgrp(STDIN_FILENO, ppgid)?;
+        job.mark_running();
+        wait_job(job);
+        if let Some(term_settings) = term_settings {
+            restore_terminal(term_settings, job.shell_pid())?;
+        }
+    } else {
+        let ppgid = Pid::from_raw(pgid);
+        // The job is running, so no sig cont needed...
+        unistd::tcsetpgrp(libc::STDIN_FILENO, ppgid)?;
+        wait_job(job);
+        if let Some(term_settings) = term_settings {
+            restore_terminal(term_settings, job.shell_pid())?;
+        }
+    }
+    Ok(())
+}
+
+/// Move the job for job_num to te background and running (start a stopped job in the background).
+pub fn background_job(job: &mut Job) -> Result<(), io::Error> {
+    let pgid = job.pgid();
+    if let JobStatus::Stopped = job.status() {
+        let ppgid = Pid::from_raw(-pgid);
+        signal::kill(ppgid, Signal::SIGCONT)?;
+        job.mark_running();
+    }
+    Ok(())
+}
+
 /// Duplicate a raw file descriptor to another file descriptor.
 pub fn dup2_fd(src_fd: i32, dst_fd: i32) -> Result<i32, io::Error> {
     unsafe { cvt(libc::dup2(src_fd, dst_fd)) }
@@ -472,4 +469,53 @@ pub fn pipe() -> Result<(i32, i32), io::Error> {
         cvt(libc::pipe(fds.as_mut_ptr()))?;
     }
     Ok((fds[0], fds[1]))
+}
+
+/// Get the current PID.
+pub fn getpid() -> i32 {
+    unistd::getpid().into()
+}
+
+/// Get the current machines hostname if available.
+pub fn gethostname() -> Option<OsString> {
+    nix::unistd::gethostname().ok()
+}
+
+/// Get current UID of the process.
+pub fn current_uid() -> u32 {
+    Uid::current().into()
+}
+
+/// Get effective UID of the process.
+pub fn effective_uid() -> u32 {
+    Uid::effective().into()
+}
+
+pub fn is_tty(terminal: i32) -> bool {
+    unistd::isatty(terminal).unwrap_or(false)
+}
+
+/// Setup the process group for the current pid as well term if interactive.
+/// Call from both the parent and child proc to avoid race conditions.
+fn setup_group_term(pid: i32, job: &Job) {
+    let pid = Pid::from_raw(pid);
+    let pgid = if job.is_empty() {
+        pid
+    } else {
+        Pid::from_raw(job.pgid())
+    };
+    if job.interactive() {
+        if let Err(_err) = unistd::setpgid(pid, pgid) {
+            // Ignore, do in parent and child.
+        }
+        // XXXX only if foreground
+        if let Err(_err) = unistd::tcsetpgrp(libc::STDIN_FILENO, pgid) {
+            // Ignore, do in parent and child.
+        }
+    } else {
+        // If not interactive then put all procs into the shells process group.
+        if let Err(_err) = unistd::setpgid(pid, Pid::from_raw(job.shell_pid())) {
+            // Ignore, do in parent and child.
+        }
+    }
 }

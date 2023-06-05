@@ -1,13 +1,8 @@
 use crate::command_data::Run;
 use crate::parse::parse_line;
-use crate::unix::{try_wait_pid, wait_job};
-use nix::{
-    libc,
-    sys::{
-        signal::{self, Signal},
-        termios,
-    },
-    unistd::{self, Pid},
+use crate::unix::{
+    background_job, foreground_job, get_term_settings, getpid, restore_terminal, try_wait_pid,
+    OsSignal, TermSettings, STDIN_FILENO,
 };
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
@@ -47,7 +42,7 @@ pub enum PidStatus {
     /// Process had an error, no status code available.  Contains the pid.
     Error(i32),
     /// Process was stopped due to a signal.  Contains the pid and signal that stopped it.
-    Signaled(i32, Signal),
+    Signaled(i32, OsSignal),
 }
 
 impl PidStatus {
@@ -159,7 +154,7 @@ impl Job {
 
     /// Move the process pid to the signaled state.
     /// Will panic if pid is not part of job.
-    pub fn process_signaled(&mut self, pid: i32, signal: Signal) {
+    pub fn process_signaled(&mut self, pid: i32, signal: OsSignal) {
         for proc in self.pids.iter_mut() {
             if proc.pid() == pid {
                 *proc = PidStatus::Signaled(pid, signal);
@@ -175,31 +170,6 @@ impl Job {
         self.names.reverse();
     }
 
-    /// Setup the process group for the current pid as well term if interactive.
-    /// Call from both the parent and child proc to avoid race conditions.
-    pub fn setup_group_term(&self, pid: i32) {
-        let pid = Pid::from_raw(pid);
-        let pgid = if self.is_empty() {
-            pid
-        } else {
-            Pid::from_raw(self.pgid())
-        };
-        if self.interactive {
-            if let Err(_err) = unistd::setpgid(pid, pgid) {
-                // Ignore, do in parent and child.
-            }
-            // XXXX only if foreground
-            if let Err(_err) = unistd::tcsetpgrp(libc::STDIN_FILENO, pgid) {
-                // Ignore, do in parent and child.
-            }
-        } else {
-            // If not interactive then put all procs into the shells process group.
-            if let Err(_err) = unistd::setpgid(pid, Pid::from_raw(self.shell_pid)) {
-                // Ignore, do in parent and child.
-            }
-        }
-    }
-
     /// Set the stealth flag, if true then do NOT print out when a background job ends (be stealthy...).
     pub fn set_stealth(&mut self, stealth: bool) {
         self.stealth = stealth;
@@ -208,6 +178,16 @@ impl Job {
     /// Is this a stealth job (do not report when complete if in the background)?
     pub fn stealth(&self) -> bool {
         self.stealth
+    }
+
+    /// Is this job running in an interactive shell?
+    pub fn interactive(&self) -> bool {
+        self.interactive
+    }
+
+    /// The PID of the shell running this job.
+    pub fn shell_pid(&self) -> i32 {
+        self.shell_pid
     }
 }
 
@@ -226,15 +206,15 @@ pub struct Jobs {
     jobs: Vec<Job>,
     shell_pid: i32,
     interactive: bool,
-    term_settings: Option<termios::Termios>,
+    term_settings: Option<TermSettings>,
     alias: HashMap<String, Run>,
 }
 
 impl Jobs {
     pub fn new(interactive: bool) -> Self {
-        let shell_pid: i32 = unistd::getpid().into();
+        let shell_pid = getpid();
         let term_settings = if interactive {
-            if let Ok(term_setting) = termios::tcgetattr(libc::STDIN_FILENO) {
+            if let Ok(term_setting) = get_term_settings(STDIN_FILENO) {
                 Some(term_setting)
             } else {
                 None
@@ -253,7 +233,7 @@ impl Jobs {
     }
 
     pub fn cap_term(&mut self) {
-        self.term_settings = if let Ok(term_setting) = termios::tcgetattr(libc::STDIN_FILENO) {
+        self.term_settings = if let Ok(term_setting) = get_term_settings(STDIN_FILENO) {
             Some(term_setting)
         } else {
             None
@@ -324,29 +304,10 @@ impl Jobs {
 
     /// Move the job for job_num to te foreground.
     pub fn foreground_job(&mut self, job_num: u32) {
+        let term_settings = self.term_settings.clone();
         if let Some(job) = self.get_job_mut(job_num) {
-            let pgid = job.pgid();
-            if let JobStatus::Stopped = job.status() {
-                let ppgid = Pid::from_raw(-pgid);
-                if let Err(err) = signal::kill(ppgid, Signal::SIGCONT) {
-                    eprintln!("Error sending sigcont to wake up process: {}.", err);
-                } else {
-                    let ppgid = Pid::from_raw(pgid);
-                    if let Err(err) = unistd::tcsetpgrp(libc::STDIN_FILENO, ppgid) {
-                        eprintln!("Error making {pgid} foreground in parent: {err}");
-                    }
-                    job.mark_running();
-                    wait_job(job);
-                    self.restore_terminal();
-                }
-            } else {
-                let ppgid = Pid::from_raw(pgid);
-                // The job is running, so no sig cont needed...
-                if let Err(err) = unistd::tcsetpgrp(libc::STDIN_FILENO, ppgid) {
-                    eprintln!("Error making {pgid} foreground in parent: {err}");
-                }
-                wait_job(job);
-                self.restore_terminal();
+            if let Err(err) = foreground_job(job, &term_settings) {
+                eprintln!("Error making job {job_num} foreground in parent: {err}");
             }
         } else {
             eprintln!("job number {job_num} is invalid");
@@ -355,17 +316,12 @@ impl Jobs {
 
     /// Move the job for job_num to te background and running (start a stopped job in the background).
     pub fn background_job(&mut self, job_num: u32) {
-        let job = self
-            .get_job_mut(job_num)
-            .expect("job number {job_num} is invalid");
-        let pgid = job.pgid();
-        if let JobStatus::Stopped = job.status() {
-            let ppgid = Pid::from_raw(-pgid);
-            if let Err(err) = signal::kill(ppgid, Signal::SIGCONT) {
-                eprintln!("Error sending sigcont to wake up process: {err}.");
-            } else {
-                job.mark_running();
+        if let Some(job) = self.get_job_mut(job_num) {
+            if let Err(err) = background_job(job) {
+                eprintln!("Error making job {job_num} background in parent: {err}");
             }
+        } else {
+            eprintln!("job number {job_num} is invalid");
         }
     }
 
@@ -375,15 +331,8 @@ impl Jobs {
         // Move the shell back into the foreground.
         if let Some(term_settings) = &self.term_settings {
             // Restore terminal settings.
-            if let Err(err) = termios::tcsetattr(0, termios::SetArg::TCSANOW, term_settings) {
+            if let Err(err) = restore_terminal(term_settings, self.shell_pid) {
                 eprintln!("Error resetting shell terminal settings: {}", err);
-            }
-            if let Err(err) = unistd::tcsetpgrp(0, Pid::from_raw(self.shell_pid)) {
-                // XXX TODO- be more specific with this (ie only turn off tty if that is the error)?
-                eprintln!(
-                    "Error making shell (stop pretending to be a tty?) {} foreground: {}",
-                    self.shell_pid, err
-                );
             }
         }
     }

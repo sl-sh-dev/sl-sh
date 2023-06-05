@@ -1,7 +1,7 @@
-use nix::unistd::{self, gethostname, Uid};
 use shell::config::get_config;
 use shell::jobs::Jobs;
 use shell::run::{run_one_command, setup_shell_tty};
+use shell::unix::{current_uid, effective_uid, gethostname, is_tty, set_self_pgroup};
 use sl_liner::Prompt;
 use std::env;
 use std::ffi::OsString;
@@ -11,7 +11,7 @@ fn main() {
     if let Some(config) = get_config() {
         let shell_terminal = 0;
         // See if we are running interactively.
-        let is_tty = unistd::isatty(shell_terminal).unwrap_or(false);
+        let is_tty = is_tty(shell_terminal);
         if config.command.is_none() && config.script.is_none() {
             if is_tty {
                 setup_shell_tty(shell_terminal);
@@ -34,14 +34,8 @@ fn main() {
             let mut jobs = Jobs::new(false);
 
             /* Put ourselves in our own process group.  */
-            let pgid = unistd::getpid();
-            if let Err(err) = unistd::setpgid(pgid, pgid) {
-                match err {
-                    nix::errno::Errno::EPERM => { /* ignore */ }
-                    _ => {
-                        eprintln!("Couldn't put the shell in its own process group: {}\n", err)
-                    }
-                }
+            if let Err(err) = set_self_pgroup() {
+                eprintln!("Couldn't put the shell in its own process group: {err}")
             }
 
             if let Err(err) = run_one_command(&command, &mut jobs) {
@@ -53,12 +47,12 @@ fn main() {
 }
 
 pub fn start_interactive() -> i32 {
-    let uid = Uid::current();
-    let euid = Uid::effective();
+    let uid = current_uid();
+    let euid = effective_uid();
     env::set_var("UID", format!("{}", uid));
     env::set_var("EUID", format!("{}", euid));
     // Initialize the HOST variable
-    let host: OsString = gethostname().ok().unwrap_or_else(|| "???".into());
+    let host: OsString = gethostname().unwrap_or_else(|| "???".into());
     env::set_var("HOST", &host);
     if let Ok(dir) = env::current_dir() {
         env::set_var("PWD", dir);

@@ -9,8 +9,6 @@ use std::os::fd::FromRawFd;
 use std::sync::Arc;
 use std::{env, io};
 
-use nix::unistd::{gethostname, Uid};
-
 use slvm::error::*;
 use slvm::opcodes::*;
 use slvm::value::*;
@@ -36,6 +34,7 @@ use crate::completions::ShellCompleter;
 use crate::liner_rules::make_editor_rules;
 use config::*;
 use debug::*;
+use shell::unix::{current_uid, effective_uid, gethostname};
 use sl_compiler::pass1::pass1;
 use slvm::Value;
 
@@ -532,15 +531,15 @@ fn main() {
             env.set_global_builtin("str-rtrim", str_rtrim);
             env.set_global_builtin("str-ltrim", str_ltrim);
             env.set_global_builtin("str-contains", str_contains);
-            let uid = Uid::current();
-            let euid = Uid::effective();
-            env::set_var("UID", format!("{}", uid));
-            env::set_var("EUID", format!("{}", euid));
-            env.set_named_global("*uid*", Value::UInt32(uid.into()));
-            env.set_named_global("*euid*", Value::UInt32(euid.into()));
+            let uid = current_uid();
+            let euid = effective_uid();
+            env::set_var("UID", format!("{uid}"));
+            env::set_var("EUID", format!("{euid}"));
+            env.set_named_global("*uid*", Value::UInt32(uid));
+            env.set_named_global("*euid*", Value::UInt32(euid));
             env.set_named_global("*last-status*", Value::Int32(0));
             // Initialize the HOST variable
-            let host: OsString = gethostname().ok().unwrap_or_else(|| "???".into());
+            let host: OsString = gethostname().unwrap_or_else(|| "???".into());
             env::set_var("HOST", host);
             if let Ok(dir) = env::current_dir() {
                 env::set_var("PWD", dir);

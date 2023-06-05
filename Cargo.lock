@@ -425,7 +425,6 @@ dependencies = [
  "chrono",
  "compile_state",
  "glob",
- "nix",
  "shell",
  "sl-compiler",
  "sl-liner",
