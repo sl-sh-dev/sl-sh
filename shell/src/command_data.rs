@@ -1,5 +1,5 @@
 use crate::jobs::Jobs;
-use crate::unix::{
+use crate::platform::{
     anon_pipe, close_fd, dup2_fd, fork_run, FileDesc, FromFileDesc, STDIN_FILENO, STDOUT_FILENO,
 };
 use std::collections::HashSet;

@@ -1,5 +1,5 @@
 use crate::command_data::{Arg, CommandWithArgs, Redirects, Run};
-use crate::unix::{FileDesc, STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
+use crate::platform::{FileDesc, STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use std::fmt::{Display, Formatter};
 use std::io;
 use std::io::ErrorKind;

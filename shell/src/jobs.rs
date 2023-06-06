@@ -1,6 +1,6 @@
 use crate::command_data::Run;
 use crate::parse::parse_line;
-use crate::unix::{
+use crate::platform::{
     background_job, foreground_job, get_term_settings, getpid, restore_terminal, try_wait_pid,
     OsSignal, Pid, TermSettings, STDIN_FILENO,
 };

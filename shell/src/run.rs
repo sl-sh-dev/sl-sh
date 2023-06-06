@@ -2,11 +2,11 @@ use crate::builtins::run_builtin;
 use crate::command_data::{CommandWithArgs, Run};
 use crate::jobs::{Job, Jobs};
 use crate::parse::parse_line;
-use crate::signals::{install_sigint_handler, mask_signals};
-use crate::unix::{
+use crate::platform::{
     anon_pipe, fork_exec, fork_run, grab_terminal, set_self_pgroup, terminal_foreground, wait_job,
     FileDesc,
 };
+use crate::signals::{install_sigint_handler, mask_signals};
 use std::{env, io};
 
 pub fn setup_shell_tty(shell_terminal: FileDesc) {

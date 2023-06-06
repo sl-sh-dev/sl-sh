@@ -33,7 +33,9 @@ use crate::completions::ShellCompleter;
 use crate::liner_rules::make_editor_rules;
 use config::*;
 use debug::*;
-use shell::unix::{current_uid, effective_uid, gethostname, FromFileDesc, STDIN_FILENO};
+use shell::platform::{
+    anon_pipe, current_uid, effective_uid, gethostname, FromFileDesc, STDIN_FILENO,
+};
 use sl_compiler::pass1::pass1;
 use slvm::Value;
 
@@ -187,7 +189,7 @@ fn sh_str(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut run = shell::parse::parse_line(&command)
         .map_err(|e| VMError::new_compile(format!("$sh: {e}")))?
         .into_run();
-    let (input, output) = shell::unix::anon_pipe()?;
+    let (input, output) = anon_pipe()?;
     run.push_stdout_front(Some(output));
     let mut fork_res = Ok(0);
     SHELL_ENV.with(|jobs| {

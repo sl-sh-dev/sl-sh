@@ -1,7 +1,9 @@
 use shell::config::get_config;
 use shell::jobs::Jobs;
+use shell::platform::{
+    current_uid, effective_uid, gethostname, is_tty, set_self_pgroup, STDIN_FILENO,
+};
 use shell::run::{run_one_command, setup_shell_tty};
-use shell::unix::{current_uid, effective_uid, gethostname, is_tty, set_self_pgroup, STDIN_FILENO};
 use sl_liner::Prompt;
 use std::env;
 use std::ffi::OsString;
