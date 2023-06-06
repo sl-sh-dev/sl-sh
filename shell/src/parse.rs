@@ -512,6 +512,7 @@ fn read_special_arg(chars: &mut Peekable<Chars>, end_char: Option<char>) -> Resu
             chars.next();
             let r = read_token(chars, Some('}'));
             if let Some('}') = chars.peek() {
+                chars.next();
                 r
             } else {
                 return Err(io::Error::new(ErrorKind::Other, "bad substitution"));
