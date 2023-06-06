@@ -19,7 +19,17 @@ use nix::libc;
 use nix::sys::signal::{self, kill, SigHandler, Signal};
 use nix::sys::termios;
 use nix::sys::wait::{self, WaitPidFlag, WaitStatus};
-use nix::unistd::{self, Pid, Uid};
+use nix::unistd::{self, Uid};
+
+/// Process ID for the target platform.
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Hash, Debug)]
+pub struct Pid(i32);
+
+impl Display for Pid {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 /// Raw file descriptor for the target platform.
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Hash, Debug)]
@@ -99,10 +109,10 @@ pub fn get_term_settings(terminal: FileDesc) -> Result<TermSettings, io::Error> 
 }
 
 /// Restore terminal settings and put the shell back into the foreground.
-pub fn restore_terminal(term_settings: &TermSettings, shell_pid: i32) -> Result<(), io::Error> {
+pub fn restore_terminal(term_settings: &TermSettings, shell_pid: Pid) -> Result<(), io::Error> {
     termios::tcsetattr(0, termios::SetArg::TCSANOW, &term_settings.0)?;
     // XXX TODO- be more specific if the next line fails (ie only turn off tty if that is the error)?
-    unistd::tcsetpgrp(0, Pid::from_raw(shell_pid))?;
+    unistd::tcsetpgrp(0, unistd::Pid::from_raw(shell_pid.0))?;
     Ok(())
 }
 
@@ -280,7 +290,7 @@ pub fn fork_run(run: &Run, job: &mut Job, jobs: &mut Jobs) -> Result<(), io::Err
     let pid = unsafe {
         match result {
             0 => {
-                setup_group_term(unistd::getpid().into(), job);
+                setup_group_term(Pid(unistd::getpid().into()), job);
 
                 let redir_fds = run.get_internal_fds();
                 close_extra_fds(&redir_fds);
@@ -297,7 +307,7 @@ pub fn fork_run(run: &Run, job: &mut Job, jobs: &mut Jobs) -> Result<(), io::Err
             n => n,
         }
     };
-    setup_group_term(pid, job);
+    setup_group_term(Pid(pid), job);
     // Close any internal FDs (from pipes for instance) in this process.
     let redir_fds = run.get_internal_fds();
     for fd in redir_fds {
@@ -305,7 +315,7 @@ pub fn fork_run(run: &Run, job: &mut Job, jobs: &mut Jobs) -> Result<(), io::Err
             let _ = close_fd(fd);
         }
     }
-    job.add_process(pid, format!("{run}"));
+    job.add_process(Pid(pid), format!("{run}"));
     Ok(())
 }
 
@@ -336,7 +346,7 @@ pub fn fork_exec(
                     }
                     Err(err) => send_error_to_parent(output, err), // This call won't return.
                 }
-                setup_group_term(unistd::getpid().into(), job);
+                setup_group_term(Pid(unistd::getpid().into()), job);
 
                 let err = exec(&program, args, jobs);
                 // This call won't return.
@@ -347,7 +357,7 @@ pub fn fork_exec(
             n => n,
         }
     };
-    setup_group_term(pid, job);
+    setup_group_term(Pid(pid), job);
     unsafe {
         libc::close(output);
         // Close any FD for child stdio we don't care about.
@@ -367,7 +377,7 @@ pub fn fork_exec(
     loop {
         match input.read(&mut bytes) {
             Ok(0) => {
-                job.add_process(pid, program.to_string_lossy());
+                job.add_process(Pid(pid), program.to_string_lossy());
                 return Ok(());
             }
             Ok(8) => {
@@ -393,11 +403,11 @@ pub fn fork_exec(
     }
 }
 
-pub fn try_wait_pid(pid: i32, job: &mut Job) -> (bool, Option<i32>) {
+pub fn try_wait_pid(pid: Pid, job: &mut Job) -> (bool, Option<i32>) {
     let mut opts = WaitPidFlag::WUNTRACED;
     opts.insert(WaitPidFlag::WCONTINUED);
     opts.insert(WaitPidFlag::WNOHANG);
-    match wait::waitpid(Pid::from_raw(pid), Some(opts)) {
+    match wait::waitpid(unistd::Pid::from_raw(pid.0), Some(opts)) {
         Err(nix::errno::Errno::ECHILD) => {
             // Does not exist.
             (true, None)
@@ -416,7 +426,7 @@ pub fn try_wait_pid(pid: i32, job: &mut Job) -> (bool, Option<i32>) {
             (true, None)
         }
         Ok(WaitStatus::Signaled(pid, signal, _core_dumped)) => {
-            job.process_signaled(pid.into(), signal as i32);
+            job.process_signaled(Pid(pid.into()), signal as i32);
             (true, None)
         }
         Ok(WaitStatus::Continued(_)) => (false, None),
@@ -437,14 +447,14 @@ pub fn wait_job(job: &mut Job) -> Option<i32> {
         loop {
             if test_clear_sigint() {
                 if int_cnt == 0 {
-                    if let Err(err) = kill(Pid::from_raw(-pgid), Signal::SIGINT) {
+                    if let Err(err) = kill(unistd::Pid::from_raw(-pgid.0), Signal::SIGINT) {
                         eprintln!("ERROR sending SIGINT to child process group {pgid}, {err}");
                     }
                 } else if int_cnt == 1 {
-                    if let Err(err) = kill(Pid::from_raw(-pgid), Signal::SIGTERM) {
+                    if let Err(err) = kill(unistd::Pid::from_raw(-pgid.0), Signal::SIGTERM) {
                         eprintln!("ERROR sending SIGTERM to child process group {pgid}, {err}");
                     }
-                } else if let Err(err) = kill(Pid::from_raw(-pgid), Signal::SIGKILL) {
+                } else if let Err(err) = kill(unistd::Pid::from_raw(-pgid.0), Signal::SIGKILL) {
                     eprintln!("ERROR sending SIGKILL to child process group {pgid}, {err}");
                 }
                 int_cnt += 1;
@@ -467,9 +477,9 @@ pub fn foreground_job(
 ) -> Result<(), io::Error> {
     let pgid = job.pgid();
     if let JobStatus::Stopped = job.status() {
-        let ppgid = Pid::from_raw(-pgid);
+        let ppgid = unistd::Pid::from_raw(-pgid.0);
         signal::kill(ppgid, Signal::SIGCONT)?;
-        let ppgid = Pid::from_raw(pgid);
+        let ppgid = unistd::Pid::from_raw(pgid.0);
         unistd::tcsetpgrp(libc::STDIN_FILENO, ppgid)?;
         job.mark_running();
         wait_job(job);
@@ -477,7 +487,7 @@ pub fn foreground_job(
             restore_terminal(term_settings, job.shell_pid())?;
         }
     } else {
-        let ppgid = Pid::from_raw(pgid);
+        let ppgid = unistd::Pid::from_raw(pgid.0);
         // The job is running, so no sig cont needed...
         unistd::tcsetpgrp(libc::STDIN_FILENO, ppgid)?;
         wait_job(job);
@@ -492,7 +502,7 @@ pub fn foreground_job(
 pub fn background_job(job: &mut Job) -> Result<(), io::Error> {
     let pgid = job.pgid();
     if let JobStatus::Stopped = job.status() {
-        let ppgid = Pid::from_raw(-pgid);
+        let ppgid = unistd::Pid::from_raw(-pgid.0);
         signal::kill(ppgid, Signal::SIGCONT)?;
         job.mark_running();
     }
@@ -505,8 +515,8 @@ pub fn dup2_fd(src_fd: FileDesc, dst_fd: FileDesc) -> Result<FileDesc, io::Error
 }
 
 /// Get the current PID.
-pub fn getpid() -> i32 {
-    unistd::getpid().into()
+pub fn getpid() -> Pid {
+    Pid(unistd::getpid().into())
 }
 
 /// Get the current machines hostname if available.
@@ -530,12 +540,12 @@ pub fn is_tty(terminal: FileDesc) -> bool {
 
 /// Setup the process group for the current pid as well term if interactive.
 /// Call from both the parent and child proc to avoid race conditions.
-fn setup_group_term(pid: i32, job: &Job) {
-    let pid = Pid::from_raw(pid);
+fn setup_group_term(pid: Pid, job: &Job) {
+    let pid = unistd::Pid::from_raw(pid.0);
     let pgid = if job.is_empty() {
         pid
     } else {
-        Pid::from_raw(job.pgid())
+        unistd::Pid::from_raw(job.pgid().0)
     };
     if job.interactive() {
         if let Err(_err) = unistd::setpgid(pid, pgid) {
@@ -547,7 +557,7 @@ fn setup_group_term(pid: i32, job: &Job) {
         }
     } else {
         // If not interactive then put all procs into the shells process group.
-        if let Err(_err) = unistd::setpgid(pid, Pid::from_raw(job.shell_pid())) {
+        if let Err(_err) = unistd::setpgid(pid, unistd::Pid::from_raw(job.shell_pid().0)) {
             // Ignore, do in parent and child.
         }
     }
