@@ -33,9 +33,7 @@ use crate::completions::ShellCompleter;
 use crate::liner_rules::make_editor_rules;
 use config::*;
 use debug::*;
-use shell::platform::{
-    anon_pipe, current_uid, effective_uid, gethostname, FromFileDesc, STDIN_FILENO,
-};
+use shell::platform::{FromFileDesc, Platform, Sys, STDIN_FILENO};
 use sl_compiler::pass1::pass1;
 use slvm::Value;
 
@@ -189,7 +187,7 @@ fn sh_str(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut run = shell::parse::parse_line(&command)
         .map_err(|e| VMError::new_compile(format!("$sh: {e}")))?
         .into_run();
-    let (input, output) = anon_pipe()?;
+    let (input, output) = Sys::anon_pipe()?;
     run.push_stdout_front(Some(output));
     let mut fork_res = Ok(0);
     SHELL_ENV.with(|jobs| {
@@ -532,15 +530,15 @@ fn main() {
             env.set_global_builtin("str-rtrim", str_rtrim);
             env.set_global_builtin("str-ltrim", str_ltrim);
             env.set_global_builtin("str-contains", str_contains);
-            let uid = current_uid();
-            let euid = effective_uid();
+            let uid = Sys::current_uid();
+            let euid = Sys::effective_uid();
             env::set_var("UID", format!("{uid}"));
             env::set_var("EUID", format!("{euid}"));
             env.set_named_global("*uid*", Value::UInt32(uid));
             env.set_named_global("*euid*", Value::UInt32(euid));
             env.set_named_global("*last-status*", Value::Int32(0));
             // Initialize the HOST variable
-            let host: OsString = gethostname().unwrap_or_else(|| "???".into());
+            let host: OsString = Sys::gethostname().unwrap_or_else(|| "???".into());
             env::set_var("HOST", host);
             if let Ok(dir) = env::current_dir() {
                 env::set_var("PWD", dir);

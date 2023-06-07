@@ -1,7 +1,5 @@
 use crate::jobs::Jobs;
-use crate::platform::{
-    anon_pipe, close_fd, dup2_fd, fork_run, FileDesc, FromFileDesc, STDIN_FILENO, STDOUT_FILENO,
-};
+use crate::platform::{FileDesc, FromFileDesc, Platform, Sys, STDIN_FILENO, STDOUT_FILENO};
 use std::collections::HashSet;
 use std::ffi::OsString;
 use std::fmt::{Display, Formatter};
@@ -28,11 +26,11 @@ impl Arg {
         match self {
             Self::Str(val) => Ok(val.clone()),
             Self::Command(run) => {
-                let (input, output) = anon_pipe()?;
+                let (input, output) = Sys::anon_pipe()?;
                 let mut run = run.clone();
                 run.push_stdout_front(Some(output));
                 let mut job = jobs.new_job();
-                fork_run(&run, &mut job, jobs)?;
+                Sys::fork_run(&run, &mut job, jobs)?;
                 let lines = io::BufReader::new(unsafe { File::from_file_desc(input) }).lines();
                 let mut val = String::new();
                 for (i, line) in lines.enumerate() {
@@ -135,20 +133,20 @@ impl RedirType {
         let targ = arg.resolve_arg(jobs)?;
         let source_fd = targ.to_string_lossy();
         if source_fd == "-" {
-            close_fd(dest_fd)?;
+            Sys::close_fd(dest_fd)?;
             Ok(dest_fd)
         } else if source_fd.ends_with('-') {
             match FileDesc::from_str(&source_fd[0..source_fd.len() - 1]) {
                 Ok(source_fd) => {
-                    dup2_fd(source_fd, dest_fd)?;
-                    close_fd(source_fd)?;
+                    Sys::dup2_fd(source_fd, dest_fd)?;
+                    Sys::close_fd(source_fd)?;
                     Ok(dest_fd)
                 }
                 Err(err) => Err(io::Error::new(ErrorKind::Other, err)),
             }
         } else {
             match FileDesc::from_str(&source_fd) {
-                Ok(source_fd) => dup2_fd(source_fd, dest_fd),
+                Ok(source_fd) => Sys::dup2_fd(source_fd, dest_fd),
                 Err(err) => Err(io::Error::new(ErrorKind::Other, err)),
             }
         }
@@ -160,16 +158,16 @@ impl RedirType {
                 let path = arg.resolve_arg(jobs)?;
                 let f = File::open(path)?;
                 // Use as_raw_fd ot nto_raw_fd so f will close when dropped.
-                dup2_fd(f.into(), *fd)?;
+                Sys::dup2_fd(f.into(), *fd)?;
                 Ok(*fd)
             }
             RedirType::In(fd, RedirArg::Fd(arg)) => Self::process_source_fd(*fd, arg, jobs),
             RedirType::InDirect(fd, arg) => {
                 let tdata = arg.resolve_arg(jobs)?;
                 let data = tdata.to_string_lossy();
-                if let Ok((pread, pwrite)) = anon_pipe() {
-                    dup2_fd(pread, *fd)?;
-                    close_fd(pread)?;
+                if let Ok((pread, pwrite)) = Sys::anon_pipe() {
+                    Sys::dup2_fd(pread, *fd)?;
+                    Sys::close_fd(pread)?;
                     unsafe {
                         let mut file = File::from_file_desc(pwrite);
                         if let Err(e) = file.write_all(data.as_bytes()) {
@@ -180,29 +178,29 @@ impl RedirType {
                 Ok(*fd)
             }
             RedirType::In(dest_fd, RedirArg::InternalFd(source_fd)) => {
-                dup2_fd(*source_fd, *dest_fd)
+                Sys::dup2_fd(*source_fd, *dest_fd)
             }
             RedirType::Out(fd, RedirArg::Path(arg)) => {
                 let path = arg.resolve_arg(jobs)?;
                 let f = File::options().append(true).create(true).open(path)?;
                 // Use as_raw_fd ot nto_raw_fd so f will close when dropped.
-                dup2_fd(f.into(), *fd)?;
+                Sys::dup2_fd(f.into(), *fd)?;
                 Ok(*fd)
             }
             RedirType::Out(fd, RedirArg::Fd(arg)) => Self::process_source_fd(*fd, arg, jobs),
             RedirType::Out(dest_fd, RedirArg::InternalFd(source_fd)) => {
-                dup2_fd(*source_fd, *dest_fd)
+                Sys::dup2_fd(*source_fd, *dest_fd)
             }
             RedirType::OutTrunc(fd, RedirArg::Path(arg)) => {
                 let path = arg.resolve_arg(jobs)?;
                 let f = File::create(path)?;
                 // Use as_raw_fd ot nto_raw_fd so f will close when dropped.
-                dup2_fd(f.into(), *fd)?;
+                Sys::dup2_fd(f.into(), *fd)?;
                 Ok(*fd)
             }
             RedirType::OutTrunc(fd, RedirArg::Fd(arg)) => Self::process_source_fd(*fd, arg, jobs),
             RedirType::OutTrunc(dest_fd, RedirArg::InternalFd(source_fd)) => {
-                dup2_fd(*source_fd, *dest_fd)
+                Sys::dup2_fd(*source_fd, *dest_fd)
             }
             RedirType::InOut(fd, RedirArg::Path(arg)) => {
                 let path = arg.resolve_arg(jobs)?;
@@ -213,12 +211,12 @@ impl RedirType {
                     .write(true)
                     .open(path)?;
                 // Use as_raw_fd ot nto_raw_fd so f will close when dropped.
-                dup2_fd(f.into(), *fd)?;
+                Sys::dup2_fd(f.into(), *fd)?;
                 Ok(*fd)
             }
             RedirType::InOut(fd, RedirArg::Fd(arg)) => Self::process_source_fd(*fd, arg, jobs),
             RedirType::InOut(dest_fd, RedirArg::InternalFd(source_fd)) => {
-                dup2_fd(*source_fd, *dest_fd)
+                Sys::dup2_fd(*source_fd, *dest_fd)
             }
         }
     }

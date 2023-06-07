@@ -1,8 +1,6 @@
 use shell::config::get_config;
 use shell::jobs::Jobs;
-use shell::platform::{
-    current_uid, effective_uid, gethostname, is_tty, set_self_pgroup, STDIN_FILENO,
-};
+use shell::platform::{Platform, Sys, STDIN_FILENO};
 use shell::run::{run_one_command, setup_shell_tty};
 use sl_liner::Prompt;
 use std::env;
@@ -13,7 +11,7 @@ fn main() {
     if let Some(config) = get_config() {
         let shell_terminal = STDIN_FILENO;
         // See if we are running interactively.
-        let is_tty = is_tty(shell_terminal);
+        let is_tty = Sys::is_tty(shell_terminal);
         if config.command.is_none() && config.script.is_none() {
             if is_tty {
                 setup_shell_tty(shell_terminal);
@@ -36,7 +34,7 @@ fn main() {
             let mut jobs = Jobs::new(false);
 
             /* Put ourselves in our own process group.  */
-            if let Err(err) = set_self_pgroup() {
+            if let Err(err) = Sys::set_self_pgroup() {
                 eprintln!("Couldn't put the shell in its own process group: {err}")
             }
 
@@ -49,12 +47,12 @@ fn main() {
 }
 
 pub fn start_interactive() -> i32 {
-    let uid = current_uid();
-    let euid = effective_uid();
+    let uid = Sys::current_uid();
+    let euid = Sys::effective_uid();
     env::set_var("UID", format!("{}", uid));
     env::set_var("EUID", format!("{}", euid));
     // Initialize the HOST variable
-    let host: OsString = gethostname().unwrap_or_else(|| "???".into());
+    let host: OsString = Sys::gethostname().unwrap_or_else(|| "???".into());
     env::set_var("HOST", &host);
     if let Ok(dir) = env::current_dir() {
         env::set_var("PWD", dir);

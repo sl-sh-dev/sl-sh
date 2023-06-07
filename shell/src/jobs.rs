@@ -1,9 +1,6 @@
 use crate::command_data::Run;
 use crate::parse::parse_line;
-use crate::platform::{
-    background_job, foreground_job, get_term_settings, getpid, restore_terminal, try_wait_pid,
-    OsSignal, Pid, TermSettings, STDIN_FILENO,
-};
+use crate::platform::{OsSignal, Pid, Platform, Sys, TermSettings, STDIN_FILENO};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::{fmt, io};
@@ -212,9 +209,9 @@ pub struct Jobs {
 
 impl Jobs {
     pub fn new(interactive: bool) -> Self {
-        let shell_pid = getpid();
+        let shell_pid = Sys::getpid();
         let term_settings = if interactive {
-            if let Ok(term_setting) = get_term_settings(STDIN_FILENO) {
+            if let Ok(term_setting) = Sys::get_term_settings(STDIN_FILENO) {
                 Some(term_setting)
             } else {
                 None
@@ -233,7 +230,7 @@ impl Jobs {
     }
 
     pub fn cap_term(&mut self) {
-        self.term_settings = if let Ok(term_setting) = get_term_settings(STDIN_FILENO) {
+        self.term_settings = if let Ok(term_setting) = Sys::get_term_settings(STDIN_FILENO) {
             Some(term_setting)
         } else {
             None
@@ -277,7 +274,7 @@ impl Jobs {
             if let JobStatus::Running = job.status() {
                 let pids: Vec<Pid> = job.pids().iter().map(|s| s.pid()).collect();
                 for pid in &pids {
-                    try_wait_pid(*pid, job);
+                    Sys::try_wait_pid(*pid, job);
                 }
                 let mut done = true;
                 for pid_status in job.pids() {
@@ -306,7 +303,7 @@ impl Jobs {
     pub fn foreground_job(&mut self, job_num: u32) {
         let term_settings = self.term_settings.clone();
         if let Some(job) = self.get_job_mut(job_num) {
-            if let Err(err) = foreground_job(job, &term_settings) {
+            if let Err(err) = Sys::foreground_job(job, &term_settings) {
                 eprintln!("Error making job {job_num} foreground in parent: {err}");
             }
         } else {
@@ -317,7 +314,7 @@ impl Jobs {
     /// Move the job for job_num to te background and running (start a stopped job in the background).
     pub fn background_job(&mut self, job_num: u32) {
         if let Some(job) = self.get_job_mut(job_num) {
-            if let Err(err) = background_job(job) {
+            if let Err(err) = Sys::background_job(job) {
                 eprintln!("Error making job {job_num} background in parent: {err}");
             }
         } else {
@@ -331,7 +328,7 @@ impl Jobs {
         // Move the shell back into the foreground.
         if let Some(term_settings) = &self.term_settings {
             // Restore terminal settings.
-            if let Err(err) = restore_terminal(term_settings, self.shell_pid) {
+            if let Err(err) = Sys::restore_terminal(term_settings, self.shell_pid) {
                 eprintln!("Error resetting shell terminal settings: {}", err);
             }
         }

@@ -2,23 +2,20 @@ use crate::builtins::run_builtin;
 use crate::command_data::{CommandWithArgs, Run};
 use crate::jobs::{Job, Jobs};
 use crate::parse::parse_line;
-use crate::platform::{
-    anon_pipe, fork_exec, fork_run, grab_terminal, set_self_pgroup, terminal_foreground, wait_job,
-    FileDesc,
-};
+use crate::platform::{FileDesc, Platform, Sys};
 use crate::signals::{install_sigint_handler, mask_signals};
 use std::{env, io};
 
 pub fn setup_shell_tty(shell_terminal: FileDesc) {
-    terminal_foreground(shell_terminal);
+    Sys::terminal_foreground(shell_terminal);
 
     mask_signals();
 
-    if let Err(err) = set_self_pgroup() {
+    if let Err(err) = Sys::set_self_pgroup() {
         eprintln!("Couldn't put the shell in its own process group: {}\n", err)
     }
     /* Grab control of the terminal.  */
-    if let Err(err) = grab_terminal(shell_terminal) {
+    if let Err(err) = Sys::grab_terminal(shell_terminal) {
         eprintln!("Couldn't grab control of terminal: {err}");
         return;
     }
@@ -31,7 +28,7 @@ pub fn setup_shell_tty(shell_terminal: FileDesc) {
 fn finish_run(background: bool, mut job: Job, jobs: &mut Jobs) -> i32 {
     job.mark_running();
     let status = if !background {
-        if let Some(status) = wait_job(&mut job) {
+        if let Some(status) = Sys::wait_job(&mut job) {
             env::set_var("LAST_STATUS", format!("{}", status));
             status
         } else {
@@ -71,7 +68,7 @@ fn run_command(
                 None => {
                     let mut job = jobs.new_job();
                     job.set_stealth(stealth);
-                    match fork_exec(command, &mut job, jobs) {
+                    match Sys::fork_exec(command, &mut job, jobs) {
                         Ok(()) => finish_run(background, job, jobs),
                         Err(err) => {
                             // Make sure we restore the terminal...
@@ -135,7 +132,7 @@ pub fn run_job(run: &Run, jobs: &mut Jobs, force_background: bool) -> Result<i32
         Run::Subshell(sub_run) => {
             let mut job = jobs.new_job();
             job.set_stealth(force_background);
-            match fork_run(sub_run, &mut job, jobs) {
+            match Sys::fork_run(sub_run, &mut job, jobs) {
                 Ok(()) => finish_run(false, job, jobs),
                 Err(err) => {
                     // Make sure we restore the terminal...
@@ -178,16 +175,16 @@ fn pipe_command(
             }
             match alias_run {
                 Run::Command(command) | Run::BackgroundCommand(command) => {
-                    fork_exec(&command, job, jobs)?;
+                    Sys::fork_exec(&command, job, jobs)?;
                 }
                 _ => {
-                    fork_run(&alias_run, job, jobs)?;
+                    Sys::fork_run(&alias_run, job, jobs)?;
                 }
             }
         } else {
             command.push_stdin_front(next_in);
             command.push_stdout_front(next_out);
-            fork_exec(&command, job, jobs)?;
+            Sys::fork_exec(&command, job, jobs)?;
         }
     }
     Ok(())
@@ -195,7 +192,7 @@ fn pipe_command(
 
 fn run_pipe(new_job: &[Run], job: &mut Job, jobs: &mut Jobs) -> Result<bool, io::Error> {
     let progs = new_job.len();
-    let (p_in, p_out) = anon_pipe()?;
+    let (p_in, p_out) = Sys::anon_pipe()?;
     let mut next_in = Some(p_in);
     let mut next_out = None;
     let mut upcoming_out = p_out;
@@ -216,7 +213,7 @@ fn run_pipe(new_job: &[Run], job: &mut Job, jobs: &mut Jobs) -> Result<bool, io:
                 program.push_stdin_front(next_in);
                 program.push_stdout_front(next_out);
                 if let Run::Subshell(sub_run) = &mut program {
-                    match fork_run(&*sub_run, job, jobs) {
+                    match Sys::fork_run(&*sub_run, job, jobs) {
                         Ok(()) => {
                             jobs.restore_terminal();
                         }
@@ -239,7 +236,7 @@ fn run_pipe(new_job: &[Run], job: &mut Job, jobs: &mut Jobs) -> Result<bool, io:
         }
         next_out = Some(upcoming_out);
         if i < (progs - 1) {
-            let (p_in, p_out) = anon_pipe()?;
+            let (p_in, p_out) = Sys::anon_pipe()?;
             upcoming_out = p_out;
             next_in = Some(p_in);
         } else {
