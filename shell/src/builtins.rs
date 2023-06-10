@@ -1,8 +1,132 @@
 use crate::command_data::Arg;
 use crate::jobs::Jobs;
+use crate::platform::{Platform, RLimit, RLimitVals, Sys};
+use std::collections::HashSet;
 use std::env;
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
+
+fn set_arg_flags<S: AsRef<str>>(
+    args: &mut HashSet<char>,
+    allowed: &str,
+    arg: S,
+) -> Result<(), String> {
+    let mut arg = arg.as_ref().chars();
+    arg.next(); // Skip over the leading '-'
+    for c in arg {
+        if allowed.contains(c) {
+            args.insert(c);
+        } else {
+            return Err(format!("invalid arg {c}"));
+        }
+    }
+    Ok(())
+}
+
+fn ulimit_parm_list(args: &HashSet<char>) -> Result<Vec<RLimit>, String> {
+    let mut limits = Vec::new();
+    for ch in args {
+        match ch {
+            'H' | 'S' | 'a' => {}
+            'b' => limits.push(RLimit::SocketBufferSize),
+            'c' => limits.push(RLimit::CoreSize),
+            'd' => limits.push(RLimit::DataSize),
+            'e' => limits.push(RLimit::Nice),
+            'f' => limits.push(RLimit::FileSize),
+            'i' => limits.push(RLimit::SigPending),
+            'k' => limits.push(RLimit::KQueues),
+            'l' => limits.push(RLimit::MemLock),
+            'm' => limits.push(RLimit::RSS),
+            'n' => limits.push(RLimit::MaxFiles),
+            //'p' => limits.push(RLimit::SocketBufferSize),
+            'q' => limits.push(RLimit::MessageQueueByte),
+            'r' => limits.push(RLimit::RealTimePriority),
+            's' => limits.push(RLimit::StackSize),
+            't' => limits.push(RLimit::CpuTime),
+            'u' => limits.push(RLimit::MaxProcs),
+            'v' => limits.push(RLimit::MaxMemory),
+            'x' => limits.push(RLimit::MaxFileLocks),
+            'P' => limits.push(RLimit::MaxPtty),
+            'R' => limits.push(RLimit::MaxRealTime),
+            'T' => limits.push(RLimit::MaxThreads),
+            _ => return Err(format!("unknown option {ch}")),
+        }
+    }
+    Ok(limits)
+}
+
+fn ulimit<I>(args: I, _jobs: &mut Jobs) -> i32
+where
+    I: Iterator<Item = OsString>,
+{
+    let mut args_flags = HashSet::new();
+    let mut limit = None;
+    for arg in args {
+        if arg.to_string_lossy().starts_with('-') {
+            if let Err(err) = set_arg_flags(
+                &mut args_flags,
+                "SHabcdefiklmnpqrstuvxPT",
+                arg.to_string_lossy(),
+            ) {
+                eprintln!("ulimit: {err}");
+                eprintln!("ulimit: usage: ulimit [-SHabcdefiklmnpqrstuvxPRT] [limit]");
+                return 1;
+            }
+        } else if limit.is_none() {
+            limit = Some(arg.to_string_lossy().to_string());
+        } else {
+            eprintln!("ulimit: invalid parameters");
+            eprintln!("ulimit: usage: ulimit [-SHabcdefiklmnpqrstuvxPT] [limit]");
+            return 1;
+        }
+    }
+    let limits = match ulimit_parm_list(&args_flags) {
+        Ok(limits) => limits,
+        Err(err) => {
+            eprintln!("ulimit: {err}");
+            eprintln!("ulimit: usage: ulimit [-SHabcdefiklmnpqrstuvxPRT] [limit]");
+            return 1;
+        }
+    };
+    if let Some(limit) = limit {
+        let limit = match limit.as_ref() {
+            "unlimited" => u64::MAX,
+            _ => match limit.parse() {
+                Ok(limit) => limit,
+                Err(_err) => {
+                    eprintln!("ulimit: invalid limit");
+                    return 1;
+                }
+            },
+        };
+        let vals = RLimitVals {
+            current: limit,
+            max: limit,
+        };
+        for l in limits {
+            if let Err(err) = Sys::set_rlimit(l, vals) {
+                eprintln!("ulimit: {err}");
+                return 1;
+            }
+        }
+    } else {
+        for l in limits {
+            match Sys::get_rlimit(l) {
+                Ok(lim) => {
+                    match (lim.current, lim.max) {
+                        (u64::MAX, u64::MAX) => println!("unlimited"),
+                        (u64::MAX, max) => println!("unlimited/{max}"), // WTF...
+                        (current, u64::MAX) => println!("{current}/unlimited"),
+                        (current, max) if current == max => println!("{current}"),
+                        (current, max) => println!("{current}/{max}"),
+                    }
+                }
+                Err(err) => eprintln!("ulimit: {err}"),
+            }
+        }
+    }
+    0
+}
 
 pub fn cd(arg: Option<PathBuf>) -> i32 {
     let home: OsString = match env::var_os("HOME") {
@@ -270,6 +394,10 @@ where
         "unalias" => {
             let args: Vec<OsString> = args.collect();
             unalias(args.into_iter(), jobs)
+        }
+        "ulimit" => {
+            let args: Vec<OsString> = args.collect();
+            ulimit(args.into_iter(), jobs)
         }
         _ => return None,
     };

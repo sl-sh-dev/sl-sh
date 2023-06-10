@@ -72,9 +72,10 @@ pub type FileDesc = <Sys as Platform>::FileDesc;
 pub type TermSettings = <Sys as Platform>::TermSettings;
 
 /// Holder for setting or getting rlimits (get/setrlimit).
+#[derive(Copy, Clone, Debug)]
 pub struct RLimitVals {
-    current: u64,
-    max: u64,
+    pub current: u64,
+    pub max: u64,
 }
 
 /// Abstraction over the various rlimits.

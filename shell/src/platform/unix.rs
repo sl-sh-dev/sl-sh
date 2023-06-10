@@ -387,14 +387,14 @@ impl Platform for Sys {
     }
 
     fn get_rlimit(rlimit: RLimit) -> Result<RLimitVals, io::Error> {
-        let val = libc::rlimit {
+        let mut val = libc::rlimit {
             rlim_cur: 0,
             rlim_max: 0,
         };
         unsafe {
-            cvt(libc::setrlimit(
+            cvt(libc::getrlimit(
                 rlimit_to_c(rlimit)?,
-                &val as *const libc::rlimit,
+                &mut val as *mut libc::rlimit,
             ))?;
         }
         Ok(RLimitVals {
