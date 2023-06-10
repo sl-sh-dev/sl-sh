@@ -3,7 +3,7 @@ use std::convert::TryInto;
 use std::ffi::{c_char, CString, OsStr, OsString};
 use std::fmt::{Display, Formatter};
 use std::fs::File;
-use std::io::{self, ErrorKind, Read, Write};
+use std::io::{self, Error, ErrorKind, Read, Write};
 use std::os::fd::{IntoRawFd, RawFd};
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::io::FromRawFd;
@@ -13,7 +13,7 @@ use std::str::FromStr;
 use crate::command_data::{Arg, CommandWithArgs, Run};
 use crate::glob::{expand_glob, GlobOutput};
 use crate::jobs::{Job, JobStatus, Jobs};
-use crate::platform::{FromFileDesc, Platform};
+use crate::platform::{FromFileDesc, Platform, RLimit, RLimitVals};
 use crate::run::run_job;
 use crate::signals::test_clear_sigint;
 use nix::libc;
@@ -371,6 +371,37 @@ impl Platform for Sys {
     fn is_tty(terminal: UnixFileDesc) -> bool {
         unistd::isatty(terminal.0).unwrap_or(false)
     }
+
+    fn set_rlimit(rlimit: RLimit, values: RLimitVals) -> Result<(), io::Error> {
+        let val = libc::rlimit {
+            rlim_cur: values.current,
+            rlim_max: values.max,
+        };
+        unsafe {
+            cvt(libc::setrlimit(
+                rlimit_to_c(rlimit)?,
+                &val as *const libc::rlimit,
+            ))?;
+        }
+        Ok(())
+    }
+
+    fn get_rlimit(rlimit: RLimit) -> Result<RLimitVals, io::Error> {
+        let val = libc::rlimit {
+            rlim_cur: 0,
+            rlim_max: 0,
+        };
+        unsafe {
+            cvt(libc::setrlimit(
+                rlimit_to_c(rlimit)?,
+                &val as *const libc::rlimit,
+            ))?;
+        }
+        Ok(RLimitVals {
+            current: val.rlim_cur,
+            max: val.rlim_max,
+        })
+    }
 }
 
 /// Process ID for the target platform.
@@ -565,5 +596,111 @@ fn setup_group_term(pid: UnixPid, job: &Job) {
         if let Err(_err) = unistd::setpgid(pid, unistd::Pid::from_raw(job.shell_pid().0)) {
             // Ignore, do in parent and child.
         }
+    }
+}
+
+fn rlimit_to_c(rlimit: RLimit) -> Result<libc::__rlimit_resource_t, io::Error> {
+    match rlimit {
+        #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
+        RLimit::SocketBufferSize => Ok(libc::RLIMIT_SBSIZE),
+        #[cfg(not(any(target_os = "freebsd", target_os = "dragonfly")))]
+        RLimit::SocketBufferSize => Err(Error::new(ErrorKind::Unsupported, "not on platform")),
+        RLimit::CoreSize => Ok(libc::RLIMIT_CORE),
+        RLimit::DataSize => Ok(libc::RLIMIT_DATA),
+        #[cfg(any(target_os = "android", target_os = "linux"))]
+        RLimit::Nice => Ok(libc::RLIMIT_NICE),
+        #[cfg(not(any(target_os = "android", target_os = "linux")))]
+        RLimit::Nice => Err(Error::new(ErrorKind::Unsupported, "not on platform")),
+        RLimit::FileSize => Ok(libc::RLIMIT_FSIZE),
+        #[cfg(any(target_os = "android", target_os = "linux"))]
+        RLimit::SigPending => Ok(libc::RLIMIT_SIGPENDING),
+        #[cfg(not(any(target_os = "android", target_os = "linux")))]
+        RLimit::SigPending => Err(Error::new(ErrorKind::Unsupported, "not on platform")),
+        #[cfg(target_os = "freebsd")]
+        RLimit::KQueues => Ok(libc::RLIMIT_KQUEUESA),
+        #[cfg(not(target_os = "freebsd"))]
+        RLimit::KQueues => Err(Error::new(ErrorKind::Unsupported, "not on platform")),
+        #[cfg(any(
+            target_os = "android",
+            target_os = "freebsd",
+            target_os = "openbsd",
+            target_os = "linux",
+            target_os = "netbsd"
+        ))]
+        RLimit::MemLock => Ok(libc::RLIMIT_MEMLOCK),
+        #[cfg(not(any(
+            target_os = "android",
+            target_os = "freebsd",
+            target_os = "openbsd",
+            target_os = "linux",
+            target_os = "netbsd"
+        )))]
+        RLimit::MemLock => Err(Error::new(ErrorKind::Unsupported, "not on platform")),
+        #[cfg(any(
+            target_os = "android",
+            target_os = "freebsd",
+            target_os = "openbsd",
+            target_os = "linux",
+            target_os = "netbsd"
+        ))]
+        RLimit::RSS => Ok(libc::RLIMIT_RSS),
+        #[cfg(not(any(
+            target_os = "android",
+            target_os = "freebsd",
+            target_os = "openbsd",
+            target_os = "linux",
+            target_os = "netbsd"
+        )))]
+        RLimit::RSS => Err(Error::new(ErrorKind::Unsupported, "not on platform")),
+        RLimit::MaxFiles => Ok(libc::RLIMIT_NOFILE),
+        //RLimit::PipeBufferSize => {}
+        #[cfg(any(target_os = "android", target_os = "linux"))]
+        RLimit::MessageQueueByte => Ok(libc::RLIMIT_MSGQUEUE),
+        #[cfg(not(any(target_os = "android", target_os = "linux")))]
+        RLimit::MessageQueueByte => Err(Error::new(ErrorKind::Unsupported, "not on platform")),
+        #[cfg(any(target_os = "android", target_os = "linux"))]
+        RLimit::RealTimePriority => Ok(libc::RLIMIT_RTPRIO),
+        #[cfg(not(any(target_os = "android", target_os = "linux")))]
+        RLimit::RealTimePriority => Err(Error::new(ErrorKind::Unsupported, "not on platform")),
+        RLimit::StackSize => Ok(libc::RLIMIT_STACK),
+        RLimit::CpuTime => Ok(libc::RLIMIT_CPU),
+        #[cfg(any(
+            target_os = "android",
+            target_os = "freebsd",
+            target_os = "openbsd",
+            target_os = "linux",
+            target_os = "netbsd"
+        ))]
+        RLimit::MaxProcs => Ok(libc::RLIMIT_NPROC),
+        #[cfg(not(any(
+            target_os = "android",
+            target_os = "freebsd",
+            target_os = "openbsd",
+            target_os = "linux",
+            target_os = "netbsd"
+        )))]
+        RLimit::MaxProcs => Err(Error::new(ErrorKind::Unsupported, "not on platform")),
+        #[cfg(not(any(target_os = "freebsd", target_os = "netbsd", target_os = "openbsd")))]
+        RLimit::MaxMemory => Ok(libc::RLIMIT_AS),
+        #[cfg(target_os = "freebsd")]
+        RLimit::MaxMemory => Ok(libc::RLIMIT_VMEM),
+        #[cfg(any(target_os = "netbsd", target_os = "openbsd"))]
+        RLimit::MaxMemory => Err(Error::new(ErrorKind::Unsupported, "not on platform")),
+        #[cfg(any(target_os = "android", target_os = "linux"))]
+        RLimit::MaxFileLocks => Ok(libc::RLIMIT_LOCKS),
+        #[cfg(not(any(target_os = "android", target_os = "linux")))]
+        RLimit::MaxFileLocks => Err(Error::new(ErrorKind::Unsupported, "not on platform")),
+        #[cfg(target_os = "freebsd")]
+        RLimit::MaxPtty => Ok(libc::RLIMIT_NPTS),
+        #[cfg(not(target_os = "freebsd"))]
+        RLimit::MaxPtty => Err(Error::new(ErrorKind::Unsupported, "not on platform")),
+        #[cfg(any(target_os = "linux"))]
+        RLimit::MaxRealTime => Ok(libc::RLIMIT_RTTIME),
+        #[cfg(not(any(target_os = "linux")))]
+        RLimit::MaxRealTime => Err(Error::new(ErrorKind::Unsupported, "not on platform")),
+        #[cfg(any(target_os = "linux"))]
+        RLimit::MaxThreads => Ok(libc::RLIMIT_NPROC),
+        #[cfg(not(any(target_os = "linux")))]
+        RLimit::MaxThreads => Err(Error::new(ErrorKind::Unsupported, "not on platform")),
     }
 }
