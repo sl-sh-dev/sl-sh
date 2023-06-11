@@ -1,5 +1,6 @@
 use crate::SloshVm;
 use slvm::{Interned, VMError, VMResult, Value};
+use std::io::{stdout, Write};
 
 fn is_sym(vm: &SloshVm, name: &str, intern: Interned) -> bool {
     if let Some(i) = vm.get_if_interned(name) {
@@ -178,6 +179,7 @@ pub fn pr(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     for v in registers {
         print!("{}", pretty_value(vm, *v));
     }
+    stdout().flush()?;
     Ok(Value::Nil)
 }
 

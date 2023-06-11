@@ -3,7 +3,7 @@ extern crate sl_liner;
 use std::cell::RefCell;
 use std::env::VarError;
 use std::ffi::OsString;
-use std::fs::File;
+use std::fs::{create_dir_all, File};
 use std::io::{BufRead, ErrorKind};
 use std::sync::Arc;
 use std::{env, io};
@@ -85,7 +85,7 @@ fn load_one_expression(
 }
 
 fn load_internal(vm: &mut SloshVm, name: &'static str) -> VMResult<Value> {
-    let file = std::fs::File::open(name)?;
+    let file = std::fs::File::open(name).map_err(|e| VMError::new("io", format!("{name}: {e}")))?;
 
     let mut last = Value::Nil;
     let mut reader = Reader::from_file(file, vm, name, 1, 0);
@@ -509,6 +509,46 @@ fn get_prompt(env: &mut SloshVm) -> String {
     }
 }
 
+fn load_sloshrc() {
+    if let Ok(mut rcfile) = env::var("HOME") {
+        if rcfile.ends_with('/') {
+            rcfile.push_str(".config/slosh/sloshrc");
+        } else {
+            rcfile.push_str("/.config/slosh/sloshrc");
+        }
+        ENV.with(|renv| {
+            let mut env = renv.borrow_mut();
+            let script = env.intern(&rcfile);
+            let script = env.get_interned(script);
+            match load_internal(&mut env, script) {
+                Ok(res) => println!("{}", res.display_value(&env)),
+                Err(err) => println!("ERROR: {err}"),
+            }
+        });
+    }
+}
+
+fn history_file() -> String {
+    let mut share_dir = if let Ok(mut home) = env::var("HOME") {
+        if home.ends_with('/') {
+            home.push_str(".local/share/slosh");
+        } else {
+            home.push_str("/.local/share/slosh");
+        }
+        home
+    } else {
+        "./.local/share/slosh".to_string()
+    };
+    if let Err(err) = create_dir_all(&share_dir) {
+        eprintln!(
+            "WARNING: Unable to create share directory: {}- {}",
+            share_dir, err
+        );
+    }
+    share_dir.push_str("/history");
+    share_dir
+}
+
 fn main() {
     if let Some(config) = get_config() {
         ENV.with(|renv| {
@@ -545,6 +585,7 @@ fn main() {
             }
         });
         if config.command.is_none() && config.script.is_none() {
+            load_sloshrc();
             let mut con = Context::new();
             //con.set_completer(Box::new(FilenameCompleter::new(Some("."))));
             con.set_completer(Box::new(ShellCompleter::new()));
@@ -564,7 +605,7 @@ fn main() {
             //Box::new(keymap::Emacs::new())
             con.set_keymap(Box::new(vi));
 
-            if let Err(e) = con.history.set_file_name_and_load_history("history") {
+            if let Err(e) = con.history.set_file_name_and_load_history(&history_file()) {
                 println!("Error loading history: {e}");
             }
             shell::run::setup_shell_tty(STDIN_FILENO);
@@ -673,7 +714,9 @@ fn exec_expression(res: String, env: &mut SloshVm) {
                     debug(env);
                 } else {
                     let reg = env.get_stack(0);
-                    println!("{}", display_value(env, reg));
+                    if !reg.is_nil() {
+                        println!("{}", display_value(env, reg));
+                    }
                 }
             }
         }
