@@ -390,26 +390,46 @@ fn consume_whitespace(chars: &mut Peekable<Chars>) {
     }
 }
 
-/// Read string surrounded by quote (typically " or ').  Assumes chars is on the open quote and
+/// Read string surrounded by single quote (').  Assumes chars is on the open quote and
 /// consumes the end quote.
-fn read_string(chars: &mut Peekable<Chars>, quote: char) -> Result<Arg, io::Error> {
+/// This simply reads the chars until the next ' and puts them in a String Arg.
+/// Note, can not produce a string containing a ' character.
+fn read_simple_string(chars: &mut Peekable<Chars>) -> Result<Arg, io::Error> {
+    let mut res = String::new();
+    let mut next_ch = chars.peek().copied();
+    while let Some(ch) = next_ch {
+        if ch == '\'' {
+            chars.next();
+            return Ok(Arg::QuotedStr(res.into()));
+        }
+        chars.next();
+        res.push(ch);
+        next_ch = chars.peek().copied();
+    }
+    Err(io::Error::new(ErrorKind::Other, "unclosed string"))
+}
+
+/// Read string surrounded by quote (").  Assumes chars is on the open quote and
+/// consumes the end quote.
+/// This version will handle interpolation and escape chars.
+fn read_string(chars: &mut Peekable<Chars>) -> Result<Arg, io::Error> {
     let mut res = String::new();
     let mut arg = None;
     let mut next_ch = chars.peek().copied();
     while let Some(ch) = next_ch {
-        if ch == quote {
+        if ch == '"' {
             chars.next();
             if let Some(Arg::Compound(mut args)) = arg {
                 if !res.is_empty() {
-                    args.push(Arg::Str(res.into()));
+                    args.push(Arg::QuotedStr(res.into()));
                 }
                 return Ok(Arg::Compound(args));
             } else {
-                return Ok(Arg::Str(res.into()));
+                return Ok(Arg::QuotedStr(res.into()));
             }
-        } else if ch == '$' && quote == '"' {
+        } else if ch == '$' {
             chars.next();
-            let spec_arg = read_special_arg(chars, Some(quote))?;
+            let spec_arg = read_special_arg(chars, Some('"'))?;
             if let Some(Arg::Compound(mut args)) = arg {
                 if !res.is_empty() {
                     args.push(Arg::Str(res.into()));
@@ -419,7 +439,7 @@ fn read_string(chars: &mut Peekable<Chars>, quote: char) -> Result<Arg, io::Erro
                 arg = Some(Arg::Compound(args));
             } else {
                 let args = if !res.is_empty() {
-                    vec![Arg::Str(res.into()), spec_arg]
+                    vec![Arg::QuotedStr(res.into()), spec_arg]
                 } else {
                     vec![spec_arg]
                 };
@@ -477,9 +497,13 @@ fn read_arg(chars: &mut Peekable<Chars>, end_char_in: Option<char>) -> Result<Ar
                 args.push(next_arg);
             }
             next_ch = chars.peek().copied();
-        } else if (ch == '"' || ch == '\'') && ch != end_char {
-            chars.next(); // Consume opening quote.
-            args.push(read_string(chars, ch)?);
+        } else if ch == '\'' && ch != end_char {
+            chars.next(); // Advance to opening quote.
+            args.push(read_simple_string(chars)?);
+            next_ch = chars.peek().copied();
+        } else if ch == '"' && ch != end_char {
+            chars.next(); // Advance to opening quote.
+            args.push(read_string(chars)?);
             next_ch = chars.peek().copied();
         } else if !ch.is_whitespace() && !end_set.contains(&ch) {
             chars.next();
@@ -555,11 +579,17 @@ fn parse_line_inner(
             state.proc_token();
         } else {
             match ch {
-                '\'' | '"' if state.last_ch != '\\' => {
+                '\'' if state.last_ch != '\\' => {
                     state.proc_token();
-                    let str_arg = read_string(chars, ch)?;
+                    let str_arg = read_simple_string(chars)?;
                     state.command().push_arg(str_arg);
-                    state.command().stop_compound_arg();
+                    state.command().start_compound_arg();
+                }
+                '"' if state.last_ch != '\\' => {
+                    state.proc_token();
+                    let str_arg = read_string(chars)?;
+                    state.command().push_arg(str_arg);
+                    state.command().start_compound_arg();
                 }
                 '|' => {
                     state.pipe_or(ch, next_char);
@@ -613,6 +643,10 @@ fn parse_line_inner(
                 }
                 '$' => state.special_arg(chars, end_char)?,
                 _ => {
+                    if state.last_ch == '\\' {
+                        // Last char was a backslash and seems unremarkable so put it in the token.
+                        state.token().push('\\');
+                    }
                     state.token().push(ch);
                     state.last_ch = ch;
                 }

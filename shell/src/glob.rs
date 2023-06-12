@@ -69,6 +69,7 @@ fn remove_escapes(pat: &str) -> String {
                     ret.push('\\');
                 }
                 ret.push(ch);
+                last_esc = false;
             }
         }
     }

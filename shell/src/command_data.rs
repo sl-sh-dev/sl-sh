@@ -13,6 +13,8 @@ use std::{env, io};
 pub enum Arg {
     /// Single string arg.
     Str(OsString),
+    /// Single string arg, was a quoted string (no globbing).
+    QuotedStr(OsString),
     /// A command to run to get the string arg.
     Command(Run),
     /// Env variable to use to set the arg.
@@ -25,6 +27,7 @@ impl Arg {
     pub fn resolve_arg(&self, jobs: &mut Jobs) -> io::Result<OsString> {
         match self {
             Self::Str(val) => Ok(val.clone()),
+            Self::QuotedStr(val) => Ok(val.clone()),
             Self::Command(run) => {
                 let (input, output) = Sys::anon_pipe()?;
                 let mut run = run.clone();
@@ -64,6 +67,7 @@ impl Display for Arg {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Str(os_str) => write!(f, "{}", os_str.to_string_lossy()),
+            Self::QuotedStr(os_str) => write!(f, "{}", os_str.to_string_lossy()),
             Self::Command(run) => write!(f, "$({run})"),
             Self::Var(var) => write!(f, "${}", var.to_string_lossy()),
             Self::Compound(cargs) => {

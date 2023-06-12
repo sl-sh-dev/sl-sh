@@ -501,6 +501,18 @@ fn arg_into_args<S: AsRef<OsStr>>(
     args_t.push(arg);
 }
 
+fn try_globbing(arg: &Arg) -> bool {
+    if let Arg::Str(_) = arg {
+        return true;
+    }
+    if let Arg::Compound(args) = arg {
+        if let Some(arg) = args.last() {
+            return try_globbing(arg);
+        }
+    }
+    false
+}
+
 fn exec<'arg, I, P>(program: P, args: I, jobs: &mut Jobs) -> Result<(), io::Error>
 where
     I: IntoIterator<Item = &'arg Arg>,
@@ -511,13 +523,17 @@ where
     let mut argv = vec![program.as_ptr(), ptr::null()];
     let mut args_t = vec![program.clone()];
     for arg in args {
-        match expand_glob(arg.resolve_arg(jobs)?) {
-            GlobOutput::Arg(arg) => arg_into_args(arg, &mut argv, &mut args_t, &mut saw_nul),
-            GlobOutput::Args(args) => {
-                for arg in args {
-                    arg_into_args(arg, &mut argv, &mut args_t, &mut saw_nul)
+        if try_globbing(arg) {
+            match expand_glob(arg.resolve_arg(jobs)?) {
+                GlobOutput::Arg(arg) => arg_into_args(arg, &mut argv, &mut args_t, &mut saw_nul),
+                GlobOutput::Args(args) => {
+                    for arg in args {
+                        arg_into_args(arg, &mut argv, &mut args_t, &mut saw_nul)
+                    }
                 }
             }
+        } else {
+            arg_into_args(arg.resolve_arg(jobs)?, &mut argv, &mut args_t, &mut saw_nul);
         }
     }
 
