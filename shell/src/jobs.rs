@@ -2,8 +2,9 @@ use crate::command_data::Run;
 use crate::parse::parse_line;
 use crate::platform::{OsSignal, Pid, Platform, Sys, TermSettings, STDIN_FILENO};
 use std::collections::HashMap;
+use std::ffi::{OsStr, OsString};
 use std::fmt::{Display, Formatter};
-use std::{fmt, io};
+use std::{env, fmt, io};
 
 /// Status of a Job.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -205,6 +206,7 @@ pub struct Jobs {
     interactive: bool,
     term_settings: Option<TermSettings>,
     alias: HashMap<String, Run>,
+    local_vars: HashMap<OsString, OsString>,
 }
 
 impl Jobs {
@@ -226,6 +228,7 @@ impl Jobs {
             interactive,
             term_settings,
             alias: HashMap::new(),
+            local_vars: HashMap::new(),
         }
     }
 
@@ -371,6 +374,33 @@ impl Jobs {
     pub fn print_all_alias(&self) {
         for (name, value) in &self.alias {
             println!("alias {name}='{value}'");
+        }
+    }
+
+    /// Set a local var into key.
+    /// Will overwrite an existing value.
+    pub fn set_local_var(&mut self, key: OsString, val: OsString) {
+        self.local_vars.insert(key, val);
+    }
+
+    /// Get the local var key or None if does not exist.
+    pub fn get_local_var(&self, key: &OsStr) -> Option<&OsStr> {
+        self.local_vars.get(key).map(|s| s as &OsStr)
+    }
+
+    /// Remove the local var key.
+    /// If key exists returns the removed value.
+    pub fn remove_local_var(&mut self, key: &OsStr) -> Option<OsString> {
+        self.local_vars.remove(key)
+    }
+
+    /// First tries to fin key in the environment then checks local variable and returns None if
+    /// not found.
+    pub fn get_env_or_local_var(&self, key: &OsStr) -> Option<OsString> {
+        if let Some(val) = env::var_os(key) {
+            Some(val)
+        } else {
+            self.get_local_var(key).map(|val| val.to_os_string())
         }
     }
 }

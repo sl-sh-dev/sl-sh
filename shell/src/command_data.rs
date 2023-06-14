@@ -4,9 +4,9 @@ use std::collections::HashSet;
 use std::ffi::OsString;
 use std::fmt::{Display, Formatter};
 use std::fs::File;
+use std::io;
 use std::io::{BufRead, ErrorKind, Write};
 use std::str::FromStr;
-use std::{env, io};
 
 /// Arg to a command, either a direct string or a sub command to run to get the arg.
 #[derive(Clone, Debug)]
@@ -46,7 +46,7 @@ impl Arg {
                 Ok(val.into())
             }
             Self::Var(var_name) => {
-                if let Some(val) = env::var_os(var_name) {
+                if let Some(val) = jobs.get_env_or_local_var(var_name) {
                     Ok(val)
                 } else {
                     Ok("".into())

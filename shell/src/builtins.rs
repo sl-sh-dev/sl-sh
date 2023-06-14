@@ -242,31 +242,38 @@ fn cd_expand_all_dots(cd: PathBuf) -> PathBuf {
     }
 }
 
-fn export(arg: OsString, arg2: Option<OsString>) -> i32 {
-    let arg = arg.to_string_lossy();
-    if !arg.contains('=') {
-        eprintln!("export: VAR_NAME=VALUE");
+fn export(key: OsString, val: OsString) -> i32 {
+    let key_str = key.to_string_lossy();
+    if key.is_empty() || key_str.contains('=') || key_str.contains('\0') {
+        eprintln!("export: Invalid key");
         return 1;
     }
-    let mut key_val = arg.split('=');
-    if let Some(key) = key_val.next() {
-        if let Some(val) = key_val.next() {
-            if val.is_empty() {
-                if let Some(val) = arg2 {
-                    env::set_var(key, val);
-                }
-            } else {
-                env::set_var(key, val);
-            }
-            0
-        } else {
-            eprintln!("export: VAR_NAME=VALUE");
-            1
-        }
-    } else {
-        eprintln!("export: VAR_NAME=VALUE");
-        1
+    let val_str = val.to_string_lossy();
+    if val_str.contains('\0') {
+        eprintln!("export: Invalid val (contains NUL character ('\\0')'");
+        return 1;
     }
+    env::set_var(key, val);
+    0
+}
+
+fn set_var(jobs: &mut Jobs, key: OsString, val: OsString) -> i32 {
+    let key_str = key.to_string_lossy();
+    if key.is_empty() || key_str.contains('=') || key_str.contains('\0') {
+        eprintln!("export: Invalid key");
+        return 1;
+    }
+    let val_str = val.to_string_lossy();
+    if val_str.contains('\0') {
+        eprintln!("export: Invalid val (contains NUL character ('\\0')'");
+        return 1;
+    }
+    if env::var_os(&key).is_some() {
+        env::set_var(key, val);
+    } else {
+        jobs.set_local_var(key, val);
+    }
+    0
 }
 
 fn alias<I>(args: I, jobs: &mut Jobs) -> i32
@@ -328,7 +335,8 @@ where
     I: Iterator<Item = &'arg Arg>,
 {
     let mut args = args.map(|v| v.resolve_arg(jobs).unwrap_or_default());
-    let status = match &*command.to_string_lossy() {
+    let command_str = command.to_string_lossy();
+    let status = match &*command_str {
         "cd" => {
             let arg = args.next();
             if args.next().is_none() {
@@ -380,13 +388,58 @@ where
             }
         }
         "export" => {
-            if let Some(arg) = args.next() {
-                export(arg, args.next())
-            } else {
-                eprintln!("export: VAR_NAME=VALUE");
-                1
+            fn split_export<S: AsRef<str>>(arg: S) -> i32 {
+                let arg = arg.as_ref();
+                let mut key_val = arg.split('=');
+                if let (Some(key), Some(val), None) =
+                    (key_val.next(), key_val.next(), key_val.next())
+                {
+                    export(key.into(), val.into())
+                } else {
+                    eprintln!("export: VAR_NAME=VALUE");
+                    1
+                }
+            }
+            let ceq: OsString = "=".into();
+            match (args.next(), args.next(), args.next(), args.next()) {
+                (Some(arg), None, None, None) => {
+                    if arg.to_string_lossy().contains('=') {
+                        split_export(arg.to_string_lossy())
+                    } else {
+                        if let Some(val) = jobs.remove_local_var(&arg) {
+                            env::set_var(arg, val)
+                        }
+                        0
+                    }
+                }
+                (Some(arg1), Some(arg2), None, None) => {
+                    let arg = arg1.to_string_lossy() + arg2.to_string_lossy();
+                    split_export(arg)
+                }
+                (Some(arg), Some(eq), Some(val), None) if eq == ceq => export(arg, val),
+                _ => {
+                    eprintln!("export: VAR_NAME=VALUE");
+                    1
+                }
             }
         }
+        "unset" => match (args.next(), args.next()) {
+            (Some(key), None) => {
+                let key_str = key.to_string_lossy();
+                if key.is_empty() || key_str.contains('=') || key_str.contains('\x00') {
+                    eprintln!("unset: Invalid key");
+                    1
+                } else {
+                    jobs.remove_local_var(&key);
+                    env::remove_var(key);
+                    0
+                }
+            }
+            _ => {
+                eprintln!("unset: VAR_NAME");
+                1
+            }
+        },
         "alias" => {
             let args: Vec<OsString> = args.collect();
             alias(args.into_iter(), jobs)
@@ -399,7 +452,27 @@ where
             let args: Vec<OsString> = args.collect();
             ulimit(args.into_iter(), jobs)
         }
-        _ => return None,
+        // Check for VAR_NAME=val before returning.
+        _ => match (args.next(), args.next()) {
+            (None, None) if command_str.contains('=') => {
+                let mut key_val = command_str.split('=');
+                if let (Some(key), Some(val), None) =
+                    (key_val.next(), key_val.next(), key_val.next())
+                {
+                    set_var(jobs, key.into(), val.into())
+                } else {
+                    return None;
+                }
+            }
+            (Some(val), None) if command_str.ends_with('=') => {
+                if let Some(key) = command_str.strip_suffix('=') {
+                    set_var(jobs, key.into(), val)
+                } else {
+                    return None;
+                }
+            }
+            _ => return None,
+        },
     };
     Some(status)
 }
