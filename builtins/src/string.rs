@@ -1,4 +1,5 @@
 use crate::SloshVm;
+use compile_state::state::SloshVmTrait;
 use slvm::{VMError, VMResult, Value};
 
 pub fn str_trim(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
@@ -60,4 +61,12 @@ pub fn str_contains(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
             "str-contains: Invalid arguments".to_string(),
         ))
     }
+}
+
+pub fn add_str_builtins(env: &mut SloshVm) {
+    env.set_global_builtin("str-replace", str_replace);
+    env.set_global_builtin("str-trim", str_trim);
+    env.set_global_builtin("str-rtrim", str_rtrim);
+    env.set_global_builtin("str-ltrim", str_ltrim);
+    env.set_global_builtin("str-contains", str_contains);
 }

@@ -1,4 +1,5 @@
 use crate::SloshVm;
+use compile_state::state::SloshVmTrait;
 use slvm::{Interned, VMError, VMResult, Value};
 use std::io::{stdout, Write};
 
@@ -210,4 +211,10 @@ pub fn dasm(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         }
         _ => Err(VMError::new_vm("DASM: Not a callable.")),
     }
+}
+
+pub fn add_print_builtins(env: &mut SloshVm) {
+    env.set_global_builtin("pr", pr);
+    env.set_global_builtin("prn", prn);
+    env.set_global_builtin("dasm", dasm);
 }

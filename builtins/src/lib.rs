@@ -1,5 +1,5 @@
-use compile_state::state::{SloshVm, SloshVmTrait};
-use slvm::{VMError, VMResult, Value};
+use compile_state::state::{CompileEnvironment, SloshVm, SloshVmTrait};
+use slvm::{CallFuncSig, VMError, VMResult, Value};
 
 pub mod collections;
 pub mod print;
@@ -84,4 +84,31 @@ pub fn gensym(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let sym_idx = vm.env_mut().next_gensym();
     let sym = vm.intern(&format!("#<SYM:{line}:{sym_idx}>"));
     Ok(Value::Symbol(sym))
+}
+
+pub fn add_builtin(
+    env: &mut SloshVm,
+    name: &str,
+    func: CallFuncSig<CompileEnvironment>,
+    doc_string: &str,
+) {
+    let si = env.set_global_builtin(name, func);
+    let key = env.intern("doc-string");
+    let s = env.alloc_string(doc_string.to_string());
+    env.set_global_property(si, key, s);
+}
+
+pub fn add_docstring(env: &mut SloshVm, name: &str, doc_string: &str) {
+    let si = env.set_named_global(name, Value::Undefined);
+    let key = env.intern("doc-string");
+    let s = env.alloc_string(doc_string.to_string());
+    env.set_global_property(si, key, s);
+}
+
+pub fn add_misc_builtins(env: &mut SloshVm) {
+    env.set_global_builtin("get-prop", get_prop);
+    env.set_global_builtin("set-prop", set_prop);
+    env.set_global_builtin("sizeof-heap-object", sizeof_heap_object);
+    env.set_global_builtin("sizeof-value", sizeof_value);
+    env.set_global_builtin("gensym", gensym);
 }
