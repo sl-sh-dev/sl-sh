@@ -634,7 +634,7 @@ fn read_string(chars: &mut Peekable<Chars>) -> Result<Arg, io::Error> {
 
 fn read_token(chars: &mut Peekable<Chars>, end_char: Option<char>) -> String {
     let end_char = end_char.unwrap_or(' ');
-    let end_set = ['"', '\'', '$', '|', ';', '&', '<', '>', '(', end_char];
+    let end_set = ['"', '\'', '$', '|', ';', '&', '<', '>', '(', ':', end_char];
     let mut res = String::new();
     let mut next_ch = chars.peek();
     while let Some(ch) = next_ch {

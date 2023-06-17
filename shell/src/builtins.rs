@@ -253,6 +253,11 @@ fn export(key: OsString, val: OsString) -> i32 {
         eprintln!("export: Invalid val (contains NUL character ('\\0')'");
         return 1;
     }
+    let val = if val.to_string_lossy().contains('~') {
+        expand_tilde(val.into()).into()
+    } else {
+        val
+    };
     env::set_var(key, val);
     0
 }
