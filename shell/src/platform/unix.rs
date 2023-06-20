@@ -22,6 +22,8 @@ use nix::sys::termios;
 use nix::sys::wait::{self, WaitPidFlag, WaitStatus};
 use nix::unistd::{self, Uid};
 
+pub mod umask;
+
 pub struct Sys {}
 impl Platform for Sys {
     type Pid = UnixPid;

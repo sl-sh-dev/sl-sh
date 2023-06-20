@@ -1,5 +1,8 @@
 use crate::command_data::Arg;
 use crate::jobs::Jobs;
+use crate::platform::umask::{
+    get_and_clear_umask, merge_and_set_umask, set_umask, to_octal_string,
+};
 use crate::platform::{Platform, RLimit, RLimitVals, Sys};
 use std::collections::HashSet;
 use std::env;
@@ -262,6 +265,40 @@ fn export(key: OsString, val: OsString) -> i32 {
     0
 }
 
+fn umask(mask_str: Option<OsString>) -> i32 {
+    let umask = get_and_clear_umask();
+    if let Some(arg) = mask_str {
+        match merge_and_set_umask(umask, &arg.to_string_lossy()) {
+            Ok(_umask) => 0,
+            Err(e) => {
+                eprintln!("umask: {e}");
+                // Set the umask back.
+                if let Err(e) = set_umask(umask) {
+                    eprintln!("umask: {e}");
+                }
+                1
+            }
+        }
+    } else {
+        // put umask back, no change
+        if let Err(e) = set_umask(umask) {
+            eprintln!("umask: {e}");
+            1
+        } else {
+            match to_octal_string(umask) {
+                Ok(ostr) => {
+                    println!("{ostr}");
+                    0
+                }
+                Err(e) => {
+                    eprintln!("umask: {e}");
+                    1
+                }
+            }
+        }
+    }
+}
+
 fn set_var(jobs: &mut Jobs, key: OsString, val: OsString) -> i32 {
     let key_str = key.to_string_lossy();
     if key.is_empty() || key_str.contains('=') || key_str.contains('\0') {
@@ -428,6 +465,13 @@ where
                 }
             }
         }
+        "umask" => match (args.next(), args.next()) {
+            (arg, None) => umask(arg),
+            _ => {
+                eprintln!("umask: takes one optional argument");
+                1
+            }
+        },
         "unset" => match (args.next(), args.next()) {
             (Some(key), None) => {
                 let key_str = key.to_string_lossy();
