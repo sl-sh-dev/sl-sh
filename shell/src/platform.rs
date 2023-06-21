@@ -1,10 +1,11 @@
-pub mod unix;
+mod unix;
 
 use crate::command_data::{CommandWithArgs, Run};
 use crate::jobs::{Job, Jobs};
 pub use crate::platform::unix::*;
 use std::ffi::OsString;
 use std::io;
+use std::io::ErrorKind;
 
 /// Abstraction for a "platform" (for instance Unix or Windows).
 pub trait Platform {
@@ -13,22 +14,22 @@ pub trait Platform {
     type TermSettings;
 
     /// If terminal is a terminal then get it's term settings.
-    fn get_term_settings(terminal: UnixFileDesc) -> Result<TermSettings, io::Error>;
+    fn get_term_settings(terminal: FileDesc) -> Result<TermSettings, io::Error>;
     /// Restore terminal settings and put the shell back into the foreground.
-    fn restore_terminal(term_settings: &TermSettings, shell_pid: UnixPid) -> Result<(), io::Error>;
+    fn restore_terminal(term_settings: &TermSettings, shell_pid: Pid) -> Result<(), io::Error>;
     /// Put terminal in the foreground, loop until this succeeds.
     /// Used during shell startup.
-    fn terminal_foreground(terminal: UnixFileDesc);
+    fn terminal_foreground(terminal: FileDesc);
     /// Puts the running process into its own process group.
     /// Do this during shell initialization.
     fn set_self_pgroup() -> Result<(), io::Error>;
     /// Grab control of terminal.
     /// Used for shell startup.
-    fn grab_terminal(terminal: UnixFileDesc) -> Result<(), io::Error>;
+    fn grab_terminal(terminal: FileDesc) -> Result<(), io::Error>;
     /// Return the input and output file descriptors for an anonymous pipe.
-    fn anon_pipe() -> Result<(UnixFileDesc, UnixFileDesc), io::Error>;
-    /// Close a raw Unix file descriptor.
-    fn close_fd(fd: UnixFileDesc) -> Result<(), io::Error>;
+    fn anon_pipe() -> Result<(FileDesc, FileDesc), io::Error>;
+    /// Close a raw file descriptor.
+    fn close_fd(fd: FileDesc) -> Result<(), io::Error>;
 
     fn fork_run(run: &Run, job: &mut Job, jobs: &mut Jobs) -> Result<(), io::Error>;
     fn fork_exec(
@@ -36,7 +37,7 @@ pub trait Platform {
         job: &mut Job,
         jobs: &mut Jobs,
     ) -> Result<(), io::Error>;
-    fn try_wait_pid(pid: UnixPid, job: &mut Job) -> (bool, Option<i32>);
+    fn try_wait_pid(pid: Pid, job: &mut Job) -> (bool, Option<i32>);
     fn wait_job(job: &mut Job) -> Option<i32>;
     /// Move the job for job_num to te foreground.
     fn foreground_job(job: &mut Job, term_settings: &Option<TermSettings>)
@@ -44,32 +45,54 @@ pub trait Platform {
     /// Move the job for job_num to te background and running (start a stopped job in the background).
     fn background_job(job: &mut Job) -> Result<(), io::Error>;
     /// Duplicate a raw file descriptor to another file descriptor.
-    fn dup2_fd(src_fd: UnixFileDesc, dst_fd: UnixFileDesc) -> Result<UnixFileDesc, io::Error>;
+    fn dup2_fd(src_fd: FileDesc, dst_fd: FileDesc) -> Result<FileDesc, io::Error>;
     /// Get the current PID.
-    fn getpid() -> UnixPid;
+    fn getpid() -> Pid;
     /// Get the current machines hostname if available.
     fn gethostname() -> Option<OsString>;
     /// Get current UID of the process.
     fn current_uid() -> u32;
     /// Get effective UID of the process.
     fn effective_uid() -> u32;
-    fn is_tty(terminal: UnixFileDesc) -> bool;
+    fn is_tty(terminal: FileDesc) -> bool;
 
     fn set_rlimit(rlimit: RLimit, values: RLimitVals) -> Result<(), io::Error>;
     fn get_rlimit(rlimit: RLimit) -> Result<RLimitVals, io::Error>;
+
+    // umask operations, these can be NoOps if platform does not have umasks.
+    /// If mask_string is a mode string then merge it with umask and set the current umask.
+    /// If mask_string is an int then treat it as a umask and set the current umask (no merge)).
+    fn merge_and_set_umask(current_umask: u32, mask_string: &str) -> Result<u32, io::Error>;
+    /// Cears the current umask and returns the previous umask.
+    fn get_and_clear_umask() -> u32;
+    /// Set current umask to umask.
+    fn set_umask(umask: u32) -> Result<(), io::Error>;
+    /// Convert mode to the octal string umask format.
+    fn to_octal_string(mode: u32) -> Result<String, io::Error> {
+        let mut octal = format!("{:o}", mode);
+        if octal.len() < 4 {
+            while octal.len() < 4 {
+                octal = "0".to_owned() + &octal;
+            }
+            Ok(octal)
+        } else {
+            let msg = format!("encountered invalid umask {octal}.");
+            Err(io::Error::new(ErrorKind::Other, msg))
+        }
+    }
 }
+
+pub type Pid = <Sys as Platform>::Pid;
+pub type FileDesc = <Sys as Platform>::FileDesc;
+pub type TermSettings = <Sys as Platform>::TermSettings;
 
 /// Trait to turn a UnixFileDesc into another object (like File).
 pub trait FromFileDesc {
     /// Constructs a new instance of Self from the given UnixFileDesc.
     /// # Safety
     /// The fd passed in must be a valid and open file descriptor.
-    unsafe fn from_file_desc(fd: UnixFileDesc) -> Self;
+    unsafe fn from_file_desc(fd: FileDesc) -> Self;
 }
-
-pub type Pid = <Sys as Platform>::Pid;
-pub type FileDesc = <Sys as Platform>::FileDesc;
-pub type TermSettings = <Sys as Platform>::TermSettings;
 
 /// Holder for setting or getting rlimits (get/setrlimit).
 #[derive(Copy, Clone, Debug)]

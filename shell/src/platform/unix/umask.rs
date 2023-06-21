@@ -14,20 +14,6 @@ static NIX_PERMISSIONS: &[Mode] = &[
     Mode::S_IXOTH,
 ];
 
-/// Convert mode to the octal string umask format.
-pub fn to_octal_string(mode: u32) -> Result<String, io::Error> {
-    let mut octal = format!("{:o}", mode);
-    if octal.len() < 4 {
-        while octal.len() < 4 {
-            octal = "0".to_owned() + &octal;
-        }
-        Ok(octal)
-    } else {
-        let msg = format!("encountered invalid umask {octal}.");
-        Err(io::Error::new(ErrorKind::Other, msg))
-    }
-}
-
 fn get_class(str: &str) -> Result<u32, io::Error> {
     if str.is_empty() {
         Ok(0b111111111)

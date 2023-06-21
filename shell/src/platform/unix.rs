@@ -22,7 +22,7 @@ use nix::sys::termios;
 use nix::sys::wait::{self, WaitPidFlag, WaitStatus};
 use nix::unistd::{self, Uid};
 
-pub mod umask;
+mod umask;
 
 pub struct Sys {}
 impl Platform for Sys {
@@ -403,6 +403,18 @@ impl Platform for Sys {
             current: val.rlim_cur,
             max: val.rlim_max,
         })
+    }
+
+    fn merge_and_set_umask(current_umask: u32, mask_string: &str) -> Result<u32, Error> {
+        umask::merge_and_set_umask(current_umask, mask_string)
+    }
+
+    fn get_and_clear_umask() -> u32 {
+        umask::get_and_clear_umask()
+    }
+
+    fn set_umask(umask: u32) -> Result<(), Error> {
+        umask::set_umask(umask)
     }
 }
 
