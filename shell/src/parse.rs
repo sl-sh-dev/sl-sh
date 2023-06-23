@@ -153,10 +153,57 @@ impl ParseState {
         result
     }
 
+    fn expand_braces(&mut self, token: &str) {
+        let mut well_formed = false;
+        let mut open = 0;
+        let mut close = 0;
+        let mut last_idx = 0;
+        let mut options = vec![];
+        let mut open_braces = 0;
+        let mut last_ch = ' ';
+        for (i, ch) in token.chars().enumerate() {
+            if ch == '{' && last_ch != '\\' {
+                if open_braces == 0 {
+                    open = i;
+                    last_idx = i;
+                }
+                open_braces += 1;
+            }
+            if open_braces == 1 && ch == ',' && last_ch != '\\' {
+                options.push(&token[last_idx + 1..i]);
+                last_idx = i;
+            }
+            if ch == '}' && last_ch != '\\' {
+                if open_braces == 1 {
+                    close = i;
+                    if !options.is_empty() {
+                        options.push(&token[last_idx + 1..i]);
+                        well_formed = true;
+                        break;
+                    }
+                }
+                open_braces -= 1;
+            }
+
+            last_ch = ch;
+        }
+        if well_formed {
+            let prefix = &token[0..open];
+            let suffix = &token[close + 1..];
+            for middle in options {
+                let new_token = format!("{prefix}{middle}{suffix}");
+                self.expand_braces(&new_token);
+            }
+        } else {
+            self.command().push_arg(Arg::Str(token.into()));
+        }
+    }
+
     fn proc_token(&mut self) {
         let token = self.take_token();
         if !token.is_empty() {
-            self.command().push_arg(Arg::Str(token.into()));
+            self.expand_braces(&token);
+            //self.command().push_arg(Arg::Str(token.into()));
             self.command().stop_compound_arg();
         }
     }
@@ -732,6 +779,8 @@ fn parse_line_inner(
     end_char: Option<char>,
 ) -> Result<ParsedJob, io::Error> {
     let mut state = ParseState::new();
+    let mut dquote = false;
+    let mut squote = false;
     while let Some(ch) = chars.next() {
         if let Some(end_ch) = end_char {
             if ch == end_ch {
@@ -739,22 +788,62 @@ fn parse_line_inner(
             }
         }
         let next_char = *chars.peek().unwrap_or(&' ');
-        if ch.is_whitespace() {
+        if ch.is_whitespace() && !(dquote || squote) {
             state.proc_token();
+            consume_whitespace(chars);
+        } else if dquote || squote {
+            if dquote && ch == '"' {
+                dquote = false;
+            } else if squote && ch == '\'' {
+                squote = false;
+            } else {
+                state.token().push(ch);
+                state.last_ch = ch;
+            }
         } else {
             match ch {
-                '\'' if state.last_ch != '\\' => {
-                    state.proc_token();
+                // Have an opening single or double quote.
+                '\'' if state.last_ch != '\\' && state.token().is_empty() => {
                     let str_arg = read_simple_string(chars)?;
                     state.command().push_arg(str_arg);
                     state.command().start_compound_arg();
                 }
-                '"' if state.last_ch != '\\' => {
-                    state.proc_token();
+                '"' if state.last_ch != '\\' && state.token().is_empty() => {
                     let str_arg = read_string(chars)?;
                     state.command().push_arg(str_arg);
                     state.command().start_compound_arg();
                 }
+
+                // Have a quote embedded in a token.
+                '\'' if state.last_ch != '\\' => {
+                    match (dquote, squote) {
+                        (true, _) => {
+                            state.token().push(ch);
+                        }
+                        (_, false) => {
+                            squote = true;
+                        }
+                        (_, true) => {
+                            squote = false;
+                        }
+                    }
+                    state.last_ch = ch;
+                }
+                '"' if state.last_ch != '\\' => {
+                    match (squote, dquote) {
+                        (true, _) => {
+                            state.token().push(ch);
+                        }
+                        (_, false) => {
+                            dquote = true;
+                        }
+                        (_, true) => {
+                            dquote = false;
+                        }
+                    }
+                    state.last_ch = ch;
+                }
+
                 '|' => {
                     state.pipe_or(ch, next_char);
                 }
@@ -790,7 +879,7 @@ fn parse_line_inner(
                         state.last_ch = ch;
                     }
                 }
-                '(' => {
+                '(' if state.last_ch != '\\' => {
                     state.proc_token();
                     state.end_command(false);
                     let mut sub = parse_line_inner(chars, Some(')'))?;
@@ -807,10 +896,10 @@ fn parse_line_inner(
                 }
                 '$' => state.special_arg(chars, end_char)?,
                 _ => {
-                    if state.last_ch == '\\' {
+                    /*if state.last_ch == '\\' {
                         // Last char was a backslash and seems unremarkable so put it in the token.
                         state.token().push('\\');
-                    }
+                    }*/
                     state.token().push(ch);
                     state.last_ch = ch;
                 }
