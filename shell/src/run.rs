@@ -149,7 +149,7 @@ pub fn run_job(run: &Run, jobs: &mut Jobs, force_background: bool) -> Result<i32
 pub fn run_one_command(command: &str, jobs: &mut Jobs) -> Result<i32, io::Error> {
     // Try to make sense out of whatever crap we get (looking at you fzf-tmux)
     // and make it work.
-    let commands = parse_line(command)?;
+    let commands = parse_line(jobs, command)?;
 
     run_job(commands.commands(), jobs, false)
 }

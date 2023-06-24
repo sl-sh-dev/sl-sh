@@ -6,7 +6,7 @@ use shell::platform::{FromFileDesc, Platform, Sys};
 use slvm::{VMError, VMResult, Value};
 use std::env::VarError;
 use std::fs::File;
-use std::io::BufRead;
+use std::io::{BufRead, ErrorKind};
 use std::{env, io};
 
 fn sh(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
@@ -22,12 +22,18 @@ fn sh(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if command.is_empty() {
         return Err(VMError::new_compile("sh: empty command"));
     }
-    let run = shell::parse::parse_line(&command)
+    let mut fork_res = Ok(0);
+    let mut run_res = Err(io::Error::new(ErrorKind::Other, "broken parse"));
+    SHELL_ENV.with(|jobs_ref| {
+        let jobs = &mut jobs_ref.borrow_mut();
+        run_res = shell::parse::parse_line(jobs, &command)
+    });
+    let run = run_res
         .map_err(|e| VMError::new_compile(format!("sh: {e}")))?
         .into_run();
-    let mut fork_res = Ok(0);
-    SHELL_ENV.with(|jobs| {
-        fork_res = shell::run::run_job(&run, &mut jobs.borrow_mut(), false);
+    SHELL_ENV.with(|jobs_ref| {
+        let jobs = &mut jobs_ref.borrow_mut();
+        fork_res = shell::run::run_job(&run, jobs, false);
     });
     fork_res
         .map(Value::Int32)
@@ -47,14 +53,20 @@ fn sh_str(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if command.is_empty() {
         return Err(VMError::new_compile("$sh: empty command"));
     }
-    let mut run = shell::parse::parse_line(&command)
+    let mut fork_res = Ok(0);
+    let mut run_res = Err(io::Error::new(ErrorKind::Other, "broken parse"));
+    SHELL_ENV.with(|jobs_ref| {
+        let jobs = &mut jobs_ref.borrow_mut();
+        run_res = shell::parse::parse_line(jobs, &command)
+    });
+    let mut run = run_res
         .map_err(|e| VMError::new_compile(format!("$sh: {e}")))?
         .into_run();
     let (input, output) = Sys::anon_pipe()?;
     run.push_stdout_front(Some(output));
-    let mut fork_res = Ok(0);
-    SHELL_ENV.with(|jobs| {
-        fork_res = shell::run::run_job(&run, &mut jobs.borrow_mut(), true);
+    SHELL_ENV.with(|jobs_ref| {
+        let jobs = &mut jobs_ref.borrow_mut();
+        fork_res = shell::run::run_job(&run, jobs, true);
     });
     fork_res.map_err(|e| VMError::new_compile(format!("$sh: {e}")))?;
     let lines = io::BufReader::new(unsafe { File::from_file_desc(input) }).lines();

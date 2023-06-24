@@ -1,4 +1,5 @@
 use crate::command_data::{Arg, CommandWithArgs, Redirects, Run};
+use crate::jobs::Jobs;
 use crate::platform::{FileDesc, STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use std::fmt::{Display, Formatter};
 use std::io;
@@ -254,6 +255,7 @@ impl ParseState {
 
     fn redir_out(
         &mut self,
+        jobs: &mut Jobs,
         chars: &mut Peekable<Chars>,
         end_char: Option<char>,
     ) -> Result<(), io::Error> {
@@ -288,7 +290,7 @@ impl ParseState {
         if next_char == '>' {
             chars.next();
             consume_whitespace(chars);
-            let fd_arg = read_arg(chars, end_char)?;
+            let fd_arg = read_arg(jobs, chars, end_char)?;
             self.stdio.set_out_path(out_fd, fd_arg, false);
             self.last_ch = ' ';
         } else {
@@ -296,7 +298,7 @@ impl ParseState {
                 chars.next(); // Consume the &
             }
             consume_whitespace(chars);
-            let fd_arg = read_arg(chars, end_char)?;
+            let fd_arg = read_arg(jobs, chars, end_char)?;
             if next_char == '&' {
                 self.stdio.set_out_fd(out_fd, fd_arg, true);
             } else {
@@ -312,6 +314,7 @@ impl ParseState {
 
     fn redir_in(
         &mut self,
+        jobs: &mut Jobs,
         chars: &mut Peekable<Chars>,
         end_char: Option<char>,
     ) -> Result<(), io::Error> {
@@ -341,7 +344,7 @@ impl ParseState {
         if next_char == '<' {
             chars.next();
             consume_whitespace(chars);
-            let fd_arg = read_arg(chars, end_char)?;
+            let fd_arg = read_arg(jobs, chars, end_char)?;
             self.last_ch = ' ';
             self.stdio.set_in_direct(in_fd, fd_arg);
         } else if next_char == '>' {
@@ -352,7 +355,7 @@ impl ParseState {
                 chars.next(); // Consume the &
             }
             consume_whitespace(chars);
-            let fd_arg = read_arg(chars, end_char)?;
+            let fd_arg = read_arg(jobs, chars, end_char)?;
             self.last_ch = ' ';
             if next_char == '&' {
                 self.stdio.set_in_out_fd(in_fd, fd_arg);
@@ -364,7 +367,7 @@ impl ParseState {
                 chars.next(); // Consume the &
             }
             consume_whitespace(chars);
-            let fd_arg = read_arg(chars, end_char)?;
+            let fd_arg = read_arg(jobs, chars, end_char)?;
             self.last_ch = ' ';
             if next_char == '&' {
                 self.stdio.set_in_fd(in_fd, fd_arg, true);
@@ -375,27 +378,24 @@ impl ParseState {
         Ok(())
     }
 
-    fn special_arg(
+    fn expand_var_or_command(
         &mut self,
+        jobs: &mut Jobs,
         chars: &mut Peekable<Chars>,
         end_char: Option<char>,
-    ) -> Result<(), io::Error> {
+    ) -> Result<String, io::Error> {
         if let Some('(') = chars.peek() {
             // Subshell to capture
             chars.next();
-            self.proc_token();
-            let mut sub = parse_line_inner(chars, Some(')'))?;
+            let mut sub = parse_line_inner(jobs, chars, Some(')'))?;
             if let Some(sub) = sub.commands.take() {
-                self.command().push_run_arg(sub);
-            }
-            if chars.peek().unwrap_or(&' ').is_whitespace() {
-                self.command().stop_compound_arg();
-            } else {
-                self.command().start_compound_arg();
+                return Ok(Arg::Command(sub)
+                    .resolve_arg(jobs)?
+                    .to_string_lossy()
+                    .to_string());
             }
         } else {
             // Env var
-            self.proc_token();
             let name = if let Some('{') = chars.peek() {
                 chars.next();
                 let r = read_token(chars, Some('}'));
@@ -409,15 +409,13 @@ impl ParseState {
                 read_token(chars, end_char)
             };
             if !name.is_empty() {
-                self.command().push_env_var_arg(name.into());
-            }
-            if chars.peek().unwrap_or(&' ').is_whitespace() {
-                self.command().stop_compound_arg();
-            } else {
-                self.command().start_compound_arg();
+                return Ok(Arg::Var(name.into())
+                    .resolve_arg(jobs)?
+                    .to_string_lossy()
+                    .to_string());
             }
         }
-        Ok(())
+        Ok("".to_string())
     }
 }
 
@@ -559,7 +557,7 @@ fn read_utf_scalar(chars: &mut Peekable<Chars>) -> Result<char, io::Error> {
 /// Read string surrounded by quote (").  Assumes chars is on the open quote and
 /// consumes the end quote.
 /// This version will handle interpolation and escape chars.
-fn read_string(chars: &mut Peekable<Chars>) -> Result<Arg, io::Error> {
+fn read_string(jobs: &mut Jobs, chars: &mut Peekable<Chars>) -> Result<Arg, io::Error> {
     let mut res = String::new();
     let mut arg = None;
     let mut next_ch = chars.peek().copied();
@@ -576,7 +574,7 @@ fn read_string(chars: &mut Peekable<Chars>) -> Result<Arg, io::Error> {
             }
         } else if ch == '$' {
             chars.next();
-            let spec_arg = read_special_arg(chars, Some('"'))?;
+            let spec_arg = read_special_arg(jobs, chars, Some('"'))?;
             if let Some(Arg::Compound(mut args)) = arg {
                 if !res.is_empty() {
                     args.push(Arg::Str(res.into()));
@@ -697,7 +695,11 @@ fn read_token(chars: &mut Peekable<Chars>, end_char: Option<char>) -> String {
     res
 }
 
-fn read_arg(chars: &mut Peekable<Chars>, end_char_in: Option<char>) -> Result<Arg, io::Error> {
+fn read_arg(
+    jobs: &mut Jobs,
+    chars: &mut Peekable<Chars>,
+    end_char_in: Option<char>,
+) -> Result<Arg, io::Error> {
     let mut args = vec![];
     let end_char = end_char_in.unwrap_or(' ');
     let end_set = ['$', '|', ';', '&', '<', '>', '(', end_char];
@@ -709,7 +711,7 @@ fn read_arg(chars: &mut Peekable<Chars>, end_char_in: Option<char>) -> Result<Ar
             args.push(Arg::Str(res.clone().into()));
             res.clear();
             chars.next();
-            let next_arg = read_special_arg(chars, end_char_in)?;
+            let next_arg = read_special_arg(jobs, chars, end_char_in)?;
             if let Arg::Compound(mut nargs) = next_arg {
                 args.append(&mut nargs);
             } else {
@@ -722,7 +724,7 @@ fn read_arg(chars: &mut Peekable<Chars>, end_char_in: Option<char>) -> Result<Ar
             next_ch = chars.peek().copied();
         } else if ch == '"' && ch != end_char {
             chars.next(); // Advance to opening quote.
-            args.push(read_string(chars)?);
+            args.push(read_string(jobs, chars)?);
             next_ch = chars.peek().copied();
         } else if !ch.is_whitespace() && !end_set.contains(&ch) {
             chars.next();
@@ -740,12 +742,16 @@ fn read_arg(chars: &mut Peekable<Chars>, end_char_in: Option<char>) -> Result<Ar
     })
 }
 
-fn read_special_arg(chars: &mut Peekable<Chars>, end_char: Option<char>) -> Result<Arg, io::Error> {
+fn read_special_arg(
+    jobs: &mut Jobs,
+    chars: &mut Peekable<Chars>,
+    end_char: Option<char>,
+) -> Result<Arg, io::Error> {
     let mut args = vec![];
     if let Some('(') = chars.peek() {
         // Subshell to capture
         chars.next();
-        let mut sub = parse_line_inner(chars, Some(')'))?;
+        let mut sub = parse_line_inner(jobs, chars, Some(')'))?;
         if let Some(sub) = sub.commands.take() {
             args.push(Arg::Command(sub));
         }
@@ -775,6 +781,7 @@ fn read_special_arg(chars: &mut Peekable<Chars>, end_char: Option<char>) -> Resu
 }
 
 fn parse_line_inner(
+    jobs: &mut Jobs,
     chars: &mut Peekable<Chars>,
     end_char: Option<char>,
 ) -> Result<ParsedJob, io::Error> {
@@ -809,7 +816,7 @@ fn parse_line_inner(
                     state.command().start_compound_arg();
                 }
                 '"' if state.last_ch != '\\' && state.token().is_empty() => {
-                    let str_arg = read_string(chars)?;
+                    let str_arg = read_string(jobs, chars)?;
                     state.command().push_arg(str_arg);
                     state.command().start_compound_arg();
                 }
@@ -851,10 +858,10 @@ fn parse_line_inner(
                     state.seq();
                 }
                 '>' => {
-                    state.redir_out(chars, end_char)?;
+                    state.redir_out(jobs, chars, end_char)?;
                 }
                 '<' => {
-                    state.redir_in(chars, end_char)?;
+                    state.redir_in(jobs, chars, end_char)?;
                 }
                 '&' if state.last_ch == '\\' => {
                     state.token().push('&');
@@ -882,7 +889,7 @@ fn parse_line_inner(
                 '(' if state.last_ch != '\\' => {
                     state.proc_token();
                     state.end_command(false);
-                    let mut sub = parse_line_inner(chars, Some(')'))?;
+                    let mut sub = parse_line_inner(jobs, chars, Some(')'))?;
                     if let Some(sub) = sub.commands.take() {
                         push_next_seq_run(
                             &mut state.ret,
@@ -894,7 +901,10 @@ fn parse_line_inner(
                 '\n' if state.last_ch == '\\' => {
                     state.last_ch = ' ';
                 }
-                '$' => state.special_arg(chars, end_char)?,
+                '$' => {
+                    let expansion = state.expand_var_or_command(jobs, chars, end_char)?;
+                    state.token().push_str(&expansion);
+                }
                 _ => {
                     /*if state.last_ch == '\\' {
                         // Last char was a backslash and seems unremarkable so put it in the token.
@@ -911,9 +921,9 @@ fn parse_line_inner(
     Ok(state.into())
 }
 
-pub fn parse_line(input: &str) -> Result<ParsedJob, io::Error> {
+pub fn parse_line(jobs: &mut Jobs, input: &str) -> Result<ParsedJob, io::Error> {
     let mut chars = input.chars().peekable();
-    parse_line_inner(&mut chars, None)
+    parse_line_inner(jobs, &mut chars, None)
 }
 
 #[cfg(test)]
@@ -921,15 +931,17 @@ mod tests {
     use super::*;
 
     fn test_parse(input: &str, expected: &str) {
-        let pj = parse_line(input).unwrap();
+        let mut jobs = Jobs::new(false);
+        let pj = parse_line(&mut jobs, input).unwrap();
         let pj_str = pj.to_string();
         assert_eq!(&pj_str, expected);
-        let pj = parse_line(&pj_str).unwrap();
+        let pj = parse_line(&mut jobs, &pj_str).unwrap();
         assert_eq!(&pj.to_string(), expected);
     }
 
     fn test_parse_once(input: &str, expected: &str) {
-        let pj = parse_line(input).unwrap();
+        let mut jobs = Jobs::new(false);
+        let pj = parse_line(&mut jobs, input).unwrap();
         let pj_str = pj.to_string();
         assert_eq!(&pj_str, expected);
     }

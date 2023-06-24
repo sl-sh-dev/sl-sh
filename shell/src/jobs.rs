@@ -356,7 +356,7 @@ impl Jobs {
 
     /// Add an alias.
     pub fn add_alias(&mut self, name: String, value: String) -> Result<(), io::Error> {
-        let runj = parse_line(&value)?;
+        let runj = parse_line(self, &value)?;
         self.alias.insert(name, runj.commands().clone());
         Ok(())
     }
