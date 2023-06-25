@@ -1,4 +1,3 @@
-use crate::builtins::expand_tilde;
 use std::path::PathBuf;
 
 pub enum GlobOutput {
@@ -9,7 +8,6 @@ pub enum GlobOutput {
 pub fn expand_glob(pat: impl Into<PathBuf>) -> GlobOutput {
     let pat: PathBuf = pat.into();
     let mut files = Vec::new();
-    let pat = expand_tilde(pat);
     if let Ok(paths) = glob::glob(&pat.to_string_lossy()) {
         for p in paths {
             match p {

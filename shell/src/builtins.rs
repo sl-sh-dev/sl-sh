@@ -138,7 +138,7 @@ pub fn cd(arg: Option<PathBuf>) -> i32 {
         None => home.clone(),
     };
     let new_dir: PathBuf = match arg {
-        Some(arg) => expand_tilde(arg),
+        Some(arg) => arg,
         None => home.into(),
     };
     let new_dir = if new_dir.as_os_str() == "-" {
@@ -167,7 +167,7 @@ pub fn cd(arg: Option<PathBuf>) -> i32 {
 /// returns path.  If path is not utf-8 then it will not expand ~.
 pub fn expand_tilde(path: PathBuf) -> PathBuf {
     if let Some(path_str) = path.to_str() {
-        if path_str.ends_with('~') || path_str.contains("~/") {
+        if path_str.contains('~') {
             let home: PathBuf = match env::var_os("HOME") {
                 Some(val) => val.into(),
                 None => "/".into(),
@@ -175,22 +175,18 @@ pub fn expand_tilde(path: PathBuf) -> PathBuf {
             let mut new_path = OsString::new();
             let mut last_ch = ' ';
             let mut buf = [0_u8; 4];
+            let mut quoted = false;
             for ch in path_str.chars() {
-                if ch == '~' && (last_ch == ' ' || last_ch == ':') {
+                if ch == '\'' && last_ch != '\\' {
+                    quoted = !quoted;
+                }
+                if ch == '~' && !quoted && (last_ch == ' ' || last_ch == ':' || last_ch == '=') {
                     // Strip the trailing / if it exists.
                     new_path.push(home.components().as_path().as_os_str());
                 } else {
-                    if last_ch == '\\' {
-                        new_path.push("\\");
-                    }
-                    if ch != '\\' {
-                        new_path.push(ch.encode_utf8(&mut buf));
-                    }
+                    new_path.push(ch.encode_utf8(&mut buf));
                 }
                 last_ch = ch;
-            }
-            if last_ch == '\\' {
-                new_path.push("\\");
             }
             new_path.into()
         } else {
@@ -253,11 +249,6 @@ fn export(key: OsString, val: OsString) -> i32 {
         eprintln!("export: Invalid val (contains NUL character ('\\0')'");
         return 1;
     }
-    let val = if val.to_string_lossy().contains('~') {
-        expand_tilde(val.into()).into()
-    } else {
-        val
-    };
     env::set_var(key, val);
     0
 }
