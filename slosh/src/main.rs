@@ -18,7 +18,7 @@ use builtins::collections::setup_colletion_builtins;
 use builtins::print::{add_print_builtins, display_value};
 use builtins::string::add_str_builtins;
 use sl_liner::vi::AlphanumericAndVariableKeywordRule;
-use sl_liner::{keymap, Context, Prompt};
+use sl_liner::{keymap, ColorClosure, Context, Prompt};
 
 mod completions;
 mod config;
@@ -56,6 +56,21 @@ fn get_prompt(env: &mut SloshVm) -> String {
             Value::Lambda(h) => {
                 let l = env.get_lambda(h);
                 match env.do_call(l, &[], None) {
+                    Ok(v) => match v {
+                        Value::StringConst(i) => env.get_interned(i).to_string(),
+                        Value::String(h) => env.get_string(h).to_string(),
+                        _ => v.display_value(env),
+                    },
+                    Err(e) => {
+                        eprintln!("Error getting prompt: {e}");
+                        "slosh> ".to_string()
+                    }
+                }
+            }
+            Value::Closure(h) => {
+                let (l, tcaps) = env.get_closure(h);
+                let caps = Vec::from(tcaps);
+                match env.do_call(l, &[], Some(&caps[..])) {
                     Ok(v) => match v {
                         Value::StringConst(i) => env.get_interned(i).to_string(),
                         Value::String(h) => env.get_string(h).to_string(),
@@ -114,6 +129,55 @@ fn history_file() -> String {
     share_dir
 }
 
+fn get_color_closure() -> Option<ColorClosure> {
+    ENV.with(move |renv| -> Option<ColorClosure> {
+        let mut env = renv.borrow_mut();
+        let handler_interned = env.intern("__line_handler");
+        if let Some(idx) = env.global_intern_slot(handler_interned) {
+            match env.get_global(idx) {
+                Value::Lambda(h) => Some(Box::new(move |input: &str| -> String {
+                    ENV.with(|renv| {
+                        let mut env = renv.borrow_mut();
+                        let line_handler = env.get_lambda(h);
+                        let param = env.alloc_string(input.to_string());
+                        match env.do_call(line_handler, &[param], None) {
+                            Ok(v) => match v {
+                                Value::StringConst(i) => env.get_interned(i).to_string(),
+                                Value::String(h) => env.get_string(h).to_string(),
+                                _ => v.display_value(&env),
+                            },
+                            Err(e) => {
+                                format!("ERROR {e}")
+                            }
+                        }
+                    })
+                })),
+                Value::Closure(h) => Some(Box::new(move |input: &str| -> String {
+                    ENV.with(|renv| {
+                        let mut env = renv.borrow_mut();
+                        let (line_handler, tcaps) = env.get_closure(h);
+                        let caps = Vec::from(tcaps);
+                        let param = env.alloc_string(input.to_string());
+                        match env.do_call(line_handler, &[param], Some(&caps[..])) {
+                            Ok(v) => match v {
+                                Value::StringConst(i) => env.get_interned(i).to_string(),
+                                Value::String(h) => env.get_string(h).to_string(),
+                                _ => v.display_value(&env),
+                            },
+                            Err(e) => {
+                                format!("ERROR {e}")
+                            }
+                        }
+                    })
+                })),
+                _ => None,
+            }
+        } else {
+            None
+        }
+    })
+}
+
 fn main() {
     if let Some(config) = get_config() {
         ENV.with(|renv| {
@@ -163,7 +227,6 @@ fn main() {
                 println!("Error loading history: {e}");
             }
             shell::run::setup_shell_tty(STDIN_FILENO);
-            //let mut jobs = shell::jobs::Jobs::new(true);
             SHELL_ENV.with(|jobs| {
                 jobs.borrow_mut().cap_term();
             });
@@ -172,7 +235,7 @@ fn main() {
                     jobs.borrow_mut().reap_procs();
                 });
                 let prompt = ENV.with(|env| get_prompt(&mut env.borrow_mut()));
-                let res = match con.read_line(Prompt::from(prompt), None) {
+                let res = match con.read_line(Prompt::from(prompt), get_color_closure()) {
                     Ok(input) => input,
                     Err(err) => match err.kind() {
                         ErrorKind::UnexpectedEof => {
