@@ -310,20 +310,6 @@ Section: vector
 
     add_docstring(
         env,
-        "vec-empty?",
-        "Usage: (vec-empty? vector)
-
-True if the vector is empty.
-
-Section: vector
-
-Example:
-(test::assert-true (vec-empty? '#()))
-(test::assert-false (vec-empty? '#(1 2 3)))
-",
-    );
-    add_docstring(
-        env,
         "vec-clear!",
         "Usage: (vec-clear! vector)
 

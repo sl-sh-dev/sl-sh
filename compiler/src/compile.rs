@@ -78,14 +78,16 @@ fn compile_list(
                 state.tail = tail;
             }
             Value::Symbol(i) if i == env.specials().do_ => {
-                let last_thing = cdr.len() - 1;
-                let old_tail = state.tail;
-                state.tail = false;
-                for (i, r) in cdr.iter().enumerate() {
-                    if i == last_thing {
-                        state.tail = old_tail;
+                if !cdr.is_empty() {
+                    let last_thing = cdr.len() - 1;
+                    let old_tail = state.tail;
+                    state.tail = false;
+                    for (i, r) in cdr.iter().enumerate() {
+                        if i == last_thing {
+                            state.tail = old_tail;
+                        }
+                        compile(env, state, *r, result)?;
                     }
-                    compile(env, state, *r, result)?;
                 }
             }
             Value::Symbol(i) if i == env.specials().def => {

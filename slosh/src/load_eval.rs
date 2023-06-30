@@ -1,4 +1,4 @@
-use compile_state::state::{new_slosh_vm, CompileState, SloshVm, SloshVmTrait};
+use compile_state::state::{CompileState, SloshVm, SloshVmTrait};
 use sl_compiler::pass1::pass1;
 use sl_compiler::{compile, Reader};
 use slvm::{Chunk, VMError, VMResult, Value, RET};
@@ -87,13 +87,12 @@ fn load(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
 
 fn eval(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if let (Some(exp), None) = (registers.get(0), registers.get(1)) {
-        let mut env = new_slosh_vm();
-        let line_num = env.line_num();
+        let line_num = 1;
         let mut state = CompileState::new_state("none/eval", line_num, None);
         state.chunk.dbg_args = Some(Vec::new());
-        pass1(&mut env, &mut state, *exp)?;
-        compile(&mut env, &mut state, *exp, 0)?;
-        state.chunk.encode0(RET, env.own_line())?;
+        pass1(vm, &mut state, *exp)?;
+        compile(vm, &mut state, *exp, 0)?;
+        state.chunk.encode0(RET, vm.own_line())?;
         let chunk = Arc::new(state.chunk.clone());
         Ok(vm.do_call(chunk, &[Value::Nil], None)?)
     } else {

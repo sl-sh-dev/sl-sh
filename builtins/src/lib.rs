@@ -86,6 +86,54 @@ pub fn gensym(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     Ok(Value::Symbol(sym))
 }
 
+pub fn expand_macro(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    if registers.len() != 1 {
+        return Err(VMError::new_vm(
+            "expand-macro: takes one arguments".to_string(),
+        ));
+    }
+    let arg = registers[0];
+    match arg {
+        Value::Pair(_) | Value::List(_, _) => {
+            let (car, cdr) = arg.get_pair(vm).expect("Pair/List not a Pair or List?");
+            if let Value::Symbol(i) = car {
+                if let Some(idx) = vm.global_intern_slot(i) {
+                    let car = vm.get_global(idx);
+                    match car {
+                        Value::Lambda(h) => {
+                            let l = vm.get_lambda(h);
+                            let args: Vec<Value> = cdr.iter(vm).collect();
+                            match vm.do_call(l, &args[..], None) {
+                                Ok(v) => Ok(v),
+                                Err(e) => {
+                                    Err(VMError::new_vm(format!("expand-macro: error on call {e}")))
+                                }
+                            }
+                        }
+                        Value::Closure(h) => {
+                            let (l, tcaps) = vm.get_closure(h);
+                            let caps = Vec::from(tcaps);
+                            let args: Vec<Value> = cdr.iter(vm).collect();
+                            match vm.do_call(l, &args[..], Some(&caps[..])) {
+                                Ok(v) => Ok(v),
+                                Err(e) => {
+                                    Err(VMError::new_vm(format!("expand-macro: error on call {e}")))
+                                }
+                            }
+                        }
+                        _ => Err(VMError::new_vm("expand-macro: not a callable".to_string())),
+                    }
+                } else {
+                    Err(VMError::new_vm("expand-macro: not a symbol".to_string()))
+                }
+            } else {
+                Err(VMError::new_vm("expand-macro: not a symbol".to_string()))
+            }
+        }
+        _ => Err(VMError::new_vm("expand-macro: requires a list".to_string())),
+    }
+}
+
 pub fn add_builtin(
     env: &mut SloshVm,
     name: &str,
@@ -111,4 +159,5 @@ pub fn add_misc_builtins(env: &mut SloshVm) {
     env.set_global_builtin("sizeof-heap-object", sizeof_heap_object);
     env.set_global_builtin("sizeof-value", sizeof_value);
     env.set_global_builtin("gensym", gensym);
+    env.set_global_builtin("expand-macro", expand_macro);
 }

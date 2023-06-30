@@ -149,7 +149,7 @@ pub const VECPOP: OpCode = VEC_BASE + 3;
 pub const VECNTH: OpCode = VEC_BASE + 4;
 // VECSTH A B C - set nth R(C) item in vec R(A) from R(B)
 pub const VECSTH: OpCode = VEC_BASE + 5;
-// VECMKD A B C - make a vector with R(B) elements and put it in R(A), each element defauted to R(C)
+// VECMKD A B C - make a vector with R(B) elements and put it in R(A), each element defaulted to R(C)
 pub const VECMKD: OpCode = VEC_BASE + 6;
 // VEC A B C - R(A) = vec(elements R(B)..R(C)) (R(B) inclusive, R(C) exclusive)
 pub const VEC: OpCode = VEC_BASE + 7;
