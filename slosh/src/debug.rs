@@ -156,7 +156,10 @@ pub fn debug(env: &mut SloshVm) {
         //    Ok(exps) => {
         //let mut exps = exps.iter();
         match exps.next() {
-            Some(Ok(Value::Keyword(k))) if k == abort => return,
+            Some(Ok(Value::Keyword(k))) if k == abort => {
+                env.reset();
+                return;
+            }
             Some(Ok(Value::Keyword(k))) if k == globals => env.dump_globals(),
             Some(Ok(Value::Keyword(k))) if k == dasm => {
                 if let Some(Ok(parm)) = exps.next() {

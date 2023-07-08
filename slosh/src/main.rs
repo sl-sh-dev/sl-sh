@@ -317,22 +317,24 @@ fn exec_expression(res: String, env: &mut SloshVm) {
                     println!("Compile error, line {}: {}", env.line_num(), e);
                 }
                 let chunk = Arc::new(state.chunk.clone());
-                if let Err(err) = env.execute(chunk.clone()) {
-                    println!("ERROR: {}", err.display(env));
-                    if let Some(err_frame) = env.err_frame() {
-                        let line = err_frame.current_line().unwrap_or(0);
-                        println!(
-                            "{} line: {} ip: {:#010x}",
-                            err_frame.chunk.file_name,
-                            line,
-                            err_frame.current_offset()
-                        );
+                match env.execute(chunk.clone()) {
+                    Ok(res) => {
+                        if !res.is_nil() {
+                            println!("{}", display_value(env, res));
+                        }
                     }
-                    debug(env);
-                } else {
-                    let reg = env.get_stack(0);
-                    if !reg.is_nil() {
-                        println!("{}", display_value(env, reg));
+                    Err(err) => {
+                        eprintln!("ERROR: {}", err.display(env));
+                        if let Some(err_frame) = env.err_frame() {
+                            let line = err_frame.current_line().unwrap_or(0);
+                            eprintln!(
+                                "{} line: {} ip: {:#010x}",
+                                err_frame.chunk.file_name,
+                                line,
+                                err_frame.current_offset()
+                            );
+                        }
+                        debug(env);
                     }
                 }
             }

@@ -3,31 +3,55 @@ use slvm::{VMError, VMResult, Value};
 
 fn str_trim(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();
-    if let (Some(string), None) = (i.next(), i.next()) {
-        let string = string.get_string(vm)?.trim().to_string();
-        Ok(vm.alloc_string(string))
-    } else {
-        Err(VMError::new_vm("str-trim: takes one argument".to_string()))
+    let right = vm.intern("right");
+    let left = vm.intern("left");
+    match (i.next(), i.next(), i.next()) {
+        (Some(string), None, None) => {
+            let string = string.get_string(vm)?.trim().to_string();
+            Ok(vm.alloc_string(string))
+        }
+        (Some(string), Some(Value::Keyword(i)), None) if *i == right => {
+            let string = string.get_string(vm)?.trim_end().to_string();
+            Ok(vm.alloc_string(string))
+        }
+        (Some(string), Some(Value::Keyword(i)), None) if *i == left => {
+            let string = string.get_string(vm)?.trim_start().to_string();
+            Ok(vm.alloc_string(string))
+        }
+        _ => Err(VMError::new_vm(
+            "str-trim: takes one argument with optional left/right keyword".to_string(),
+        )),
     }
 }
 
-fn str_ltrim(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+fn str_trim_bang(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();
-    if let (Some(string), None) = (i.next(), i.next()) {
-        let string = string.get_string(vm)?.trim_start().to_string();
-        Ok(vm.alloc_string(string))
-    } else {
-        Err(VMError::new_vm("str-ltrim: takes one argument".to_string()))
-    }
-}
-
-fn str_rtrim(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
-    let mut i = registers.iter();
-    if let (Some(string), None) = (i.next(), i.next()) {
-        let string = string.get_string(vm)?.trim_end().to_string();
-        Ok(vm.alloc_string(string))
-    } else {
-        Err(VMError::new_vm("str-rtrim: takes one argument".to_string()))
+    let right = vm.intern("right");
+    let left = vm.intern("left");
+    match (i.next(), i.next(), i.next()) {
+        (Some(Value::String(handle)), None, None) => {
+            let buffer = vm.get_string_mut(*handle);
+            let trimmed = buffer.trim_end();
+            buffer.truncate(trimmed.len());
+            let trimmed = buffer.trim_start();
+            buffer.replace_range(..(buffer.len() - trimmed.len()), "");
+            Ok(Value::String(*handle))
+        }
+        (Some(Value::String(handle)), Some(Value::Keyword(i)), None) if *i == right => {
+            let buffer = vm.get_string_mut(*handle);
+            let trimmed = buffer.trim_end();
+            buffer.truncate(trimmed.len());
+            Ok(Value::String(*handle))
+        }
+        (Some(Value::String(handle)), Some(Value::Keyword(i)), None) if *i == left => {
+            let buffer = vm.get_string_mut(*handle);
+            let trimmed = buffer.trim_start();
+            buffer.replace_range(..(buffer.len() - trimmed.len()), "");
+            Ok(Value::String(*handle))
+        }
+        _ => Err(VMError::new_vm(
+            "str-trim!: takes a non-const string with optional left/right keyword".to_string(),
+        )),
     }
 }
 
@@ -140,9 +164,10 @@ Example:
         env,
         "str-trim",
         str_trim,
-        r#"Usage: (str-trim string) -> string
+        r#"Usage: (str-trim string [:right | :left]) -> string
 
-Trim right and left whitespace from string.
+Trim right and/or left whitespace from string.  With no optional keywork trims both, otherwise :right
+or :left specify right or left trimming.
 
 Section: string
 
@@ -152,42 +177,52 @@ Example:
 (test::assert-equal "some string" (str-trim (str "   some string   ")))
 (test::assert-equal "some string" (str-trim "some string   "))
 (test::assert-equal "some string" (str-trim "some string"))
+
+(test::assert-equal "   some string" (str-trim "   some string" :right))
+(test::assert-equal "   some string" (str-trim "   some string   " :right))
+(test::assert-equal "   some string" (str-trim (str "   some string   " :right)))
+(test::assert-equal "some string" (str-trim "some string   " :right))
+(test::assert-equal "some string" (str-trim "some string" :right))
+
+(test::assert-equal "some string" (str-trim "   some string" :left))
+(test::assert-equal "some string   " (str-trim "   some string   " :left))
+(test::assert-equal "some string   " (str-trim (str "   some string   " :left)))
+(test::assert-equal "some string   " (str-trim "some string   " :left))
+(test::assert-equal "some string" (str-trim "some string" :left))
 "#,
     );
     add_builtin(
         env,
-        "str-rtrim",
-        str_rtrim,
-        r#"Usage: (str-rtrim string) -> string
+        "str-trim!",
+        str_trim_bang,
+        r#"Usage: (str-trim! string [:right | :left]) -> string
 
-Trim right whitespace from string.
+Trim right and/or left whitespace from string iiin place.  With no optional keywork trims both,
+otherwise :right or :left specify right or left trimming.
 
-Section: string
-
-Example:
-(test::assert-equal "   some string" (str-rtrim "   some string"))
-(test::assert-equal "   some string" (str-rtrim "   some string   "))
-(test::assert-equal "   some string" (str-rtrim (str "   some string   ")))
-(test::assert-equal "some string" (str-rtrim "some string   "))
-(test::assert-equal "some string" (str-rtrim "some string"))
-"#,
-    );
-    add_builtin(
-        env,
-        "str-ltrim",
-        str_ltrim,
-        r#"Usage: (str-ltrim string) -> string
-
-Trim left whitespace from string.
+This is a destructive operation (unlike str-trim) and requires a actual non-const string as it's first
+argument.  It returns this string on success.
 
 Section: string
 
 Example:
-(test::assert-equal "some string" (str-ltrim "   some string"))
-(test::assert-equal "some string   " (str-ltrim "   some string   "))
-(test::assert-equal "some string   " (str-ltrim (str "   some string   ")))
-(test::assert-equal "some string   " (str-ltrim "some string   "))
-(test::assert-equal "some string" (str-ltrim "some string"))
+(test::assert-equal "some string" (str-trim! (str "   some string")))
+(test::assert-equal "some string" (str-trim! (str  "   some string   ")))
+(test::assert-equal "some string" (str-trim! (str  (str "   some string   "))))
+(test::assert-equal "some string" (str-trim! (str  "some string   ")))
+(test::assert-equal "some string" (str-trim! (str  "some string")))
+
+(test::assert-equal "   some string" (str-trim! (str  "   some string") :right))
+(test::assert-equal "   some string" (str-trim! (str  "   some string   ") :right))
+(test::assert-equal "   some string" (str-trim! (str  (str "   some string   ") :right)))
+(test::assert-equal "some string" (str-trim! (str  "some string   ") :right))
+(test::assert-equal "some string" (str-trim! (str  "some string") :right))
+
+(test::assert-equal "some string" (str-trim! (str  "   some string") :left))
+(test::assert-equal "some string   " (str-trim! (str  "   some string   ") :left))
+(test::assert-equal "some string   " (str-trim! (str  (str "   some string   ") :left)))
+(test::assert-equal "some string   " (str-trim! (str  "some string   ") :left))
+(test::assert-equal "some string" (str-trim! (str  "some string") :left))
 "#,
     );
     add_builtin(

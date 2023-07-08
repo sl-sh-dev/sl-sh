@@ -150,5 +150,5 @@ Example:
 (def *ns* "SLOSH")
 
 (defn __prompt ()
-    (str "\x1b[32m[" *ns* "]:" (env "HOST") ":\x1b[34m" (str-trim (get-pwd)) "/\x1b[37m" (parse-git-branch) (set-prompt-tail *last-status*)))
+    (str "\x1b[32m[" *ns* "]:" (env "HOST") ":\x1b[34m" (str-trim! (get-pwd)) "/\x1b[37m" (parse-git-branch) (set-prompt-tail *last-status*)))
 
