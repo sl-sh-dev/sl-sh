@@ -312,7 +312,7 @@ impl PersistentVec {
         }
     }
 
-    /// Replace the value ad idx with new_value and return a new vec.
+    /// Replace the value at idx with new_value and return a new vec.
     pub fn replace<ENV>(
         &self,
         idx: usize,

@@ -87,7 +87,7 @@ impl PersistentMap {
 
     /// Lookup key and return true if it exists in map.
     pub fn contains<ENV>(&self, key: Value, vm: &GVm<ENV>) -> bool {
-        self.get(key, vm).is_none()
+        self.get(key, vm).is_some()
     }
 
     fn dec_shift(&self, shift: u64) -> u64 {
