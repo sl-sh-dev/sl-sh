@@ -24,7 +24,7 @@ pub(crate) fn compile_def(
                 let key = env.intern("doc-string");
                 env.set_global_property(si_const, key, doc_string);
             }
-            compile(env, state, cdr[1], result)?; // + 1)?;
+            compile(env, state, cdr[1], result)?;
             state
                 .chunk
                 .encode_def(result as u16, si_const, env.own_line(), false)?;

@@ -260,12 +260,8 @@ impl<'vm> Reader<'vm> {
         }
     }
 
-    fn read_doc_string<'sym>(
-        &mut self,
-        buffer: &'sym mut String,
-        read_table: &HashMap<&'static str, Chunk>,
-    ) -> Result<&'sym mut String, ReadError> {
-        self.read_string(buffer, read_table, true)
+    fn read_doc_string(&mut self, buffer: &mut String) -> Result<Value, ReadError> {
+        self.read_string(buffer, true)
     }
 
     fn consume_line_comment(&mut self) {
@@ -416,75 +412,86 @@ impl<'vm> Reader<'vm> {
         }
     }
 
-    fn read_string<'sym>(
-        &mut self,
-        symbol: &'sym mut String,
-        read_table: &HashMap<&'static str, Chunk>,
-        doc_string: bool,
-    ) -> Result<&'sym mut String, ReadError> {
+    fn end_string(&mut self, ch: &str, doc_string: bool) -> bool {
+        if doc_string {
+            let peek = if let Some(pch) = self.chars().peek() {
+                pch
+            } else {
+                ""
+            };
+            if ch == "!" && peek == "#" {
+                self.chars().next();
+                return true;
+            }
+        } else if ch == "\"" {
+            return true;
+        }
+        false
+    }
+
+    fn read_string(&mut self, symbol: &mut String, doc_string: bool) -> Result<Value, ReadError> {
         symbol.clear();
         let mut last_ch_escape = false;
+        let mut args = vec![];
+        let line = self.line() as u32;
+        let column = self.column() as u32;
 
         while let Some(ch) = self.chars().next() {
             if last_ch_escape {
-                let mut do_match = true;
-                if read_table.contains_key(&*ch) {
-                    do_match = false;
-                    symbol.push_str(&ch);
-                }
-                if do_match {
-                    match &*ch {
-                        "n" => symbol.push('\n'),
-                        "r" => symbol.push('\r'),
-                        "t" => symbol.push('\t'),
-                        "\"" => symbol.push('"'),
-                        "x" => {
-                            let res = self.escape_to_char()?;
-                            symbol.push(res);
-                        }
-                        "\\" => {
-                            symbol.push('\\');
-                        }
-                        "u" => {
-                            let res = self.read_utf_scalar()?;
-                            symbol.push(res);
-                        }
-                        _ => {
-                            symbol.push('\\');
-                            symbol.push_str(&ch);
-                        }
+                match &*ch {
+                    "n" => symbol.push('\n'),
+                    "r" => symbol.push('\r'),
+                    "t" => symbol.push('\t'),
+                    "x" => {
+                        let res = self.escape_to_char()?;
+                        symbol.push(res);
+                    }
+                    "u" => {
+                        let res = self.read_utf_scalar()?;
+                        symbol.push(res);
+                    }
+                    _ => {
+                        symbol.push_str(&ch);
                     }
                 }
                 last_ch_escape = false;
             } else {
-                if doc_string {
-                    let peek = if let Some(pch) = self.chars().peek() {
-                        pch
-                    } else {
-                        ""
-                    };
-                    if ch == "!" && peek == "#" {
-                        self.chars().next();
-                        break;
-                    }
-                } else if ch == "\"" {
+                if self.end_string(&ch, doc_string) {
                     break;
                 }
-                let mut proc_ch = true;
-                if read_table.contains_key(&*ch) {
-                    proc_ch = false;
-                }
-                if proc_ch {
-                    if ch != "\\" {
-                        last_ch_escape = false;
-                        symbol.push_str(&ch);
-                    } else {
-                        last_ch_escape = true;
+                if ch == "{" {
+                    if args.is_empty() {
+                        args.push(Value::Symbol(self.vm.intern("str")));
                     }
+                    if !symbol.is_empty() {
+                        args.push(Value::StringConst(self.vm.intern(symbol)));
+                    }
+                    if let Some(next_arg) = self.read_inner(symbol, false, ReadReturn::None)? {
+                        args.push(next_arg);
+                    }
+                    symbol.clear();
+                    let ch = self.chars().next();
+                    if ch != Some("}".into()) {
+                        return Err(ReadError {
+                            reason: "invalid str format, missing '}'".to_string(),
+                        });
+                    }
+                } else if ch == "\\" {
+                    last_ch_escape = true;
+                } else {
+                    symbol.push_str(&ch);
                 }
             }
         }
-        Ok(symbol)
+        if args.is_empty() {
+            Ok(Value::StringConst(self.vm.intern(symbol)))
+        } else {
+            if !symbol.is_empty() {
+                args.push(Value::StringConst(self.vm.intern(symbol)));
+                symbol.clear();
+            }
+            Ok(self.alloc_list(args, line, column))
+        }
     }
 
     fn read_string_literal<'sym>(
@@ -897,7 +904,7 @@ impl<'vm> Reader<'vm> {
     ) -> Result<Option<Value>, ReadError> {
         self.consume_whitespace();
         let read_table_term: HashMap<&'static str, Value> = HashMap::new();
-        let read_table: HashMap<&'static str, Chunk> = HashMap::new();
+        let _read_table: HashMap<&'static str, Chunk> = HashMap::new();
 
         let i_quote = self.vm.intern("quote");
         let i_backquote = self.vm.intern("back-quote");
@@ -906,8 +913,8 @@ impl<'vm> Reader<'vm> {
             let column = self.column() as u32;
             match &*ch {
                 "\"" => {
-                    match self.read_string(buffer, &read_table, false) {
-                        Ok(s) => return Ok(Some(Value::StringConst(self.vm.intern(s)))),
+                    match self.read_string(buffer, false) {
+                        Ok(s) => return Ok(Some(s)),
                         Err(e) => return Err(e),
                     };
                 }
@@ -981,10 +988,10 @@ impl<'vm> Reader<'vm> {
                         "!" => {
                             let line = self.line() as u32;
                             let column = self.column() as u32;
-                            match self.read_doc_string(buffer, &read_table) {
+                            match self.read_doc_string(buffer) {
                                 Ok(s) => {
                                     let doc_sym = Value::Symbol(self.vm.intern("doc-string"));
-                                    let doc_string = Value::StringConst(self.vm.intern(s));
+                                    let doc_string = s;
                                     let list =
                                         self.alloc_list(vec![doc_sym, doc_string], line, column);
                                     return Ok(Some(list));

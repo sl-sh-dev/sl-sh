@@ -94,7 +94,7 @@ fn eval(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         compile(vm, &mut state, *exp, 0)?;
         state.chunk.encode0(RET, vm.own_line())?;
         let chunk = Arc::new(state.chunk.clone());
-        Ok(vm.do_call(chunk, &[Value::Nil], None)?)
+        vm.do_call(chunk, &[], None)
     } else {
         Err(VMError::new_compile(
             "eval: wrong number of args, expected one",
