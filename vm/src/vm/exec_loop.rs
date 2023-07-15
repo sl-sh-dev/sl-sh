@@ -165,24 +165,22 @@ impl<ENV> GVm<ENV> {
                         let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
                         self.ip_ptr = self.current_ip_ptr;
                         chunk = self.make_call(defer, chunk, first_reg, 0, false)?;
-                        //self.ip_ptr = get_code!(chunk);
                         self.make_registers();
-                    } else if let Some(frame) = self.call_frame_mut() {
-                        // Need to break the call frame lifetime from self to avoid extra work.
-                        // This is safe because the stack and heap are not touched so the reference is
-                        // stable.  The unwrap() is OK because the frame can not be NULL.
-                        let frame: &mut CallFrame =
-                            unsafe { (frame as *mut CallFrame).as_mut().unwrap() };
-                        self.stack_top = frame.stack_top;
-                        self.make_registers();
+                    } else if let Some(frame) = self.call_frame() {
+                        let stack_top = frame.stack_top;
+                        let ip_ptr = frame.ip;
+                        let current_ip = frame.current_ip;
+                        let this_fn = frame.this_fn;
+                        let on_error = frame.on_error;
                         chunk = frame.chunk.clone();
-                        //self.ip_ptr = get_code!(chunk);
+                        self.swap_defers_with_frame(); // Do this BEFORE we change stack_top...
+                        self.stack_top = stack_top;
+                        self.make_registers();
                         self.stack_max = self.stack_top + chunk.input_regs + chunk.extra_regs;
-                        self.ip_ptr = frame.ip;
-                        self.current_ip_ptr = frame.current_ip;
-                        self.this_fn = frame.this_fn;
-                        self.on_error = frame.on_error;
-                        std::mem::swap(&mut self.defers, &mut frame.defers);
+                        self.ip_ptr = ip_ptr;
+                        self.current_ip_ptr = current_ip;
+                        self.this_fn = this_fn;
+                        self.on_error = on_error;
                     } else {
                         return Ok(());
                     }
@@ -192,28 +190,26 @@ impl<ENV> GVm<ENV> {
                         let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
                         self.ip_ptr = self.current_ip_ptr;
                         chunk = self.make_call(defer, chunk, first_reg, 0, false)?;
-                        //self.ip_ptr = get_code!(chunk);
                         self.make_registers();
                     } else {
                         let src = decode1!(self.ip_ptr, wide);
                         let val = self.register(src as usize);
                         let old_top = self.stack_top;
-                        if let Some(frame) = self.call_frame_mut() {
-                            // Need to break the call frame lifetime from self to avoid extra work.
-                            // This is safe because the stack and heap are not touched so the reference is
-                            // stable.  The unwrap() is OK because the frame can not be NULL.
-                            let frame: &mut CallFrame =
-                                unsafe { (frame as *mut CallFrame).as_mut().unwrap() };
-                            self.stack_top = frame.stack_top;
-                            self.make_registers();
+                        if let Some(frame) = self.call_frame() {
+                            let stack_top = frame.stack_top;
+                            let ip_ptr = frame.ip;
+                            let current_ip = frame.current_ip;
+                            let this_fn = frame.this_fn;
+                            let on_error = frame.on_error;
                             chunk = frame.chunk.clone();
-                            //self.ip_ptr = get_code!(chunk);
+                            self.swap_defers_with_frame(); // Do this BEFORE we change stack_top...
+                            self.stack_top = stack_top;
+                            self.make_registers();
                             self.stack_max = self.stack_top + chunk.input_regs + chunk.extra_regs;
-                            self.ip_ptr = frame.ip;
-                            self.current_ip_ptr = frame.current_ip;
-                            self.this_fn = frame.this_fn;
-                            self.on_error = frame.on_error;
-                            std::mem::swap(&mut self.defers, &mut frame.defers);
+                            self.ip_ptr = ip_ptr;
+                            self.current_ip_ptr = current_ip;
+                            self.this_fn = this_fn;
+                            self.on_error = on_error;
                         } else {
                             *self.stack_mut(old_top) = val;
                             return Ok(());

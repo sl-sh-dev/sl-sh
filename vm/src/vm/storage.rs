@@ -503,18 +503,25 @@ impl<ENV> GVm<ENV> {
         self.alloc_value(val)
     }
 
-    pub(super) fn _call_frame(&self) -> Option<&CallFrame> {
+    pub(super) fn call_frame(&self) -> Option<&CallFrame> {
         self.call_frame_idx(self.stack_top)
     }
 
     pub(super) fn call_frame_idx(&self, idx: usize) -> Option<&CallFrame> {
         match self.stack(idx) {
-            Value::CallFrame(handle) => {
-                let frame = self.get_callframe(handle);
-                Some(frame)
-            }
+            Value::CallFrame(handle) => Some(self.get_callframe(handle)),
             _ => None,
             //_ => panic!("Invalid stack, not a call frame."),
+        }
+    }
+
+    pub(super) fn swap_defers_with_frame(&mut self) {
+        if let Some(frame) = self.call_frame_mut() {
+            // Need to break the call frame lifetime from self to avoid extra work.
+            // This is safe because the stack and heap are not touched so the reference is
+            // stable.  The unwrap() is OK because the frame can not be NULL.
+            let frame: &mut CallFrame = unsafe { (frame as *mut CallFrame).as_mut().unwrap() };
+            std::mem::swap(&mut self.defers, &mut frame.defers);
         }
     }
 
