@@ -71,14 +71,32 @@ impl<ENV> GVm<ENV> {
             1 => {
                 let v = self.heap().get_vector(handle);
                 let idx = self.register(first_reg as usize + 1).get_int(self)?;
+                let idx = if idx >= 0 { idx } else { v.len() as i64 + idx };
                 let res = if idx >= 0 {
                     if let Some(val) = v.get(idx as usize) {
                         *val
                     } else {
-                        return Err(VMError::new_vm("Vector, index out of bounds."));
+                        Value::Nil
                     }
                 } else {
-                    return Err(VMError::new_vm("A vector requires a positive index."));
+                    Value::Nil
+                };
+                let res_reg = self.stack_top + first_reg as usize;
+                *self.stack_mut(res_reg) = res;
+                Ok(())
+            }
+            2 => {
+                let v = self.heap().get_vector(handle);
+                let idx = self.register(first_reg as usize + 1).get_int(self)?;
+                let idx = if idx >= 0 { idx } else { v.len() as i64 + idx };
+                let res = if idx >= 0 {
+                    if let Some(val) = v.get(idx as usize) {
+                        *val
+                    } else {
+                        self.register(first_reg as usize + 2)
+                    }
+                } else {
+                    self.register(first_reg as usize + 2)
                 };
                 let res_reg = self.stack_top + first_reg as usize;
                 *self.stack_mut(res_reg) = res;
@@ -87,8 +105,15 @@ impl<ENV> GVm<ENV> {
             3 => {
                 let eqi = self.intern("=");
                 let idx = self.register(first_reg as usize + 1).get_int(self)?;
+                let idx = if idx >= 0 {
+                    idx
+                } else {
+                    self.heap().get_vector(handle).len() as i64 + idx
+                };
                 if idx < 0 {
-                    return Err(VMError::new_vm("A vector requires a positive index."));
+                    return Err(VMError::new_vm(
+                        "Vector, index out of bounds (negative value to large).",
+                    ));
                 }
                 let eq = self.register(first_reg as usize + 2);
                 let val = self.register(first_reg as usize + 3);
@@ -97,9 +122,21 @@ impl<ENV> GVm<ENV> {
                         let v = self.heap_mut().get_vector_mut(handle)?;
                         if let Some(slot) = v.get_mut(idx as usize) {
                             *slot = val;
+                            let res_reg = self.stack_top + first_reg as usize;
+                            *self.stack_mut(res_reg) = Value::Vector(handle);
                             Ok(())
                         } else {
-                            Err(VMError::new_vm("Vector, index out of bounds."))
+                            v.resize(idx as usize + 1, Value::Nil);
+                            if let Some(slot) = v.get_mut(idx as usize) {
+                                *slot = val;
+                                let res_reg = self.stack_top + first_reg as usize;
+                                *self.stack_mut(res_reg) = Value::Vector(handle);
+                                Ok(())
+                            } else {
+                                Err(VMError::new_vm(
+                                    "Vector, index out of bounds (unable to grow vector).",
+                                ))
+                            }
                         }
                     } else {
                         Err(VMError::new_vm(
@@ -141,7 +178,7 @@ impl<ENV> GVm<ENV> {
                 *self.stack_mut(res_reg) = res;
                 Ok(())
             }
-            _ => Err(VMError::new_vm("Vector wrong number of arguments.")),
+            _ => Err(VMError::new_vm("List wrong number of arguments.")),
         }
     }
 }
