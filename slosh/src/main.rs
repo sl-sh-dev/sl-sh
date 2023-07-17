@@ -92,9 +92,9 @@ fn get_prompt(env: &mut SloshVm) -> String {
 fn load_sloshrc() {
     if let Ok(mut rcfile) = env::var("HOME") {
         if rcfile.ends_with('/') {
-            rcfile.push_str(".config/slosh/sloshrc");
+            rcfile.push_str(".config/slosh/init.slosh");
         } else {
-            rcfile.push_str("/.config/slosh/sloshrc");
+            rcfile.push_str("/.config/slosh/init.slosh");
         }
         ENV.with(|renv| {
             let mut env = renv.borrow_mut();

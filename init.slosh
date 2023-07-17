@@ -89,7 +89,7 @@ Example:
   (params bindings & body)
     `(call/cc (fn (break) ((fn ~params ~@body) ~@bindings))))
 
-(defmacro doc (sym) `(prn (get-prop '~sym :doc-string)))
+(defmacro doc (sym) `(prn (eval (get-prop '~sym :doc-string))))
 
 #!
 Evaluate body a number of times equal to times' numerical value.
