@@ -347,18 +347,21 @@ impl Jobs {
         self.alias.clear();
     }
 
-    /// Removes the alias name.
-    pub fn remove_alias<S: AsRef<str>>(&mut self, name: S) {
-        if self.alias.remove(name.as_ref()).is_none() {
-            eprintln!("not found {}", name.as_ref());
-        }
+    /// Removes the alias name, return the value if removed..
+    pub fn remove_alias<S: AsRef<str>>(&mut self, name: S) -> Option<Run> {
+        self.alias.remove(name.as_ref())
     }
 
     /// Add an alias.
     pub fn add_alias(&mut self, name: String, value: String) -> Result<(), io::Error> {
         let runj = parse_line(self, &value)?;
-        self.alias.insert(name, runj.commands().clone());
+        self.alias.insert(name, runj.into_run());
         Ok(())
+    }
+
+    /// Add an already parsed alias.
+    pub fn add_alias_run(&mut self, name: String, value: Run) {
+        self.alias.insert(name, value);
     }
 
     /// Print a the alias for name if set.

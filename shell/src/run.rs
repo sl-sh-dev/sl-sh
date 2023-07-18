@@ -53,14 +53,18 @@ fn run_command(
 ) -> Result<i32, io::Error> {
     Ok(if let Some(command_name) = command.command(jobs) {
         let command_name = command_name?;
-        if let Some(mut alias_run) = jobs.get_alias(command_name.to_string_lossy()) {
+        if let Some(init_alias_run) = jobs.remove_alias(command_name.to_string_lossy()) {
+            // need to remove the alias so we don't recurse for alias with a command the same name
+            let mut alias_run = init_alias_run.clone();
             for arg in command.args_iter() {
                 alias_run.push_arg_end(arg.clone());
             }
             if let Some(stdios) = command.stdios() {
                 alias_run.extend_redirs_end(stdios)
             }
-            run_job(&alias_run, jobs, background)?
+            let r = run_job(&alias_run, jobs, background);
+            jobs.add_alias_run(command_name.to_string_lossy().to_string(), init_alias_run);
+            r?
         } else {
             let mut args = command.args_iter();
             match run_builtin(&command_name, &mut args, jobs) {

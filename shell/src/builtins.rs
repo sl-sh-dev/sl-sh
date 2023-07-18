@@ -353,8 +353,8 @@ where
         let arg = arg.to_string_lossy();
         if arg == "-a" {
             jobs.clear_aliases();
-        } else {
-            jobs.remove_alias(&arg)
+        } else if jobs.remove_alias(&arg).is_none() {
+            eprintln!("not found {}", arg);
         }
     }
     0
