@@ -207,6 +207,12 @@ impl<ENV> GVm<ENV> {
         Value::Builtin(result as u32)
     }
 
+    /// Return the builtin function at idx.
+    /// Note, will panic if idx is not a valid builtin index.
+    pub fn get_builtin(&self, idx: u32) -> &CallFuncSig<ENV> {
+        &self.buitins[idx as usize].func
+    }
+
     pub fn is_equal_pair(&self, val1: Value, val2: Value) -> VMResult<Value> {
         let mut val = Value::False;
         if val1 == val2 {

@@ -1,5 +1,6 @@
 use crate::{add_builtin, SloshVm};
-use slvm::{VMError, VMResult, Value};
+use slvm::{Handle, VMError, VMResult, Value};
+use unicode_segmentation::UnicodeSegmentation;
 
 fn str_trim(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();
@@ -143,6 +144,84 @@ fn str_clear(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
+fn str_map_inner(vm: &mut SloshVm, func: Value, string: Value) -> VMResult<String> {
+    let tmp_str;
+    let string = match string {
+        Value::StringConst(i) => vm.get_interned(i),
+        Value::CodePoint(ch) => {
+            tmp_str = format!("{ch}");
+            &tmp_str
+        }
+        Value::CharCluster(l, c) => {
+            tmp_str = format!("{}", String::from_utf8_lossy(&c[0..l as usize]));
+            &tmp_str
+        }
+        //Value::CharClusterLong(_) => "Char".to_string(), // XXX TODO- move this to Object?
+        Value::String(handle) => {
+            tmp_str = vm.get_string(handle).to_string();
+            &tmp_str
+        }
+        _ => {
+            return Err(VMError::new_vm(
+                "str-map: first arg must be a string".to_string(),
+            ))
+        }
+    };
+    let mut res = String::new();
+    for ch in UnicodeSegmentation::graphemes(string, true) {
+        let param = if ch.len() < 7 {
+            let mut buf = [0_u8; 6];
+            let ch_bytes = ch.as_bytes();
+            buf[0..ch_bytes.len()].copy_from_slice(ch_bytes);
+            Value::CharCluster(ch.len() as u8, buf)
+        } else {
+            vm.alloc_string(ch.to_string())
+        };
+        let val = match func {
+            Value::Lambda(handle) => {
+                let func = vm.get_lambda(handle);
+                vm.do_call(func, &[param], None)?
+            }
+            Value::Closure(handle) => {
+                let (func, caps) = vm.get_closure(handle);
+                let caps: Vec<Handle> = caps.to_vec();
+                vm.do_call(func, &[param], Some(&caps[..]))?
+            }
+            Value::Builtin(idx) => vm.get_builtin(idx)(vm, &[param])?,
+            _ => {
+                return Err(VMError::new_vm(
+                    "str-map: second arg must be callable".to_string(),
+                ))
+            }
+        };
+        match val {
+            Value::StringConst(i) => res.push_str(vm.get_interned(i)),
+            Value::String(h) => res.push_str(vm.get_string(h)),
+            Value::CodePoint(ch) => res.push(ch),
+            Value::CharCluster(l, c) => res.push_str(&String::from_utf8_lossy(&c[0..l as usize])),
+            //Value::CharClusterLong(_) => "Char".to_string(), // XXX TODO- move this to Object?
+            _ => {
+                return Err(VMError::new_vm(
+                    "str-map: callable must return a string or char".to_string(),
+                ))
+            }
+        }
+    }
+    Ok(res)
+}
+
+fn str_map(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    let mut i = registers.iter();
+    if let (Some(string), Some(func), None) = (i.next(), i.next(), i.next()) {
+        let res = str_map_inner(vm, *func, *string)?;
+        Ok(vm.alloc_string(res))
+    } else {
+        Err(VMError::new_vm(
+            "str-map: takes a string and a lambda".to_string(),
+        ))
+    }
+}
+
 pub fn add_str_builtins(env: &mut SloshVm) {
     add_builtin(
         env,
@@ -281,6 +360,26 @@ Example:
 (def test-str-clear (str "def-string"))
 (test::assert-equal "" (str-clear! test-str-clear))
 (test::assert-equal "" test-str-clear)
+"#,
+    );
+    add_builtin(
+        env,
+        "str-map",
+        str_map,
+        r#"Usage: (str-map string lambda) -> string
+
+Make a new string by applying lambda to each char in input string.
+
+Section: string
+
+Example:
+(test::assert-equal "XstringXstrX" (str-map "xstringxstrx" (fn (ch) (if (= #\x ch) #\X ch))))
+(def test-str-map (str-map "xstringxstrx" (fn (ch) (if (= #\x ch) #\X ch))))
+(test::assert-equal "XstringXstrX" test-str-map)
+(test::assert-true (string? test-str-map))
+(def test-str-map (str-map (str "xstringxstrx") (fn (ch) (if (= #\x ch) #\X ch))))
+(test::assert-equal "XstringXstrX" test-str-map)
+(test::assert-true (string? test-str-map))
 "#,
     );
 }

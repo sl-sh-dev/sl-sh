@@ -165,7 +165,7 @@ pub fn hash_keys(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-pub fn hash_clear(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+fn hash_clear(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();
     if let (Some(Value::Map(map_handle)), None) = (i.next(), i.next()) {
         let map = vm.get_map_mut(*map_handle)?;
@@ -380,5 +380,29 @@ associations will be evaluated.
 Section: hashmap
 
 ",
+    );
+    add_builtin(
+        env,
+        "hash-clear!",
+        hash_clear,
+    "Usage: (hash-clear! hashmap)
+
+Clears a hashmap.  This is a destructive form!
+
+Section: hashmap
+
+Example:
+(def tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\")(#\\S . \"val S\"))))
+(test::assert-equal 4 (length (hash-keys tst-hash)))
+(test::assert-true (hash-haskey tst-hash :key1))
+(test::assert-true (hash-haskey tst-hash 'key2))
+(test::assert-true (hash-haskey tst-hash \"key3\"))
+(test::assert-true (hash-haskey tst-hash #\\S))
+(hash-clear! tst-hash)
+(test::assert-equal 0 (length (hash-keys tst-hash)))
+(test::assert-false (hash-haskey tst-hash :key1))
+(test::assert-false (hash-haskey tst-hash 'key2))
+(test::assert-false (hash-haskey tst-hash \"key3\"))
+(test::assert-false (hash-haskey tst-hash #\\S))",
     );
 }
