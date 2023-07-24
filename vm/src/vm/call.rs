@@ -72,7 +72,7 @@ impl<ENV> GVm<ENV> {
     }
 
     /// Build a call frame to be placed on the stack before transferring to a new chunk.
-    fn make_call_frame(
+    pub(crate) fn make_call_frame(
         &mut self,
         chunk: Arc<Chunk>,
         called: Value,
@@ -115,15 +115,26 @@ impl<ENV> GVm<ENV> {
                 let frame = self.make_call_frame(chunk.clone(), lambda, false);
                 let f = &self.buitins[f_idx as usize];
                 let regs = self.register_slice();
+
+                // Move top/max to a new window- this is in case a builtin calls Lisp
+                let save_top = self.stack_top;
+                let save_max = self.stack_max;
+                self.stack_top += first_reg as usize;
+                self.stack_max = self.stack_top + num_args as usize + 1;
+
                 let res =
                     (f.func)(self, &regs[(first_reg + 1) as usize..last_reg]).map_err(|e| {
+                        self.stack_top = save_top;
                         if self.err_frame().is_some() {
                             let call_frame = self.alloc_callframe(frame);
                             mov_register!(self, first_reg as usize, call_frame);
                             self.stack_top += first_reg as usize;
                         }
+                        self.stack_max = save_max;
                         (e, chunk.clone())
                     })?;
+                self.stack_top = save_top;
+                self.stack_max = save_max;
                 let res_reg = self.stack_top + first_reg as usize;
                 if tail_call {
                     // Go to last call frame so SRET does not mess up the return of a builtin.
@@ -181,22 +192,24 @@ impl<ENV> GVm<ENV> {
                     self.stack_top += first_reg as usize;
                     Some(frame)
                 } else {
+                    assert_eq!(first_reg, 0);
                     None
                 };
-                // Take the heap so we can mutate self.  Put it back when down or will panic on next access.
+                // Take the heap so we can mutate self.  Put it back when done or will panic on next access.
                 let heap = self.heap.take().expect("VM must have a Heap!");
                 let caps = heap.get_closure_captures(handle);
                 self.stack_max = self.stack_top + l.input_regs + l.extra_regs;
                 self.this_fn = Some(lambda);
                 self.ip_ptr = get_code!(l);
-                let cap_first = (first_reg + l.args + l.opt_args + 1) as usize;
                 if l.rest {
                     let (rest_reg, h) = self.setup_rest(&l, first_reg, num_args);
+                    let cap_first = rest_reg + 1;
                     for (i, c) in caps.iter().enumerate() {
                         *self.stack_mut(stack_top + cap_first + i) = Value::Value(*c);
                     }
                     *self.stack_mut(stack_top + rest_reg) = h;
                 } else {
+                    let cap_first = (first_reg + l.args + l.opt_args + 1) as usize;
                     for (i, c) in caps.iter().enumerate() {
                         *self.stack_mut(stack_top + cap_first + i) = Value::Value(*c);
                     }
@@ -328,7 +341,7 @@ impl<ENV> GVm<ENV> {
         }
         // Clear extra regs so things like closures or globals don't get changed by mistake.
         if l.extra_regs > 0 {
-            for r in l.input_regs + 1..=l.input_regs + l.extra_regs {
+            for r in l.input_regs..=l.input_regs + l.extra_regs {
                 mov_register!(self, first_reg as usize + r, Value::Undefined);
             }
         }

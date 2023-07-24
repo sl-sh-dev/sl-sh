@@ -188,6 +188,7 @@ fn main() {
             add_load_builtins(&mut env);
             add_str_builtins(&mut env);
             add_misc_builtins(&mut env);
+            env.set_global_builtin("dump-regs", builtin_dump_regs);
             let uid = Sys::current_uid();
             let euid = Sys::effective_uid();
             env::set_var("UID", format!("{uid}"));
@@ -369,13 +370,20 @@ fn exec_expression(res: String, env: &mut SloshVm) {
                 let line_num = env.line_num();
                 let mut state = CompileState::new_state(PROMPT_FN, line_num, None);
                 if let Err(e) = pass1(env, &mut state, exp) {
-                    println!("Compile error, line {}: {}", env.line_num(), e);
+                    eprintln!("Compile error (pass1), line {}: {}", env.line_num(), e);
+                    return;
                 }
                 if let Err(e) = compile(env, &mut state, exp, 0) {
-                    println!("Compile error, line {}: {}", env.line_num(), e);
+                    eprintln!("Compile error, line {}: {}", env.line_num(), e);
+                    return;
                 }
                 if let Err(e) = state.chunk.encode0(RET, env.own_line()) {
-                    println!("Compile error, line {}: {}", env.line_num(), e);
+                    eprintln!(
+                        "Compile error (failed to add return...), line {}: {}",
+                        env.line_num(),
+                        e
+                    );
+                    return;
                 }
                 let chunk = Arc::new(state.chunk.clone());
                 match env.execute(chunk.clone()) {

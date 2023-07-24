@@ -114,9 +114,10 @@ fn str_push(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
             }
             Ok(Value::String(handle))
         } else {
-            Err(VMError::new_vm(
-                "str-push!: first arg must be a string (not a const)".to_string(),
-            ))
+            Err(VMError::new_vm(format!(
+                "str-push!: first arg must be a string (not a const), got a {}",
+                buffer.display_type(vm)
+            )))
         }
     } else {
         Err(VMError::new_vm(
@@ -218,6 +219,44 @@ fn str_map(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     } else {
         Err(VMError::new_vm(
             "str-map: takes a string and a lambda".to_string(),
+        ))
+    }
+}
+
+fn char_whitespace(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    let mut i = registers.iter();
+    if let (Some(ch), None) = (i.next(), i.next()) {
+        match ch {
+            Value::CodePoint(ch) => {
+                if ch.is_whitespace() {
+                    Ok(Value::True)
+                } else {
+                    Ok(Value::False)
+                }
+            }
+            Value::CharCluster(l, a) => {
+                // TODO- should probably convert this back to a utf string...
+                if *l == 1 && a[0].is_ascii_whitespace() {
+                    Ok(Value::True)
+                } else {
+                    Ok(Value::False)
+                }
+            }
+            Value::CharClusterLong(h) => {
+                let ch = vm.get_string(*h);
+                if ch.len() == 1 && ch.chars().next().unwrap().is_whitespace() {
+                    Ok(Value::True)
+                } else {
+                    Ok(Value::False)
+                }
+            }
+            _ => Err(VMError::new_vm(
+                "char-whitespace?: takes a character".to_string(),
+            )),
+        }
+    } else {
+        Err(VMError::new_vm(
+            "char-whitespace?: takes a character".to_string(),
         ))
     }
 }
@@ -380,6 +419,22 @@ Example:
 (def test-str-map (str-map (str "xstringxstrx") (fn (ch) (if (= #\x ch) #\X ch))))
 (test::assert-equal "XstringXstrX" test-str-map)
 (test::assert-true (string? test-str-map))
+"#,
+    );
+    add_builtin(
+        env,
+        "char-whitespace?",
+        char_whitespace,
+        r#"Usage: (char-whitespace? char) -> t/nil
+
+Returns true if a character is whitespace, false/nil otherwise.
+
+Section: char
+
+Example:
+(test::assert-true (char-whitespace? #\ ))
+(test::assert-true (char-whitespace? #\tab))
+(test::assert-false (char-whitespace? #\s))
 "#,
     );
 }

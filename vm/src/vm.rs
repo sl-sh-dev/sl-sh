@@ -95,6 +95,10 @@ impl<ENV> GVm<ENV> {
         }
     }
 
+    pub fn this_fn(&self) -> Option<Value> {
+        self.this_fn
+    }
+
     pub fn stack(&self, idx: usize) -> Value {
         unsafe { *self.stack.add(idx) }
     }
@@ -334,15 +338,18 @@ impl<ENV> GVm<ENV> {
         let on_error = self.on_error;
         self.this_fn = None;
         self.on_error = None;
-        self.stack_top = self.stack_max;
+        self.stack_top = self.stack_max + 1;
+
         self.stack_max = self.stack_top + chunk.input_regs + chunk.extra_regs;
-        *self.stack_mut(self.stack_top) = Value::UInt32(params.len() as u32);
+
+        // We don't have a call frame, this will cause RET/SRET to return control back when called.
+        *self.stack_mut(self.stack_top) = Value::Undefined;
         if !params.is_empty() {
             let r = self.stack_top + 1..self.stack_top + 1 + params.len();
             self.stack_slice_mut()[r].copy_from_slice(params);
         }
+        self.make_registers();
         if chunk.rest {
-            self.make_registers();
             let (rest_reg, h) = self.setup_rest(&chunk, 0, params.len() as u16);
             if let Some(caps) = caps {
                 let cap_first = (chunk.args + chunk.opt_args + 1) as usize;

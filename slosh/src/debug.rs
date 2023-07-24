@@ -11,6 +11,7 @@ use sl_compiler::reader::*;
 
 use compile_state::state::{SloshVm, SloshVmTrait};
 use sl_liner::{Context, Prompt};
+use slvm::{VMError, VMResult};
 
 fn dump_regs(vm: &SloshVm, frame: &CallFrame) {
     let start = frame.stack_top;
@@ -234,4 +235,49 @@ pub fn debug(env: &mut SloshVm) {
         //  Err(err) => println!("Reader error: {}", err),
         //}
     }
+}
+
+pub fn builtin_dump_regs(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    if !registers.is_empty() {
+        return Err(VMError::new_compile("dump-regs: takes no args"));
+    }
+    if let Some(frame) = vm.call_frame() {
+        println!("Previous Regs:");
+        dump_regs(vm, frame);
+        println!();
+        //} else {
+        //    eprintln!("No frame found!");
+    }
+    let regs = vm.get_current_registers();
+    for (i, r) in regs.iter().enumerate() {
+        let aname = if i == 0 {
+            "params/result"
+        /*} else if let Some(reg_names) = reg_names.as_mut() {
+        if let Some(n) = reg_names.next() {
+            vm.get_interned(*n)
+        } else {
+            "[SCRATCH]"
+        }*/
+        } else {
+            "[SCRATCH]"
+        };
+        if let Value::Value(_) = r {
+            println!(
+                "{:#03} ^{:#20}: {:#12} {}",
+                i,
+                aname,
+                r.display_type(vm),
+                r.pretty_value(vm)
+            );
+        } else {
+            println!(
+                "{:#03}  {:#20}: {:#12} {}",
+                i,
+                aname,
+                r.display_type(vm),
+                r.pretty_value(vm)
+            );
+        }
+    }
+    Ok(Value::Nil)
 }

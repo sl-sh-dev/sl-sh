@@ -40,7 +40,10 @@ fn let_inner(
         let value = if let Some(r) = args_iter.next() {
             *r
         } else {
-            return Err(VMError::new_compile("symbol must have a value"));
+            return Err(VMError::new_compile(format!(
+                "let: symbol {} must have a value",
+                a.display_value(env)
+            )));
         };
         match a {
             Value::Symbol(i) => {

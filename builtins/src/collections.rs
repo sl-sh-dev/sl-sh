@@ -1,6 +1,7 @@
 use crate::{add_builtin, add_docstring, SloshVm};
 use slvm::{VMError, VMResult, Value};
 use std::collections::HashMap;
+use unicode_segmentation::UnicodeSegmentation;
 
 pub fn vec_slice(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let (vector, start, end) = match registers.len() {
@@ -173,6 +174,48 @@ fn hash_clear(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         Ok(Value::Map(*map_handle))
     } else {
         Err(VMError::new_vm("takes one argument (hash-map)".to_string()))
+    }
+}
+
+fn length(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    let mut i = registers.iter();
+    if let (Some(val), None) = (i.next(), i.next()) {
+        match val {
+            Value::String(h) => {
+                let mut len: u32 = 0;
+                for _ in UnicodeSegmentation::graphemes(vm.get_string(*h), true) {
+                    len += 1;
+                }
+                Ok(Value::UInt32(len))
+            }
+            Value::StringConst(i) => {
+                let mut len: u32 = 0;
+                for _ in UnicodeSegmentation::graphemes(vm.get_interned(*i), true) {
+                    len += 1;
+                }
+                Ok(Value::UInt32(len))
+            }
+            Value::Vector(h) => Ok(Value::UInt32(vm.get_vector(*h).len() as u32)),
+            Value::List(h, i) => Ok(Value::UInt32(vm.get_vector(*h).len() as u32 - *i as u32)),
+            Value::Pair(h) => {
+                let mut len: u32 = 1;
+                let (_, mut cdr) = vm.get_pair(*h);
+                while let Value::Pair(h) = cdr {
+                    let (_, c) = vm.get_pair(h);
+                    cdr = c;
+                    len += 1;
+                }
+                Ok(Value::UInt32(len))
+            }
+            Value::Map(h) => Ok(Value::UInt32(vm.get_map(*h).len() as u32)),
+            Value::Nil => Ok(Value::UInt32(0)),
+            _ => Err(VMError::new_vm(format!(
+                "len: net valid for value of type {}",
+                val.display_type(vm)
+            ))),
+        }
+    } else {
+        Err(VMError::new_vm("len: takes one argument".to_string()))
     }
 }
 
@@ -404,5 +447,29 @@ Example:
 (test::assert-false (hash-haskey tst-hash 'key2))
 (test::assert-false (hash-haskey tst-hash \"key3\"))
 (test::assert-false (hash-haskey tst-hash #\\S))",
+    );
+    add_builtin(
+        env,
+        "len",
+        length,
+        r#"Usage: (length expression) -> int
+
+Return length of supplied expression.
+
+Section: core
+
+Example:
+(test::assert-equal 0 (length nil))
+(test::assert-equal 5 (length \"12345\"))
+; Note the unicode symbol is only one char even though it is more then one byte.
+(test::assert-equal 6 (length \"12345Σ\"))
+(test::assert-equal 3 (length '(1 2 3)))
+(test::assert-equal 3 (length '#(1 2 3)))
+(test::assert-equal 3 (length (list 1 2 3)))
+(test::assert-equal 3 (length (vec 1 2 3)))
+(test::assert-error (length 100))
+(test::assert-error (length 100.0))
+(test::assert-error (length #\\x))
+"#,
     );
 }

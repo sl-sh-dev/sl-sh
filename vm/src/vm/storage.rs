@@ -59,6 +59,12 @@ impl<ENV> GVm<ENV> {
         &self.stack_slice()[start..end]
     }
 
+    pub fn get_current_registers(&self) -> &[Value] {
+        let start = self.stack_top;
+        let end = self.stack_max;
+        &self.stack_slice()[start..=end]
+    }
+
     pub fn get_stack(&self, idx: usize) -> Value {
         self.stack(idx)
     }
@@ -503,7 +509,7 @@ impl<ENV> GVm<ENV> {
         self.alloc_value(val)
     }
 
-    pub(super) fn call_frame(&self) -> Option<&CallFrame> {
+    pub fn call_frame(&self) -> Option<&CallFrame> {
         self.call_frame_idx(self.stack_top)
     }
 

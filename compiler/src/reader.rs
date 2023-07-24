@@ -121,7 +121,7 @@ fn end_symbol(ch: &str, read_table_term: &HashMap<&'static str, Value>) -> bool 
     } else {
         matches!(
             ch,
-            "(" | ")" | "#" | "\"" | "~" | "'" | "`" | "[" | "]" | "{" | "}" | "\\"
+            "(" | ")" | "#" | "\"" | "~" | "'" | "`" | "[" | "]" | "{" | "}" | "\\" | ";"
         )
     }
 }
@@ -296,7 +296,13 @@ impl<'vm> Reader<'vm> {
     ) -> Result<Value, ReadError> {
         if let Some(ch) = self.chars().next() {
             if let Some(pch) = self.chars().peek() {
-                if !is_whitespace(pch) {
+                if !is_whitespace(pch)
+                    && pch != "("
+                    && pch != ")"
+                    && pch != "\""
+                    && pch != "'"
+                    && pch != "`"
+                {
                     match &*ch {
                         "u" => {
                             let ch = self.read_utf_scalar()?;
@@ -333,9 +339,7 @@ impl<'vm> Reader<'vm> {
                     }
                 }
             }
-            if ch.len() == 1 {
-                Ok(Value::CodePoint(ch.chars().next().unwrap()))
-            } else if ch.len() < 6 {
+            if ch.len() < 7 {
                 let mut v: [u8; 6] = [0; 6];
                 for (i, c) in ch.bytes().enumerate() {
                     v[i] = c;

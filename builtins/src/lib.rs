@@ -1,3 +1,5 @@
+extern crate core;
+
 use compile_state::state::{CompileEnvironment, SloshVm, SloshVmTrait};
 use slvm::{CallFuncSig, VMError, VMResult, Value};
 
@@ -5,7 +7,7 @@ pub mod collections;
 pub mod print;
 pub mod string;
 
-pub fn get_prop(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+fn get_prop(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if registers.len() != 2 {
         return Err(VMError::new_vm(
             "get-prop: Invalid arguments (object symbol)".to_string(),
@@ -32,7 +34,7 @@ pub fn get_prop(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-pub fn set_prop(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+fn set_prop(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if registers.len() != 3 {
         return Err(VMError::new_vm(
             "set-prop: Invalid arguments (object symbol value)".to_string(),
@@ -58,7 +60,7 @@ pub fn set_prop(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-pub fn sizeof_heap_object(_vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+fn sizeof_heap_object(_vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if !registers.is_empty() {
         return Err(VMError::new_vm(
             "sizeof-heap-object: takes no arguments".to_string(),
@@ -67,7 +69,7 @@ pub fn sizeof_heap_object(_vm: &mut SloshVm, registers: &[Value]) -> VMResult<Va
     Ok(Value::UInt32(SloshVm::sizeof_heap_object() as u32))
 }
 
-pub fn sizeof_value(_vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+fn sizeof_value(_vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if !registers.is_empty() {
         return Err(VMError::new_vm(
             "sizeof-value: takes no arguments".to_string(),
@@ -76,7 +78,7 @@ pub fn sizeof_value(_vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     Ok(Value::UInt32(std::mem::size_of::<Value>() as u32))
 }
 
-pub fn gensym(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+fn gensym(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if !registers.is_empty() {
         return Err(VMError::new_vm("gensym: takes no arguments".to_string()));
     }
@@ -86,7 +88,7 @@ pub fn gensym(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     Ok(Value::Symbol(sym))
 }
 
-pub fn expand_macro(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+fn expand_macro(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if registers.len() != 1 {
         return Err(VMError::new_vm(
             "expand-macro: takes one arguments".to_string(),
@@ -134,6 +136,17 @@ pub fn expand_macro(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
+fn remainder(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    let mut i = registers.iter();
+    if let (Some(val1), Some(val2), None) = (i.next(), i.next(), i.next()) {
+        let i1 = val1.get_int(vm)?;
+        let i2 = val2.get_int(vm)?;
+        Ok(vm.alloc_int(i1 % i2))
+    } else {
+        Err(VMError::new_vm("requires two integers".to_string()))
+    }
+}
+
 pub fn add_builtin(
     env: &mut SloshVm,
     name: &str,
@@ -160,4 +173,25 @@ pub fn add_misc_builtins(env: &mut SloshVm) {
     env.set_global_builtin("sizeof-value", sizeof_value);
     env.set_global_builtin("gensym", gensym);
     env.set_global_builtin("expand-macro", expand_macro);
+    add_builtin(
+        env,
+        "rem",
+        remainder,
+        "Usage: (% int int)
+
+Remainder from dividing first int by the second.
+
+Section: math
+
+Example:
+(ns-import 'math)
+(test::assert-equal 0 (% 50 10))
+(test::assert-equal 5 (% 55 10))
+(test::assert-equal 1 (% 1 2))
+(test::assert-error (%))
+(test::assert-error (% 1))
+(test::assert-error (% 1 2 3))
+(test::assert-error (% 1 2.0))
+",
+    );
 }
