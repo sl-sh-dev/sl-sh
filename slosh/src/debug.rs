@@ -3,6 +3,7 @@ extern crate sl_liner;
 use std::collections::VecDeque;
 use std::io::ErrorKind;
 use std::iter::*;
+use std::sync::Arc;
 
 use slvm::heap::*;
 use slvm::value::*;
@@ -11,7 +12,7 @@ use sl_compiler::reader::*;
 
 use compile_state::state::{SloshVm, SloshVmTrait};
 use sl_liner::{Context, Prompt};
-use slvm::{VMError, VMResult};
+use slvm::{Chunk, VMError, VMResult};
 
 fn dump_regs(vm: &SloshVm, frame: &CallFrame) {
     let start = frame.stack_top;
@@ -242,22 +243,33 @@ pub fn builtin_dump_regs(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Valu
         return Err(VMError::new_compile("dump-regs: takes no args"));
     }
     if let Some(frame) = vm.call_frame() {
-        println!("Previous Regs:");
+        println!("Previous Call Frames Regs (NOTE: tail calls will be 'missing' Call Frames):");
         dump_regs(vm, frame);
         println!();
-        //} else {
-        //    eprintln!("No frame found!");
     }
+    let lambda = if let Some(val) = vm.this_fn() {
+        match val {
+            Value::Lambda(h) => vm.get_lambda(h),
+            Value::Closure(h) => {
+                let (l, _) = vm.get_closure(h);
+                l
+            }
+            _ => Arc::new(Chunk::new("", 0)),
+        }
+    } else {
+        Arc::new(Chunk::new("", 0))
+    };
+    let mut reg_names = lambda.dbg_args.as_ref().map(|iargs| iargs.iter());
     let regs = vm.get_current_registers();
     for (i, r) in regs.iter().enumerate() {
         let aname = if i == 0 {
             "params/result"
-        /*} else if let Some(reg_names) = reg_names.as_mut() {
-        if let Some(n) = reg_names.next() {
-            vm.get_interned(*n)
-        } else {
-            "[SCRATCH]"
-        }*/
+        } else if let Some(reg_names) = reg_names.as_mut() {
+            if let Some(n) = reg_names.next() {
+                vm.get_interned(*n)
+            } else {
+                "[SCRATCH]"
+            }
         } else {
             "[SCRATCH]"
         };

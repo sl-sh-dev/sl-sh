@@ -116,25 +116,15 @@ impl<ENV> GVm<ENV> {
                 let f = &self.buitins[f_idx as usize];
                 let regs = self.register_slice();
 
-                // Move top/max to a new window- this is in case a builtin calls Lisp
-                let save_top = self.stack_top;
-                let save_max = self.stack_max;
-                self.stack_top += first_reg as usize;
-                self.stack_max = self.stack_top + num_args as usize + 1;
-
                 let res =
                     (f.func)(self, &regs[(first_reg + 1) as usize..last_reg]).map_err(|e| {
-                        self.stack_top = save_top;
                         if self.err_frame().is_some() {
                             let call_frame = self.alloc_callframe(frame);
                             mov_register!(self, first_reg as usize, call_frame);
                             self.stack_top += first_reg as usize;
                         }
-                        self.stack_max = save_max;
                         (e, chunk.clone())
                     })?;
-                self.stack_top = save_top;
-                self.stack_max = save_max;
                 let res_reg = self.stack_top + first_reg as usize;
                 if tail_call {
                     // Go to last call frame so SRET does not mess up the return of a builtin.
