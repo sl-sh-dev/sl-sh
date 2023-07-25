@@ -1032,7 +1032,7 @@ impl<ENV> GVm<ENV> {
                 TYPE => {
                     let (dest, val) = decode2!(self.ip_ptr, wide);
                     let val = self.register(val as usize);
-                    let t = Value::StringConst(self.intern_static(val.display_type(self)));
+                    let t = Value::Keyword(self.intern_static(val.display_type(self)));
                     set_register!(self, dest as usize, t);
                 }
                 _ => {

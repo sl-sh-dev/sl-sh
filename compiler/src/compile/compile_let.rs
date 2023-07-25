@@ -32,11 +32,9 @@ fn let_inner(
     let args = cdr_iter.next().unwrap(); // unwrap safe, length is at least 1
     let mut right_exps: Vec<RightSideExp> = Vec::new();
     let mut destruct_state = DestructState::new();
-    env.set_line_val(state, *args);
     let args: Vec<Value> = get_args_iter(env, *args, "let")?.collect();
     let mut args_iter = args.iter();
     while let Some(a) = args_iter.next() {
-        env.set_line_val(state, *a);
         let value = if let Some(r) = args_iter.next() {
             *r
         } else {

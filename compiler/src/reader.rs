@@ -232,7 +232,6 @@ impl<'vm> Reader<'vm> {
 
     fn alloc_list(&mut self, list: Vec<Value>, line: u32, column: u32) -> Value {
         let result = self.vm.alloc_list_ro(list);
-        // Just allocated this so the unwrap is safe.
         let file_name = self.vm.intern_static(self.file_name);
         self.vm
             .set_heap_property(result, "dbg-file", Value::StringConst(file_name));
@@ -887,7 +886,7 @@ impl<'vm> Reader<'vm> {
             if let Some(last) = list_iter.next() {
                 let mut last = *last;
                 for v in list_iter {
-                    last = self.alloc_pair(*v, last, self.line() as u32, self.column() as u32);
+                    last = self.alloc_pair(*v, last, line, column);
                 }
                 Ok(last)
             } else {

@@ -14,7 +14,6 @@ pub fn mk_state(
     let line = env.own_line().unwrap_or(1);
     let mut new_state =
         CompileState::new_state(state.chunk.file_name, line, Some(state.symbols.clone()));
-    env.set_line_val(&mut new_state, args);
     let args_iter: Vec<Value> = get_args_iter(env, args, "fn")?.collect();
     let mut opt = false;
     let mut rest = false;

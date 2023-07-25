@@ -166,13 +166,26 @@ fn compile_list(
                 if cdr.len() != 1 {
                     return Err(VMError::new_compile("Requires one argument."));
                 } else {
-                    compile(env, state, cdr[0], result + 1)?;
-                    state.chunk.encode2(
-                        TYPE,
-                        result as u16,
-                        (result + 1) as u16,
-                        env.own_line(),
-                    )?;
+                    match cdr[0] {
+                        Value::Symbol(i) if env.specials().is_special(i) => {
+                            let const_i = state.add_constant(Value::Keyword(env.intern("Special")));
+                            state.chunk.encode2(
+                                CONST,
+                                result as u16,
+                                const_i as u16,
+                                env.own_line(),
+                            )?;
+                        }
+                        _ => {
+                            compile(env, state, cdr[0], result + 1)?;
+                            state.chunk.encode2(
+                                TYPE,
+                                result as u16,
+                                (result + 1) as u16,
+                                env.own_line(),
+                            )?;
+                        }
+                    }
                 }
             }
             Value::Symbol(i) if i == env.specials().not => {
@@ -296,7 +309,6 @@ fn compile_list(
             Value::Lambda(h) => compile_call(env, state, Value::Lambda(h), cdr, result)?,
             Value::Pair(_) | Value::List(_, _) => {
                 let (ncar, ncdr) = car.get_pair(env).expect("Pair/List not a Pair or List?");
-                env.set_line_val(state, car);
                 if let Value::List(h, idx) = ncdr {
                     // This unsafe should be fine (it breaks the lifetime away from env) since the
                     // vector that backs a list is read only.

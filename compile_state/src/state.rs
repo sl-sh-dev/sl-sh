@@ -266,6 +266,60 @@ impl Specials {
             scratch: vm.intern_static("[SCRATCH]"),
         }
     }
+
+    /// Does i equal one of the special forms that are compiled?
+    pub fn is_special(&self, i: Interned) -> bool {
+        self.def == i
+            || self.set == i
+            || self.do_ == i
+            || self.fn_ == i
+            || self.mac_ == i
+            || self.if_ == i
+            || self.add == i
+            || self.sub == i
+            || self.mul == i
+            || self.div == i
+            || self.inc == i
+            || self.dec == i
+            || self.list == i
+            || self.list_append == i
+            || self.cons == i
+            || self.car == i
+            || self.cdr == i
+            || self.xar == i
+            || self.xdr == i
+            || self.make_vec == i
+            || self.vec_push == i
+            || self.vec_pop == i
+            || self.vec_nth == i
+            || self.vec_set == i
+            || self.quote == i
+            || self.backquote == i
+            || self.recur == i
+            || self.this_fn == i
+            || self.numeq == i
+            || self.numneq == i
+            || self.numlt == i
+            || self.numlte == i
+            || self.numgt == i
+            || self.numgte == i
+            || self.eq == i
+            || self.equal == i
+            || self.type_ == i
+            || self.not == i
+            || self.and == i
+            || self.or == i
+            || self.err == i
+            || self.vec_len == i
+            || self.vec_clr == i
+            || self.str_ == i
+            || self.let_ == i
+            || self.call_cc == i
+            || self.defer == i
+            || self.on_error == i
+            || self.while_ == i
+            || self.doc_string == i
+    }
 }
 
 pub struct CompileState {
