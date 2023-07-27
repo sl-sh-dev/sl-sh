@@ -421,6 +421,10 @@ impl CompileEnvironment {
     pub fn line(&self) -> u32 {
         self.line
     }
+
+    pub fn global_defined(&self, i: Interned) -> bool {
+        self.global_map.contains_key(&i)
+    }
 }
 
 pub type SloshVm = GVm<CompileEnvironment>;

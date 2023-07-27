@@ -14,6 +14,7 @@ use sl_compiler::compile::*;
 use sl_compiler::reader::*;
 
 use builtins::collections::setup_colletion_builtins;
+use builtins::io::add_io_builtins;
 use builtins::print::{add_print_builtins, display_value};
 use builtins::string::add_str_builtins;
 use builtins::{add_global_docstring, add_misc_builtins};
@@ -35,7 +36,7 @@ use config::*;
 use debug::*;
 use shell::platform::{Platform, Sys, STDIN_FILENO};
 use sl_compiler::pass1::pass1;
-use slvm::Value;
+use slvm::{VMError, VMResult, Value};
 
 thread_local! {
     /// Env (job control status, etc) for the shell.
@@ -178,6 +179,25 @@ fn get_color_closure() -> Option<ColorClosure> {
     })
 }
 
+fn builtin_is_def(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    let mut i = registers.iter();
+    if let (Some(val), None) = (i.next(), i.next()) {
+        if let Value::Symbol(i) = val {
+            if vm.env().global_defined(*i) {
+                Ok(Value::True)
+            } else {
+                Ok(Value::False)
+            }
+        } else {
+            Err(VMError::new_vm(
+                "def?: argument must be a symbol".to_string(),
+            ))
+        }
+    } else {
+        Err(VMError::new_vm("def?: takes one argument".to_string()))
+    }
+}
+
 fn main() {
     if let Some(config) = get_config() {
         ENV.with(|renv| {
@@ -188,7 +208,9 @@ fn main() {
             add_load_builtins(&mut env);
             add_str_builtins(&mut env);
             add_misc_builtins(&mut env);
+            add_io_builtins(&mut env);
             env.set_global_builtin("dump-regs", builtin_dump_regs);
+            env.set_global_builtin("def?", builtin_is_def);
             let sym_i = env.intern_static("car");
             add_global_docstring(&mut env, "car", Value::Symbol(sym_i), "CAR instructions");
             let uid = Sys::current_uid();

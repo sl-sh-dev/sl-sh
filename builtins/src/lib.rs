@@ -4,6 +4,7 @@ use compile_state::state::{CompileEnvironment, SloshVm, SloshVmTrait};
 use slvm::{CallFuncSig, VMError, VMResult, Value};
 
 pub mod collections;
+pub mod io;
 pub mod print;
 pub mod string;
 

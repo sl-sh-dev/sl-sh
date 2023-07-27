@@ -326,7 +326,7 @@ impl<ENV> GVm<ENV> {
                     } else {
                         decode_u16!(self.ip_ptr) as u32
                     };
-                    let val = self.register(src as usize); //self.register(src as usize);
+                    let val = self.register(src as usize);
                     self.set_global(idx, val);
                 }
                 DEFV => {
