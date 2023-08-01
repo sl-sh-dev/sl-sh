@@ -338,17 +338,7 @@ impl<'vm> Reader<'vm> {
                     }
                 }
             }
-            if ch.len() < 7 {
-                let mut v: [u8; 6] = [0; 6];
-                for (i, c) in ch.bytes().enumerate() {
-                    v[i] = c;
-                }
-                Ok(Value::CharCluster(ch.len() as u8, v))
-            } else if let Value::String(handle) = self.vm.alloc_string_ro(ch.to_string()) {
-                Ok(Value::CharClusterLong(handle))
-            } else {
-                panic!("Invalid alloc_string!");
-            }
+            Ok(self.vm.alloc_char(&ch))
         } else {
             let reason = format!(
                 "Not a valid char, missing: line {}, col: {}",

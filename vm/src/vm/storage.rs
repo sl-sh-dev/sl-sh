@@ -183,6 +183,20 @@ impl<ENV> GVm<ENV> {
         res
     }
 
+    pub fn alloc_char(&mut self, ch: &str) -> Value {
+        if ch.len() < 7 {
+            let mut v: [u8; 6] = [0; 6];
+            for (i, c) in ch.bytes().enumerate() {
+                v[i] = c;
+            }
+            Value::CharCluster(ch.len() as u8, v)
+        } else if let Value::String(handle) = self.alloc_string_ro(ch.to_string()) {
+            Value::CharClusterLong(handle)
+        } else {
+            panic!("Invalid alloc_string!");
+        }
+    }
+
     pub fn alloc_vector(&mut self, v: Vec<Value>) -> Value {
         let mut heap = self.heap.take().expect("VM must have a Heap!");
         let res = heap.alloc_vector(v, MutState::Mutable, |heap| self.mark_roots(heap));

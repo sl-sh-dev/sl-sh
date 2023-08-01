@@ -223,6 +223,58 @@ fn str_map(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
+fn str_empty(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    let mut i = registers.iter();
+    if let (Some(string), None) = (i.next(), i.next()) {
+        match string {
+            Value::StringConst(i) => {
+                if vm.get_interned(*i).is_empty() {
+                    Ok(Value::True)
+                } else {
+                    Ok(Value::False)
+                }
+            }
+            Value::String(h) => {
+                if vm.get_string(*h).is_empty() {
+                    Ok(Value::True)
+                } else {
+                    Ok(Value::False)
+                }
+            }
+            _ => Err(VMError::new_vm(format!(
+                "str-empty?: takes a string, got a {}",
+                string.display_type(vm)
+            ))),
+        }
+    } else {
+        Err(VMError::new_vm("str-empty?: takes a string".to_string()))
+    }
+}
+
+fn str_nth(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    let mut i = registers.iter();
+    if let (Some(string), Some(idx), None) = (i.next(), i.next(), i.next()) {
+        let string = string.pretty_value(vm);
+        let idx = idx.get_int(vm)?;
+        if idx < 0 {
+            return Err(VMError::new_vm(
+                "str-nth: index must be positive".to_string(),
+            ));
+        }
+        let strng: &str = &string;
+        let mut chars = UnicodeSegmentation::graphemes(strng, true).skip(idx as usize);
+        if let Some(char) = chars.next() {
+            Ok(vm.alloc_char(char))
+        } else {
+            Err(VMError::new_vm("str-nth: index out of bounds".to_string()))
+        }
+    } else {
+        Err(VMError::new_vm(
+            "str-nth: takes a string and a index".to_string(),
+        ))
+    }
+}
+
 fn char_whitespace(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();
     if let (Some(ch), None) = (i.next(), i.next()) {
@@ -435,6 +487,39 @@ Example:
 (test::assert-true (char-whitespace? #\ ))
 (test::assert-true (char-whitespace? #\tab))
 (test::assert-false (char-whitespace? #\s))
+"#,
+    );
+    add_builtin(
+        env,
+        "str-empty?",
+        str_empty,
+        r#"Usage: (str-empty? string) -> #t/#f
+
+Is a string empty?  Let's find out...
+
+Section: string
+
+Example:
+(test::assert-true (str-empty? ""))
+(test::assert-true (str-empty? (str-trim "   ")))
+(test::assert-false (str-empty? " "))
+(test::assert-false (str-empty? "string"))
+"#,
+    );
+    add_builtin(
+        env,
+        "str-nth",
+        str_nth,
+        r#"Usage: (str-nth string index) -> char
+
+Get the nth char (idexx) of a string.  Index is 0 based.
+
+Section: string
+
+Example:
+(test::assert-equal #\a (str-nth "stau" 2))
+(test::assert-equal #\s (str-nth "stau" 0))
+(test::assert-equal #\u (str-nth "stau" 3))
 "#,
     );
 }
