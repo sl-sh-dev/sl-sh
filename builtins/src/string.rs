@@ -74,8 +74,8 @@ fn str_contains(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();
     if let (Some(string), Some(pat), None) = (i.next(), i.next(), i.next()) {
         let string = string.get_string(vm)?;
-        let pat = pat.get_string(vm)?;
-        if string.contains(pat) {
+        let pat = pat.pretty_value(vm);
+        if string.contains(&pat) {
             Ok(Value::True)
         } else {
             Ok(Value::False)
@@ -271,6 +271,46 @@ fn str_nth(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     } else {
         Err(VMError::new_vm(
             "str-nth: takes a string and a index".to_string(),
+        ))
+    }
+}
+
+fn str_starts_with(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    let mut i = registers.iter();
+    if let (Some(string), Some(pat), None) = (i.next(), i.next(), i.next()) {
+        let string = string.pretty_value(vm);
+        let pat = pat.pretty_value(vm);
+        if string.starts_with(&pat) {
+            Ok(Value::True)
+        } else {
+            Ok(Value::False)
+        }
+    } else {
+        Err(VMError::new_vm(
+            "str-starts-with: takes a string and a pattern".to_string(),
+        ))
+    }
+}
+
+fn str_split(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    let mut i = registers.iter();
+    if let (Some(string), Some(pat), None) = (i.next(), i.next(), i.next()) {
+        let string = string.pretty_value(vm);
+        let pat = pat.pretty_value(vm);
+        let mut splits = Vec::new();
+        if pat == ":whitespace" {
+            for s in string.split_whitespace() {
+                splits.push(vm.alloc_string(s.to_string()));
+            }
+        } else {
+            for s in string.split(&pat) {
+                splits.push(vm.alloc_string(s.to_string()));
+            }
+        }
+        Ok(vm.alloc_vector(splits))
+    } else {
+        Err(VMError::new_vm(
+            "str-split: takes a string and a pattern".to_string(),
         ))
     }
 }
@@ -520,6 +560,40 @@ Example:
 (test::assert-equal #\a (str-nth "stau" 2))
 (test::assert-equal #\s (str-nth "stau" 0))
 (test::assert-equal #\u (str-nth "stau" 3))
+"#,
+    );
+    add_builtin(
+        env,
+        "str-starts-with",
+        str_starts_with,
+        r#"Usage: (str-starts-with string pattern) -> #t/#f
+
+True if string start with pattern.
+
+Section: string
+
+Example:
+(test::assert-true (str-starts-with "Stausomething" "Stau"))
+(test::assert-false (str-starts-with "Stausomething" "StaU"))
+"#,
+    );
+    add_builtin(
+        env,
+        "str-split",
+        str_split,
+        r#"Usage: (str-split string split-pattern) -> vector
+
+Use a pattern to split a string (:whitespace to split on whitespace).
+
+Section: string
+
+Example:
+(test::assert-equal '("some" "yyy" "string") (str-split "somexxxyyyxxxstring" "xxx"))
+(test::assert-equal '("some" "yyy" "string" "") (str-split "somexxxyyyxxxstringxxx" "xxx"))
+(test::assert-equal '("" "some" "yyy" "string" "") (str-split "xxxsomexxxyyyxxxstringxxx" "xxx"))
+(test::assert-equal '("some" "yyy" "string") (str-split "some yyy string" :whitespace))
+(test::assert-equal '("somexxxyyyxxxstring") (str-split "somexxxyyyxxxstring" :whitespace))
+(test::assert-equal '("somexxxyyyxxxstring") (str-split "somexxxyyyxxxstring" "zzz"))
 "#,
     );
 }

@@ -100,7 +100,7 @@ pub(crate) fn compile_and(
             state.tail = tail;
         }
         compile(env, state, *r, result)?;
-        if cdr_i.peek().is_some() {
+        if next.is_some() {
             state
                 .chunk
                 .encode2(JMPF, result as u16, jmp_idx as u16, env.own_line())?;
@@ -135,7 +135,7 @@ pub(crate) fn compile_or(
             state.tail = tail;
         }
         compile(env, state, *r, result)?;
-        if cdr_i.peek().is_some() {
+        if next.is_some() {
             state
                 .chunk
                 .encode2(JMPT, result as u16, jmp_idx as u16, env.own_line())?;

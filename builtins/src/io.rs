@@ -3,6 +3,7 @@ use compile_state::state::SloshVm;
 use slvm::{VMError, VMResult, Value};
 use std::collections::HashMap;
 use std::fs::File;
+use std::path::Path;
 
 fn fs_meta(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();
@@ -44,6 +45,24 @@ fn fs_meta(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
+fn fs_exists(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    let mut i = registers.iter();
+    if let (Some(string), None) = (i.next(), i.next()) {
+        let string = string.pretty_value(vm);
+        let p = Path::new(&string);
+        if p.exists() {
+            Ok(Value::True)
+        } else {
+            Ok(Value::False)
+        }
+    } else {
+        Err(VMError::new(
+            "io",
+            "fs-exists?: takes a filename as only arg".to_string(),
+        ))
+    }
+}
+
 pub fn add_io_builtins(env: &mut SloshVm) {
     add_builtin(
         env,
@@ -54,6 +73,28 @@ pub fn add_io_builtins(env: &mut SloshVm) {
 Returns a map if a files meta data.
 
 Section: io
+"#,
+    );
+
+    add_builtin(
+        env,
+        "fs-exists?",
+        fs_exists,
+        r#"
+ Usage: (fs-exists? path-to-test)
+
+Does the given path exist?
+
+Section: file
+
+Example:
+(sh "mkdir /tmp/tst-fs-exists")
+(sh "touch /tmp/tst-fs-exists/fs-exists")
+(test::assert-true (fs-exists? "/tmp/tst-fs-exists/fs-exists"))
+(test::assert-true (fs-exists? "/tmp/tst-fs-exists"))
+(test::assert-false (fs-exists? "/tmp/tst-fs-exists/fs-exists-nope"))
+(sh "rm /tmp/tst-fs-exists/fs-exists")
+(sh "rmdir /tmp/tst-fs-exists")
 "#,
     );
 }
