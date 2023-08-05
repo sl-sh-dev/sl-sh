@@ -429,37 +429,21 @@ impl<ENV> GVm<ENV> {
                     self.make_registers();
                 }
                 TCALL => {
-                    if let Some(defer) = self.defers.pop() {
-                        // Tail call so do defers first.
-                        let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
-                        self.ip_ptr = self.current_ip_ptr;
-                        chunk = self.make_call(defer, chunk, first_reg, 0, false)?;
-                        self.make_registers();
-                    } else {
-                        let (lambda, num_args) = decode2!(self.ip_ptr, wide);
-                        let lambda = self.register(lambda as usize);
-                        chunk = self.make_call(lambda, chunk, 0, num_args, true)?;
-                        self.make_registers(); // In case of a builtin call
-                    }
+                    let (lambda, num_args) = decode2!(self.ip_ptr, wide);
+                    let lambda = self.register(lambda as usize);
+                    chunk = self.make_call(lambda, chunk, 0, num_args, true)?;
+                    self.make_registers(); // In case of a builtin call
                 }
                 TCALLG => {
-                    if let Some(defer) = self.defers.pop() {
-                        // Tail call so do defers first.
-                        let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
-                        self.ip_ptr = self.current_ip_ptr;
-                        chunk = self.make_call(defer, chunk, first_reg, 0, false)?;
-                        self.make_registers();
+                    let idx = if wide {
+                        decode_u32!(self.ip_ptr)
                     } else {
-                        let idx = if wide {
-                            decode_u32!(self.ip_ptr)
-                        } else {
-                            decode_u16!(self.ip_ptr) as u32
-                        };
-                        let num_args = decode1!(self.ip_ptr, wide);
-                        let lambda = self.get_global(idx);
-                        chunk = self.make_call(lambda, chunk, 0, num_args, true)?;
-                        self.make_registers(); // In case of a builtin call
-                    }
+                        decode_u16!(self.ip_ptr) as u32
+                    };
+                    let num_args = decode1!(self.ip_ptr, wide);
+                    let lambda = self.get_global(idx);
+                    chunk = self.make_call(lambda, chunk, 0, num_args, true)?;
+                    self.make_registers(); // In case of a builtin call
                 }
                 CALLM => {
                     let (num_args, first_reg) = decode2!(self.ip_ptr, wide);
@@ -478,27 +462,19 @@ impl<ENV> GVm<ENV> {
                     }
                 }
                 TCALLM => {
-                    if let Some(defer) = self.defers.pop() {
-                        // Tail call so do defers first.
-                        let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
-                        self.ip_ptr = self.current_ip_ptr;
-                        chunk = self.make_call(defer, chunk, first_reg, 0, false)?;
-                        self.make_registers();
+                    let num_args = decode1!(self.ip_ptr, wide);
+                    if let Some(this_fn) = self.this_fn {
+                        chunk = self.make_call(this_fn, chunk, 0, num_args, true)?;
+                        self.make_registers(); // In case of a builtin call
                     } else {
-                        let num_args = decode1!(self.ip_ptr, wide);
-                        if let Some(this_fn) = self.this_fn {
-                            chunk = self.make_call(this_fn, chunk, 0, num_args, true)?;
-                            self.make_registers(); // In case of a builtin call
-                        } else {
-                            let line = self.get_line(wide, &chunk);
-                            return Err((
-                                VMError::new_vm(format!(
-                                    "TCALLM: Not in an existing lambda call, line {}.",
-                                    line.unwrap_or(0)
-                                )),
-                                chunk,
-                            ));
-                        }
+                        let line = self.get_line(wide, &chunk);
+                        return Err((
+                            VMError::new_vm(format!(
+                                "TCALLM: Not in an existing lambda call, line {}.",
+                                line.unwrap_or(0)
+                            )),
+                            chunk,
+                        ));
                     }
                 }
                 JMP => {

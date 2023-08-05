@@ -1,0 +1,140 @@
+use crate::add_builtin;
+use compile_state::state::{SloshVm, SloshVmTrait};
+use slvm::{VMError, VMResult, Value};
+
+fn to_sym(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    let mut i = registers.iter();
+    if let (Some(string), None) = (i.next(), i.next()) {
+        match string {
+            Value::StringConst(i) => Ok(Value::Symbol(*i)),
+            Value::Keyword(i) => Ok(Value::Symbol(*i)),
+            Value::Symbol(i) => Ok(Value::Symbol(*i)),
+            _ => {
+                let string = string.pretty_value(vm);
+                let i = vm.intern(&string);
+                Ok(Value::Symbol(i))
+            }
+        }
+    } else {
+        Err(VMError::new("conv", "->sym: takes one arg".to_string()))
+    }
+}
+
+fn to_key(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    let mut i = registers.iter();
+    if let (Some(string), None) = (i.next(), i.next()) {
+        match string {
+            Value::StringConst(i) => Ok(Value::Keyword(*i)),
+            Value::Keyword(i) => Ok(Value::Keyword(*i)),
+            Value::Symbol(i) => Ok(Value::Keyword(*i)),
+            _ => {
+                let string = string.pretty_value(vm);
+                let i = vm.intern(&string);
+                Ok(Value::Keyword(i))
+            }
+        }
+    } else {
+        Err(VMError::new("conv", "->key: takes one arg".to_string()))
+    }
+}
+
+fn global_ref(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    let mut i = registers.iter();
+    if let (Some(symbol), None) = (i.next(), i.next()) {
+        match symbol {
+            Value::Symbol(i) => {
+                if let Some(slot) = vm.global_intern_slot(*i) {
+                    Ok(vm.get_global(slot))
+                } else {
+                    Err(VMError::new(
+                        "conv",
+                        "global-ref: not a global var".to_string(),
+                    ))
+                }
+            }
+            _ => Err(VMError::new(
+                "conv",
+                format!(
+                    "global-ref: expected a symbol, got a {}",
+                    symbol.display_type(vm)
+                ),
+            )),
+        }
+    } else {
+        Err(VMError::new(
+            "conv",
+            "global-ref: takes one arg".to_string(),
+        ))
+    }
+}
+
+fn is_global(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    let mut i = registers.iter();
+    if let (Some(symbol), None) = (i.next(), i.next()) {
+        match symbol {
+            Value::Symbol(i) => {
+                if let Some(_slot) = vm.global_intern_slot(*i) {
+                    Ok(Value::True)
+                } else {
+                    Ok(Value::False)
+                }
+            }
+            _ => Err(VMError::new(
+                "conv",
+                format!(
+                    "global?: expected a symbol, got a {}",
+                    symbol.display_type(vm)
+                ),
+            )),
+        }
+    } else {
+        Err(VMError::new("conv", "global?: takes one arg".to_string()))
+    }
+}
+
+pub fn add_conv_builtins(env: &mut SloshVm) {
+    add_builtin(
+        env,
+        "->sym",
+        to_sym,
+        r#"Usage: (->sym exp) -> symbol
+
+Converts exp to a symbol.
+
+Section: conv
+"#,
+    );
+    add_builtin(
+        env,
+        "->key",
+        to_key,
+        r#"Usage: (->key exp) -> keyword
+
+Converts exp to a keyword.
+
+Section: conv
+"#,
+    );
+    add_builtin(
+        env,
+        "global-ref",
+        global_ref,
+        r#"Usage: (global-ref symol) -> Value
+
+If symbol is a gobal var then return the thing it references.
+
+Section: conv
+"#,
+    );
+    add_builtin(
+        env,
+        "global?",
+        is_global,
+        r#"Usage: (global? symol) -> #t/#f
+
+If symbol is a gobal var then return true else false.
+
+Section: conv
+"#,
+    );
+}

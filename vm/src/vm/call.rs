@@ -98,6 +98,41 @@ impl<ENV> GVm<ENV> {
         frame
     }
 
+    fn finish_special_call(
+        &mut self,
+        chunk: Arc<Chunk>,
+        tail_call: bool,
+        first_reg: u16,
+        res: Value,
+    ) -> Arc<Chunk> {
+        let res_reg = self.stack_top + first_reg as usize;
+        if tail_call {
+            // Go to last call frame so SRET does not mess up the return of a builtin or other special call.
+            if let Some(frame) = self.call_frame() {
+                let stack_top = frame.stack_top;
+                let ip_ptr = frame.ip;
+                let current_ip = frame.current_ip;
+                let this_fn = frame.this_fn;
+                let on_error = frame.on_error;
+                let new_chunk = frame.chunk.clone();
+                self.swap_defers_with_frame(); // Do this BEFORE we change stack_top...
+                self.stack_top = stack_top;
+                self.stack_max = self.stack_top + new_chunk.input_regs + new_chunk.extra_regs;
+                self.ip_ptr = ip_ptr;
+                self.current_ip_ptr = current_ip;
+                self.this_fn = this_fn;
+                self.on_error = on_error;
+                *self.stack_mut(res_reg) = res;
+                new_chunk
+            } else {
+                *self.stack_mut(res_reg) = res;
+                chunk
+            }
+        } else {
+            *self.stack_mut(res_reg) = res;
+            chunk
+        }
+    }
     /// Main function to match and execute anything that is callable.
     pub fn make_call(
         &mut self,
@@ -125,32 +160,7 @@ impl<ENV> GVm<ENV> {
                         }
                         (e, chunk.clone())
                     })?;
-                let res_reg = self.stack_top + first_reg as usize;
-                if tail_call {
-                    // Go to last call frame so SRET does not mess up the return of a builtin.
-                    if let Some(frame) = self.call_frame_mut() {
-                        // Need to break the call frame lifetime from self to avoid extra work.
-                        // This is safe because the stack and heap are not touched so the reference is
-                        // stable.  The unwrap() is OK because the frame can not be NULL.
-                        let frame: &mut CallFrame =
-                            unsafe { (frame as *mut CallFrame).as_mut().unwrap() };
-                        self.stack_top = frame.stack_top;
-                        self.stack_max =
-                            self.stack_top + frame.chunk.input_regs + frame.chunk.extra_regs;
-                        self.ip_ptr = frame.ip;
-                        self.this_fn = frame.this_fn;
-                        self.on_error = frame.on_error;
-                        *self.stack_mut(res_reg) = res;
-                        std::mem::swap(&mut self.defers, &mut frame.defers);
-                        Ok(frame.chunk.clone())
-                    } else {
-                        *self.stack_mut(res_reg) = res;
-                        Ok(chunk)
-                    }
-                } else {
-                    *self.stack_mut(res_reg) = res;
-                    Ok(chunk)
-                }
+                Ok(self.finish_special_call(chunk, tail_call, first_reg, res))
             }
             Value::Lambda(handle) => {
                 let stack_top = self.stack_top;
@@ -246,19 +256,22 @@ impl<ENV> GVm<ENV> {
                 }
             }
             Value::Map(handle) => {
-                self.call_map(handle, first_reg, num_args)
+                let res = self
+                    .call_map(handle, first_reg, num_args)
                     .map_err(|e| (e, chunk.clone()))?;
-                Ok(chunk)
+                Ok(self.finish_special_call(chunk, tail_call, first_reg, res))
             }
             Value::Vector(handle) => {
-                self.call_vector(handle, first_reg, num_args)
+                let res = self
+                    .call_vector(handle, first_reg, num_args)
                     .map_err(|e| (e, chunk.clone()))?;
-                Ok(chunk)
+                Ok(self.finish_special_call(chunk, tail_call, first_reg, res))
             }
             Value::Pair(_) | Value::List(_, _) => {
-                self.call_list(lambda, first_reg, num_args)
+                let res = self
+                    .call_list(lambda, first_reg, num_args)
                     .map_err(|e| (e, chunk.clone()))?;
-                Ok(chunk)
+                Ok(self.finish_special_call(chunk, tail_call, first_reg, res))
             }
             Value::Value(handle) => {
                 // Need to deref.

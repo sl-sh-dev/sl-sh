@@ -14,6 +14,7 @@ use sl_compiler::compile::*;
 use sl_compiler::reader::*;
 
 use builtins::collections::setup_colletion_builtins;
+use builtins::conversions::add_conv_builtins;
 use builtins::io::add_io_builtins;
 use builtins::print::{add_print_builtins, display_value};
 use builtins::string::add_str_builtins;
@@ -209,6 +210,7 @@ fn main() {
             add_str_builtins(&mut env);
             add_misc_builtins(&mut env);
             add_io_builtins(&mut env);
+            add_conv_builtins(&mut env);
             env.set_global_builtin("dump-regs", builtin_dump_regs);
             env.set_global_builtin("def?", builtin_is_def);
             let sym_i = env.intern_static("car");

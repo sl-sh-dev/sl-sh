@@ -542,6 +542,8 @@ impl<ENV> GVm<ENV> {
             // stable.  The unwrap() is OK because the frame can not be NULL.
             let frame: &mut CallFrame = unsafe { (frame as *mut CallFrame).as_mut().unwrap() };
             std::mem::swap(&mut self.defers, &mut frame.defers);
+            // Generally self.defers will be empty but if not don't loose them!
+            self.defers.append(&mut frame.defers);
         }
     }
 

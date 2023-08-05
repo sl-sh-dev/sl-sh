@@ -6,7 +6,7 @@ impl<ENV> GVm<ENV> {
         handle: Handle,
         first_reg: u16,
         num_args: u16,
-    ) -> VMResult<()> {
+    ) -> VMResult<Value> {
         match num_args {
             1 => {
                 let map = self.heap().get_map(handle);
@@ -15,9 +15,7 @@ impl<ENV> GVm<ENV> {
                 } else {
                     Value::Nil
                 };
-                let res_reg = self.stack_top + first_reg as usize;
-                *self.stack_mut(res_reg) = res;
-                Ok(())
+                Ok(res)
             }
             2 => {
                 let map = self.heap().get_map(handle);
@@ -26,9 +24,7 @@ impl<ENV> GVm<ENV> {
                 } else {
                     self.register(first_reg as usize + 2)
                 };
-                let res_reg = self.stack_top + first_reg as usize;
-                *self.stack_mut(res_reg) = res;
-                Ok(())
+                Ok(res)
             }
             3 => {
                 let eqi = self.intern("=");
@@ -43,9 +39,7 @@ impl<ENV> GVm<ENV> {
                         let map = self.heap_mut().get_map_mut(handle)?;
                         let slot = map.entry(key);
                         slot.or_insert(val);
-                        let res_reg = self.stack_top + first_reg as usize;
-                        *self.stack_mut(res_reg) = val;
-                        Ok(())
+                        Ok(val)
                     } else {
                         Err(VMError::new_vm(
                             "Map invalid second argument (expected :=).",
@@ -66,7 +60,7 @@ impl<ENV> GVm<ENV> {
         handle: Handle,
         first_reg: u16,
         num_args: u16,
-    ) -> VMResult<()> {
+    ) -> VMResult<Value> {
         match num_args {
             1 => {
                 let v = self.heap().get_vector(handle);
@@ -81,9 +75,7 @@ impl<ENV> GVm<ENV> {
                 } else {
                     Value::Nil
                 };
-                let res_reg = self.stack_top + first_reg as usize;
-                *self.stack_mut(res_reg) = res;
-                Ok(())
+                Ok(res)
             }
             2 => {
                 let v = self.heap().get_vector(handle);
@@ -98,9 +90,7 @@ impl<ENV> GVm<ENV> {
                 } else {
                     self.register(first_reg as usize + 2)
                 };
-                let res_reg = self.stack_top + first_reg as usize;
-                *self.stack_mut(res_reg) = res;
-                Ok(())
+                Ok(res)
             }
             3 => {
                 let eqi = self.intern("=");
@@ -122,16 +112,12 @@ impl<ENV> GVm<ENV> {
                         let v = self.heap_mut().get_vector_mut(handle)?;
                         if let Some(slot) = v.get_mut(idx as usize) {
                             *slot = val;
-                            let res_reg = self.stack_top + first_reg as usize;
-                            *self.stack_mut(res_reg) = Value::Vector(handle);
-                            Ok(())
+                            Ok(Value::Vector(handle))
                         } else {
                             v.resize(idx as usize + 1, Value::Nil);
                             if let Some(slot) = v.get_mut(idx as usize) {
                                 *slot = val;
-                                let res_reg = self.stack_top + first_reg as usize;
-                                *self.stack_mut(res_reg) = Value::Vector(handle);
-                                Ok(())
+                                Ok(Value::Vector(handle))
                             } else {
                                 Err(VMError::new_vm(
                                     "Vector, index out of bounds (unable to grow vector).",
@@ -153,7 +139,12 @@ impl<ENV> GVm<ENV> {
         }
     }
 
-    pub(crate) fn call_list(&mut self, head: Value, first_reg: u16, num_args: u16) -> VMResult<()> {
+    pub(crate) fn call_list(
+        &mut self,
+        head: Value,
+        first_reg: u16,
+        num_args: u16,
+    ) -> VMResult<Value> {
         match num_args {
             1 => {
                 let idx = self.register(first_reg as usize + 1).get_int(self)?;
@@ -174,9 +165,7 @@ impl<ENV> GVm<ENV> {
                 } else {
                     return Err(VMError::new_vm("A list requires a positive index."));
                 };
-                let res_reg = self.stack_top + first_reg as usize;
-                *self.stack_mut(res_reg) = res;
-                Ok(())
+                Ok(res)
             }
             _ => Err(VMError::new_vm("List wrong number of arguments.")),
         }
