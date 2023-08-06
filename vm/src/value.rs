@@ -115,12 +115,12 @@ pub enum Value {
     Byte(u8),
     Int32(i32),
     UInt32(u32),
-    Int64(Numeric),   //64Handle),
-    UInt64(Numeric),  //64Handle),
-    Float64(Numeric), //64Handle),
+    Int64(Numeric),
+    UInt64(Numeric),
+    Float64(Numeric),
     CodePoint(char),
     CharCluster(u8, [u8; 6]),
-    CharClusterLong(Handle), // XXX TODO- move to Object?
+    CharClusterLong(Handle), // Handle points to a String on the heap.
     Symbol(Interned),
     Keyword(Interned),
     StringConst(Interned),
@@ -477,7 +477,7 @@ impl Value {
             Value::CharCluster(l, c) => {
                 format!("{}", String::from_utf8_lossy(&c[0..*l as usize]))
             }
-            Value::CharClusterLong(_) => "Char".to_string(), // XXX TODO- move this to Object?
+            Value::CharClusterLong(h) => vm.get_string(*h).to_string(),
             Value::String(handle) => vm.get_string(*handle).to_string(),
             _ => self.display_value(vm),
         }

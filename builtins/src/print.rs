@@ -93,7 +93,7 @@ pub fn display_value(vm: &SloshVm, val: Value) -> String {
         Value::CharCluster(l, c) => {
             format!("\\{}", String::from_utf8_lossy(&c[0..*l as usize]))
         }
-        Value::CharClusterLong(_) => "Char".to_string(), // XXX TODO- move this to Object?
+        Value::CharClusterLong(h) => format!("\\{}", vm.get_string(*h)),
         Value::Builtin(_) => "#<Function>".to_string(),
         Value::Nil => "nil".to_string(),
         Value::Undefined => "#<Undefined>".to_string(), //panic!("Tried to get type for undefined!"),
@@ -170,7 +170,7 @@ pub fn pretty_value(vm: &SloshVm, val: Value) -> String {
         Value::CharCluster(l, c) => {
             format!("{}", String::from_utf8_lossy(&c[0..*l as usize]))
         }
-        Value::CharClusterLong(_) => "Char".to_string(),
+        Value::CharClusterLong(h) => vm.get_string(*h).to_string(),
         Value::String(h) => vm.get_string(*h).to_string(),
         _ => display_value(vm, val),
     }
