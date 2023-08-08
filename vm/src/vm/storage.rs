@@ -507,10 +507,6 @@ impl<ENV> GVm<ENV> {
         self.heap().get_callframe(handle)
     }
 
-    pub fn get_callframe_mut(&mut self, handle: Handle) -> &mut CallFrame {
-        self.heap_mut().get_callframe_mut(handle)
-    }
-
     pub fn get_value(&self, handle: Handle) -> Value {
         self.heap().get_value(handle)
     }
@@ -531,31 +527,18 @@ impl<ENV> GVm<ENV> {
         match self.stack(idx) {
             Value::CallFrame(handle) => Some(self.get_callframe(handle)),
             _ => None,
-            //_ => panic!("Invalid stack, not a call frame."),
         }
     }
 
-    pub(super) fn swap_defers_with_frame(&mut self) {
-        if let Some(frame) = self.call_frame_mut() {
-            // Need to break the call frame lifetime from self to avoid extra work.
-            // This is safe because the stack and heap are not touched so the reference is
+    pub(super) fn copy_frame_defers(&mut self) {
+        if let Some(frame) = self.call_frame() {
+            // Need to break the call frame lifetime from self to avoid extra work (allocations).
+            // This should safe because the stack and heap are not touched so the reference is
             // stable.  The unwrap() is OK because the frame can not be NULL.
-            let frame: &mut CallFrame = unsafe { (frame as *mut CallFrame).as_mut().unwrap() };
-            std::mem::swap(&mut self.defers, &mut frame.defers);
+            let frame: &CallFrame = unsafe { (frame as *const CallFrame).as_ref().unwrap() };
+            self.defers.resize(frame.defers.len(), Value::Undefined);
             // Generally self.defers will be empty but if not don't loose them!
-            self.defers.append(&mut frame.defers);
-        }
-    }
-
-    pub(super) fn call_frame_mut(&mut self) -> Option<&mut CallFrame> {
-        self.call_frame_mut_idx(self.stack_top)
-    }
-
-    pub(super) fn call_frame_mut_idx(&mut self, idx: usize) -> Option<&mut CallFrame> {
-        match self.stack(idx) {
-            Value::CallFrame(handle) => Some(self.get_callframe_mut(handle)),
-            _ => None,
-            //_ => panic!("Invalid stack, not a call frame."),
+            self.defers.copy_from_slice(&frame.defers[..]);
         }
     }
 

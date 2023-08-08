@@ -173,7 +173,7 @@ impl<ENV> GVm<ENV> {
                         let this_fn = frame.this_fn;
                         let on_error = frame.on_error;
                         chunk = frame.chunk.clone();
-                        self.swap_defers_with_frame(); // Do this BEFORE we change stack_top...
+                        self.copy_frame_defers(); // Do this BEFORE we change stack_top...
                         self.stack_top = stack_top;
                         self.make_registers();
                         self.stack_max = self.stack_top + chunk.input_regs + chunk.extra_regs;
@@ -202,7 +202,7 @@ impl<ENV> GVm<ENV> {
                             let this_fn = frame.this_fn;
                             let on_error = frame.on_error;
                             chunk = frame.chunk.clone();
-                            self.swap_defers_with_frame(); // Do this BEFORE we change stack_top...
+                            self.copy_frame_defers(); // Do this BEFORE we change stack_top...
                             self.stack_top = stack_top;
                             self.make_registers();
                             self.stack_max = self.stack_top + chunk.input_regs + chunk.extra_regs;
@@ -628,14 +628,16 @@ impl<ENV> GVm<ENV> {
                 CCC => {
                     let (lambda, first_reg) = decode2!(self.ip_ptr, wide);
                     let lambda = self.register(lambda as usize);
+                    let mut defers = vec![Value::Undefined; self.defers.len()];
+                    defers.copy_from_slice(&self.defers[..]);
                     let frame = CallFrame {
-                        id: 0,
+                        id: self.callframe_id, // This will duplicate the id for lambda ccc calls on purpose.
                         chunk: chunk.clone(),
                         ip: self.ip_ptr,
                         current_ip: self.current_ip_ptr,
                         stack_top: self.stack_top,
                         this_fn: self.this_fn,
-                        defers: Vec::new(),
+                        defers,
                         on_error: self.on_error,
                         called: Value::Undefined,
                     };

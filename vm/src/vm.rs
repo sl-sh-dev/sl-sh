@@ -37,6 +37,7 @@ pub struct GVm<ENV> {
 
     err_frame: Option<CallFrame>,
     stack_top: usize,
+    k_stack_top: Option<usize>, // Used for continuation/defer interaction.
     stack_max: usize,
     ip_ptr: *const u8,
     current_ip_ptr: *const u8,
@@ -86,6 +87,7 @@ impl<ENV> GVm<ENV> {
             on_error: None,
             err_frame: None,
             stack_top: 0,
+            k_stack_top: None,
             stack_max: 0,
             ip_ptr: DEAD_CODE.as_ptr(),
             current_ip_ptr: DEAD_CODE.as_ptr(),

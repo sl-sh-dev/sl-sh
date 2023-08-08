@@ -44,31 +44,37 @@ impl<ENV> GVm<ENV> {
                 }
             } else if let Value::CallFrame(h) = self.stack(stack_top) {
                 let frame = self.heap().get_callframe(h);
-                return Some((frame.stack_top, &frame.defers));
+                // If the continuation and frame have the same id then don't use the frame defers
+                // (will lead to double deferring in some cases without this).
+                return if k.frame.id == frame.id {
+                    None
+                } else {
+                    Some((frame.stack_top, &frame.defers))
+                };
             }
         }
         None
     }
 
-    fn k_defers(&self, k: &Continuation) -> (bool, Option<usize>) {
+    fn k_defers(&self, k: &Continuation) -> Option<usize> {
         if !self.defers.is_empty() {
-            return (true, None);
+            return None;
         }
-        let mut stack_top = self.stack_top;
+        let mut stack_top = if let Some(k_stack_top) = self.k_stack_top {
+            k_stack_top
+        } else {
+            self.stack_top
+        };
         while let Some((next_stack_top, defers)) = self.k_unshared_stack(stack_top, k) {
             if stack_top == next_stack_top {
                 break;
             }
             if !defers.is_empty() {
-                return if self.k_unshared_stack(next_stack_top, k).is_none() {
-                    (false, Some(stack_top))
-                } else {
-                    (true, Some(stack_top))
-                };
+                return Some(stack_top);
             }
             stack_top = next_stack_top;
         }
-        (false, None)
+        None
     }
 
     /// Build a call frame to be placed on the stack before transferring to a new chunk.
@@ -115,7 +121,7 @@ impl<ENV> GVm<ENV> {
                 let this_fn = frame.this_fn;
                 let on_error = frame.on_error;
                 let new_chunk = frame.chunk.clone();
-                self.swap_defers_with_frame(); // Do this BEFORE we change stack_top...
+                self.copy_frame_defers(); // Do this BEFORE we change stack_top...
                 self.stack_top = stack_top;
                 self.stack_max = self.stack_top + new_chunk.input_regs + new_chunk.extra_regs;
                 self.ip_ptr = ip_ptr;
@@ -228,29 +234,24 @@ impl<ENV> GVm<ENV> {
                 if num_args != 1 {
                     return Err((VMError::new_vm("Continuation takes one argument."), chunk));
                 }
-                let (defered, from) = self.k_defers(k);
+                let from = self.k_defers(k);
                 if let Some(from) = from {
-                    // expect ok because this will be a call frame.
-                    let frame = self.call_frame_mut_idx(from).expect("Invalid frame index!");
-                    // Need to break the call frame lifetime from self to avoid extra work.
-                    // This is safe because the stack and heap are not touched so the reference is
+                    let frame = self.call_frame_idx(from).expect("Invalid frame index!");
+                    // Need to break the call frame lifetime from self to avoid extra work (allocations).
+                    // This should safe because the stack and heap are not touched so the reference is
                     // stable.  The unwrap() is OK because the frame can not be NULL.
-                    let frame: &mut CallFrame =
-                        unsafe { (frame as *mut CallFrame).as_mut().unwrap() };
-                    std::mem::swap(&mut self.defers, &mut frame.defers);
+                    let frame: &CallFrame =
+                        unsafe { (frame as *const CallFrame).as_ref().unwrap() };
+                    self.defers.resize(frame.defers.len(), Value::Undefined);
+                    self.defers.copy_from_slice(&frame.defers[..]);
+                    self.k_stack_top = Some(frame.stack_top);
                 }
-                if defered {
-                    if let Some(defer) = self.defers.pop() {
-                        let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
-                        self.ip_ptr = self.current_ip_ptr;
-                        self.make_call(defer, chunk, first_reg, 0, false)
-                    } else {
-                        // If k_defers returns true than self.defers.pop() better
-                        // return something.  Need this to make the borrow checker
-                        // happy.
-                        panic!("No defers but need a defer!");
-                    }
+                if let Some(defer) = self.defers.pop() {
+                    let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
+                    self.ip_ptr = self.current_ip_ptr;
+                    self.make_call(defer, chunk, first_reg, 0, false)
                 } else {
+                    self.k_stack_top = None;
                     do_cont = true;
                     Ok(chunk)
                 }
@@ -296,6 +297,10 @@ impl<ENV> GVm<ENV> {
                     let heap = self.heap.take().expect("VM must have a Heap!");
                     let k = heap.get_continuation(h);
                     let arg = self.register(first_reg as usize + 1);
+
+                    self.defers.resize(k.frame.defers.len(), Value::Undefined);
+                    self.defers.copy_from_slice(&k.frame.defers[..]);
+
                     self.stack_slice_mut()[..k.stack.len()].copy_from_slice(&k.stack[..]);
                     *self.stack_mut(k.arg_reg) = arg;
                     self.stack_top = k.frame.stack_top;

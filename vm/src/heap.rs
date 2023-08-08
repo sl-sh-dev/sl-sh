@@ -69,7 +69,6 @@ enum Object {
     PersistentMap(Arc<PersistentMap>),
     MapNode(Arc<MapNode>),
 
-    // CallFrame can be mutable for internal purposes.
     CallFrame(Arc<CallFrame>),
     // Everything below here is always read only.
     Lambda(Arc<Chunk>),
@@ -657,14 +656,6 @@ impl Heap {
         }
     }
 
-    pub fn get_callframe_mut(&mut self, handle: Handle) -> &mut CallFrame {
-        if let Some(Object::CallFrame(call_frame)) = self.objects.get_mut(handle.idx()) {
-            Arc::make_mut(call_frame)
-        } else {
-            panic!("Handle {} is not a continuation!", handle.idx());
-        }
-    }
-
     pub fn get_value(&self, handle: Handle) -> Value {
         if let Some(Object::Value(value)) = self.objects.get(handle.idx()) {
             //if let Object::Value(value) = self.objects[handle.idx()] {
@@ -702,8 +693,6 @@ impl Heap {
         mark!(self, value);
     }
 
-    // mark_trace has an invariant to maintain, do not touch objects (see unsafe in
-    // trace below).
     fn mark_trace(&mut self, val: Value) {
         mark!(self, val);
         self.greys.push(val);
@@ -730,10 +719,6 @@ impl Heap {
     }
 
     fn trace_object(&mut self, obj: &Object) {
-        // This unsafe avoids cloning the object to avoid having a mutable and immutable self.
-        // This should be fine because we are not touching objects in a mark, only flags.
-        // idx should also have been validated before it gets here (by mark if nothing else).
-        //let obj = unsafe { &*(self.objects.vals.get_unchecked(idx) as *const Object) };
         match obj {
             Object::String(_) => {}
             Object::Vector(vec) => {
