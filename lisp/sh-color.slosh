@@ -1,0 +1,232 @@
+;; https://wiki-dev.bash-hackers.org/scripting/terminalcodes
+(def *fg-default* "\x1b[39m")
+(def *fg-black* "\x1b[30m")
+(def *fg-red* "\x1b[31m")
+(def *fg-green* "\x1b[32m")
+(def *fg-yellow* "\x1b[33m")
+(def *fg-blue* "\x1b[34m")
+(def *fg-magenta* "\x1b[35m")
+(def *fg-cyan* "\x1b[36m")
+(def *fg-white* "\x1b[37m")
+
+(def *bg-default* "\x1b[49m")
+(def *bg-black* "\x1b[40m")
+(def *bg-red* "\x1b[41m")
+(def *bg-green* "\x1b[42m")
+(def *bg-yellow* "\x1b[43m")
+(def *bg-blue* "\x1b[44m")
+(def *bg-magenta* "\x1b[45m")
+(def *bg-cyan* "\x1b[46m")
+(def *bg-white* "\x1b[47m")
+
+; These will be used by syntax-on.
+(def tok-slsh-form-color *fg-blue*)
+(def tok-slsh-fcn-color *fg-cyan*)
+(def tok-default-color *fg-default*)
+(def tok-sys-command-color *fg-white*)
+(def tok-sys-alias-color *fg-default*)
+(def tok-string-color *fg-magenta*)
+(def tok-invalid-color *fg-red*)
+
+(defn get-rgb-seq (R G B color-type)
+  (let (make-color (fn (color-code) (str "\x1b[" color-code ";2;" R ";" G ";" B "m")))
+    (if (eq? color-type :font) (make-color 38)
+        (eq? color-type :bkrd) (make-color 48)
+        (make-color 38))))
+
+#!
+Usage: (fg-color-rgb red-val green-val blue-val)
+
+Set the foreground color to the desired rgb where each arg is an integer between 0 and 255 inclusive.
+
+Section: shell
+
+Example:
+(test::assert-equal "\\x1b[38;2;128;128;128m" (fg-color-rgb 128 128 128))
+(test::assert-equal "\\x1b[38;2;255;255;255m" (fg-color-rgb 255 255 255))
+(test::assert-equal "\\x1b[38;2;255;0;0m" (fg-color-rgb 255 0 0))
+(test::assert-equal "\\x1b[38;2;0;255;0m" (fg-color-rgb 0 255 0))
+(test::assert-equal "\\x1b[38;2;0;0;255m" (fg-color-rgb 0 0 255))
+(test::assert-equal "\\x1b[38;2;0;0;0m" (fg-color-rgb 0 0 0))
+!#
+(defn fg-color-rgb (R G B)
+  (get-rgb-seq R G B :font))
+
+#!
+Usage: (bg-color-rgb red-val green-val blue-val)
+
+Set the background color to the desired rgb where each arg is an integer between 0 and 255 inclusive.
+
+Section: shell
+
+Example:
+(test::assert-equal "\\x1b[48;2;128;128;128m" (bg-color-rgb 128 128 128))
+(test::assert-equal "\\x1b[48;2;255;255;255m" (bg-color-rgb 255 255 255))
+(test::assert-equal "\\x1b[48;2;255;0;0m" (bg-color-rgb 255 0 0))
+(test::assert-equal "\\x1b[48;2;0;255;0m" (bg-color-rgb 0 255 0))
+(test::assert-equal "\\x1b[48;2;0;0;255m" (bg-color-rgb 0 0 255))
+(test::assert-equal "\\x1b[48;2;0;0;0m" (bg-color-rgb 0 0 0))
+!#
+(defn bg-color-rgb (R G B)
+  (get-rgb-seq R G B :bkrd))
+
+
+
+#!
+True if the supplied command is a system command.
+
+Section: shell
+
+Example:
+(assert-true (sys-command? "ls"))
+(assert-false (sys-command? "rst-not-a-comand-strsnt"))
+!#
+(defn sys-command? (com)
+    (if (or (str-empty? com)(eq? (str-nth com 0) \/)(eq? (str-nth com 0) \.))
+            (fs-exists? com)
+        (str-contains com "/")(fs-exists? (str "./" com))
+        (str-starts-with com "~/") (fs-exists? (str-replace com "~/" (env "HOME")))
+        ((fn (paths idx) 
+            (if (< idx (vec-len paths))
+                (if (fs-exists? (str (paths idx) "/" com)) #t (recur paths (+ idx 1)))
+                #f))
+         (str-split (env "PATH") ":") 0)))
+
+
+#!
+Turn on syntax highlighting at the repl.
+
+Section: shell
+!#
+(defn syntax-on ()
+  (let (plev 0
+        ch nil
+        sys-syms (make-hash)
+        token (str "")
+        in-sys-command #f
+        tok-command #t
+        is-lisp #t
+
+        paren-color
+           (fn (level)
+               (let (col (rem level 4))
+                 (if (= col 0) *fg-white*
+                     (if (= col 1) *fg-cyan*
+                         (if (= col 2) *fg-yellow*
+                             (if (= col 3) *fg-blue*))))))
+
+        my-sys-command?
+           (fn (command)
+               (if (eq? (sys-syms command :missing) :missing) (sys-syms command := (sys-command? command)))
+               (sys-syms command #f))
+
+        sys-command-color
+            (fn (command)
+                (if tok-command
+                    (if (my-sys-command? command)
+                        (do
+                          (set! in-sys-command #t)
+                          (str tok-sys-command-color command *fg-default*))
+                        (str tok-invalid-color command *fg-default*))
+                    command))
+
+        command-color
+            (fn (command) 
+				(if tok-command
+					(let (sym (->sym command))
+						(if (and (def? sym)(callable? (ref sym)))
+                    	    (str tok-slsh-form-color command *fg-default*)
+                        	(str tok-invalid-color command *fg-default*)))
+					command))
+
+        prrawtoken
+           (fn ()
+               (let (ttok token)
+                 (set! token (str ""))
+                 ttok))
+        prtoken
+           (fn ()
+               (let (ttok token)
+                 (set! token (str ""))
+                 (if is-lisp
+                    (command-color ttok)
+                    (sys-command-color ttok))))
+
+        paren-open
+           (fn ()
+               (let (ret (str (prtoken) (paren-color plev) \( *fg-default*))
+                 (set! plev (+ plev 1))
+                 (set! tok-command #t)
+                 ret))
+        paren-close
+           (fn ()
+               (set! in-sys-command #f)
+               (if (> plev 0)
+                   (do
+                    (set! plev (- plev 1))
+                    (str (prtoken) (paren-color plev) \) *fg-default*))
+                   (str (prtoken) *fg-red* \) *fg-default*)))
+
+        whitespace
+           (fn (ch)
+               (let (ret (str (prtoken) ch))
+                 (set! token (str ""))
+                 (set! tok-command #f)
+                 ret))
+
+        in-quote #f
+        out nil
+        last-ch \space
+
+        str-mapper-fn
+            (fn (ch)
+                (set! last-ch ch)
+                (if in-quote
+                    (do
+                      (str-push! token ch)
+                      (if (and (not (eq? last-ch \\))(eq? ch \"))
+                          (do
+                            (set! in-quote #f)
+                            (str-push! token *fg-default*)
+                            (prrawtoken))
+                          ""))
+                    (if (and (not (eq? last-ch \\))(eq? ch \"))
+                        (do (str-push! token (str tok-string-color ch))(set! in-quote #t) "")
+                        (if (eq? ch \()
+                            (paren-open)
+                            (if (eq? ch \))
+                                (paren-close)
+                                (if (char-whitespace? ch)
+                                    (whitespace ch)
+                                    (do (str-push! token ch) "")))))))
+
+        line-handler
+           (fn (line)
+                 (set! plev 0)
+                 (set! ch nil)
+                 (str-clear! token)
+                 (set! tok-command #t)
+                 (set! in-sys-command #f)
+                 (set! in-quote #f)
+                 (set! last-ch \space)
+                 (set! is-lisp (str-starts-with line \())
+
+                 (if (<= (len line) 1) (hash-clear! sys-syms))
+                 (set! out (str-map line str-mapper-fn))
+                 (if in-quote (str-push! out (prrawtoken)) (str-push! out (prtoken)))
+                 out))
+
+    (defn __line_handler (line) (line-handler line))
+      ;(let (result (get-error (line-handler line)))
+      ;  (if (eq? :error (car result)) (do (prn result) line) (cdr result))))
+
+    nil))
+
+#!
+Turn off syntax highlighting at the repl.
+
+Section: shell
+!#
+(defn syntax-off () (defn __line_handler (line) line))
+
+
