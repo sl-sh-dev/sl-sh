@@ -46,29 +46,20 @@ fn global_ref(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
                 if let Some(slot) = vm.global_intern_slot(*i) {
                     Ok(vm.get_global(slot))
                 } else {
-                    Err(VMError::new(
-                        "conv",
-                        "global-ref: not a global var".to_string(),
-                    ))
+                    Err(VMError::new("conv", "ref: not a global var".to_string()))
                 }
             }
             _ => Err(VMError::new(
                 "conv",
-                format!(
-                    "global-ref: expected a symbol, got a {}",
-                    symbol.display_type(vm)
-                ),
+                format!("ref: expected a symbol, got a {}", symbol.display_type(vm)),
             )),
         }
     } else {
-        Err(VMError::new(
-            "conv",
-            "global-ref: takes one arg".to_string(),
-        ))
+        Err(VMError::new("conv", "ref: takes one arg".to_string()))
     }
 }
 
-fn is_global(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+fn is_def(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();
     if let (Some(symbol), None) = (i.next(), i.next()) {
         match symbol {
@@ -81,14 +72,11 @@ fn is_global(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
             }
             _ => Err(VMError::new(
                 "conv",
-                format!(
-                    "global?: expected a symbol, got a {}",
-                    symbol.display_type(vm)
-                ),
+                format!("def?: expected a symbol, got a {}", symbol.display_type(vm)),
             )),
         }
     } else {
-        Err(VMError::new("conv", "global?: takes one arg".to_string()))
+        Err(VMError::new("conv", "def?: takes one arg".to_string()))
     }
 }
 
@@ -117,22 +105,22 @@ Section: conv
     );
     add_builtin(
         env,
-        "global-ref",
+        "ref",
         global_ref,
-        r#"Usage: (global-ref symol) -> Value
+        r#"Usage: (ref symol) -> Value
 
-If symbol is a gobal var then return the thing it references.
+If symbol is defined then return the thing it references.
 
 Section: conv
 "#,
     );
     add_builtin(
         env,
-        "global?",
-        is_global,
-        r#"Usage: (global? symol) -> #t/#f
+        "def?",
+        is_def,
+        r#"Usage: (def? symol) -> #t/#f
 
-If symbol is a gobal var then return true else false.
+If symbol is defined then return true else false.
 
 Section: conv
 "#,

@@ -37,7 +37,7 @@ use config::*;
 use debug::*;
 use shell::platform::{Platform, Sys, STDIN_FILENO};
 use sl_compiler::pass1::pass1;
-use slvm::{VMError, VMResult, Value};
+use slvm::Value;
 
 thread_local! {
     /// Env (job control status, etc) for the shell.
@@ -180,25 +180,6 @@ fn get_color_closure() -> Option<ColorClosure> {
     })
 }
 
-fn builtin_is_def(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
-    let mut i = registers.iter();
-    if let (Some(val), None) = (i.next(), i.next()) {
-        if let Value::Symbol(i) = val {
-            if vm.env().global_defined(*i) {
-                Ok(Value::True)
-            } else {
-                Ok(Value::False)
-            }
-        } else {
-            Err(VMError::new_vm(
-                "def?: argument must be a symbol".to_string(),
-            ))
-        }
-    } else {
-        Err(VMError::new_vm("def?: takes one argument".to_string()))
-    }
-}
-
 fn main() {
     if let Some(config) = get_config() {
         ENV.with(|renv| {
@@ -212,7 +193,6 @@ fn main() {
             add_io_builtins(&mut env);
             add_conv_builtins(&mut env);
             env.set_global_builtin("dump-regs", builtin_dump_regs);
-            env.set_global_builtin("def?", builtin_is_def);
             let uid = Sys::current_uid();
             let euid = Sys::effective_uid();
             env::set_var("UID", format!("{uid}"));
