@@ -1,9 +1,16 @@
-(def nil? (fn (v) (eq? (type v) "Nil")))
-(def pair? (fn (v) (eq? (type v) "Pair")))
-(def string? (fn (v) (eq? (type v) "String")))
-(def symbol? (fn (v) (eq? (type v) "Symbol")))
-(def vec? (fn (v) (eq? (type v) "Vector")))
+(def nil? (fn (v) (eq? (type v) :Nil)))
+(def pair? (fn (v) (eq? (type v) :Pair)))
+(def string? (fn (v) (eq? (type v) :String)))
+(def symbol? (fn (v) (eq? (type v) :Symbol)))
+(def vec? (fn (v) (eq? (type v) :Vector)))
 (def list? (fn (v) (if (or (nil? v)(pair? v))(if (nil? (cdr v)) #t (recur (cdr v))) #f)))
+(def callable? (fn (v) (let (t (type v))(or (eq? t :Lambda)
+                                             (eq? t :Continuation)
+                                             (eq? t :Special)
+                                             (eq? t :Builtin)
+                                             (eq? t :Map)
+                                             (eq? t :Vactor)
+                                             (eq? t :Pair)))))
 
 #!
 Usage: (defmacro name doc_string? argument_list body)
@@ -151,4 +158,13 @@ Example:
 
 (defn __prompt ()
     (str "\x1b[32m[" *ns* "]:" (env "HOST") ":\x1b[34m" (str-trim! (get-pwd)) "/\x1b[37m" (parse-git-branch) (set-prompt-tail *last-status*)))
+
+(sh "alias ls='/bin/ls --color -F'")
+(sh "alias ll='/bin/ls --color -Falh'")
+(sh "alias vi=nvim")
+(sh "alias vim=nvim")
+
+(sh "export PATH=/bin:/usr/local/bin:~/bin:~/.cargo/bin")
+
+(sh "export LC_ALL=en_US.UTF-8")
 
