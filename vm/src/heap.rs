@@ -155,6 +155,7 @@ macro_rules! value_op {
             | Value::Symbol(_)
             | Value::Keyword(_)
             | Value::StringConst(_)
+            | Value::Special(_)
             | Value::Builtin(_)
             | Value::True
             | Value::False
@@ -822,6 +823,7 @@ impl Heap {
             | Value::Symbol(_)
             | Value::Keyword(_)
             | Value::StringConst(_)
+            | Value::Special(_)
             | Value::Builtin(_)
             | Value::True
             | Value::False

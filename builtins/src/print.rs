@@ -89,6 +89,7 @@ pub fn display_value(vm: &SloshVm, val: Value) -> String {
         Value::Symbol(i) => vm.get_interned(*i).to_string(),
         Value::Keyword(i) => format!(":{}", vm.get_interned(*i)),
         Value::StringConst(i) => format!("\"{}\"", vm.get_interned(*i)),
+        Value::Special(i) => format!("#<SpecialFn({})>", vm.get_interned(*i)),
         Value::CodePoint(ch) => format!("\\{ch}"),
         Value::CharCluster(l, c) => {
             format!("\\{}", String::from_utf8_lossy(&c[0..*l as usize]))

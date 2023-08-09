@@ -36,8 +36,8 @@ pub(crate) fn compile_math(
     result: usize,
 ) -> VMResult<bool> {
     match car {
-        Value::Symbol(i) if i == env.specials().inc => {
-            let dest = if let Value::Symbol(si) = cdr[0] {
+        Value::Special(i) if i == env.specials().inc => {
+            let dest = if let Value::Special(si) = cdr[0] {
                 if let Some(idx) = state.get_symbol(si) {
                     idx
                 } else if let Some(slot) = env.global_intern_slot(i) {
@@ -47,7 +47,7 @@ pub(crate) fn compile_math(
                     result
                 } else {
                     let sym = env.get_interned(i);
-                    return Err(VMError::new_compile(format!("Symbol {sym} not defined (maybe you need to use 'def {sym}' to pre-declare it).")));
+                    return Err(VMError::new_compile(format!("Special {sym} not defined (maybe you need to use 'def {sym}' to pre-declare it).")));
                 }
             } else {
                 return Err(VMError::new_compile("inc!: expected symbol"));
@@ -75,8 +75,8 @@ pub(crate) fn compile_math(
                 return Err(VMError::new_compile("inc!: malformed"));
             }
         }
-        Value::Symbol(i) if i == env.specials().dec => {
-            let dest = if let Value::Symbol(si) = cdr[0] {
+        Value::Special(i) if i == env.specials().dec => {
+            let dest = if let Value::Special(si) = cdr[0] {
                 if let Some(idx) = state.get_symbol(si) {
                     idx
                 } else if let Some(slot) = env.global_intern_slot(i) {
@@ -86,7 +86,7 @@ pub(crate) fn compile_math(
                     result
                 } else {
                     let sym = env.get_interned(i);
-                    return Err(VMError::new_compile(format!("Symbol {sym} not defined (maybe you need to use 'def {sym}' to pre-declare it).")));
+                    return Err(VMError::new_compile(format!("Special {sym} not defined (maybe you need to use 'def {sym}' to pre-declare it).")));
                 }
             } else {
                 return Err(VMError::new_compile("dec!: expected symbol"));
@@ -114,7 +114,7 @@ pub(crate) fn compile_math(
                 return Err(VMError::new_compile("dec!: malformed"));
             }
         }
-        Value::Symbol(i) if i == env.specials().add => {
+        Value::Special(i) if i == env.specials().add => {
             if cdr.is_empty() {
                 compile(env, state, Value::Int32(0), result)?;
             } else if cdr.len() == 1 {
@@ -135,7 +135,7 @@ pub(crate) fn compile_math(
                 }
             }
         }
-        Value::Symbol(i) if i == env.specials().sub => {
+        Value::Special(i) if i == env.specials().sub => {
             if cdr.is_empty() {
                 return Err(VMError::new_compile(
                     "Malformed -, requires at least one argument.",
@@ -164,7 +164,7 @@ pub(crate) fn compile_math(
                 }
             }
         }
-        Value::Symbol(i) if i == env.specials().mul => {
+        Value::Special(i) if i == env.specials().mul => {
             if cdr.is_empty() {
                 compile(env, state, Value::Int32(1), result)?;
             } else if cdr.len() == 1 {
@@ -185,7 +185,7 @@ pub(crate) fn compile_math(
                 }
             }
         }
-        Value::Symbol(i) if i == env.specials().div => {
+        Value::Special(i) if i == env.specials().div => {
             if cdr.len() <= 1 {
                 return Err(VMError::new_compile(
                     "Malformed /, requires at least two arguments.",
@@ -206,22 +206,22 @@ pub(crate) fn compile_math(
                 }
             }
         }
-        Value::Symbol(i) if i == env.specials().numeq => {
+        Value::Special(i) if i == env.specials().numeq => {
             make_math_comp(env, state, cdr, result, NUMEQ)?;
         }
-        Value::Symbol(i) if i == env.specials().numneq => {
+        Value::Special(i) if i == env.specials().numneq => {
             make_math_comp(env, state, cdr, result, NUMNEQ)?;
         }
-        Value::Symbol(i) if i == env.specials().numlt => {
+        Value::Special(i) if i == env.specials().numlt => {
             make_math_comp(env, state, cdr, result, NUMLT)?;
         }
-        Value::Symbol(i) if i == env.specials().numlte => {
+        Value::Special(i) if i == env.specials().numlte => {
             make_math_comp(env, state, cdr, result, NUMLTE)?;
         }
-        Value::Symbol(i) if i == env.specials().numgt => {
+        Value::Special(i) if i == env.specials().numgt => {
             make_math_comp(env, state, cdr, result, NUMGT)?;
         }
-        Value::Symbol(i) if i == env.specials().numgte => {
+        Value::Special(i) if i == env.specials().numgte => {
             make_math_comp(env, state, cdr, result, NUMGTE)?;
         }
         _ => return Ok(false),

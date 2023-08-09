@@ -124,6 +124,7 @@ pub enum Value {
     Symbol(Interned),
     Keyword(Interned),
     StringConst(Interned),
+    Special(Interned), // Intended for symbols that are compiled.
     Builtin(u32),
     True,
     False,
@@ -294,6 +295,7 @@ impl Value {
             Value::CharCluster(_, _) => None,
             Value::Symbol(_) => None,
             Value::Keyword(_) => None,
+            Value::Special(_) => None,
             Value::StringConst(_) => None,
             Value::Builtin(_) => None,
             Value::True => None,
@@ -397,6 +399,7 @@ impl Value {
             Value::Symbol(i) => vm.get_interned(*i).to_string(),
             Value::Keyword(i) => format!(":{}", vm.get_interned(*i)),
             Value::StringConst(i) => format!("\"{}\"", vm.get_interned(*i)),
+            Value::Special(i) => format!("#<SpecialFn({})>", vm.get_interned(*i)),
             Value::CodePoint(ch) => format!("\\{ch}"),
             Value::CharCluster(l, c) => {
                 format!("\\{}", String::from_utf8_lossy(&c[0..*l as usize]))
@@ -495,6 +498,7 @@ impl Value {
             Value::Symbol(_) => "Symbol",
             Value::Keyword(_) => "Keyword",
             Value::StringConst(_) => "String",
+            Value::Special(_) => "Special",
             Value::CodePoint(_) => "Char",
             Value::CharCluster(_, _) => "Char",
             Value::CharClusterLong(_) => "Char",

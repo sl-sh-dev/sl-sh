@@ -209,117 +209,73 @@ pub struct Specials {
 impl Specials {
     pub fn new(vm: &mut SloshVm) -> Self {
         Self {
-            def: vm.intern_static("def"),
-            set: vm.intern_static("set!"),
-            do_: vm.intern_static("do"),
-            fn_: vm.intern_static("fn"),
-            mac_: vm.intern_static("macro"),
-            if_: vm.intern_static("if"),
-            add: vm.intern_static("+"),
-            sub: vm.intern_static("-"),
-            mul: vm.intern_static("*"),
-            div: vm.intern_static("/"),
-            inc: vm.intern_static("inc!"),
-            dec: vm.intern_static("dec!"),
-            list: vm.intern_static("list"),
-            list_append: vm.intern_static("list-append"),
-            cons: vm.intern_static("cons"),
-            car: vm.intern_static("car"),
-            cdr: vm.intern_static("cdr"),
-            xar: vm.intern_static("xar!"),
-            xdr: vm.intern_static("xdr!"),
-            vec: vm.intern_static("vec"),
-            make_vec: vm.intern_static("make-vec"),
-            vec_push: vm.intern_static("vec-push!"),
-            vec_pop: vm.intern_static("vec-pop!"),
-            vec_nth: vm.intern_static("vec-nth"),
-            vec_set: vm.intern_static("vec-set!"),
-            quote: vm.intern_static("quote"),
-            backquote: vm.intern_static("back-quote"),
-            recur: vm.intern_static("recur"),
-            this_fn: vm.intern_static("this-fn"),
-            numeq: vm.intern_static("="),
-            numneq: vm.intern_static("/="),
-            numlt: vm.intern_static("<"),
-            numlte: vm.intern_static("<="),
-            numgt: vm.intern_static(">"),
-            numgte: vm.intern_static(">="),
-            eq: vm.intern_static("eq?"),
-            equal: vm.intern_static("equal?"),
-            type_: vm.intern_static("type"),
-            not: vm.intern_static("not"),
-            and: vm.intern_static("and"),
-            or: vm.intern_static("or"),
-            err: vm.intern_static("err"),
-            vec_len: vm.intern_static("vec-len"),
-            vec_clr: vm.intern_static("vec-clear!"),
-            str_: vm.intern_static("str"),
-            let_: vm.intern_static("let"),
-            call_cc: vm.intern_static("call/cc"),
-            defer: vm.intern_static("defer"),
-            on_error: vm.intern_static("on-error"),
-            while_: vm.intern_static("while"),
-            doc_string: vm.intern_static("doc-string"),
+            def: add_special(vm, "def", ""),
+            set: add_special(vm, "set!", ""),
+            do_: add_special(vm, "do", ""),
+            fn_: add_special(vm, "fn", ""),
+            mac_: add_special(vm, "macro", ""),
+            if_: add_special(vm, "if", ""),
+            add: add_special(vm, "+", ""),
+            sub: add_special(vm, "-", ""),
+            mul: add_special(vm, "*", ""),
+            div: add_special(vm, "/", ""),
+            inc: add_special(vm, "inc!", ""),
+            dec: add_special(vm, "dec!", ""),
+            list: add_special(vm, "list", ""),
+            list_append: add_special(vm, "list-append", ""),
+            cons: add_special(vm, "cons", ""),
+            car: add_special(vm, "car", ""),
+            cdr: add_special(vm, "cdr", ""),
+            xar: add_special(vm, "xar!", ""),
+            xdr: add_special(vm, "xdr!", ""),
+            vec: add_special(vm, "vec", ""),
+            make_vec: add_special(vm, "make-vec", ""),
+            vec_push: add_special(vm, "vec-push!", ""),
+            vec_pop: add_special(vm, "vec-pop!", ""),
+            vec_nth: add_special(vm, "vec-nth", ""),
+            vec_set: add_special(vm, "vec-set!", ""),
+            quote: add_special(vm, "quote", ""),
+            backquote: add_special(vm, "back-quote", ""),
+            recur: add_special(vm, "recur", ""),
+            this_fn: add_special(vm, "this-fn", ""),
+            numeq: add_special(vm, "=", ""),
+            numneq: add_special(vm, "/=", ""),
+            numlt: add_special(vm, "<", ""),
+            numlte: add_special(vm, "<=", ""),
+            numgt: add_special(vm, ">", ""),
+            numgte: add_special(vm, ">=", ""),
+            eq: add_special(vm, "eq?", ""),
+            equal: add_special(vm, "equal?", ""),
+            type_: add_special(vm, "type", ""),
+            not: add_special(vm, "not", ""),
+            and: add_special(vm, "and", ""),
+            or: add_special(vm, "or", ""),
+            err: add_special(vm, "err", ""),
+            vec_len: add_special(vm, "vec-len", ""),
+            vec_clr: add_special(vm, "vec-clear!", ""),
+            str_: add_special(vm, "str", ""),
+            let_: add_special(vm, "let", ""),
+            call_cc: add_special(vm, "call/cc", ""),
+            defer: add_special(vm, "defer", ""),
+            on_error: add_special(vm, "on-error", ""),
+            while_: add_special(vm, "while", ""),
+            doc_string: add_special(vm, "doc-string", ""),
 
             rest: vm.intern_static("&"),
             optional: vm.intern_static("%"),
             scratch: vm.intern_static("[SCRATCH]"),
         }
     }
+}
 
-    /// Does i equal one of the special forms that are compiled?
-    pub fn is_special(&self, i: Interned) -> bool {
-        self.def == i
-            || self.set == i
-            || self.do_ == i
-            || self.fn_ == i
-            || self.mac_ == i
-            || self.if_ == i
-            || self.add == i
-            || self.sub == i
-            || self.mul == i
-            || self.div == i
-            || self.inc == i
-            || self.dec == i
-            || self.list == i
-            || self.list_append == i
-            || self.cons == i
-            || self.car == i
-            || self.cdr == i
-            || self.xar == i
-            || self.xdr == i
-            || self.make_vec == i
-            || self.vec_push == i
-            || self.vec_pop == i
-            || self.vec_nth == i
-            || self.vec_set == i
-            || self.quote == i
-            || self.backquote == i
-            || self.recur == i
-            || self.this_fn == i
-            || self.numeq == i
-            || self.numneq == i
-            || self.numlt == i
-            || self.numlte == i
-            || self.numgt == i
-            || self.numgte == i
-            || self.eq == i
-            || self.equal == i
-            || self.type_ == i
-            || self.not == i
-            || self.and == i
-            || self.or == i
-            || self.err == i
-            || self.vec_len == i
-            || self.vec_clr == i
-            || self.str_ == i
-            || self.let_ == i
-            || self.call_cc == i
-            || self.defer == i
-            || self.on_error == i
-            || self.while_ == i
-            || self.doc_string == i
-    }
+fn add_special(env: &mut SloshVm, name: &'static str, doc_string: &str) -> Interned {
+    let i = env.intern_static(name);
+    let val = Value::Special(i);
+    let si = env.set_named_global(name, val);
+    let key = env.intern("doc-string");
+    let s = env.alloc_string(doc_string.to_string());
+    env.set_global_property(si, key, s);
+    i
 }
 
 pub struct CompileState {

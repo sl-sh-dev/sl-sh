@@ -13,12 +13,12 @@ use compile_state::state::*;
 use sl_compiler::compile::*;
 use sl_compiler::reader::*;
 
+use builtins::add_misc_builtins;
 use builtins::collections::setup_colletion_builtins;
 use builtins::conversions::add_conv_builtins;
 use builtins::io::add_io_builtins;
 use builtins::print::{add_print_builtins, display_value};
 use builtins::string::add_str_builtins;
-use builtins::{add_global_docstring, add_misc_builtins};
 use sl_liner::vi::AlphanumericAndVariableKeywordRule;
 use sl_liner::{keymap, ColorClosure, Context, Prompt};
 
@@ -213,8 +213,6 @@ fn main() {
             add_conv_builtins(&mut env);
             env.set_global_builtin("dump-regs", builtin_dump_regs);
             env.set_global_builtin("def?", builtin_is_def);
-            let sym_i = env.intern_static("car");
-            add_global_docstring(&mut env, "car", Value::Symbol(sym_i), "CAR instructions");
             let uid = Sys::current_uid();
             let euid = Sys::effective_uid();
             env::set_var("UID", format!("{uid}"));

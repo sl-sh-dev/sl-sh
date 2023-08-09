@@ -34,7 +34,7 @@ fn is_macro(env: &SloshVm, val: Value) -> bool {
     }
 }
 
-fn compile_list(
+fn compile_special(
     env: &mut SloshVm,
     state: &mut CompileState,
     car: Value,
@@ -46,7 +46,7 @@ fn compile_list(
         || compile_vec(env, state, car, cdr, result)?)
     {
         match car {
-            Value::Symbol(i) if i == env.specials().doc_string => {
+            Value::Special(i) if i == env.specials().doc_string => {
                 if cdr.len() == 1 {
                     state.doc_string = Some(cdr[0]);
                     return Ok(());
@@ -54,30 +54,30 @@ fn compile_list(
                     return Err(VMError::new_compile("Malformed doc-string form."));
                 }
             }
-            Value::Symbol(i) if i == env.specials().fn_ => {
+            Value::Special(i) if i == env.specials().fn_ => {
                 if cdr.len() > 1 {
                     compile_fn(env, state, cdr[0], &cdr[1..], result, false)?
                 } else {
                     return Err(VMError::new_compile("Malformed fn form."));
                 }
             }
-            Value::Symbol(i) if i == env.specials().mac_ => {
+            Value::Special(i) if i == env.specials().mac_ => {
                 if cdr.len() > 1 {
                     compile_fn(env, state, cdr[0], &cdr[1..], result, true)?
                 } else {
                     return Err(VMError::new_compile("Malformed macro form."));
                 }
             }
-            Value::Symbol(i) if i == env.specials().if_ => {
+            Value::Special(i) if i == env.specials().if_ => {
                 compile_if(env, state, cdr, result)?;
             }
-            Value::Symbol(i) if i == env.specials().while_ => {
+            Value::Special(i) if i == env.specials().while_ => {
                 let tail = state.tail;
                 state.tail = false;
                 compile_while(env, state, cdr, result)?;
                 state.tail = tail;
             }
-            Value::Symbol(i) if i == env.specials().do_ => {
+            Value::Special(i) if i == env.specials().do_ => {
                 if !cdr.is_empty() {
                     let last_thing = cdr.len() - 1;
                     let old_tail = state.tail;
@@ -90,15 +90,15 @@ fn compile_list(
                     }
                 }
             }
-            Value::Symbol(i) if i == env.specials().def => {
+            Value::Special(i) if i == env.specials().def => {
                 state.tail = false;
                 compile_def(env, state, cdr, result)?;
             }
-            Value::Symbol(i) if i == env.specials().set => {
+            Value::Special(i) if i == env.specials().set => {
                 state.tail = false;
                 compile_set(env, state, cdr, result)?;
             }
-            Value::Symbol(i) if i == env.specials().quote => {
+            Value::Special(i) if i == env.specials().quote => {
                 state.tail = false;
                 if cdr.len() != 1 {
                     return Err(VMError::new_compile(format!(
@@ -109,7 +109,7 @@ fn compile_list(
                 }
                 mkconst(env, state, cdr[0], result)?;
             }
-            Value::Symbol(i) if i == env.specials().backquote => {
+            Value::Special(i) if i == env.specials().backquote => {
                 state.tail = false;
                 if cdr.len() != 1 {
                     return Err(VMError::new_compile(format!(
@@ -120,13 +120,13 @@ fn compile_list(
                 }
                 backquote(env, state, cdr[0], result)?;
             }
-            Value::Symbol(i) if i == env.specials().recur => {
+            Value::Special(i) if i == env.specials().recur => {
                 compile_call_myself(env, state, cdr, result, true)?
             }
-            Value::Symbol(i) if i == env.specials().this_fn => {
+            Value::Special(i) if i == env.specials().this_fn => {
                 compile_call_myself(env, state, cdr, result, false)?
             }
-            Value::Symbol(i) if i == env.specials().eq => {
+            Value::Special(i) if i == env.specials().eq => {
                 if cdr.len() <= 1 {
                     return Err(VMError::new_compile("Requires at least two arguments."));
                 } else {
@@ -144,7 +144,7 @@ fn compile_list(
                     )?;
                 }
             }
-            Value::Symbol(i) if i == env.specials().equal => {
+            Value::Special(i) if i == env.specials().equal => {
                 if cdr.len() <= 1 {
                     return Err(VMError::new_compile("Requires at least two arguments. 2"));
                 } else {
@@ -162,33 +162,20 @@ fn compile_list(
                     )?;
                 }
             }
-            Value::Symbol(i) if i == env.specials().type_ => {
+            Value::Special(i) if i == env.specials().type_ => {
                 if cdr.len() != 1 {
                     return Err(VMError::new_compile("Requires one argument."));
                 } else {
-                    match cdr[0] {
-                        Value::Symbol(i) if env.specials().is_special(i) => {
-                            let const_i = state.add_constant(Value::Keyword(env.intern("Special")));
-                            state.chunk.encode2(
-                                CONST,
-                                result as u16,
-                                const_i as u16,
-                                env.own_line(),
-                            )?;
-                        }
-                        _ => {
-                            compile(env, state, cdr[0], result + 1)?;
-                            state.chunk.encode2(
-                                TYPE,
-                                result as u16,
-                                (result + 1) as u16,
-                                env.own_line(),
-                            )?;
-                        }
-                    }
+                    compile(env, state, cdr[0], result + 1)?;
+                    state.chunk.encode2(
+                        TYPE,
+                        result as u16,
+                        (result + 1) as u16,
+                        env.own_line(),
+                    )?;
                 }
             }
-            Value::Symbol(i) if i == env.specials().not => {
+            Value::Special(i) if i == env.specials().not => {
                 if cdr.len() != 1 {
                     return Err(VMError::new_compile("Requires one argument."));
                 } else {
@@ -198,7 +185,7 @@ fn compile_list(
                         .encode2(NOT, result as u16, (result + 1) as u16, env.own_line())?;
                 }
             }
-            Value::Symbol(i) if i == env.specials().err => {
+            Value::Special(i) if i == env.specials().err => {
                 let len = cdr.len();
                 if len != 1 && len != 2 {
                     return Err(VMError::new_compile("Requires one or two arguments."));
@@ -216,13 +203,13 @@ fn compile_list(
                         .encode2(ERR, result as u16, (result + 1) as u16, env.own_line())?;
                 }
             }
-            Value::Symbol(i) if i == env.specials().and => {
+            Value::Special(i) if i == env.specials().and => {
                 compile_and(env, state, cdr, result)?;
             }
-            Value::Symbol(i) if i == env.specials().or => {
+            Value::Special(i) if i == env.specials().or => {
                 compile_or(env, state, cdr, result)?;
             }
-            Value::Symbol(i) if i == env.specials().str_ => {
+            Value::Special(i) if i == env.specials().str_ => {
                 let tail = state.tail;
                 state.tail = false;
                 let mut max = 0;
@@ -239,10 +226,10 @@ fn compile_list(
                 )?;
                 state.tail = tail;
             }
-            Value::Symbol(i) if i == env.specials().let_ => {
+            Value::Special(i) if i == env.specials().let_ => {
                 compile_let(env, state, cdr, result)?;
             }
-            Value::Symbol(i) if i == env.specials().call_cc => {
+            Value::Special(i) if i == env.specials().call_cc => {
                 if cdr.len() != 1 {
                     return Err(VMError::new_compile("Requires one argument."));
                 }
@@ -251,7 +238,7 @@ fn compile_list(
                     .chunk
                     .encode2(CCC, result as u16, result as u16, env.own_line())?;
             }
-            Value::Symbol(i) if i == env.specials().defer => {
+            Value::Special(i) if i == env.specials().defer => {
                 if !cdr.is_empty() {
                     compile_fn(env, state, Value::Nil, &cdr[0..], result, false)?;
                     state.chunk.encode1(DFR, result as u16, env.own_line())?;
@@ -262,72 +249,86 @@ fn compile_list(
                     ));
                 }
             }
-            Value::Symbol(i) if i == env.specials().on_error => {
+            Value::Special(i) if i == env.specials().on_error => {
                 if cdr.len() != 1 {
                     return Err(VMError::new_compile("Requires one argument."));
                 }
                 compile(env, state, cdr[0], result)?;
                 state.chunk.encode1(ONERR, result as u16, env.own_line())?;
             }
-            Value::Symbol(i) => {
-                if let Some(idx) = state.get_symbol(i) {
-                    compile_call_reg(env, state, idx as u16, cdr, result)?
-                } else if let Some(slot) = env.global_intern_slot(i) {
-                    // Have to at least pre-declare a global.
-                    let global = env.get_global(slot);
-                    if let Value::Undefined = global {
-                        eprintln!("Warning: {} not defined.", env.get_interned(i));
-                    }
-                    if is_macro(env, global) {
-                        let (mac, caps) = match global {
-                            Value::Lambda(h) => (env.get_lambda(h), None),
-                            Value::Closure(h) => {
-                                let (mac, caps) = env.get_closure(h);
-                                // Closures are read only so lets just break the lifetime away vs
-                                // allocate the same thing again...
-                                let caps = unsafe { (caps as *const [Handle]).as_ref().unwrap() };
-                                (mac, Some(caps))
-                            }
-                            _ => panic!("Invalid macro!"),
-                        };
-                        env.pause_gc();
-                        let exp = env.do_call(mac, cdr, caps)?;
-                        env.unpause_gc();
-                        pass1(env, state, exp)?;
-                        compile(env, state, exp, result)?
-                    } else {
-                        compile_callg(env, state, slot, cdr, result)?
-                    }
-                } else {
-                    let sym = env.get_interned(i);
-                    return Err(VMError::new_compile(format!("Symbol {sym} not defined (maybe you need to use 'def {sym}' to pre-declare it).")));
+            Value::Special(i) => panic!("Unknown special {} is not special!", env.get_interned(i)),
+            _ => panic!("compile_special called with something mundane!"),
+        }
+    }
+    Ok(())
+}
+
+fn compile_list(
+    env: &mut SloshVm,
+    state: &mut CompileState,
+    car: Value,
+    cdr: &[Value],
+    result: usize,
+) -> VMResult<()> {
+    match car {
+        Value::Symbol(i) => {
+            if let Some(idx) = state.get_symbol(i) {
+                compile_call_reg(env, state, idx as u16, cdr, result)?
+            } else if let Some(slot) = env.global_intern_slot(i) {
+                // Have to at least pre-declare a global.
+                let global = env.get_global(slot);
+                if let Value::Undefined = global {
+                    eprintln!("Warning: {} not defined.", env.get_interned(i));
                 }
-            }
-            Value::Builtin(builtin) => {
-                compile_call(env, state, Value::Builtin(builtin), cdr, result)?
-            }
-            Value::Lambda(h) => compile_call(env, state, Value::Lambda(h), cdr, result)?,
-            Value::Pair(_) | Value::List(_, _) => {
-                let (ncar, ncdr) = car.get_pair(env).expect("Pair/List not a Pair or List?");
-                if let Value::List(h, idx) = ncdr {
-                    // This unsafe should be fine (it breaks the lifetime away from env) since the
-                    // vector that backs a list is read only.
-                    // Do this to avoid a useless allocation in the common case (see the code below).
-                    let ncdr = unsafe {
-                        (&env.get_vector(h)[idx as usize..] as *const [Value])
-                            .as_ref()
-                            .unwrap()
+                if let Value::Special(_) = global {
+                    compile_special(env, state, global, cdr, result)?;
+                } else if is_macro(env, global) {
+                    let (mac, caps) = match global {
+                        Value::Lambda(h) => (env.get_lambda(h), None),
+                        Value::Closure(h) => {
+                            let (mac, caps) = env.get_closure(h);
+                            // Closures are read only so lets just break the lifetime away vs
+                            // allocate the same thing again...
+                            let caps = unsafe { (caps as *const [Handle]).as_ref().unwrap() };
+                            (mac, Some(caps))
+                        }
+                        _ => panic!("Invalid macro!"),
                     };
-                    compile_list(env, state, ncar, ncdr, result)?;
+                    env.pause_gc();
+                    let exp = env.do_call(mac, cdr, caps)?;
+                    env.unpause_gc();
+                    pass1(env, state, exp)?;
+                    compile(env, state, exp, result)?
                 } else {
-                    let ncdr: Vec<Value> = ncdr.iter(env).collect();
-                    compile_list(env, state, ncar, &ncdr[..], result)?;
+                    compile_callg(env, state, slot, cdr, result)?
                 }
-                compile_call_reg(env, state, result as u16, cdr, result)?
+            } else {
+                let sym = env.get_interned(i);
+                return Err(VMError::new_compile(format!("Symbol {sym} not defined (maybe you need to use 'def {sym}' to pre-declare it).")));
             }
-            _ => {
-                println!("Boo, {}", car.display_value(env));
+        }
+        Value::Builtin(builtin) => compile_call(env, state, Value::Builtin(builtin), cdr, result)?,
+        Value::Lambda(h) => compile_call(env, state, Value::Lambda(h), cdr, result)?,
+        Value::Pair(_) | Value::List(_, _) => {
+            let (ncar, ncdr) = car.get_pair(env).expect("Pair/List not a Pair or List?");
+            if let Value::List(h, idx) = ncdr {
+                // This unsafe should be fine (it breaks the lifetime away from env) since the
+                // vector that backs a list is read only.
+                // Do this to avoid a useless allocation in the common case (see the code below).
+                let ncdr = unsafe {
+                    (&env.get_vector(h)[idx as usize..] as *const [Value])
+                        .as_ref()
+                        .unwrap()
+                };
+                compile_list(env, state, ncar, ncdr, result)?;
+            } else {
+                let ncdr: Vec<Value> = ncdr.iter(env).collect();
+                compile_list(env, state, ncar, &ncdr[..], result)?;
             }
+            compile_call_reg(env, state, result as u16, cdr, result)?
+        }
+        _ => {
+            println!("Boo, {}", car.display_value(env));
         }
     }
     state.doc_string = None;
