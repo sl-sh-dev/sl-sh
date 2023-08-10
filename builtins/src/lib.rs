@@ -161,13 +161,6 @@ pub fn add_builtin(
     env.set_global_property(si, key, s);
 }
 
-pub fn add_docstring(env: &mut SloshVm, name: &str, doc_string: &str) {
-    let si = env.set_named_global(name, Value::Undefined);
-    let key = env.intern("doc-string");
-    let s = env.alloc_string(doc_string.to_string());
-    env.set_global_property(si, key, s);
-}
-
 pub fn add_misc_builtins(env: &mut SloshVm) {
     env.set_global_builtin("get-prop", get_prop);
     env.set_global_builtin("set-prop", set_prop);

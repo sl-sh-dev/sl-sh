@@ -142,7 +142,8 @@ fn get_color_closure() -> Option<ColorClosure> {
                         let mut env = renv.borrow_mut();
                         let line_handler = env.get_lambda(h);
                         let param = env.alloc_string(input.to_string());
-                        match env.do_call(line_handler, &[param], None) {
+                        env.heap_sticky(param);
+                        let res = match env.do_call(line_handler, &[param], None) {
                             Ok(v) => match v {
                                 Value::StringConst(i) => env.get_interned(i).to_string(),
                                 Value::String(h) => env.get_string(h).to_string(),
@@ -151,7 +152,9 @@ fn get_color_closure() -> Option<ColorClosure> {
                             Err(e) => {
                                 format!("ERROR {e}")
                             }
-                        }
+                        };
+                        env.heap_unsticky(param);
+                        res
                     })
                 })),
                 Value::Closure(h) => Some(Box::new(move |input: &str| -> String {
@@ -160,7 +163,8 @@ fn get_color_closure() -> Option<ColorClosure> {
                         let (line_handler, tcaps) = env.get_closure(h);
                         let caps = Vec::from(tcaps);
                         let param = env.alloc_string(input.to_string());
-                        match env.do_call(line_handler, &[param], Some(&caps[..])) {
+                        env.heap_sticky(param);
+                        let res = match env.do_call(line_handler, &[param], Some(&caps[..])) {
                             Ok(v) => match v {
                                 Value::StringConst(i) => env.get_interned(i).to_string(),
                                 Value::String(h) => env.get_string(h).to_string(),
@@ -169,7 +173,9 @@ fn get_color_closure() -> Option<ColorClosure> {
                             Err(e) => {
                                 format!("ERROR {e}")
                             }
-                        }
+                        };
+                        env.heap_unsticky(param);
+                        res
                     })
                 })),
                 _ => None,

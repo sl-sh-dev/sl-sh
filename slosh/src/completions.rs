@@ -7,7 +7,7 @@ use std::path::Path;
 use crate::ENV;
 use shell::builtins::compress_tilde;
 use shell::builtins::expand_tilde;
-use slvm::Value;
+use slvm::{VMResult, Value};
 
 /// Unescape filenames for the completer so that special characters will be properly shown.
 fn unescape(input: &str) -> String {
@@ -85,6 +85,51 @@ impl ShellCompleter {
         }
     }
 
+    fn process_hook(&mut self, env: &mut SloshVm, res: VMResult<Value>) -> HookResult {
+        match res {
+            Ok(val) => match val {
+                Value::Keyword(i) => match env.get_interned(i) {
+                    "path" => HookResult::Path,
+                    "default" => HookResult::Default,
+                    _ => {
+                        eprintln!(
+                            "ERROR: unknown completion hook command, {}\n",
+                            env.get_interned(i)
+                        );
+                        HookResult::Default
+                    }
+                },
+                Value::Vector(handle) => {
+                    let list = env.get_vector(handle);
+                    let mut v = Vec::with_capacity(list.len());
+                    for l in list {
+                        v.push(l.pretty_value(env).trim().to_string());
+                    }
+                    HookResult::UseList(v)
+                }
+                Value::Pair(_) | Value::List(_, _) => {
+                    let mut v = Vec::new();
+                    for l in val.iter(env) {
+                        v.push(l.pretty_value(env).trim().to_string());
+                    }
+                    HookResult::UseList(v)
+                }
+                Value::Nil => HookResult::Default,
+                _ => {
+                    eprintln!(
+                        "WARNING: unexpected result from __completion_hook, {}, ignoring.\n",
+                        val.display_value(env)
+                    );
+                    HookResult::Default
+                }
+            },
+            Err(e) => {
+                eprintln!("Error calling completion hook: {e}");
+                HookResult::Default
+            }
+        }
+    }
+
     fn run_hook(&mut self) -> HookResult {
         if self.args.is_empty() {
             return HookResult::Default;
@@ -94,49 +139,31 @@ impl ShellCompleter {
             // XXX TODO- namespace this when we have namespaces.
             let i_val = env.intern("__completion_hook");
             if let Some(idx) = env.global_intern_slot(i_val) {
-                match env.get_global(idx) {
+                let mut v: Vec<Value> = self
+                    .args
+                    .drain(..)
+                    .map(|a| {
+                        let val = env.alloc_string(a);
+                        env.heap_sticky(val);
+                        val
+                    })
+                    .collect();
+                let res = match env.get_global(idx) {
                     Value::Lambda(h) => {
                         let l = env.get_lambda(h);
-                        let v: Vec<Value> = self.args.drain(..).map(|a| env.alloc_string(a)).collect();
-                        match env.do_call(l, &v[..], None) {
-                            Ok(val) => match val {
-                                Value::Keyword(i) => match env.get_interned(i) {
-                                    "path" => HookResult::Path,
-                                    "default" => HookResult::Default,
-                                    _ => {
-                                        eprintln!("ERROR: unknown completion hook command, {}\n", env.get_interned(i));
-                                        HookResult::Default
-                                    }
-                                },
-                                Value::Vector(handle) => {
-                                    let list = env.get_vector(handle);
-                                    let mut v = Vec::with_capacity(list.len());
-                                    for l in list {
-                                        v.push(l.pretty_value(&env).trim().to_string());
-                                    }
-                                    HookResult::UseList(v)
-                                }
-                                Value::Pair(_) | Value::List(_, _) => {
-                                    let mut v = Vec::new();
-                                    for l in val.iter(&env) {
-                                        v.push(l.pretty_value(&env).trim().to_string());
-                                    }
-                                    HookResult::UseList(v)
-                                }
-                                Value::Nil => HookResult::Default,
-                                _ => {
-                                    eprintln!("WARNING: unexpected result from __completion_hook, {}, ignoring.\n", val.display_value(&env));
-                                    HookResult::Default
-                                }
-                            },
-                            Err(e) => {
-                                eprintln!("Error calling completion hook: {e}");
-                                HookResult::Default
-                            }
-                        }
+                        let call_res = env.do_call(l, &v[..], None);
+                        self.process_hook(&mut env, call_res)
                     }
-                    _ => HookResult::Default
-                }
+                    Value::Closure(h) => {
+                        let (l, tcaps) = env.get_closure(h);
+                        let caps = Vec::from(tcaps);
+                        let call_res = env.do_call(l, &v[..], Some(&caps[..]));
+                        self.process_hook(&mut env, call_res)
+                    }
+                    _ => HookResult::Default,
+                };
+                v.drain(..).for_each(|val| env.heap_unsticky(val));
+                res
             } else {
                 HookResult::Default
             }
@@ -150,14 +177,12 @@ impl Completer for ShellCompleter {
             CompType::Nothing => Vec::new(),
             CompType::Command => {
                 let mut ret = get_dir_matches(start);
-                //ENV.with(|env| find_lisp_fns(&mut env.borrow_mut(), &mut ret, start));
                 find_exes(&mut ret, start);
                 ret
             }
             CompType::CommandParen => {
                 let mut ret: Vec<String> = Vec::new();
                 ENV.with(|env| find_lisp_fns(&env.borrow(), &mut ret, start));
-                //find_exes(&mut ret, start);
                 ret
             }
             CompType::EnvVar => match self.run_hook() {
@@ -176,9 +201,18 @@ impl Completer for ShellCompleter {
             },
             CompType::Other => match self.run_hook() {
                 HookResult::Default => {
-                    let mut ret = get_dir_matches(start);
-                    ENV.with(|env| find_lisp_symbols(&env.borrow(), &mut ret, start));
-                    ret
+                    if self
+                        .args
+                        .get(0)
+                        .map(|s| s.trim().starts_with('('))
+                        .unwrap_or(false)
+                    {
+                        let mut ret = vec![];
+                        ENV.with(|env| find_lisp_symbols(&env.borrow(), &mut ret, start));
+                        ret
+                    } else {
+                        get_dir_matches(start)
+                    }
                 }
                 HookResult::Path => get_path_matches(start),
                 HookResult::UseList(list) => list,
@@ -361,7 +395,11 @@ fn find_lisp_things(
 ) {
     fn save_val(comps: &mut Vec<String>, data: Value, val: String, symbols: bool) {
         match data {
-            Value::Lambda(_) | Value::Closure(_) | Value::Continuation(_) | Value::Builtin(_) => {
+            Value::Lambda(_)
+            | Value::Closure(_)
+            | Value::Continuation(_)
+            | Value::Builtin(_)
+            | Value::Special(_) => {
                 if !symbols {
                     comps.push(val);
                 }
@@ -377,7 +415,7 @@ fn find_lisp_things(
     // XXX TODO support namespaces when we have them.
     for (i, idx) in environment.globals() {
         let key = environment.get_interned(*i);
-        if key.starts_with(start) {
+        if start.is_empty() || key.starts_with(start) {
             let val = if need_quote {
                 format!("'{}", key)
             } else {
