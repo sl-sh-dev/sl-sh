@@ -37,7 +37,7 @@ pub(crate) fn compile_math(
 ) -> VMResult<bool> {
     match car {
         Value::Special(i) if i == env.specials().inc => {
-            let dest = if let Value::Special(si) = cdr[0] {
+            let dest = if let Value::Symbol(si) = cdr[0] {
                 if let Some(idx) = state.get_symbol(si) {
                     idx
                 } else if let Some(slot) = env.global_intern_slot(i) {
@@ -76,7 +76,7 @@ pub(crate) fn compile_math(
             }
         }
         Value::Special(i) if i == env.specials().dec => {
-            let dest = if let Value::Special(si) = cdr[0] {
+            let dest = if let Value::Symbol(si) = cdr[0] {
                 if let Some(idx) = state.get_symbol(si) {
                     idx
                 } else if let Some(slot) = env.global_intern_slot(i) {

@@ -166,23 +166,29 @@ impl<ENV> GVm<ENV> {
                         self.ip_ptr = self.current_ip_ptr;
                         chunk = self.make_call(defer, chunk, first_reg, 0, false)?;
                         self.make_registers();
-                    } else if let Some(frame) = self.call_frame() {
-                        let stack_top = frame.stack_top;
-                        let ip_ptr = frame.ip;
-                        let current_ip = frame.current_ip;
-                        let this_fn = frame.this_fn;
-                        let on_error = frame.on_error;
-                        chunk = frame.chunk.clone();
-                        self.copy_frame_defers(); // Do this BEFORE we change stack_top...
-                        self.stack_top = stack_top;
-                        self.make_registers();
-                        self.stack_max = self.stack_top + chunk.input_regs + chunk.extra_regs;
-                        self.ip_ptr = ip_ptr;
-                        self.current_ip_ptr = current_ip;
-                        self.this_fn = this_fn;
-                        self.on_error = on_error;
                     } else {
-                        return Ok(());
+                        // Clear used regs to make sure no closures or globals get overwritten later.
+                        for r in self.stack_top + 1..=self.stack_max {
+                            *self.stack_mut(r) = Value::Undefined;
+                        }
+                        if let Some(frame) = self.call_frame() {
+                            let stack_top = frame.stack_top;
+                            let ip_ptr = frame.ip;
+                            let current_ip = frame.current_ip;
+                            let this_fn = frame.this_fn;
+                            let on_error = frame.on_error;
+                            chunk = frame.chunk.clone();
+                            self.copy_frame_defers(); // Do this BEFORE we change stack_top...
+                            self.stack_top = stack_top;
+                            self.make_registers();
+                            self.stack_max = self.stack_top + chunk.input_regs + chunk.extra_regs;
+                            self.ip_ptr = ip_ptr;
+                            self.current_ip_ptr = current_ip;
+                            self.this_fn = this_fn;
+                            self.on_error = on_error;
+                        } else {
+                            return Ok(());
+                        }
                     }
                 }
                 SRET => {
@@ -195,6 +201,10 @@ impl<ENV> GVm<ENV> {
                         let src = decode1!(self.ip_ptr, wide);
                         let val = self.register(src as usize);
                         let old_top = self.stack_top;
+                        // Clear used regs to make sure no closures or globals get overwritten later.
+                        for r in self.stack_top + 1..=self.stack_max {
+                            *self.stack_mut(r) = Value::Undefined;
+                        }
                         if let Some(frame) = self.call_frame() {
                             let stack_top = frame.stack_top;
                             let ip_ptr = frame.ip;

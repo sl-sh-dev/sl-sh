@@ -133,10 +133,16 @@ fn str_clear(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
             let buffer = vm.get_string_mut(handle);
             buffer.clear();
             Ok(Value::String(handle))
+        } else if let Value::StringConst(_handle) = *buffer {
+            Err(VMError::new_vm(format!(
+                "str-clear!: takes a string (not a const), got string const {}",
+                buffer.display_value(vm)
+            )))
         } else {
-            Err(VMError::new_vm(
-                "str-clear!: takes one arg, must be a string (not a const)".to_string(),
-            ))
+            Err(VMError::new_vm(format!(
+                "str-clear!: takes one arg, must be a string (got a {})",
+                buffer.display_value(vm)
+            )))
         }
     } else {
         Err(VMError::new_vm(
@@ -292,6 +298,7 @@ fn str_split(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         let string = string.pretty_value(vm);
         let pat = pat.pretty_value(vm);
         let mut splits = Vec::new();
+        vm.pause_gc();
         if pat == ":whitespace" {
             for s in string.split_whitespace() {
                 splits.push(vm.alloc_string(s.to_string()));
@@ -301,7 +308,9 @@ fn str_split(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
                 splits.push(vm.alloc_string(s.to_string()));
             }
         }
-        Ok(vm.alloc_vector(splits))
+        let ret = vm.alloc_vector(splits);
+        vm.unpause_gc();
+        Ok(ret)
     } else {
         Err(VMError::new_vm(
             "str-split: takes a string and a pattern".to_string(),

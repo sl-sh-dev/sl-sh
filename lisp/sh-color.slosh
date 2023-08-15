@@ -132,12 +132,12 @@ Section: shell
 
         command-color
             (fn (command) 
-				(if tok-command
-					(let (sym (->sym command))
-						(if (and (def? sym)(callable? (ref sym)))
-                    	    (str tok-slsh-form-color command *fg-default*)
-                        	(str tok-invalid-color command *fg-default*)))
-					command))
+                (if tok-command
+                    (let (sym (->sym command))
+                        (if (and (def? sym)(callable? (ref sym)))
+                            (str tok-slsh-form-color command *fg-default*)
+                            (str tok-invalid-color command *fg-default*)))
+                    command))
 
         prrawtoken
            (fn ()
@@ -228,5 +228,4 @@ Turn off syntax highlighting at the repl.
 Section: shell
 !#
 (defn syntax-off () (defn __line_handler (line) line))
-
 
