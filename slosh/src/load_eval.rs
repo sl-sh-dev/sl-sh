@@ -1,7 +1,10 @@
 use compile_state::state::{CompileState, SloshVm, SloshVmTrait};
+use shell::builtins::expand_tilde;
 use sl_compiler::pass1::pass1;
 use sl_compiler::{compile, Reader};
 use slvm::{Chunk, VMError, VMResult, Value, RET};
+use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 
 fn load_one_expression(
@@ -77,6 +80,18 @@ fn load(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
             vm.get_interned(s_i)
         }
         _ => return Err(VMError::new_vm("load: Not a string.")),
+    };
+    let name = if name.contains('~') {
+        let name_path = PathBuf::from_str(name).expect("PathBuf from_str failed!");
+        let name_exp = expand_tilde(name_path.clone());
+        if name_exp == name_path {
+            name
+        } else {
+            let s_i = vm.intern(name_exp.to_string_lossy().as_ref());
+            vm.get_interned(s_i)
+        }
+    } else {
+        name
     };
     let olf_line_num = vm.line_num();
     vm.set_line_num(1);
