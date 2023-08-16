@@ -219,7 +219,7 @@ fn length(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-pub fn setup_colletion_builtins(env: &mut SloshVm) {
+pub fn setup_collection_builtins(env: &mut SloshVm) {
     add_builtin(
         env,
         "vec-slice",

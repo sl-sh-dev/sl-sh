@@ -14,7 +14,7 @@ use sl_compiler::compile::*;
 use sl_compiler::reader::*;
 
 use builtins::add_misc_builtins;
-use builtins::collections::setup_colletion_builtins;
+use builtins::collections::setup_collection_builtins;
 use builtins::conversions::add_conv_builtins;
 use builtins::io::add_io_builtins;
 use builtins::print::{add_print_builtins, display_value};
@@ -191,7 +191,7 @@ fn main() {
         ENV.with(|renv| {
             let mut env = renv.borrow_mut();
             add_shell_builtins(&mut env);
-            setup_colletion_builtins(&mut env);
+            setup_collection_builtins(&mut env);
             add_print_builtins(&mut env);
             add_load_builtins(&mut env);
             add_str_builtins(&mut env);
