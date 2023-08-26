@@ -700,11 +700,11 @@ fn rlimit_to_c(rlimit: RLimit) -> Result<libc::__rlimit_resource_t, io::Error> {
         RLimit::MaxPtty => Ok(libc::RLIMIT_NPTS),
         #[cfg(not(target_os = "freebsd"))]
         RLimit::MaxPtty => Err(Error::new(ErrorKind::Unsupported, "not on platform")),
-        #[cfg(any(target_os = "linux"))]
+        #[cfg(target_os = "linux")]
         RLimit::MaxRealTime => Ok(libc::RLIMIT_RTTIME),
         #[cfg(not(any(target_os = "linux")))]
         RLimit::MaxRealTime => Err(Error::new(ErrorKind::Unsupported, "not on platform")),
-        #[cfg(any(target_os = "linux"))]
+        #[cfg(target_os = "linux")]
         RLimit::MaxThreads => Ok(libc::RLIMIT_NPROC),
         #[cfg(not(any(target_os = "linux")))]
         RLimit::MaxThreads => Err(Error::new(ErrorKind::Unsupported, "not on platform")),

@@ -256,10 +256,36 @@ fn compile_special(
                 compile(env, state, cdr[0], result)?;
                 state.chunk.encode1(ONERR, result as u16, env.own_line())?;
             }
+            Value::Special(i) if i == env.specials().get => {
+                compile_get(env, state, cdr, result)?;
+            }
             Value::Special(i) => panic!("Unknown special {} is not special!", env.get_interned(i)),
             _ => panic!("compile_special called with something mundane!"),
         }
     }
+    Ok(())
+}
+
+pub(crate) fn compile_get(
+    env: &mut SloshVm,
+    state: &mut CompileState,
+    cdr: &[Value],
+    result: usize,
+) -> VMResult<()> {
+    if cdr.len() != 2 {
+        return Err(VMError::new_compile(
+            "Wrong number of arguments, expected two.",
+        ));
+    }
+    compile(env, state, cdr[0], result + 1)?;
+    compile(env, state, cdr[1], result + 2)?;
+    state.chunk.encode3(
+        GET,
+        result as u16,
+        (result + 1) as u16,
+        (result + 2) as u16,
+        env.own_line(),
+    )?;
     Ok(())
 }
 

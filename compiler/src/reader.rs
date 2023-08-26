@@ -889,6 +889,44 @@ impl<'vm> Reader<'vm> {
         }
     }
 
+    fn parse_get(&mut self, buffer: &str) -> Option<Value> {
+        if buffer.contains('.') {
+            let i_get = self.vm.intern("get");
+            let mut vals = vec![Value::Symbol(i_get)];
+            let line = self.line() as u32;
+            let column = self.column() as u32;
+            let parts = buffer.split('.');
+            let mut i = 0;
+            for p in parts {
+                if !p.is_empty() {
+                    if i != 0 && i % 2 == 0 {
+                        let inner = self.alloc_list(vals, line, column);
+                        vals = vec![Value::Symbol(i_get)];
+                        vals.push(inner);
+                    }
+                    if p.starts_with(':') && p.len() > 1 {
+                        let i_p = self.vm.intern(&p[1..]);
+                        vals.push(Value::Keyword(i_p));
+                    } else if let Ok(num) = p.parse::<i32>() {
+                        vals.push(Value::Int32(num));
+                    } else {
+                        let i_p = self.vm.intern(p);
+                        vals.push(Value::Symbol(i_p));
+                    }
+                    i += 1;
+                }
+            }
+            if i > 1 {
+                let res = self.alloc_list(vals, line, column);
+                Some(res)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
     fn read_inner(
         &mut self,
         buffer: &mut String,
@@ -1094,7 +1132,13 @@ impl<'vm> Reader<'vm> {
                     buffer.clear();
                     buffer.push_str(&ch);
                     let is_number = self.read_symbol(buffer, false, false, &read_table_term);
-                    return Ok(Some(self.do_atom(buffer, is_number)));
+                    if is_number {
+                        return Ok(Some(self.do_atom(buffer, is_number)));
+                    } else if let Some(get) = self.parse_get(buffer) {
+                        return Ok(Some(get));
+                    } else {
+                        return Ok(Some(self.do_atom(buffer, is_number)));
+                    }
                 }
             }
             self.consume_whitespace();
@@ -1661,9 +1705,9 @@ two""#
     #[test]
     fn test_tok_floats() {
         let mut vm = build_def_vm();
-        let input = "2300.0 23_000.0 23e10 23e+5 23e-4 23e-+5 23e-5e+4 23.123 0.23.123";
+        let input = "2300.0 23_000.0 23e10 23e+5 23e-4 23e-+5 23e-5e+4 23.123";
         let tokens = tokenize(&mut vm, input);
-        assert!(tokens.len() == 11);
+        assert!(tokens.len() == 10);
         assert!(tokens[0] == "[");
         assert!(tokens[1] == "Float:2300");
         assert!(tokens[2] == "Float:23000");
@@ -1673,8 +1717,7 @@ two""#
         assert!(tokens[6] == "Symbol:23e-+5");
         assert!(tokens[7] == "Symbol:23e-5e+4");
         assert!(tokens[8] == "Float:23.123");
-        assert!(tokens[9] == "Symbol:0.23.123");
-        assert!(tokens[10] == "]");
+        assert!(tokens[9] == "]");
     }
 
     #[test]

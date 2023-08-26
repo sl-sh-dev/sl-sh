@@ -1,6 +1,6 @@
 use crate::pass1::pass1;
 use crate::{compile, CompileState, ReadError, Reader};
-use compile_state::state::SloshVm;
+use compile_state::state::{SloshVm, SloshVmTrait};
 use slvm::*;
 use std::sync::Arc;
 
@@ -26,18 +26,28 @@ pub fn exec(env: &mut SloshVm, input: &'static str) -> Value {
     let exp = read_test(env, input);
     let mut state = CompileState::new();
     if let Value::Vector(_) = exp {
+        env.pause_gc();
         for e in exp.iter(env).collect::<Vec<Value>>() {
             pass1(env, &mut state, e).unwrap();
             compile(env, &mut state, e, 0).unwrap();
         }
         state.chunk.encode0(RET, Some(1)).unwrap();
-        env.execute(Arc::new(state.chunk)).unwrap();
+        let chunk = Arc::new(state.chunk);
+        env.unpause_gc();
+        let c_alloc = env.alloc_lambda(chunk.clone());
+        // Keep chunk from getting GCed...
+        env.set_named_global("#<remember-me>", c_alloc);
+        env.execute(chunk).unwrap();
     } else {
-        env.heap_sticky(exp);
+        env.pause_gc();
         pass1(env, &mut state, exp).unwrap();
         compile(env, &mut state, exp, 0).unwrap();
         state.chunk.encode0(RET, Some(1)).unwrap();
         let chunk = Arc::new(state.chunk);
+        env.unpause_gc();
+        let c_alloc = env.alloc_lambda(chunk.clone());
+        // Keep chunk from getting GCed...
+        env.set_named_global("#<remember-me>", c_alloc);
         env.execute(chunk).unwrap();
     }
     env.stack(0).unref(env)

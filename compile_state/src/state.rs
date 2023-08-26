@@ -200,6 +200,7 @@ pub struct Specials {
     pub on_error: Interned,
     pub while_: Interned,
     pub doc_string: Interned,
+    pub get: Interned,
 
     pub rest: Interned,
     pub optional: Interned,
@@ -371,6 +372,7 @@ Example:
             on_error: add_special(vm, "on-error", ""),
             while_: add_special(vm, "while", ""),
             doc_string: add_special(vm, "doc-string", ""),
+            get: add_special(vm, "get", ""),
 
             rest: vm.intern_static("&"),
             optional: vm.intern_static("%"),

@@ -126,6 +126,98 @@ impl<ENV> GVm<ENV> {
         }
     }
 
+    fn get(&mut self, wide: bool) -> VMResult<()> {
+        let (dest, data, i) = decode3!(self.ip_ptr, wide);
+        let data = self.register(data as usize);
+        let val = match data {
+            Value::Vector(h) => {
+                let v = self.get_vector(h);
+                let idx = self.register_int(i as usize)?;
+                let idx = if idx >= 0 { idx } else { v.len() as i64 + idx };
+                if idx < 0 {
+                    return Err(VMError::new_vm(format!(
+                        "GET: index out of bounds, {}/{}.",
+                        i,
+                        v.len()
+                    )));
+                }
+                if let Some(val) = v.get(idx as usize) {
+                    *val
+                } else {
+                    return Err(VMError::new_vm(format!(
+                        "GET: index out of bounds, {}/{}.",
+                        i,
+                        v.len()
+                    )));
+                }
+            }
+            Value::List(h, start) => {
+                let v = self.get_vector(h);
+                let idx = self.register_int(i as usize)?;
+                if idx < 0 {
+                    return Err(VMError::new_vm(format!(
+                        "GET: index out of bounds, {}/{}.",
+                        i,
+                        v.len() - start as usize,
+                    )));
+                }
+                if let Some(val) = v.get(start as usize + idx as usize) {
+                    *val
+                } else {
+                    return Err(VMError::new_vm(format!(
+                        "GET: index out of bounds, {}/{}.",
+                        i,
+                        v.len() - start as usize,
+                    )));
+                }
+            }
+            Value::Pair(_) => {
+                let idx = self.register_int(i as usize)?;
+                if idx >= 0 {
+                    let idx = idx as usize;
+                    if let Some((mut car_out, mut cdr)) = data.get_pair(self) {
+                        for _ in 0..idx {
+                            if let Some((car, cdr_in)) = cdr.get_pair(self) {
+                                car_out = car;
+                                cdr = cdr_in;
+                            } else {
+                                return Err(VMError::new_vm(format!(
+                                    "GET: index out of bounds (pair), {}.",
+                                    i,
+                                )));
+                            }
+                        }
+                        car_out
+                    } else {
+                        panic!("pair not a pair!")
+                    }
+                } else {
+                    return Err(VMError::new_vm(format!(
+                        "GET: list requires a positive index (pair), {}.",
+                        i,
+                    )));
+                }
+            }
+            Value::Map(h) => {
+                let map = self.get_map(h);
+                let key = self.register(i as usize);
+                if let Some(val) = map.get(&key) {
+                    *val
+                } else {
+                    return Err(VMError::new_vm(format!(
+                        "GET: not a map index, {}.",
+                        key.display_value(self),
+                    )));
+                }
+            }
+            _ => {
+                return Err(VMError::new_vm("GET: Not a compound data structure."));
+            }
+        };
+        set_register!(self, dest as usize, val);
+        Ok(())
+    }
+
     pub(super) fn exec_loop(&mut self, chunk: Arc<Chunk>) -> Result<(), (VMError, Arc<Chunk>)> {
         let _env: PhantomData<ENV>;
         self.make_registers();
@@ -251,6 +343,7 @@ impl<ENV> GVm<ENV> {
                     let val = self.register_unref(src as usize);
                     mov_register_num!(self, dest as usize, val);
                 }
+                GET => self.get(wide).map_err(|e| (e, chunk.clone()))?,
                 BMOV => {
                     let (dest, src, len) = decode3!(self.ip_ptr, wide);
                     for i in 0..len as usize {

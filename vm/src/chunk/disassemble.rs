@@ -179,6 +179,16 @@ impl Chunk {
                 println!();
                 Ok(false)
             }
+            GET => {
+                print!("GET({GET:#04x})  \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(false)
+            }
             SET => {
                 print!("SET({SET:#04x})    \t");
                 disassemble_operand!(code, true, wide);
