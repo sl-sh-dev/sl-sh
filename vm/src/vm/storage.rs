@@ -336,6 +336,14 @@ impl<ENV> GVm<ENV> {
         res
     }
 
+    /// Allocate an Error on the heap.
+    pub fn alloc_error(&mut self, err: Error) -> Value {
+        let mut heap = self.heap.take().expect("VM must have a Heap!");
+        let res = heap.alloc_error(err, MutState::Mutable, |heap| self.mark_roots(heap));
+        self.heap = Some(heap);
+        res
+    }
+
     pub fn heap_immutable(&mut self, val: Value) {
         self.heap_mut().immutable(val);
     }
@@ -513,6 +521,10 @@ impl<ENV> GVm<ENV> {
 
     pub fn get_value_mut(&mut self, handle: Handle) -> &mut Value {
         self.heap_mut().get_value_mut(handle)
+    }
+
+    pub fn get_error(&self, handle: Handle) -> Error {
+        self.heap().get_error(handle)
     }
 
     pub fn new_upval(&mut self, val: Value) -> Value {

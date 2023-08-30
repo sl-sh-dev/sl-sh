@@ -146,6 +146,7 @@ pub enum Value {
     Continuation(Handle),
     CallFrame(Handle),
     Value(Handle),
+    Error(Handle),
 }
 
 impl Default for Value {
@@ -284,6 +285,7 @@ impl Value {
             Value::Continuation(handle) => Some(*handle),
             Value::CallFrame(handle) => Some(*handle),
             Value::Value(handle) => Some(*handle),
+            Value::Error(handle) => Some(*handle),
 
             Value::Byte(_) => None,
             Value::Int32(_) => None,
@@ -470,6 +472,11 @@ impl Value {
             Value::String(handle) => format!("\"{}\"", vm.get_string(*handle)),
             Value::Bytes(_) => "Bytes".to_string(), // XXX TODO
             Value::Value(handle) => vm.get_value(*handle).display_value(vm),
+            Value::Error(handle) => {
+                let err = vm.get_error(*handle);
+                let key = vm.get_interned(err.keyword);
+                format!("error [{key}]: {}", err.data.display_value(vm))
+            }
         }
     }
 
@@ -521,6 +528,7 @@ impl Value {
             Value::String(_) => "String",
             Value::Bytes(_) => "Bytes",
             Value::Value(handle) => vm.get_value(*handle).display_type(vm),
+            Value::Error(_) => "Error",
         }
     }
 

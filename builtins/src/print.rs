@@ -37,18 +37,6 @@ fn quotey(vm: &SloshVm, car: Value, buf: &mut String) -> bool {
     }
 }
 
-fn list_out_iter(vm: &SloshVm, res: &mut String, itr: &mut dyn Iterator<Item = Value>) {
-    let mut first = true;
-    for p in itr {
-        if !first {
-            res.push(' ');
-        } else {
-            first = false;
-        }
-        res.push_str(&display_value(vm, p));
-    }
-}
-
 fn list_out(vm: &SloshVm, res: &mut String, lst: Value) {
     let mut first = true;
     let mut cdr = lst;
@@ -78,70 +66,6 @@ fn list_out(vm: &SloshVm, res: &mut String, lst: Value) {
 
 pub fn display_value(vm: &SloshVm, val: Value) -> String {
     match &val {
-        Value::True => "true".to_string(),
-        Value::False => "false".to_string(),
-        Value::Int32(i) => format!("{i}"),
-        Value::UInt32(i) => format!("{i}"),
-        Value::Float64(handle) => format!("{}", vm.get_float(*handle)),
-        Value::Int64(handle) => format!("{}", vm.get_int(*handle)),
-        Value::UInt64(handle) => format!("{}", vm.get_uint(*handle)),
-        Value::Byte(b) => format!("{b}"),
-        Value::Symbol(i) => vm.get_interned(*i).to_string(),
-        Value::Keyword(i) => format!(":{}", vm.get_interned(*i)),
-        Value::StringConst(i) => format!("\"{}\"", vm.get_interned(*i)),
-        Value::Special(i) => format!("#<SpecialFn({})>", vm.get_interned(*i)),
-        Value::CodePoint(ch) => format!("\\{ch}"),
-        Value::CharCluster(l, c) => {
-            format!("\\{}", String::from_utf8_lossy(&c[0..*l as usize]))
-        }
-        Value::CharClusterLong(h) => format!("\\{}", vm.get_string(*h)),
-        Value::Builtin(_) => "#<Function>".to_string(),
-        Value::Nil => "nil".to_string(),
-        Value::Undefined => "#<Undefined>".to_string(), //panic!("Tried to get type for undefined!"),
-        Value::Lambda(_) => "#<Lambda>".to_string(),
-        Value::Closure(_) => "#<Lambda>".to_string(),
-        Value::Continuation(_) => "#<Continuation>".to_string(),
-        Value::CallFrame(_) => "#<CallFrame>".to_string(),
-        Value::Vector(h) => {
-            let v = vm.get_vector(*h);
-            let mut res = String::new();
-            res.push('[');
-            list_out_iter(vm, &mut res, &mut v.iter().copied());
-            res.push(']');
-            res
-        }
-        Value::PersistentVec(_) => {
-            let mut res = String::new();
-            res.push_str("#[");
-            list_out_iter(vm, &mut res, &mut val.iter(vm));
-            res.push(']');
-            res
-        }
-        Value::PersistentMap(_) => {
-            // TODO- implement
-            "IMPLEMENT".to_string()
-        }
-        Value::MapNode(_) => {
-            // TODO- implement
-            "MapNode".to_string()
-        }
-        Value::VecNode(_) => {
-            // TODO- implement
-            "VecNode".to_string()
-        }
-        Value::Map(handle) => {
-            let mut res = String::new();
-            res.push('{');
-            for (key, val) in vm.get_map(*handle).iter() {
-                res.push_str(&format!(
-                    "{} {}, ",
-                    key.display_value(vm),
-                    val.display_value(vm)
-                ));
-            }
-            res.push('}');
-            res
-        }
         Value::Pair(_) | Value::List(_, _) => {
             let (car, cdr) = val.get_pair(vm).expect("pair/list not a pair/list");
             let mut res = String::new();
@@ -158,9 +82,7 @@ pub fn display_value(vm: &SloshVm, val: Value) -> String {
             }
             res
         }
-        Value::String(h) => format!("\"{}\"", vm.get_string(*h)),
-        Value::Bytes(_) => "Bytes".to_string(), // XXX TODO
-        Value::Value(h) => display_value(vm, vm.get_value(*h)),
+        _ => val.display_value(vm),
     }
 }
 

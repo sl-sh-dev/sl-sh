@@ -85,6 +85,12 @@ pub union Numeric64 {
     pub float: f64,
 }
 
+#[derive(Clone, Copy)]
+pub struct Error {
+    pub keyword: Interned,
+    pub data: Value,
+}
+
 pub enum MutState {
     Mutable,
     Immutable,
@@ -103,6 +109,7 @@ impl MutState {
 pub struct Heap {
     objects: Storage<Object>,
     numerics: Storage<Numeric64>,
+    errors: Storage<Error>,
     props: FxHashMap<Value, Arc<FxHashMap<Interned, Value>>>,
     greys: Vec<Value>,
     paused: u32,
@@ -146,6 +153,7 @@ macro_rules! value_op {
                 Numeric::Local(_) => $default,
                 Numeric::Heap(handle) => $heap.numerics.$op(handle.into()),
             },
+            Value::Error(handle) => $heap.errors.$op(handle.idx()),
 
             Value::Byte(_)
             | Value::Int32(_)
@@ -176,6 +184,7 @@ impl Heap {
         Heap {
             objects: Storage::default(),
             numerics: Storage::default(),
+            errors: Storage::default(),
             props: FxHashMap::default(),
             greys: vec![],
             paused: 0,
@@ -421,6 +430,21 @@ impl Heap {
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
         Value::Value(self.alloc(Object::Value(val), mutable.flag(), mark_roots))
+    }
+
+    pub fn alloc_error<MarkFunc>(
+        &mut self,
+        error: Error,
+        mutable: MutState,
+        mark_roots: MarkFunc,
+    ) -> Value
+    where
+        MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
+    {
+        if self.errors.live_objects() >= self.errors.capacity() && self.paused == 0 {
+            self.collect(mark_roots);
+        }
+        Value::Error(self.errors.alloc(error, mutable.flag()).into())
     }
 
     pub fn get_int(&self, handle: Numeric64Handle) -> i64 {
@@ -674,6 +698,14 @@ impl Heap {
         }
     }
 
+    pub fn get_error(&self, handle: Handle) -> Error {
+        if let Some(error) = self.errors.get(handle.idx()) {
+            *error
+        } else {
+            panic!("Handle {} is not an error!", handle.idx());
+        }
+    }
+
     pub fn immutable(&mut self, val: Value) {
         value_op!(self, val, immutable, ());
     }
@@ -810,6 +842,14 @@ impl Heap {
                     .expect("Invalid object handle!")
                     .clone();
                 self.trace_object(&obj);
+            }
+
+            Value::Error(handle) => {
+                let err = self
+                    .errors
+                    .get(handle.idx())
+                    .expect("Invalid error handle!");
+                self.mark_trace(err.data);
             }
 
             Value::Int64(_)
