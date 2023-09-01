@@ -92,9 +92,11 @@ pub const ONERR: OpCode = FLOW_BASE + 21;
 pub const JMPRU: OpCode = FLOW_BASE + 22;
 // JMPRNU A B OFFSET - Jump to current IP + OFFSET if any in R(A)..R(A+B) is NOT undefined
 pub const JMPRNU: OpCode = FLOW_BASE + 23;
+// MKERR A B C - R(A) = error with key R(B) (must be keyword) and value R(C)
+pub const MKERR: OpCode = FLOW_BASE + 24;
 
 // Basic math
-const MATH_BASE: OpCode = FLOW_BASE + 24;
+const MATH_BASE: OpCode = FLOW_BASE + 25;
 // ADD A B - set R(A) = R(A) + R(B)
 pub const ADD: OpCode = MATH_BASE;
 // SUB A B - set R(A) = R(A) - R(B)

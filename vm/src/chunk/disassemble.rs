@@ -438,6 +438,16 @@ impl Chunk {
                 println!();
                 Ok(false)
             }
+            MKERR => {
+                print!("MKERR  \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(false)
+            }
             CCC => {
                 print!("CCC    \t");
                 disassemble_operand!(code, true, wide);

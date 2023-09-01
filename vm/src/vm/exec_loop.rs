@@ -1,5 +1,7 @@
 use crate::opcodes::*;
-use crate::{CallFrame, Chunk, Continuation, GVm, VMError, VMErrorObj, VMResult, Value, STACK_CAP};
+use crate::{
+    CallFrame, Chunk, Continuation, Error, GVm, VMError, VMErrorObj, VMResult, Value, STACK_CAP,
+};
 use std::marker::PhantomData;
 use std::sync::Arc;
 
@@ -727,6 +729,22 @@ impl<ENV> GVm<ENV> {
                             chunk,
                         ));
                     }
+                }
+                MKERR => {
+                    let (dest, key, data) = decode3!(self.ip_ptr, wide);
+                    let key = self.register(key as usize);
+                    let data = self.register(data as usize);
+                    let keyword = if let Value::Keyword(i) = key {
+                        i
+                    } else {
+                        return Err((
+                            VMError::new_vm(format!("MKERR: key must be a keyword, got {key:?}.")),
+                            chunk,
+                        ));
+                    };
+                    let err = Error { keyword, data };
+                    let err = self.alloc_error(err);
+                    set_register!(self, dest as usize, err);
                 }
                 CCC => {
                     let (lambda, first_reg) = decode2!(self.ip_ptr, wide);
