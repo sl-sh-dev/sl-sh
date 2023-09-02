@@ -448,6 +448,22 @@ impl Chunk {
                 println!();
                 Ok(false)
             }
+            ISERR => {
+                print!("ISERR  \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(false)
+            }
+            ISOK => {
+                print!("ISOK   \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(false)
+            }
             CCC => {
                 print!("CCC    \t");
                 disassemble_operand!(code, true, wide);

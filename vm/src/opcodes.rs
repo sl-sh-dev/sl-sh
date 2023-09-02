@@ -94,9 +94,13 @@ pub const JMPRU: OpCode = FLOW_BASE + 22;
 pub const JMPRNU: OpCode = FLOW_BASE + 23;
 // MKERR A B C - R(A) = error with key R(B) (must be keyword) and value R(C)
 pub const MKERR: OpCode = FLOW_BASE + 24;
+// ISERR A B - R(A) is #t if R(B) is an error type, #f otherwise
+pub const ISERR: OpCode = FLOW_BASE + 25;
+// ISOK A B - R(A) is #f if R(B) is an error type, #t otherwise
+pub const ISOK: OpCode = FLOW_BASE + 26;
 
 // Basic math
-const MATH_BASE: OpCode = FLOW_BASE + 25;
+const MATH_BASE: OpCode = FLOW_BASE + 27;
 // ADD A B - set R(A) = R(A) + R(B)
 pub const ADD: OpCode = MATH_BASE;
 // SUB A B - set R(A) = R(A) - R(B)

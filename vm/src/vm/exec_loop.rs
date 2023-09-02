@@ -690,6 +690,26 @@ impl<ENV> GVm<ENV> {
                     let val = self.is_equal(reg1, reg2).map_err(|e| (e, chunk.clone()))?;
                     set_register!(self, dest as usize, val);
                 }
+                ISERR => {
+                    let (dest, testreg) = decode2!(self.ip_ptr, wide);
+                    let test = self.register_unref(testreg as usize);
+                    let val = if let Value::Error(_) = test {
+                        Value::True
+                    } else {
+                        Value::False
+                    };
+                    set_register!(self, dest as usize, val);
+                }
+                ISOK => {
+                    let (dest, testreg) = decode2!(self.ip_ptr, wide);
+                    let test = self.register_unref(testreg as usize);
+                    let val = if let Value::Error(_) = test {
+                        Value::False
+                    } else {
+                        Value::True
+                    };
+                    set_register!(self, dest as usize, val);
+                }
                 NOT => {
                     let (dest, val) = decode2!(self.ip_ptr, wide);
                     let val = self.register(val as usize);
