@@ -259,6 +259,55 @@ fn compile_special(
             Value::Special(i) if i == env.specials().get => {
                 compile_get(env, state, cdr, result)?;
             }
+            Value::Special(i) if i == env.specials().mk_err => {
+                if cdr.is_empty() || cdr.len() > 2 {
+                    return Err(VMError::new_compile(
+                        "Wrong number of ars (requires one or two).",
+                    ));
+                } else {
+                    compile(env, state, cdr[0], result + 1)?;
+                    if cdr.len() == 2 {
+                        compile(env, state, cdr[1], result + 2)?;
+                    } else {
+                        state
+                            .chunk
+                            .encode1(REGN, result as u16 + 2, env.own_line())?
+                    }
+                    state.chunk.encode3(
+                        MKERR,
+                        result as u16,
+                        (result + 1) as u16,
+                        (result + 2) as u16,
+                        env.own_line(),
+                    )?;
+                }
+            }
+            Value::Special(i) if i == env.specials().is_err => {
+                if cdr.len() != 1 {
+                    return Err(VMError::new_compile("Requires one argument."));
+                } else {
+                    compile(env, state, cdr[0], result + 1)?;
+                    state.chunk.encode2(
+                        ISERR,
+                        result as u16,
+                        (result + 1) as u16,
+                        env.own_line(),
+                    )?;
+                }
+            }
+            Value::Special(i) if i == env.specials().is_ok => {
+                if cdr.len() != 1 {
+                    return Err(VMError::new_compile("Requires one argument."));
+                } else {
+                    compile(env, state, cdr[0], result + 1)?;
+                    state.chunk.encode2(
+                        ISOK,
+                        result as u16,
+                        (result + 1) as u16,
+                        env.own_line(),
+                    )?;
+                }
+            }
             Value::Special(i) => panic!("Unknown special {} is not special!", env.get_interned(i)),
             _ => panic!("compile_special called with something mundane!"),
         }
