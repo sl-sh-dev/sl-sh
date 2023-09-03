@@ -204,6 +204,7 @@ pub struct Specials {
     pub mk_err: Interned,
     pub is_err: Interned,
     pub is_ok: Interned,
+    pub ret: Interned,
 
     pub rest: Interned,
     pub optional: Interned,
@@ -379,6 +380,7 @@ Example:
             mk_err: add_special(vm, "mk-err", ""),
             is_err: add_special(vm, "err?", ""),
             is_ok: add_special(vm, "ok?", ""),
+            ret: add_special(vm, "return", ""),
 
             rest: vm.intern_static("&"),
             optional: vm.intern_static("%"),

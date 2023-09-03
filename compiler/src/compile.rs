@@ -308,6 +308,14 @@ fn compile_special(
                     )?;
                 }
             }
+            Value::Special(i) if i == env.specials().ret => {
+                if cdr.len() != 1 {
+                    return Err(VMError::new_compile("Requires one argument."));
+                } else {
+                    compile(env, state, cdr[0], result)?;
+                    state.chunk.encode1(SRET, result as u16, env.own_line())?;
+                }
+            }
             Value::Special(i) => panic!("Unknown special {} is not special!", env.get_interned(i)),
             _ => panic!("compile_special called with something mundane!"),
         }
