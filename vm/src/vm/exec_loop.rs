@@ -220,6 +220,98 @@ impl<ENV> GVm<ENV> {
         Ok(())
     }
 
+    fn set_data(&mut self, wide: bool) -> VMResult<()> {
+        let (src, data, i) = decode3!(self.ip_ptr, wide);
+        let data = self.register(data as usize);
+        let src = self.register(src as usize);
+        match data {
+            Value::Vector(h) => {
+                let idx = self.register_int(i as usize)?;
+                let v = self.get_vector_mut(h)?;
+                let idx = if idx >= 0 { idx } else { v.len() as i64 + idx };
+                if idx < 0 {
+                    return Err(VMError::new_vm(format!(
+                        "index out of bounds, {}/{}.",
+                        i,
+                        v.len()
+                    )));
+                }
+                if let Some(slot) = v.get_mut(idx as usize) {
+                    *slot = src;
+                } else {
+                    v.resize(idx as usize + 1, Value::Nil);
+                    if let Some(slot) = v.get_mut(idx as usize) {
+                        *slot = src;
+                    } else {
+                        return Err(VMError::new_vm(
+                            "Vector, index out of bounds (unable to grow vector).",
+                        ));
+                    }
+                }
+            }
+            Value::List(h, start) => {
+                let idx = self.register_int(i as usize)?;
+                let v = self.get_vector_mut(h)?;
+                if idx < 0 {
+                    return Err(VMError::new_vm(format!(
+                        "index out of bounds, {}/{}.",
+                        i,
+                        v.len() - start as usize,
+                    )));
+                }
+                if let Some(slot) = v.get_mut(start as usize + idx as usize) {
+                    *slot = src;
+                } else {
+                    return Err(VMError::new_vm("index out of bounds"));
+                }
+            }
+            Value::Pair(_) => {
+                let idx = self.register_int(i as usize)?;
+                if idx >= 0 {
+                    let idx = idx as usize;
+                    if let Some((_car, cdr)) = data.get_pair(self) {
+                        let mut last_cdr = cdr;
+                        for _ in 0..idx {
+                            if let Some((_car, cdr_in)) = cdr.get_pair(self) {
+                                last_cdr = cdr_in;
+                            } else {
+                                return Err(VMError::new_vm(format!(
+                                    "index out of bounds (pair), {}.",
+                                    i,
+                                )));
+                            }
+                        }
+                        match &last_cdr {
+                            Value::Pair(handle) => {
+                                let (car, _) = self.get_pair_mut(*handle)?;
+                                *car = src;
+                            }
+                            Value::List(_, _) => return Err(VMError::new_vm("pair is read only")),
+                            _ => return Err(VMError::new_vm("not a pair/conscell")),
+                        }
+                    } else {
+                        panic!("pair not a pair!")
+                    }
+                } else {
+                    return Err(VMError::new_vm(format!(
+                        "list requires a positive index (pair), {}.",
+                        i,
+                    )));
+                }
+            }
+            Value::Map(h) => {
+                let key = self.register(i as usize);
+                let map = self.get_map_mut(h)?;
+                let slot = map.entry(key);
+                slot.or_insert(src);
+            }
+            _ => {
+                return Err(VMError::new_vm("Not a compound data structure."));
+            }
+        }
+        Ok(())
+    }
+
     pub(super) fn exec_loop(&mut self, chunk: Arc<Chunk>) -> Result<(), (VMError, Arc<Chunk>)> {
         let _env: PhantomData<ENV>;
         self.make_registers();
@@ -346,6 +438,7 @@ impl<ENV> GVm<ENV> {
                     mov_register_num!(self, dest as usize, val);
                 }
                 GET => self.get(wide).map_err(|e| (e, chunk.clone()))?,
+                SETCOL => self.set_data(wide).map_err(|e| (e, chunk.clone()))?,
                 BMOV => {
                     let (dest, src, len) = decode3!(self.ip_ptr, wide);
                     for i in 0..len as usize {
