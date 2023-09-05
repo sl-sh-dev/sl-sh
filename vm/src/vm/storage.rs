@@ -535,6 +535,12 @@ impl<ENV> GVm<ENV> {
         self.call_frame_idx(self.stack_top)
     }
 
+    pub fn make_err(&mut self, key: &'static str, data: Value) -> Value {
+        let keyword = self.intern_static(key);
+        let err = Error { keyword, data };
+        self.alloc_error(err)
+    }
+
     pub(super) fn call_frame_idx(&self, idx: usize) -> Option<&CallFrame> {
         match self.stack(idx) {
             Value::CallFrame(handle) => Some(self.get_callframe(handle)),

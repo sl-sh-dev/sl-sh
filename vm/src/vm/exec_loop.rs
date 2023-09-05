@@ -137,40 +137,26 @@ impl<ENV> GVm<ENV> {
                 let idx = self.register_int(i as usize)?;
                 let idx = if idx >= 0 { idx } else { v.len() as i64 + idx };
                 if idx < 0 {
-                    return Err(VMError::new_vm(format!(
-                        "GET: index out of bounds, {}/{}.",
-                        i,
-                        v.len()
-                    )));
-                }
-                if let Some(val) = v.get(idx as usize) {
+                    let iv = self.alloc_int(idx);
+                    self.make_err("vm-missing", iv)
+                } else if let Some(val) = v.get(idx as usize) {
                     *val
                 } else {
-                    return Err(VMError::new_vm(format!(
-                        "GET: index out of bounds, {}/{}.",
-                        i,
-                        v.len()
-                    )));
+                    let iv = self.alloc_int(idx);
+                    self.make_err("vm-missing", iv)
                 }
             }
             Value::List(h, start) => {
                 let v = self.get_vector(h);
                 let idx = self.register_int(i as usize)?;
                 if idx < 0 {
-                    return Err(VMError::new_vm(format!(
-                        "GET: index out of bounds, {}/{}.",
-                        i,
-                        v.len() - start as usize,
-                    )));
-                }
-                if let Some(val) = v.get(start as usize + idx as usize) {
+                    let iv = self.alloc_int(idx);
+                    self.make_err("vm-missing", iv)
+                } else if let Some(val) = v.get(start as usize + idx as usize) {
                     *val
                 } else {
-                    return Err(VMError::new_vm(format!(
-                        "GET: index out of bounds, {}/{}.",
-                        i,
-                        v.len() - start as usize,
-                    )));
+                    let iv = self.alloc_int(idx);
+                    self.make_err("vm-missing", iv)
                 }
             }
             Value::Pair(_) => {
@@ -183,10 +169,8 @@ impl<ENV> GVm<ENV> {
                                 car_out = car;
                                 cdr = cdr_in;
                             } else {
-                                return Err(VMError::new_vm(format!(
-                                    "GET: index out of bounds (pair), {}.",
-                                    i,
-                                )));
+                                let iv = self.alloc_int(idx as i64);
+                                car_out = self.make_err("vm-missing", iv);
                             }
                         }
                         car_out
@@ -206,12 +190,10 @@ impl<ENV> GVm<ENV> {
                 if let Some(val) = map.get(&key) {
                     *val
                 } else {
-                    return Err(VMError::new_vm(format!(
-                        "GET: not a map index, {}.",
-                        key.display_value(self),
-                    )));
+                    self.make_err("vm-missing", key)
                 }
             }
+            Value::Error(_) => data, // Pass the error on (for stacked GETs).
             _ => {
                 return Err(VMError::new_vm("GET: Not a compound data structure."));
             }
