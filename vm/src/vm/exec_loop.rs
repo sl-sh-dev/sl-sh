@@ -303,7 +303,7 @@ impl<ENV> GVm<ENV> {
                 let key = self.register(i as usize);
                 let map = self.get_map_mut(h)?;
                 let slot = map.entry(key);
-                slot.or_insert(src);
+                *slot.or_insert(Value::Undefined) = src;
             }
             _ => {
                 return Err(VMError::new_vm("Not a compound data structure."));

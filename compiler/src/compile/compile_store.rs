@@ -57,7 +57,30 @@ pub(crate) fn compile_set(
                 return Err(VMError::new_compile(format!("Symbol {sym} not defined (maybe you need to use 'def {sym}' to pre-declare it).")));
             }
         } else {
-            return Err(VMError::new_compile("set!: expected symbol"));
+            match cdr[0].get_pair(env) {
+                Some((Value::Symbol(i), ncdr)) if i == env.specials().get => {
+                    if cdr.len() != 2 {
+                        return Err(VMError::new_compile(
+                            "Wrong number of arguments, expected two.",
+                        ));
+                    }
+                    compile(env, state, cdr[1], result)?;
+                    let mut cdr_i = ncdr.iter(env);
+                    let collection = cdr_i.next().expect("had two elements!");
+                    let field = cdr_i.next().expect("had two elements!");
+                    drop(cdr_i);
+                    compile(env, state, collection, result + 1)?;
+                    compile(env, state, field, result + 2)?;
+                    state.chunk.encode3(
+                        SETCOL,
+                        result as u16,
+                        (result + 1) as u16,
+                        (result + 2) as u16,
+                        env.own_line(),
+                    )?;
+                }
+                _ => return Err(VMError::new_compile("set!: expected symbol")),
+            }
         }
     } else {
         return Err(VMError::new_compile("set!: malformed"));
