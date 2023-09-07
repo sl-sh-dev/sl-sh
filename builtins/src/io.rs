@@ -70,7 +70,7 @@ pub fn add_io_builtins(env: &mut SloshVm) {
         fs_meta,
         r#"Usage: (fs-meta [FILENAME]) -> map
 
-Returns a map if a files meta data.
+Returns a map of a files meta data.
 
 Section: io
 "#,

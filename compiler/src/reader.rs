@@ -616,6 +616,8 @@ impl<'vm> Reader<'vm> {
                 }
                 buffer.push_str(&next_ch);
                 push_next = false;
+            } else if ch == "." && peek_ch == "~" {
+                buffer.push_str(&ch);
             } else if end_symbol(peek_ch, read_table_term) {
                 break;
             }
@@ -907,11 +909,22 @@ impl<'vm> Reader<'vm> {
                     if p.starts_with(':') && p.len() > 1 {
                         let i_p = self.vm.intern(&p[1..]);
                         vals.push(Value::Keyword(i_p));
+                    } else if p.starts_with('~') && p.len() > 1 {
+                        let i_p = self.vm.intern(&p[1..]);
+                        vals.push(Value::Symbol(i_p));
                     } else if let Ok(num) = p.parse::<i32>() {
                         vals.push(Value::Int32(num));
-                    } else {
+                    } else if i % 2 == 0 {
                         let i_p = self.vm.intern(p);
                         vals.push(Value::Symbol(i_p));
+                    } else {
+                        let i_p = self.vm.intern(p);
+                        let i_quote = self.vm.intern_static("quote");
+                        vals.push(self.alloc_list(
+                            vec![Value::Symbol(i_quote), Value::Symbol(i_p)],
+                            line,
+                            column,
+                        ));
                     }
                     i += 1;
                 }

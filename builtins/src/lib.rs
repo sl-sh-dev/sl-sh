@@ -18,7 +18,7 @@ fn get_prop(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let key = match registers[1] {
         Value::Keyword(key) => key,
         Value::Symbol(key) => key,
-        _ => return Err(VMError::new_vm("get-prop: key must be a keywork or symbol")),
+        _ => return Err(VMError::new_vm("get-prop: key must be a keyword or symbol")),
     };
     match registers[0] {
         Value::Symbol(si) => {
