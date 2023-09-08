@@ -89,6 +89,15 @@ impl<T: Clone> Storage<T> {
         }
     }
 
+    /// Is the object at index still alive after GC.
+    pub fn is_live(&self, idx: usize) -> bool {
+        if let Some(flag) = self.flags.get(idx) {
+            is_live(*flag)
+        } else {
+            false
+        }
+    }
+
     /// Is the object at index mutable.
     pub fn is_mutable(&self, idx: usize) -> bool {
         if let Some(flag) = self.flags.get(idx) {

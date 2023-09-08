@@ -110,7 +110,7 @@ pub struct Heap {
     objects: Storage<Object>,
     numerics: Storage<Numeric64>,
     errors: Storage<Error>,
-    props: FxHashMap<Value, Arc<FxHashMap<Interned, Value>>>,
+    props: Option<FxHashMap<Value, Arc<FxHashMap<Interned, Value>>>>,
     greys: Vec<Value>,
     paused: u32,
 }
@@ -185,10 +185,18 @@ impl Heap {
             objects: Storage::default(),
             numerics: Storage::default(),
             errors: Storage::default(),
-            props: FxHashMap::default(),
+            props: Some(FxHashMap::default()),
             greys: vec![],
             paused: 0,
         }
+    }
+
+    fn props(&self) -> &FxHashMap<Value, Arc<FxHashMap<Interned, Value>>> {
+        self.props.as_ref().expect("missing heap properties")
+    }
+
+    fn props_mut(&mut self) -> &mut FxHashMap<Value, Arc<FxHashMap<Interned, Value>>> {
+        self.props.as_mut().expect("missing heap properties")
     }
 
     pub fn sizeof_object() -> usize {
@@ -706,6 +714,12 @@ impl Heap {
         }
     }
 
+    /// If val is o the heap is it still alive after GC
+    /// Return true if val is not a heap object.
+    pub fn is_live(&self, val: Value) -> bool {
+        value_op!(self, val, is_live, true)
+    }
+
     pub fn immutable(&mut self, val: Value) {
         value_op!(self, val, immutable, ());
     }
@@ -819,6 +833,15 @@ impl Heap {
     }
 
     fn trace(&mut self, val: Value) {
+        let props = self.props.take().expect("missing heap props");
+        if let Some(props) = props.get(&val) {
+            // Make sure we don't do anything that can access self.props here since that will panic...
+            // trace any properties for val.
+            for val in props.values() {
+                self.mark_trace(*val);
+            }
+        }
+        self.props = Some(props);
         match val {
             Value::CharClusterLong(handle)
             | Value::String(handle)
@@ -878,14 +901,8 @@ impl Heap {
     {
         self.objects.clear_marks();
         self.numerics.clear_marks();
+        self.errors.clear_marks();
         mark_roots(self).expect("Failed to mark the roots!");
-        // Mark properties.
-        for (key, value) in &self.props {
-            mark!(self, *key);
-            for val in value.values() {
-                mark!(self, *val);
-            }
-        }
         let mut objs = Vec::new();
         self.objects.trace_all_live(|obj| {
             // this cloning is not great...
@@ -899,6 +916,10 @@ impl Heap {
                 self.trace(val);
             }
         }
+        // Sweep out collected properties.
+        let mut props = self.props.take().expect("missing heap props");
+        props.retain(|key, _val| self.is_live(*key));
+        self.props = Some(props);
         self.objects.set_all_dead(Object::Empty);
     }
 
@@ -911,7 +932,7 @@ impl Heap {
     }
 
     pub fn get_property(&self, value: Value, prop: Interned) -> Option<Value> {
-        if let Some(map) = self.props.get(&value) {
+        if let Some(map) = self.props().get(&value) {
             if let Some(val) = map.get(&prop) {
                 return Some(*val);
             }
@@ -920,13 +941,13 @@ impl Heap {
     }
 
     pub fn set_property(&mut self, key_value: Value, prop: Interned, value: Value) {
-        if let Some(map) = self.props.get_mut(&key_value) {
+        if let Some(map) = self.props_mut().get_mut(&key_value) {
             let map = Arc::make_mut(map);
             map.insert(prop, value);
         } else {
             let mut map = FxHashMap::default();
             map.insert(prop, value);
-            self.props.insert(key_value, Arc::new(map));
+            self.props_mut().insert(key_value, Arc::new(map));
         }
     }
 }
