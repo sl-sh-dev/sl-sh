@@ -117,7 +117,7 @@ Section: shell
 
         my-sys-command?
            (fn (command)
-               (if (eq? (sys-syms command :missing) :missing) (sys-syms command := (sys-command? command)))
+               (if (eq? (sys-syms command :missing) :missing) (set! sys-syms.~command (sys-command? command)))
                (sys-syms command #f))
 
         sys-command-color

@@ -26,31 +26,6 @@ impl<ENV> GVm<ENV> {
                 };
                 Ok(res)
             }
-            3 => {
-                let eqi = self.intern("=");
-                let key = self.register(first_reg as usize + 1);
-                if matches!(key, Value::Undefined) {
-                    return Err(VMError::new_vm("Key is undefined."));
-                }
-                let eq = self.register(first_reg as usize + 2);
-                let val = self.register(first_reg as usize + 3);
-                if let Value::Keyword(i) = eq {
-                    if i == eqi {
-                        let map = self.heap_mut().get_map_mut(handle)?;
-                        let slot = map.entry(key);
-                        slot.or_insert(val);
-                        Ok(val)
-                    } else {
-                        Err(VMError::new_vm(
-                            "Map invalid second argument (expected :=).",
-                        ))
-                    }
-                } else {
-                    Err(VMError::new_vm(
-                        "Map invalid second argument (expected :=).",
-                    ))
-                }
-            }
             _ => Err(VMError::new_vm("Map wrong number of arguments.")),
         }
     }
@@ -91,49 +66,6 @@ impl<ENV> GVm<ENV> {
                     self.register(first_reg as usize + 2)
                 };
                 Ok(res)
-            }
-            3 => {
-                let eqi = self.intern("=");
-                let idx = self.register(first_reg as usize + 1).get_int(self)?;
-                let idx = if idx >= 0 {
-                    idx
-                } else {
-                    self.heap().get_vector(handle).len() as i64 + idx
-                };
-                if idx < 0 {
-                    return Err(VMError::new_vm(
-                        "Vector, index out of bounds (negative value to large).",
-                    ));
-                }
-                let eq = self.register(first_reg as usize + 2);
-                let val = self.register(first_reg as usize + 3);
-                if let Value::Keyword(i) = eq {
-                    if i == eqi {
-                        let v = self.heap_mut().get_vector_mut(handle)?;
-                        if let Some(slot) = v.get_mut(idx as usize) {
-                            *slot = val;
-                            Ok(Value::Vector(handle))
-                        } else {
-                            v.resize(idx as usize + 1, Value::Nil);
-                            if let Some(slot) = v.get_mut(idx as usize) {
-                                *slot = val;
-                                Ok(Value::Vector(handle))
-                            } else {
-                                Err(VMError::new_vm(
-                                    "Vector, index out of bounds (unable to grow vector).",
-                                ))
-                            }
-                        }
-                    } else {
-                        Err(VMError::new_vm(
-                            "Vector invalid second argument (expected :=).",
-                        ))
-                    }
-                } else {
-                    Err(VMError::new_vm(
-                        "Vector invalid second argument (expected :=).",
-                    ))
-                }
             }
             _ => Err(VMError::new_vm("Vector wrong number of arguments.")),
         }
