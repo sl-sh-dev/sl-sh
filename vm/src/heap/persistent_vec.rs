@@ -8,6 +8,43 @@ const BITS: usize = 5;
 const WIDTH: usize = 1 << BITS; // 2^5 = 32
 const MASK: usize = WIDTH - 1; // 31, or 0x1f
 
+const PUSH_STACK_SIZE: usize = 12;
+
+/// Simple little stack based "stack" for tracking paths through a tree.
+/// This saves allocations or for some operations.
+/// 12 levels deep at a width of 32 provides a huge index range (32^12), not quite 64^2 but close enough..
+struct PathStack {
+    path: [Option<(VecNode, usize)>; PUSH_STACK_SIZE],
+    idx: usize,
+}
+
+impl PathStack {
+    fn new() -> PathStack {
+        PathStack {
+            path: [None; PUSH_STACK_SIZE],
+            idx: 0,
+        }
+    }
+
+    fn push(&mut self, val: (VecNode, usize)) {
+        self.idx += 1;
+        if self.idx >= PUSH_STACK_SIZE {
+            panic!("depth of vector tree to deep!");
+        }
+        self.path[self.idx] = Some(val);
+    }
+
+    fn pop(&mut self) -> Option<(VecNode, usize)> {
+        if self.idx > 0 {
+            let r = self.path[self.idx].take();
+            self.idx -= 1;
+            r
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct PersistentVec {
     // How many elements are in the vec.
@@ -229,7 +266,7 @@ impl PersistentVec {
             new_vec.tail_length -= 1;
         } else {
             let idx = self.length - 1;
-            let mut path = Vec::new();
+            let mut path = PathStack::new();
             let mut node = new_vec.root;
             let mut level = self.shift;
             loop {
@@ -330,7 +367,7 @@ impl PersistentVec {
             return Some(new_vec);
         }
 
-        let mut path = Vec::new();
+        let mut path = PathStack::new();
         let mut level = self.shift;
         let mut node = new_vec.root;
         loop {

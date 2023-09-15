@@ -5,6 +5,43 @@ const BITS: u64 = 5;
 const WIDTH: usize = 1 << BITS; // 2^5 = 32
 const MASK: u64 = (WIDTH as u64) - 1; // 31, or 0x1f
 
+const PUSH_STACK_SIZE: usize = 13;
+
+/// Simple little stack based "stack" for tracking paths through a tree.
+/// This saves allocations or for some operations.
+/// 13 levels deep at a width of 5 bits covers 64 bit hashes.
+struct PathStack {
+    path: [Option<(MapNode, usize)>; PUSH_STACK_SIZE],
+    idx: usize,
+}
+
+impl PathStack {
+    fn new() -> PathStack {
+        PathStack {
+            path: [None; PUSH_STACK_SIZE],
+            idx: 0,
+        }
+    }
+
+    fn push(&mut self, val: (MapNode, usize)) {
+        self.idx += 1;
+        if self.idx >= PUSH_STACK_SIZE {
+            panic!("depth of vector tree to deep!");
+        }
+        self.path[self.idx] = Some(val);
+    }
+
+    fn pop(&mut self) -> Option<(MapNode, usize)> {
+        if self.idx > 0 {
+            let r = self.path[self.idx].take();
+            self.idx -= 1;
+            r
+        } else {
+            None
+        }
+    }
+}
+
 /// A persistent map data structure, based on Bagwell's ideal Hash Tree.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct PersistentMap {
@@ -106,7 +143,7 @@ impl PersistentMap {
         let mut shift = 64 - BITS;
         let mut new_map = *self;
         let mut node = new_map.root;
-        let mut path: Vec<(MapNode, usize)> = Vec::new();
+        let mut path = PathStack::new();
         loop {
             let branch = ((hash >> shift) & MASK) as usize;
             match node.data[branch] {
@@ -160,7 +197,7 @@ impl PersistentMap {
         let hash = hasher.finish();
         let mut shift = 64 - BITS;
         let mut node = self.root;
-        let mut path: Vec<(MapNode, usize)> = Vec::new();
+        let mut path = PathStack::new();
         loop {
             let branch = ((hash >> shift) & MASK) as usize;
             match node.data[branch] {
