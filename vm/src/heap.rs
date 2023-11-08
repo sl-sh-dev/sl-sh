@@ -69,11 +69,11 @@ enum Object {
     PersistentMap(Arc<PersistentMap>),
     MapNode(Arc<MapNode>),
 
-    CallFrame(Arc<CallFrame>),
+    CallFrame(CallFrame),
     // Everything below here is always read only.
     Lambda(Arc<Chunk>),
     Closure(Arc<Chunk>, Arc<Vec<Handle>>),
-    Continuation(Arc<Continuation>),
+    Continuation(Continuation),
     // Place holder for an empty object slot.
     Empty,
 }
@@ -418,14 +418,14 @@ impl Heap {
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        Value::Continuation(self.alloc(Object::Continuation(Arc::new(k)), 0, mark_roots))
+        Value::Continuation(self.alloc(Object::Continuation(k), 0, mark_roots))
     }
 
     pub fn alloc_callframe<MarkFunc>(&mut self, frame: CallFrame, mark_roots: MarkFunc) -> Value
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        Value::CallFrame(self.alloc(Object::CallFrame(Arc::new(frame)), 0, mark_roots))
+        Value::CallFrame(self.alloc(Object::CallFrame(frame), 0, mark_roots))
     }
 
     pub fn alloc_value<MarkFunc>(
