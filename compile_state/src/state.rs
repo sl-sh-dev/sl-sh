@@ -608,8 +608,7 @@ impl SloshVmTrait for SloshVm {
     }
 
     fn specials(&self) -> &Specials {
-        if self.env().specials.is_none() {}
-        self.env().specials.as_ref().unwrap()
+        self.env().specials.as_ref().expect("specials are missing!")
     }
 
     fn global_intern_slot(&self, symbol: Interned) -> Option<u32> {

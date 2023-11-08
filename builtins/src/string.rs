@@ -520,7 +520,7 @@ Example:
         env,
         "char-whitespace?",
         char_whitespace,
-        r#"Usage: (char-whitespace? char) -> t/nil
+        r"Usage: (char-whitespace? char) -> t/nil
 
 Returns true if a character is whitespace, false/nil otherwise.
 
@@ -530,7 +530,7 @@ Example:
 (test::assert-true (char-whitespace? #\ ))
 (test::assert-true (char-whitespace? #\tab))
 (test::assert-false (char-whitespace? #\s))
-"#,
+",
     );
     add_builtin(
         env,

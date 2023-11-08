@@ -4,7 +4,7 @@ use std::ffi::{c_char, CString, OsStr, OsString};
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io::{self, Error, ErrorKind, Read, Write};
-use std::os::fd::{IntoRawFd, RawFd};
+use std::os::fd::{AsFd, BorrowedFd, IntoRawFd, RawFd};
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::io::FromRawFd;
 use std::ptr;
@@ -31,7 +31,7 @@ impl Platform for Sys {
 
     /// If terminal is a terminal then get it's term settings.
     fn get_term_settings(terminal: UnixFileDesc) -> Result<UnixTermSettings, io::Error> {
-        Ok(UnixTermSettings(termios::tcgetattr(terminal.0)?))
+        Ok(UnixTermSettings(termios::tcgetattr(terminal)?))
     }
 
     /// Restore terminal settings and put the shell back into the foreground.
@@ -39,7 +39,7 @@ impl Platform for Sys {
         term_settings: &UnixTermSettings,
         shell_pid: UnixPid,
     ) -> Result<(), io::Error> {
-        termios::tcsetattr(0, termios::SetArg::TCSANOW, &term_settings.0)?;
+        termios::tcsetattr(UnixFileDesc(0), termios::SetArg::TCSANOW, &term_settings.0)?;
         // XXX TODO- be more specific if the next line fails (ie only turn off tty if that is the error)?
         unistd::tcsetpgrp(0, unistd::Pid::from_raw(shell_pid.0))?;
         Ok(())
@@ -455,6 +455,12 @@ impl From<File> for UnixFileDesc {
 impl FromFileDesc for File {
     unsafe fn from_file_desc(fd: UnixFileDesc) -> Self {
         File::from_raw_fd(fd.0)
+    }
+}
+
+impl AsFd for UnixFileDesc {
+    fn as_fd(&self) -> BorrowedFd<'_> {
+        unsafe { BorrowedFd::borrow_raw(self.0) }
     }
 }
 

@@ -808,7 +808,6 @@ fn read_arg(
     let mut res = String::new();
     let mut next_ch = chars.peek().copied();
     while let Some(ch) = next_ch {
-        let ch = ch;
         if ch == '$' {
             args.push(Arg::Str(res.clone().into()));
             res.clear();

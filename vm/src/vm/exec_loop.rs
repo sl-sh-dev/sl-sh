@@ -294,6 +294,8 @@ impl<ENV> GVm<ENV> {
         Ok(())
     }
 
+    // Some macro expansions trips this.
+    #[allow(clippy::redundant_closure_call)]
     pub(super) fn exec_loop(&mut self, chunk: Arc<Chunk>) -> Result<(), (VMError, Arc<Chunk>)> {
         let _env: PhantomData<ENV>;
         self.make_registers();

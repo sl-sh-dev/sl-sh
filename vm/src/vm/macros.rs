@@ -111,11 +111,15 @@ macro_rules! compare_int {
             let op1 = $vm.register_unref(reg as usize);
             let op2 = $vm.register_unref(reg as usize + 1);
             val = if matches!(op1, Value::Float64(_)) || matches!(op2, Value::Float64(_)) {
+                // The macro expansion trips this.
+                #[allow(clippy::redundant_closure_call)]
                 $comp_fn(
                     get_float!($vm, op1).map_err(|e| (e, $chunk.clone()))?,
                     get_float!($vm, op2).map_err(|e| (e, $chunk.clone()))?,
                 )
             } else {
+                // The macro expansion trips this.
+                #[allow(clippy::redundant_closure_call)]
                 $comp_fn(
                     get_int!($vm, op1).map_err(|e| (e, $chunk.clone()))?,
                     get_int!($vm, op2).map_err(|e| (e, $chunk.clone()))?,
