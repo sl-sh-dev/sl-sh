@@ -39,7 +39,6 @@ Some of the more prominent features:
 ### 2. Build sl-sh
 - [Install Rust](https://www.rust-lang.org/tools/install) and build from source:
     ```
-
     cargo build --release
     ./target/release/sl-sh
     ```
