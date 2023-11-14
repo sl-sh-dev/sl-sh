@@ -12,6 +12,7 @@ use std::str::FromStr;
 
 use crate::command_data::{Arg, CommandWithArgs, Run};
 use crate::jobs::{Job, JobStatus, Jobs};
+pub use crate::platform::unix::umask::mode_t;
 use crate::platform::{FromFileDesc, Platform, RLimit, RLimitVals};
 use crate::run::run_job;
 use crate::signals::test_clear_sigint;
@@ -22,6 +23,12 @@ use nix::sys::wait::{self, WaitPidFlag, WaitStatus};
 use nix::unistd::{self, Uid};
 
 mod umask;
+
+// macos does not define __rlimit_resource_t...
+#[cfg(target_os = "macos")]
+pub type RlimitResource = nix::libc::c_int;
+#[cfg(not(target_os = "macos"))]
+pub type RlimitResource = nix::libc::__rlimit_resource_t;
 
 pub struct Sys {}
 impl Platform for Sys {
@@ -263,7 +270,9 @@ impl Platform for Sys {
                 (true, None)
             }
             Ok(WaitStatus::Continued(_)) => (false, None),
+            #[cfg(any(target_os = "linux", target_os = "android"))]
             Ok(WaitStatus::PtraceEvent(_pid, _signal, _)) => (false, None),
+            #[cfg(any(target_os = "linux", target_os = "android"))]
             Ok(WaitStatus::PtraceSyscall(_pid)) => (false, None),
             Ok(WaitStatus::StillAlive) => (false, None),
         }
@@ -404,15 +413,15 @@ impl Platform for Sys {
         })
     }
 
-    fn merge_and_set_umask(current_umask: u32, mask_string: &str) -> Result<u32, Error> {
+    fn merge_and_set_umask(current_umask: mode_t, mask_string: &str) -> Result<mode_t, Error> {
         umask::merge_and_set_umask(current_umask, mask_string)
     }
 
-    fn get_and_clear_umask() -> u32 {
+    fn get_and_clear_umask() -> mode_t {
         umask::get_and_clear_umask()
     }
 
-    fn set_umask(umask: u32) -> Result<(), Error> {
+    fn set_umask(umask: mode_t) -> Result<(), Error> {
         umask::set_umask(umask)
     }
 }
@@ -611,7 +620,7 @@ fn setup_group_term(pid: UnixPid, job: &Job) {
     }
 }
 
-fn rlimit_to_c(rlimit: RLimit) -> Result<libc::__rlimit_resource_t, io::Error> {
+fn rlimit_to_c(rlimit: RLimit) -> Result<RlimitResource, io::Error> {
     match rlimit {
         #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
         RLimit::SocketBufferSize => Ok(libc::RLIMIT_SBSIZE),

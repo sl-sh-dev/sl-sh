@@ -2,6 +2,8 @@ use nix::sys::stat::Mode;
 use std::io;
 use std::io::ErrorKind;
 
+pub use nix::libc::mode_t;
+
 static NIX_PERMISSIONS: &[Mode] = &[
     Mode::S_IRUSR,
     Mode::S_IWUSR,
@@ -14,7 +16,7 @@ static NIX_PERMISSIONS: &[Mode] = &[
     Mode::S_IXOTH,
 ];
 
-fn get_class(str: &str) -> Result<u32, io::Error> {
+fn get_class(str: &str) -> Result<mode_t, io::Error> {
     if str.is_empty() {
         Ok(0b111111111)
     } else {
@@ -24,7 +26,7 @@ fn get_class(str: &str) -> Result<u32, io::Error> {
                 "symbolic mode string before the '+' can only contain u, g, o, or a.".to_string();
             Err(io::Error::new(ErrorKind::Other, msg))
         } else {
-            let mut class: u32 = 0;
+            let mut class: mode_t = 0;
             for c in str.chars() {
                 class |= match c {
                     'u' => 0b111000000,
@@ -40,7 +42,7 @@ fn get_class(str: &str) -> Result<u32, io::Error> {
     }
 }
 
-fn get_perms(str: &str) -> Result<u32, io::Error> {
+fn get_perms(str: &str) -> Result<mode_t, io::Error> {
     if str.is_empty() {
         Ok(0b111111111)
     } else {
@@ -50,7 +52,7 @@ fn get_perms(str: &str) -> Result<u32, io::Error> {
                 "symbolic mode string before the '+' can only contain r, w, or x.".to_string();
             Err(io::Error::new(ErrorKind::Other, msg))
         } else {
-            let mut class: u32 = 0;
+            let mut class: mode_t = 0;
             for c in str.chars() {
                 class |= match c {
                     'r' => 0b100100100,
@@ -64,7 +66,7 @@ fn get_perms(str: &str) -> Result<u32, io::Error> {
     }
 }
 
-fn decode_symbolic_mode_string(str: &str, split_char: char) -> Result<(u32, u32), io::Error> {
+fn decode_symbolic_mode_string(str: &str, split_char: char) -> Result<(mode_t, mode_t), io::Error> {
     let mode_strings = str.split(split_char).collect::<Vec<&str>>();
     if mode_strings.len() == 2 {
         if let (Some(c), Some(p)) = (mode_strings.first(), mode_strings.get(1)) {
@@ -103,14 +105,14 @@ enum PermissionOperator {
 }
 
 struct MaskType {
-    class: u32,
-    perms: u32,
+    class: mode_t,
+    perms: mode_t,
     mask_type: PermissionOperator,
 }
 
 impl MaskType {
     #[allow(clippy::unnecessary_cast)]
-    fn combine(&self, mode: u32) -> u32 {
+    fn combine(&self, mode: mode_t) -> mode_t {
         let m = match &self.mask_type {
             PermissionOperator::Plus => !(self.class & self.perms) & mode,
             PermissionOperator::Minus => mode | (self.class & self.perms),
@@ -118,12 +120,12 @@ impl MaskType {
                 ((self.class & self.perms) ^ 0o777) & ((mode & !self.class) ^ self.class)
             }
         };
-        to_mode(m).bits() as u32
+        to_mode(m).bits() as mode_t
     }
 }
 
 fn to_mask_type(str: &str) -> Result<MaskType, io::Error> {
-    let decode = |split_char| -> Result<(u32, u32), io::Error> {
+    let decode = |split_char| -> Result<(mode_t, mode_t), io::Error> {
         decode_symbolic_mode_string(str, split_char)
     };
     if str.contains('+') {
@@ -170,7 +172,7 @@ fn get_umask_tokens(str: &str) -> Result<Vec<MaskType>, io::Error> {
     }
 }
 
-fn with_umask_tokens(mut umask: u32, masks: Vec<MaskType>) -> u32 {
+fn with_umask_tokens(mut umask: mode_t, masks: Vec<MaskType>) -> mode_t {
     for x in masks {
         umask = x.combine(umask)
     }
@@ -199,8 +201,8 @@ fn make_parsable_octal_string(str: &str) -> Result<String, io::Error> {
     }
 }
 
-fn build_mask(to_shift: usize, c: char) -> Result<u32, io::Error> {
-    let apply = |m| Ok((m << (to_shift * 3)) as u32);
+fn build_mask(to_shift: usize, c: char) -> Result<mode_t, io::Error> {
+    let apply = |m| Ok((m << (to_shift * 3)) as mode_t);
     match c {
         '0' => apply(0b000),
         '1' => apply(0b001),
@@ -217,7 +219,7 @@ fn build_mask(to_shift: usize, c: char) -> Result<u32, io::Error> {
     }
 }
 
-fn octal_string_to_u32(str: &str) -> Result<u32, io::Error> {
+fn octal_string_to_mode_t(str: &str) -> Result<mode_t, io::Error> {
     let mut val = 0;
     let mut err = false;
     for (usize, c) in str.chars().rev().enumerate() {
@@ -239,9 +241,9 @@ fn octal_string_to_u32(str: &str) -> Result<u32, io::Error> {
 }
 
 #[allow(clippy::unnecessary_cast)]
-fn to_mode(i: u32) -> Mode {
+fn to_mode(i: mode_t) -> Mode {
     NIX_PERMISSIONS.iter().fold(Mode::empty(), |acc, x| {
-        if (x.bits() as u32 & i) == x.bits() as u32 {
+        if (x.bits() as mode_t & i) == x.bits() as mode_t {
             acc | *x
         } else {
             acc
@@ -251,7 +253,7 @@ fn to_mode(i: u32) -> Mode {
 
 fn octal_string_to_mode(str: &str) -> Result<Mode, io::Error> {
     let str = make_parsable_octal_string(str)?;
-    let val = octal_string_to_u32(&str)?;
+    let val = octal_string_to_mode_t(&str)?;
     Ok(to_mode(val))
 }
 
@@ -272,7 +274,7 @@ fn is_digit(ch: char) -> bool {
 
 /// If mask_string is a mode string then merge it with umask and set the current umask.
 /// If mask_string is an int then treat it as a umask and set the current umask (no merge)).
-pub fn merge_and_set_umask(current_umask: u32, mask_string: &str) -> Result<u32, io::Error> {
+pub fn merge_and_set_umask(current_umask: mode_t, mask_string: &str) -> Result<mode_t, io::Error> {
     if mask_string.parse::<u32>().is_ok() {
         let mode = octal_string_to_mode(mask_string)?;
         nix::sys::stat::umask(mode);
@@ -280,7 +282,7 @@ pub fn merge_and_set_umask(current_umask: u32, mask_string: &str) -> Result<u32,
     } else if !mask_string.is_empty() {
         #[allow(clippy::unnecessary_cast)]
         let mode = if is_digit(mask_string.chars().next().unwrap()) {
-            octal_string_to_mode(mask_string)?.bits() as u32
+            octal_string_to_mode(mask_string)?.bits() as mode_t
         } else {
             let masks = get_umask_tokens(mask_string)?;
             with_umask_tokens(current_umask, masks)
@@ -302,12 +304,13 @@ pub fn merge_and_set_umask(current_umask: u32, mask_string: &str) -> Result<u32,
 
 /// Cears the current umask and returns the previous umask.
 #[allow(clippy::unnecessary_cast)]
-pub fn get_and_clear_umask() -> u32 {
-    nix::sys::stat::umask(Mode::empty()).bits() as u32
+pub fn get_and_clear_umask() -> mode_t {
+    nix::sys::stat::umask(Mode::empty()).bits() as mode_t
 }
 
 /// Set current umask to umask.
-pub fn set_umask(umask: u32) -> Result<(), io::Error> {
+#[allow(clippy::unnecessary_cast)]
+pub fn set_umask(umask: mode_t) -> Result<(), io::Error> {
     if let Some(umask) = Mode::from_bits(umask) {
         nix::sys::stat::umask(umask);
         Ok(())
@@ -406,7 +409,7 @@ mod tests {
     #[test]
     #[allow(clippy::unnecessary_cast)]
     fn test_umask_parser() {
-        let umask = to_mode(0o022).bits() as u32;
+        let umask = to_mode(0o022).bits() as mode_t;
 
         let m = with_umask_tokens(umask, get_umask_tokens("go+rx").unwrap());
         assert_eq!(0o022, m);

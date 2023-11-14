@@ -62,13 +62,13 @@ pub trait Platform {
     // umask operations, these can be NoOps if platform does not have umasks.
     /// If mask_string is a mode string then merge it with umask and set the current umask.
     /// If mask_string is an int then treat it as a umask and set the current umask (no merge)).
-    fn merge_and_set_umask(current_umask: u32, mask_string: &str) -> Result<u32, io::Error>;
+    fn merge_and_set_umask(current_umask: mode_t, mask_string: &str) -> Result<mode_t, io::Error>;
     /// Cears the current umask and returns the previous umask.
-    fn get_and_clear_umask() -> u32;
+    fn get_and_clear_umask() -> mode_t;
     /// Set current umask to umask.
-    fn set_umask(umask: u32) -> Result<(), io::Error>;
+    fn set_umask(umask: mode_t) -> Result<(), io::Error>;
     /// Convert mode to the octal string umask format.
-    fn to_octal_string(mode: u32) -> Result<String, io::Error> {
+    fn to_octal_string(mode: mode_t) -> Result<String, io::Error> {
         let mut octal = format!("{:o}", mode);
         if octal.len() < 4 {
             while octal.len() < 4 {
