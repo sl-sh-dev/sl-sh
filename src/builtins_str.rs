@@ -1,4 +1,3 @@
-use crate::LispResult;
 use sl_sh_proc_macros::sl_sh_fn;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -30,11 +29,8 @@ fn as_string(environment: &mut Environment, exp: &Expression) -> Result<String, 
 /// (test::assert-equal "some string" (str-trim "some string   "))
 /// (test::assert-equal "some string" (str-trim "some string"))
 #[sl_sh_fn(fn_name = "str-trim")]
-fn str_trim(arg: String) -> LispResult<Expression> {
-    Ok(Expression::alloc_data(ExpEnum::String(
-        arg.trim().to_string().into(),
-        None,
-    )))
+fn str_trim(arg: String) -> String {
+    arg.trim().to_string()
 }
 
 /// Usage: (str-ltrim string) -> string
@@ -50,11 +46,8 @@ fn str_trim(arg: String) -> LispResult<Expression> {
 /// (test::assert-equal "some string   " (str-ltrim "some string   "))
 /// (test::assert-equal "some string" (str-ltrim "some string"))
 #[sl_sh_fn(fn_name = "str-ltrim")]
-fn str_ltrim(arg: String) -> LispResult<Expression> {
-    Ok(Expression::alloc_data(ExpEnum::String(
-        arg.trim_start().to_string().into(),
-        None,
-    )))
+fn str_ltrim(arg: String) -> String {
+    arg.trim_start().to_string()
 }
 
 /// Usage: (str-rtrim string) -> string
@@ -70,11 +63,8 @@ fn str_ltrim(arg: String) -> LispResult<Expression> {
 /// (test::assert-equal "some string" (str-rtrim "some string   "))
 /// (test::assert-equal "some string" (str-rtrim "some string"))
 #[sl_sh_fn(fn_name = "str-rtrim")]
-fn str_rtrim(arg: String) -> LispResult<Expression> {
-    Ok(Expression::alloc_data(ExpEnum::String(
-        arg.trim_end().to_string().into(),
-        None,
-    )))
+fn str_rtrim(arg: String) -> String {
+    arg.trim_end().to_string()
 }
 
 /// Usage: (str-replace string old-pattern new-pattern) -> string
@@ -88,12 +78,8 @@ fn str_rtrim(arg: String) -> LispResult<Expression> {
 /// (test::assert-equal "some yyy string yyy" (str-replace "some xxx string xxx" "xxx" "yyy"))
 /// (test::assert-equal "yyy some yyy string yyy" (str-replace "xxx some xxx string xxx" "xxx" "yyy"))
 #[sl_sh_fn(fn_name = "str-replace")]
-fn str_replace(source: String, old_pattern: &str, new_pattern: &str) -> LispResult<Expression> {
-    let new_str = source.replace(old_pattern, new_pattern);
-    Ok(Expression::alloc_data(ExpEnum::String(
-        new_str.into(),
-        None,
-    )))
+fn str_replace(source: String, old_pattern: &str, new_pattern: &str) -> String {
+    source.replace(old_pattern, new_pattern)
 }
 
 fn builtin_str_split(
