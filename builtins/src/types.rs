@@ -19,6 +19,17 @@ use slvm::{Handle, Value, VMError, VMResult};
 /// provided to the lisp environment was the type of value the rust function expected.
 pub struct TypedWrapper<'a, T: ?Sized, U>(&'a U, PhantomData<T>);
 
+
+/// Type wrapper to use in [`RustProcedure`] and [`RustProcedureRefMut`] declarations for
+/// partial application.
+pub trait VmToRustType<T, F>
+    where
+        Self: Sized,
+        F: FnOnce(&mut SloshVm) -> T,
+{
+    fn apply(&self, fun: F) -> VMResult<Value>;
+}
+
 impl<'a, T: ?Sized, U> TypedWrapper<'a, T, U> {
     pub fn new(src: &'a U) -> TypedWrapper<T, U> {
         TypedWrapper(src, PhantomData::default())
@@ -26,19 +37,22 @@ impl<'a, T: ?Sized, U> TypedWrapper<'a, T, U> {
 }
 
 /// Trait used to curry the arguments of some T to any [`Value`] by applying T to F.
-pub trait RustProcedure<T, F>
+pub trait RustProcedure<T, F, G, S>
     where
         Self: Sized,
-        F: FnOnce(T) -> VMResult<Value> + ?Sized,
+        G: VmToRustType<T, S>,
+        F: FnOnce(&mut SloshVm, G) -> VMResult<Value> + ?Sized,
 {
     fn apply(&self, vm: &mut SloshVm, fn_name: &str, fun: F) -> VMResult<Value>;
 }
 
+//TODO PC + ?Sized Self: Sized artifacts from previous impl?
 /// Trait used to curry the mutable reference of some T to any [`Value`] by applying T to F.
-pub trait RustProcedureRefMut<T, F>
+pub trait RustProcedureRefMut<T, F, G, S>
     where
         Self: Sized,
-        F: FnOnce(&mut T) -> VMResult<Value> + ?Sized,
+        G: VmToRustType<T, S>,
+        F: FnOnce(&mut SloshVm, G) -> VMResult<Value> + ?Sized,
 {
     fn apply_ref_mut(&mut self, vm: &mut SloshVm, fn_name: &str, fun: F) -> VMResult<Value>;
 }
@@ -123,44 +137,61 @@ macro_rules! try_inner_string {
         }
     }};
 }
-
-impl<F> RustProcedure<&str, F> for TypedWrapper<'_, &str, Value>
-    where
-        F: FnOnce(&str) -> VMResult<Value>,
-{
-    fn apply(&self, mut vm: &mut SloshVm, fn_name: &str, fun: F) -> VMResult<Value> {
-        // TODO PC which other of these types do we consider to be "cast"-able to a
-        // string in the context of Rust functions that implement "this" macro.
-        match self.0 {
+fn vm_to_string(val: &Value) -> impl Fn(&mut SloshVm) -> &str {
+    move |vm: &mut SloshVm|
+        match val {
             Value::String(h) => {
-                let h = vm.get_string_mut(*h);
-                fun(h)
+                vm.get_string(*h)
             }
-            Value::CodePoint(char) |
             Value::CodePoint(char) => {
                 let s = *char;
-                let mut s = s.to_string();
-                fun(&mut s)
+                s.encode_utf8(&mut [0; 4])
             }
             Value::CharCluster(l, c) => {
-                let mut s = format!("{}", String::from_utf8_lossy(&c[0..*l as usize]));
-                fun(&mut s)
+                &format!("{}", String::from_utf8_lossy(&c[0..*l as usize]))
             }
             Value::CharClusterLong(h) => {
-                let ch = vm.get_string_mut(*h);
-                fun(ch)
+                vm.get_string(*h)
             }
             Value::Symbol(i) => {
-                let mut s = vm.get_interned(*i).to_string();
-                fun(&mut s)
+                vm.get_interned(*i)
             },
             Value::Keyword(i) => {
-                let mut s = format!(":{}", vm.get_interned(*i));
-                fun(&mut s)
+                vm.get_interned(*i)
             },
             Value::StringConst(i) => {
-                let mut s = format!("\"{}\"", vm.get_interned(*i));
-                fun(&mut s)
+                vm.get_interned(*i)
+            },
+            _ => {
+                Err(VMError::new("conv", "Wrong type, expected something that can be cast to a string."))
+            }
+        }
+}
+
+fn vm_to_string2(val: &Value) -> fn(&mut SloshVm) -> &str {
+    |vm: &mut SloshVm| -> &str {
+        match val {
+            Value::String(h) => {
+                vm.get_string(*h)
+            }
+            Value::CodePoint(char) => {
+                let s = *char;
+                s.encode_utf8(&mut [0; 4])
+            }
+            Value::CharCluster(l, c) => {
+                &format!("{}", String::from_utf8_lossy(&c[0..*l as usize]))
+            }
+            Value::CharClusterLong(h) => {
+                vm.get_string(*h)
+            }
+            Value::Symbol(i) => {
+                vm.get_interned(*i)
+            },
+            Value::Keyword(i) => {
+                vm.get_interned(*i)
+            },
+            Value::StringConst(i) => {
+                vm.get_interned(*i)
             },
             _ => {
                 Err(VMError::new("conv", "Wrong type, expected something that can be cast to a string."))
@@ -169,43 +200,56 @@ impl<F> RustProcedure<&str, F> for TypedWrapper<'_, &str, Value>
     }
 }
 
-impl<F> RustProcedure<String, F> for TypedWrapper<'_, String, Value>
+impl<'a, F, G, S> RustProcedure<&str, F, G, S> for TypedWrapper<'_, &'a str, Value>
     where
-        F: FnOnce(String) -> VMResult<Value>,
+        G: VmToRustType<&'a str, S>,
+        F: FnOnce(&mut SloshVm, G) -> VMResult<Value>,
 {
-    fn apply(&self, mut vm: &mut SloshVm, fn_name: &str, fun: F) -> VMResult<Value> {
+    fn apply(&self, vm: &mut SloshVm, fn_name: &str, fun: F) -> VMResult<Value> {
+        // TODO PC which other of these types do we consider to be "cast"-able to a
+        // string in the context of Rust functions that implement "this" macro.
+        fun(vm, vm_to_string(self.0))
+    }
+}
+
+impl<F, G, S> RustProcedure<String, F, G, S> for TypedWrapper<'_, String, Value>
+    where
+        G: VmToRustType<String, S>,
+        F: FnOnce(&mut SloshVm, G) -> VMResult<Value>,
+{
+    fn apply(&self, vm: &mut SloshVm, fn_name: &str, fun: F) -> VMResult<Value> {
         // TODO PC which other of these types do we consider to be "cast"-able to a
         // string in the context of Rust functions that implement "this" macro.
         match self.0 {
             Value::String(h) => {
                 let h = vm.get_string(*h);
-                fun(h.to_string())
+                fun(vm, h.to_string())
             }
             Value::CodePoint(char) |
             Value::CodePoint(char) => {
                 let s = *char;
                 let s = s.to_string();
-                fun(s)
+                fun(vm ,s)
             }
             Value::CharCluster(l, c) => {
                 let s = format!("{}", String::from_utf8_lossy(&c[0..*l as usize]));
-                fun(s)
+                fun(vm, s)
             }
             Value::CharClusterLong(h) => {
                 let ch = vm.get_string(*h);
-                fun(ch.to_string())
+                fun(vm, ch.to_string())
             }
             Value::Symbol(i) => {
                 let s = vm.get_interned(*i).to_string();
-                fun(s)
+                fun(vm, s)
             },
             Value::Keyword(i) => {
                 let s = format!(":{}", vm.get_interned(*i));
-                fun(s)
+                fun(vm, s)
             },
             Value::StringConst(i) => {
                 let s = format!("\"{}\"", vm.get_interned(*i));
-                fun(s)
+                fun(vm, s)
             },
             _ => {
                 Err(VMError::new("conv", "Wrong type, expected something that can be cast to a string."))
@@ -214,9 +258,10 @@ impl<F> RustProcedure<String, F> for TypedWrapper<'_, String, Value>
     }
 }
 
-impl<F> RustProcedureRefMut<String, F> for TypedWrapper<'_, String, Value>
+impl<F, G, S> RustProcedureRefMut<String, F, G, S> for TypedWrapper<'_, String, Value>
     where
-        F: FnOnce(&mut String) -> VMResult<Value>,
+        G: VmToRustType<String, S>,
+        F: FnOnce(&mut SloshVm, G) -> VMResult<Value>,
 {
     fn apply_ref_mut(&mut self, vm: &mut SloshVm, fn_name: &str, fun: F) -> VMResult<Value> {
         // TODO PC which other of these types do we consider to be "cast"-able to a
@@ -224,33 +269,33 @@ impl<F> RustProcedureRefMut<String, F> for TypedWrapper<'_, String, Value>
         match self.0 {
             Value::String(h) => {
                 let h = vm.get_string_mut(*h);
-                fun(h)
+                fun(vm, h)
             }
             Value::CodePoint(char) |
             Value::CodePoint(char) => {
                 let s = *char;
                 let mut s = s.to_string();
-                fun(&mut s)
+                fun(vm, &mut s)
             }
             Value::CharCluster(l, c) => {
                 let mut s = format!("{}", String::from_utf8_lossy(&c[0..*l as usize]));
-                fun(&mut s)
+                fun(vm, &mut s)
             }
             Value::CharClusterLong(h) => {
                 let ch = vm.get_string_mut(*h);
-                fun(ch)
+                fun(vm, ch)
             }
             Value::Symbol(i) => {
                 let mut s = vm.get_interned(*i).to_string();
-                fun(&mut s)
+                fun(vm, &mut s)
             },
             Value::Keyword(i) => {
                 let mut s = format!(":{}", vm.get_interned(*i));
-                fun(&mut s)
+                fun(vm, &mut s)
             },
             Value::StringConst(i) => {
                 let mut s = format!("\"{}\"", vm.get_interned(*i));
-                fun(&mut s)
+                fun(vm, &mut s)
             },
             _ => {
                 Err(VMError::new("conv", format!("{fn_name}: Wrong type, expected something that can be cast to a string.")))
@@ -260,12 +305,13 @@ impl<F> RustProcedureRefMut<String, F> for TypedWrapper<'_, String, Value>
 }
 
 
-impl<F> RustProcedure<&Value, F> for TypedWrapper<'_, Value, Value>
+impl<F, G, S> RustProcedure<&Value, F, G, S> for TypedWrapper<'_, Value, Value>
     where
-        F: FnOnce(&Value) -> VMResult<Value>,
+        G: VmToRustType<Value, S>,
+        F: FnOnce(&mut SloshVm, G) -> VMResult<Value>,
 {
-    fn apply(&self, _vm: &mut SloshVm, _fn_name: &str, fun: F) -> VMResult<Value> {
-        fun(&mut self.0.clone())
+    fn apply(&self, vm: &mut SloshVm, _fn_name: &str, fun: F) -> VMResult<Value> {
+        fun(vm, &mut self.0.clone())
     }
 }
 
@@ -406,6 +452,7 @@ mod test {
 
     #[test]
     fn try_me() {
+        // what do we do about this damn VM!!!
         str_trim_test().unwrap();
     }
 
@@ -443,7 +490,7 @@ mod test {
                                     crate::Value> =
                                 crate::types::TypedWrapper::new(&arg_0);
                             let callback =
-                                |arg_0: String|
+                                |vm: &mut SloshVm, arg_0: String|
                                  -> crate::VMResult<crate::Value>
                                     {
                                         match args.get(PARAMS_LEN) {
@@ -461,14 +508,15 @@ mod test {
                                             _ => {
                                                 return {
                                                     let arg: String = arg_0;
-                                                    let res: VMResult<String> =
+                                                    let res: VMResult<Value> =
                                                         {
                                                             {
-                                                                Ok(arg.trim().to_string())
+                                                                let val = vm.alloc_string(arg.trim().to_string());
+                                                                Ok(val)
                                                             }
                                                         };
                                                     res
-                                                }.map(Into::into);
+                                                };
                                             }
                                         }
                                     };
