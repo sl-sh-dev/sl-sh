@@ -1,19 +1,19 @@
 use std::marker::PhantomData;
 use compile_state::state::SloshVm;
-use slvm::{Value, Vm, VMError, VMResult};
+use slvm::{Handle, Value, VMError, VMResult};
 
-//! [`RustProcedure`] and [`RustProcedureRefMut`] are traits that are used to implement type conversions
-//! from [`Value`] to Rust types that take a callback function so the various arguments to rust
-//! native functions can be curried by recursively applied callbacks doing so -in place- to avoid
-//! needing to copy the data.
-//!
-//!  TODO PC ( this is why the fun() is applied at the core of each statement that matches self in a rust procedure )
-//!     however, in the new world... if every single tuple item in the [`Value`] enum is copy then
-//!     maybe it doesn't matter anymore and this strategy can be abandoned.
-//!
-//! Is TryIntoExpression still needed?
-//! It looks like nothing can be converted From Rust Type to Value without vm. So, something new will
-//! need to be figured out here.
+// [`RustProcedure`] and [`RustProcedureRefMut`] are traits that are used to implement type conversions
+// from [`Value`] to Rust types that take a callback function so the various arguments to rust
+// native functions can be curried by recursively applied callbacks doing so -in place- to avoid
+// needing to copy the data.
+//
+//  TODO PC ( this is why the fun() is applied at the core of each statement that matches self in a rust procedure )
+//     however, in the new world... if every single tuple item in the [`Value`] enum is copy then
+//     maybe it doesn't matter anymore and this strategy can be abandoned.
+//
+// Is TryIntoExpression still needed?
+// It looks like nothing can be converted From Rust Type to Value without vm. So, something new will
+// need to be figured out here.
 
 /// Simple wrapper so the macro can infer the type of the Value at runtime to see if the value
 /// provided to the lisp environment was the type of value the rust function expected.
