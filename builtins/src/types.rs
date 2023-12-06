@@ -15,7 +15,8 @@ use slvm::{Value, Vm, VMError, VMResult};
 //! It looks like nothing can be converted From Rust Type to Value without vm. So, something new will
 //! need to be figured out here.
 
-// TODO Can this move to it's own crate maybe? maybe one that's a la carte with slsh-proc-macros?
+/// Simple wrapper so the macro can infer the type of the Value at runtime to see if the value
+/// provided to the lisp environment was the type of value the rust function expected.
 pub struct TypedWrapper<'a, T: ?Sized, U>(&'a U, PhantomData<T>);
 
 impl<'a, T: ?Sized, U> TypedWrapper<'a, T, U> {
@@ -24,6 +25,7 @@ impl<'a, T: ?Sized, U> TypedWrapper<'a, T, U> {
     }
 }
 
+/// Trait used to curry the arguments of some T to any [`Value`] by applying T to F.
 pub trait RustProcedure<T, F>
     where
         Self: Sized,
@@ -32,6 +34,7 @@ pub trait RustProcedure<T, F>
     fn apply(&self, vm: &mut SloshVm, fn_name: &str, fun: F) -> VMResult<Value>;
 }
 
+/// Trait used to curry the mutable reference of some T to any [`Value`] by applying T to F.
 pub trait RustProcedureRefMut<T, F>
     where
         Self: Sized,
@@ -429,6 +432,9 @@ mod test {
                             res
                         }));
                     }
+                    // TODO PC
+                    // now that we do not have to run this callback inside the branch, since Value is copy... can we do something
+                    // different entirely so we don't have to surrender the vm into the callback function.
                     Some(arg_0) => {
                         {
                             use crate::types::RustProcedure;
