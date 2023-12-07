@@ -93,6 +93,16 @@ impl<'a, T: ?Sized + 'a, U> TypedWrapper<'a, T, U> {
     }
 }
 
+pub trait SloshRustBridge<T> {
+    fn bridge(&self, vm: &mut SloshVm, val: &Value) -> VMResult<T>;
+}
+
+impl SloshRustBridge<String> for TypedWrapper<'_, String, Value> {
+    fn bridge(&self, vm: &mut SloshVm, val: &Value) -> VMResult<String> {
+        vm_to_string(vm, val)
+    }
+}
+
 /// Trait used to curry the arguments of some T to any [`Value`] by applying T to F.
 pub trait RustProcedure<'a, T, F, G, S>
     where
@@ -127,7 +137,7 @@ impl<'a, F, G, S> RustProcedure<'a, String, F, G, S> for TypedWrapper<'a, String
     fn apply(&self, vm: &mut SloshVm, fn_name: &str, fun: F) -> VMResult<Value> {
         // TODO PC which other of these types do we consider to be "cast"-able to a
         // string in the context of Rust functions that implement "this" macro.
-        fun(vm_to_string(&self.0))
+        //fun(partial_vm_to_string(&self.0))
         // match self.0 {
         //     Value::String(h) => {
         //         let h = vm.get_string(*h);
@@ -163,6 +173,7 @@ impl<'a, F, G, S> RustProcedure<'a, String, F, G, S> for TypedWrapper<'a, String
         //         Err(VMError::new("conv", "Wrong type, expected something that can be cast to a string."))
         //     }
         // }
+        Err(VMError::new("conv", "Unimplemented"))
     }
 }
 
@@ -239,36 +250,66 @@ impl<F, G, S> RustProcedureRefMut<String, F, G, S> for TypedWrapper<'_, String, 
 }
  */
 
-fn vm_to_string<'a>(val: &'a Value) -> impl Fn(&'a mut SloshVm) -> VMResult<String> {
-    |vm: &mut SloshVm|
-        match val {
-            Value::String(h) => {
-                Ok(vm.get_string(*h).to_string())
-            }
-            Value::CodePoint(char) => {
-                let s = *char;
-                Ok(s.encode_utf8(&mut [0; 4]).to_string())
-            }
-            Value::CharCluster(l, c) => {
-                Ok(format!("{}", String::from_utf8_lossy(&c[0..*l as usize])))
-            }
-            Value::CharClusterLong(h) => {
-                Ok(vm.get_string(*h).to_string())
-            }
-            Value::Symbol(i) => {
-                Ok(vm.get_interned(*i).to_string())
-            },
-            Value::Keyword(i) => {
-                Ok(vm.get_interned(*i).to_string())
-            },
-            Value::StringConst(i) => {
-                Ok(vm.get_interned(*i).to_string())
-            },
-            _ => {
-                Err(VMError::new("conv", "Wrong type, expected something that can be cast to a string."))
-            }
+fn vm_to_string<'a>(vm: &mut SloshVm, val: &'a Value) -> VMResult<String> {
+    match val {
+        Value::String(h) => {
+            Ok(vm.get_string(*h).to_string())
         }
+        Value::CodePoint(char) => {
+            let s = *char;
+            Ok(s.encode_utf8(&mut [0; 4]).to_string())
+        }
+        Value::CharCluster(l, c) => {
+            Ok(format!("{}", String::from_utf8_lossy(&c[0..*l as usize])))
+        }
+        Value::CharClusterLong(h) => {
+            Ok(vm.get_string(*h).to_string())
+        }
+        Value::Symbol(i) => {
+            Ok(vm.get_interned(*i).to_string())
+        },
+        Value::Keyword(i) => {
+            Ok(vm.get_interned(*i).to_string())
+        },
+        Value::StringConst(i) => {
+            Ok(vm.get_interned(*i).to_string())
+        },
+        _ => {
+            Err(VMError::new("conv", "Wrong type, expected something that can be cast to a string."))
+        }
+    }
 }
+
+//fn partial_vm_to_string<'a>(val: &'a Value) -> impl Fn(&'a mut SloshVm) -> VMResult<String> {
+//    |vm: &mut SloshVm|
+//        match val {
+//            Value::String(h) => {
+//                Ok(vm.get_string(*h).to_string())
+//            }
+//            Value::CodePoint(char) => {
+//                let s = *char;
+//                Ok(s.encode_utf8(&mut [0; 4]).to_string())
+//            }
+//            Value::CharCluster(l, c) => {
+//                Ok(format!("{}", String::from_utf8_lossy(&c[0..*l as usize])))
+//            }
+//            Value::CharClusterLong(h) => {
+//                Ok(vm.get_string(*h).to_string())
+//            }
+//            Value::Symbol(i) => {
+//                Ok(vm.get_interned(*i).to_string())
+//            },
+//            Value::Keyword(i) => {
+//                Ok(vm.get_interned(*i).to_string())
+//            },
+//            Value::StringConst(i) => {
+//                Ok(vm.get_interned(*i).to_string())
+//            },
+//            _ => {
+//                Err(VMError::new("conv", "Wrong type, expected something that can be cast to a string."))
+//            }
+//        }
+//}
 
 // fn vm_to_string(val: &Value) -> impl Fn(&mut SloshVm) -> &str {
 //     move |vm: &mut SloshVm|
@@ -507,38 +548,33 @@ mod test {
                                 crate::types::TypedWrapper<String,
                                     crate::Value> =
                                 crate::types::TypedWrapper::new(&arg_0);
-                            let callback =
-                                |vm: &mut SloshVm, arg_0: String|
-                                 -> crate::VMResult<crate::Value>
-                                    {
-                                        match args.get(PARAMS_LEN) {
-                                            Some(_) if
-                                            PARAMS_LEN == 0 ||
-                                                arg_types[PARAMS_LEN - 1].handle !=
-                                                    crate::types::TypeHandle::VarArgs => {
-                                                return Err(crate::VMError::new("conv", &*{
-                                                    let res =
-                                                        format!("{} given too many arguments, expected at least {} arguments, got {}.",
-                                                                fn_name, 1usize, args.len());
-                                                    res
-                                                }));
-                                            }
-                                            _ => {
-                                                return {
-                                                    let arg: String = arg_0;
-                                                    let res: VMResult<Value> =
-                                                        {
-                                                            {
-                                                                let val = vm.alloc_string(arg.trim().to_string());
-                                                                Ok(val)
-                                                            }
-                                                        };
-                                                    res
-                                                };
-                                            }
-                                        }
+                            let arg_0: String = typed_data.bridge(&mut vm, arg_0)?;
+                            match args.get(PARAMS_LEN) {
+                                Some(_) if
+                                PARAMS_LEN == 0 ||
+                                    arg_types[PARAMS_LEN - 1].handle !=
+                                        crate::types::TypeHandle::VarArgs => {
+                                    return Err(crate::VMError::new("conv", &*{
+                                        let res =
+                                            format!("{} given too many arguments, expected at least {} arguments, got {}.",
+                                                    fn_name, 1usize, args.len());
+                                        res
+                                    }));
+                                }
+                                _ => {
+                                    return {
+                                        let arg: String = arg_0;
+                                        let res: VMResult<Value> =
+                                            {
+                                                {
+                                                    let val = vm.alloc_string(arg.trim().to_string());
+                                                    Ok(val)
+                                                }
+                                            };
+                                        res
                                     };
-                            typed_data.apply(&mut vm, fn_name, callback)
+                                }
+                            }
                         }
                     }
                 },
