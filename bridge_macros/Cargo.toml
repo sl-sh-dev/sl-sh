@@ -11,3 +11,4 @@ proc-macro = true
 syn = { version = "1.0.95", features = ["full"] }
 quote = "1.0.18"
 static_assertions = "1.1.0"
+trybuild = "1.0.85"

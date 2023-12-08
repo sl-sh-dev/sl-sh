@@ -11,6 +11,7 @@ where
 {
     fn apply(&self, fun: F) -> VMResult<Value>;
 }
+
 pub trait TryFromSlosh<T> {
     fn try_from_slosh(&self, vm: &mut SloshVm, val: &Value) -> VMResult<T>;
 }
