@@ -11,6 +11,51 @@ use syn::{
 };
 extern crate static_assertions;
 
+// [`RustProcedure`] and [`RustProcedureRefMut`] are traits that are used to implement type conversions
+// from [`Value`] to Rust types that take a callback function so the various arguments to rust
+// native functions can be curried by recursively applied callbacks doing so -in place- to avoid
+// needing to copy the data.
+//
+//  TODO PC ( this is why the fun() is applied at the core of each statement that matches self in a rust procedure )
+//     however, in the new world... if every single tuple item in the [`Value`] enum is copy then
+//     maybe it doesn't matter anymore and this strategy can be abandoned.
+//
+// Is TryIntoExpression still needed?
+// It looks like nothing can be converted From Rust Type to Value without vm. So, something new will
+// need to be figured out here.
+
+// still struggling w/ compiler about how TryFromSlosh<&str> is going to work.
+// since the Value enum is not actually the "actual" thing that owns the data we do not necessarily
+// need the approach in sl-sh where a closure was used to prevent needing to return the inner data
+// from the Expression enum... but it does need to work!
+//
+// actually... now I'm not sure that's true, we're not going to get away with returning a reference
+// inside try_from_slosh... I think, even if a try_inner_string type macro is introduced (pretty
+// sure but think on it more!!!) which means the only choice is to pass in a closure to try_from_slosh
+// so that that closure can be passed into the try_inner_string macro.
+//
+// OR
+//
+// since nothing is actually owned in the value maybe we could reutrn the ahndle or the value (i64)
+// and just remember the type information e.g. what function to call on the vm to extract the value to avoid
+// needing to do the extraction inside the try_from_slosh macro...?
+
+//TODO PC
+// macro crate wish list
+// 1. The macro should fail if the structure of the docs is not as expected. e.g. Type/Namespace/.../Usage/Example/
+// 2. type aliasing, need a gensym type macro so I do not conflict with names.
+// 3. trybuild tests!
+// 4. worry about inlining, e.g. are the mechanisms in place to do the type conversions constant time,
+//    and inlined? or is there a way to make them so?
+// 5. can yet another crate solve the problem of housing typehandle/passingstyle/param/errorstrings/typedwrapper in the same place?
+
+/// Simple wrapper so the macro can infer the type of the Value at runtime to see if the value
+/// provided to the lisp environment was the type of value the rust function expected.
+
+
+/// Used by sl_sh_fn macro to embed information at runtime about the parameters of
+/// the rust native function, specifically whether it is a normal Type, or some
+/// supported wrapped type, e.g. Optional.
 #[derive(Copy, Clone, Debug, PartialEq)]
 enum TypeHandle {
     Direct,
@@ -18,6 +63,9 @@ enum TypeHandle {
     VarArgs,
 }
 
+/// Used by sl_sh_fn macro to embed information at runtime about the parameters of
+/// the rust native function, specifically whether it is going to pass the value (a move),
+/// a reference, or mutable reference.
 #[derive(Copy, Clone, Debug, PartialEq)]
 enum PassingStyle {
     Value,
@@ -25,6 +73,8 @@ enum PassingStyle {
     MutReference,
 }
 
+/// Struct used by sl_sh_fn macro to embed information in an array at runtime about each of
+/// the parameters of the rust native function.
 #[derive(Copy, Clone, Debug, PartialEq)]
 struct Param {
     handle: TypeHandle,
