@@ -401,14 +401,46 @@ mod test {
         }
     }
 
+
     #[test]
-    fn try_me() {
-        str_trim_test().unwrap();
+    fn try_orig_str_trim() {
+        let mut vm = new_slosh_vm();
+        let to_trim = " hello world ";
+        let mut vm = new_slosh_vm();
+        let test_str = vm.alloc_string(to_trim.to_string());
+        let args = [test_str];
+        let val = str_trim(&mut vm, &args).unwrap();
+        match val {
+            Value::String(handle) => {
+                let to_test = vm.get_string(handle);
+                assert_eq!(to_test, "hello world");
+            }
+            _ => {
+                panic!("Should return a string!")
+            }
+        }
     }
 
-    fn str_trim_test() -> VMResult<Value> {
+    #[test]
+    fn try_str_trim() {
         let mut vm = new_slosh_vm();
-        let args = [];
+        let to_trim = " hello world ";
+        let val = str_trim_test(&mut vm, to_trim.to_string()).unwrap();
+        match val {
+            Value::String(handle) => {
+                let to_test = vm.get_string(handle);
+                assert_eq!(to_test, "hello world");
+            }
+            _ => {
+                panic!("Should return a string!")
+            }
+        }
+    }
+
+    fn str_trim_test(vm: &mut SloshVm, test_str: String) -> VMResult<Value> {
+        let mut vm = new_slosh_vm();
+        let test_str = vm.alloc_string(test_str);
+        let args = [test_str];
         let fn_name = "str_trim";
         const PARAMS_LEN: usize = 1usize;
         let arg_types: [crate::types::Param; PARAMS_LEN] =
@@ -416,7 +448,6 @@ mod test {
                 handle: crate::types::TypeHandle::Direct,
                 passing_style: crate::types::PassingStyle::Value,
             }];
-
 
         let param = arg_types[0usize];
         match param.handle {
@@ -461,8 +492,10 @@ mod test {
                                                                 Ok(arg.trim().to_string())
                                                             }
                                                         };
-                                                    res
-                                                }.map(Into::into);
+                                                    // need a trait that does this
+                                                    let val = vm.alloc_string(res?);
+                                                    Ok(val)
+                                                }
                                             }
                                         }
                                     };
