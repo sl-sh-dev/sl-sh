@@ -85,130 +85,79 @@ impl<'a, T: ?Sized, U> TypedWrapper<'a, T, U> {
 //}
 
 pub trait SlTryFrom<T>: Sized {
-    /// The type returned in the event of a conversion error.
-    type Error;
-
     /// Converts to this type from the input type.
     fn sl_try_from(value: T, vm: &mut SloshVm) -> VMResult<Self>;
 }
 
 pub trait SlTryInto<T>: Sized {
-    /// The type returned in the event of a conversion error.
-    type Error;
-
     /// Converts this type into the (usually inferred) input type.
     fn sl_try_into(self, vm: &mut SloshVm) -> VMResult<T>;
 }
 
 impl<T, U> SlTryInto<U> for T
 where U: SlTryFrom<T> {
-    type Error = U::Error;
-
     fn sl_try_into(self, vm: &mut SloshVm) -> VMResult<U> {
         U::sl_try_from(self, vm)
     }
 }
 
 impl SlTryFrom<String> for Value {
-    type Error = VMError;
-
     fn sl_try_from(value: String, vm: &mut SloshVm) -> VMResult<Self> {
-        let val = vm.alloc_string(value);
-        match &val {
-            Value::String(h) => {
-                println!("handle1: {:?}", h);
-            }
-            _ => {
-                unreachable!("Should always be a string value.")
-            }
-        }
-        Ok(val)
+        Ok(vm.alloc_string(value))
     }
 }
 
-impl SlTryFrom<Value> for String {
-    type Error = VMError;
+pub trait SlAsRef<'a, T: ?Sized> {
 
-    fn sl_try_from(value: Value, vm: &mut SloshVm) -> VMResult<Self> {
-        match value {
-            Value::String(h) => {
-                Ok(vm.get_string(h).to_string())
-            }
-            Value::CodePoint(char) => {
-                let s = char;
-                Ok(s.encode_utf8(&mut [0; 4]).to_string())
-            }
-            Value::CharCluster(l, c) => {
-                Ok(format!("{}", String::from_utf8_lossy(&c[0..l as usize])))
-            }
-            Value::CharClusterLong(h) => {
-                Ok(vm.get_string(h).to_string())
-            }
-            Value::Symbol(i) => {
-                Ok(vm.get_interned(i).to_string())
-            },
-            Value::Keyword(i) => {
-                Ok(vm.get_interned(i).to_string())
-            },
-            Value::StringConst(i) => {
-                Ok(vm.get_interned(i).to_string())
-            },
-            _ => {
-                Err(VMError::new("conv", "Wrong type, expected something that can be cast to a string."))
-            }
-        }
-    }
-}
-
-pub trait SlAsRef<T: ?Sized> {
     /// Converts this type into a shared reference of the (usually inferred) input type.
-    fn sl_as_ref(&self, vm: &mut SloshVm) -> &T;
-}
-
-pub trait SlAsMut<T: ?Sized> {
-    /// Converts this type into a mutable reference of the (usually inferred) input type.
-    fn sl_as_mut(&mut self, vm: &mut SloshVm) -> &mut T;
-}
-
-impl<T: ?Sized, U: ?Sized> SlAsMut<U> for &mut T
-    where
-        T: SlAsMut<U>,
-{
-    #[inline]
-    fn sl_as_mut(&mut self, vm: &mut SloshVm) -> &mut U {
-        (*self).sl_as_mut(vm)
-    }
+    fn sl_as_ref(&self, vm: &'a mut SloshVm) -> &'a T;
 }
 
 // As lifts over &
-impl<T: ?Sized, U: ?Sized> SlAsRef<U> for &T
+impl<'a, T: ?Sized, U: ?Sized> SlAsRef<'a, U> for &'a T
     where
-        T: SlAsRef<U>,
+        T: SlAsRef<'a, U>,
 {
     #[inline]
-    fn sl_as_ref(&self, vm: &mut SloshVm) -> &U {
-        <T as SlAsRef<U>>::sl_as_ref(*self, vm)
+    fn sl_as_ref(&self, vm: &'a mut SloshVm) -> &'a U {
+        <T as SlAsRef<'a, U>>::sl_as_ref(*self, vm)
     }
 }
 
-/// As lifts over &mut
-impl<T: ?Sized, U: ?Sized> SlAsRef<U> for &mut T
+// SlAsRef lifts over &mut
+impl<'a, T: ?Sized, U: ?Sized> SlAsRef<'a, U> for &'a mut T
     where
-        T: SlAsRef<U>,
+        T: SlAsRef<'a, U>,
 {
     #[inline]
-    fn sl_as_ref(&self, vm: &mut SloshVm) -> &U {
-        <T as SlAsRef<U>>::sl_as_ref(*self, vm)
+    fn sl_as_ref(&self, vm: &'a mut SloshVm) -> &'a U {
+        <T as SlAsRef<'a, U>>::sl_as_ref(*self, vm)
     }
 }
 
+
+pub trait SlAsMut<'a, T: ?Sized> {
+    /// Converts this type into a mutable reference of the (usually inferred) input type.
+    fn sl_as_mut(&mut self, vm: &'a mut SloshVm) -> &'a mut T;
+}
+
+// SlAsMut lifts over &mut
+impl<'a, T: ?Sized, U: ?Sized> SlAsMut<'a, U> for &'a mut T
+    where
+        T: SlAsMut<'a, U>,
+{
+    #[inline]
+    fn sl_as_mut(&mut self, vm: &'a mut SloshVm) -> &'a mut U {
+        (*self).sl_as_mut(vm)
+    }
+}
 
 pub trait RustProcedure<T, F>
     where
         Self: Sized,
         F: FnOnce(T, &mut SloshVm) -> VMResult<Value> + ?Sized,
 {
-    fn apply(&self, vm: &mut SloshVm, fn_name: &str, fun: F) -> VMResult<Value>;
+    fn apply(&self, vm: &mut SloshVm,fn_name: &str, fun: F) -> VMResult<Value>;
 }
 
 //pub trait RustProcedureRefMut<T, F>
@@ -548,6 +497,53 @@ impl<F> RustProcedure<String, F> for TypedWrapper<'_, String, Value>
 //     }
 // }
 
+impl<'a> SlAsRef<'a, str> for Value {
+    fn sl_as_ref(&self, vm: &'a mut SloshVm) -> &'a str {
+        match self {
+            Value::String(h) => {
+                vm.get_string(*h)
+            }
+            _ => {
+                panic!("TODO fix me");
+            }
+
+        }
+    }
+}
+
+
+impl SlTryFrom<Value> for String {
+    fn sl_try_from(value: Value, vm: &mut SloshVm) -> VMResult<Self> {
+        match value {
+            Value::String(h) => {
+                Ok(vm.get_string(h).to_string())
+            }
+            Value::CodePoint(char) => {
+                let s = char;
+                Ok(s.encode_utf8(&mut [0; 4]).to_string())
+            }
+            Value::CharCluster(l, c) => {
+                Ok(format!("{}", String::from_utf8_lossy(&c[0..l as usize])))
+            }
+            Value::CharClusterLong(h) => {
+                Ok(vm.get_string(h).to_string())
+            }
+            Value::Symbol(i) => {
+                Ok(vm.get_interned(i).to_string())
+            },
+            Value::Keyword(i) => {
+                Ok(vm.get_interned(i).to_string())
+            },
+            Value::StringConst(i) => {
+                Ok(vm.get_interned(i).to_string())
+            },
+            _ => {
+                Err(VMError::new("conv", "Wrong type, expected something that can be cast to a string."))
+            }
+        }
+    }
+}
+
 
 
 #[cfg(test)]
@@ -615,7 +611,6 @@ mod test {
     }
 
     fn str_trim_test(vm: &mut SloshVm, test_str: String) -> VMResult<Value> {
-        let mut vm = new_slosh_vm();
         let test_str = vm.alloc_string(test_str);
         let args = [test_str];
         let fn_name = "str_trim";
@@ -667,7 +662,7 @@ mod test {
                                             }
                                         }
                                     };
-                            typed_data.apply(&mut vm, fn_name, callback)
+                            typed_data.apply(vm, fn_name, callback)
                         }
                     }
                 },
