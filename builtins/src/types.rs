@@ -25,25 +25,25 @@ impl<'a, T: ?Sized, U> TypedWrapper<'a, T, U> {
     }
 }
 
-pub trait SlTryFrom<T>: Sized {
+pub trait SlFrom<T>: Sized {
     /// Converts to this type from the input type.
-    fn sl_try_from(value: T, vm: &mut SloshVm) -> VMResult<Self>;
+    fn SlFrom(value: T, vm: &mut SloshVm) -> VMResult<Self>;
 }
 
-pub trait SlTryInto<T>: Sized {
+pub trait SlInto<T>: Sized {
     /// Converts this type into the (usually inferred) input type.
-    fn sl_try_into(self, vm: &mut SloshVm) -> VMResult<T>;
+    fn sl_into(self, vm: &mut SloshVm) -> VMResult<T>;
 }
 
-impl<T, U> SlTryInto<U> for T
-where U: SlTryFrom<T> {
-    fn sl_try_into(self, vm: &mut SloshVm) -> VMResult<U> {
-        U::sl_try_from(self, vm)
+impl<T, U> SlInto<U> for T
+where U: SlFrom<T> {
+    fn sl_into(self, vm: &mut SloshVm) -> VMResult<U> {
+        U::SlFrom(self, vm)
     }
 }
 
-impl SlTryFrom<String> for Value {
-    fn sl_try_from(value: String, vm: &mut SloshVm) -> VMResult<Self> {
+impl SlFrom<String> for Value {
+    fn SlFrom(value: String, vm: &mut SloshVm) -> VMResult<Self> {
         Ok(vm.alloc_string(value))
     }
 }
@@ -204,7 +204,7 @@ impl<F> RustProcedure<String, F> for TypedWrapper<'_, String, Value>
     }
 }
 
-impl<'a> SlAsRef<'a, str> for Value {
+impl<'a> SlAsRef<'a, str> for &Value {
     fn sl_as_ref(&self, vm: &'a mut SloshVm) -> VMResult<&'a str> {
         match self {
             Value::String(h) => {
@@ -218,30 +218,30 @@ impl<'a> SlAsRef<'a, str> for Value {
     }
 }
 
-impl SlTryFrom<Value> for String {
-    fn sl_try_from(value: Value, vm: &mut SloshVm) -> VMResult<Self> {
+impl SlFrom<&Value> for String {
+    fn SlFrom(value: &Value, vm: &mut SloshVm) -> VMResult<Self> {
         match value {
             Value::String(h) => {
-                Ok(vm.get_string(h).to_string())
+                Ok(vm.get_string(*h).to_string())
             }
             Value::CodePoint(char) => {
                 let s = char;
                 Ok(s.encode_utf8(&mut [0; 4]).to_string())
             }
             Value::CharCluster(l, c) => {
-                Ok(format!("{}", String::from_utf8_lossy(&c[0..l as usize])))
+                Ok(format!("{}", String::from_utf8_lossy(&c[0..*l as usize])))
             }
             Value::CharClusterLong(h) => {
-                Ok(vm.get_string(h).to_string())
+                Ok(vm.get_string(*h).to_string())
             }
             Value::Symbol(i) => {
-                Ok(vm.get_interned(i).to_string())
+                Ok(vm.get_interned(*i).to_string())
             },
             Value::Keyword(i) => {
-                Ok(vm.get_interned(i).to_string())
+                Ok(vm.get_interned(*i).to_string())
             },
             Value::StringConst(i) => {
-                Ok(vm.get_interned(i).to_string())
+                Ok(vm.get_interned(*i).to_string())
             },
             _ => {
                 Err(VMError::new("conv", "Wrong type, expected something that can be cast to a string."))
@@ -340,35 +340,25 @@ mod test {
                     }
                     Some(arg_0) => {
                         {
-                            let typed_data:
-                                crate::types::TypedWrapper<String,
-                                    crate::Value> =
-                                crate::types::TypedWrapper::new(&arg_0);
-                            let callback =
-                                |arg_0: String, vm: &mut SloshVm|
-                                 -> crate::VMResult<crate::Value>
-                                    {
-                                        match args.get(PARAMS_LEN) {
-                                            Some(_) if
-                                            PARAMS_LEN == 0 ||
-                                                arg_types[PARAMS_LEN - 1].handle !=
-                                                    crate::types::TypeHandle::VarArgs => {
-                                                return Err(crate::VMError::new("conv", &*{
-                                                    let res =
-                                                        format!("{} given too many arguments, expected at least {} arguments, got {}.",
-                                                                fn_name, 1usize, args.len());
-                                                    res
-                                                }));
-                                            }
-                                            _ => {
-                                                return {
-                                                    let arg: String = arg_0;
-                                                    arg.trim().to_string().sl_try_into(vm)
-                                                }
-                                            }
-                                        }
-                                    };
-                            typed_data.apply(vm, fn_name, callback)
+                            match args.get(PARAMS_LEN) {
+                                Some(_) if
+                                PARAMS_LEN == 0 ||
+                                    arg_types[PARAMS_LEN - 1].handle !=
+                                        crate::types::TypeHandle::VarArgs => {
+                                    return Err(crate::VMError::new("conv", &*{
+                                        let res =
+                                            format!("{} given too many arguments, expected at least {} arguments, got {}.",
+                                                    fn_name, 1usize, args.len());
+                                        res
+                                    }));
+                                }
+                                _ => {
+                                    return {
+                                        let arg: String = arg_0.sl_into(vm)?;
+                                        arg.trim().to_string().sl_into(vm)
+                                    }
+                                }
+                            }
                         }
                     }
                 },
