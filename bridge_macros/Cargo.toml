@@ -1,6 +1,6 @@
 [package]
-name = "sl-sh-proc-macros"
-version = "0.3.1"
+name = "bridge_macros"
+version = "0.1.0"
 edition = "2021"
 
 
@@ -11,4 +11,5 @@ proc-macro = true
 syn = { version = "1.0.95", features = ["full"] }
 quote = "1.0.18"
 static_assertions = "1.1.0"
+bridge_types = { path = "../bridge_types" }
 trybuild = "1.0.85"

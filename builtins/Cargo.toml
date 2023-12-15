@@ -7,5 +7,6 @@ edition = "2021"
 
 [dependencies]
 slvm = { path = "../vm" }
+bridge_types = { path = "../bridge_types" }
 compile_state = { path = "../compile_state" }
 unicode-segmentation = "1.10.1"

@@ -1,3 +1,16 @@
+//! TODO PC
+//! macro crate wish list
+//! 1. The macro should fail if the structure of the docs is not as expected. e.g. Type/Namespace/.../Usage/Example/
+//! 2. type aliasing, need a gensym type macro so I do not conflict with names.
+//! 3. trybuild tests!
+//! 4. worry about inlining, e.g. are the mechanisms in place to do the type conversions constant time,
+//!    and inlined? or is there a way to make them so?
+//! 5. can yet another crate solve the problem of housing typehandle/passingstyle/param/errorstrings/typedwrapper in the same place?
+
+use bridge_types::TypeHandle;
+use bridge_types::PassingStyle;
+use bridge_types::Param;
+use bridge_types::ErrorStrings;
 use quote::quote;
 use quote::ToTokens;
 use quote::__private::TokenStream;
@@ -11,85 +24,15 @@ use syn::{
 };
 extern crate static_assertions;
 
-// [`RustProcedure`] and [`RustProcedureRefMut`] are traits that are used to implement type conversions
-// from [`Value`] to Rust types that take a callback function so the various arguments to rust
-// native functions can be curried by recursively applied callbacks doing so -in place- to avoid
-// needing to copy the data.
-//
-//  TODO PC ( this is why the fun() is applied at the core of each statement that matches self in a rust procedure )
-//     however, in the new world... if every single tuple item in the [`Value`] enum is copy then
-//     maybe it doesn't matter anymore and this strategy can be abandoned.
-//
-// Is TryIntoExpression still needed?
-// It looks like nothing can be converted From Rust Type to Value without vm. So, something new will
-// need to be figured out here.
-
-// still struggling w/ compiler about how TryFromSlosh<&str> is going to work.
-// since the Value enum is not actually the "actual" thing that owns the data we do not necessarily
-// need the approach in sl-sh where a closure was used to prevent needing to return the inner data
-// from the Expression enum... but it does need to work!
-//
-// actually... now I'm not sure that's true, we're not going to get away with returning a reference
-// inside try_from_slosh... I think, even if a try_inner_string type macro is introduced (pretty
-// sure but think on it more!!!) which means the only choice is to pass in a closure to try_from_slosh
-// so that that closure can be passed into the try_inner_string macro.
-//
-// OR
-//
-// since nothing is actually owned in the value maybe we could reutrn the ahndle or the value (i64)
-// and just remember the type information e.g. what function to call on the vm to extract the value to avoid
-// needing to do the extraction inside the try_from_slosh macro...?
-
-//TODO PC
-// macro crate wish list
-// 1. The macro should fail if the structure of the docs is not as expected. e.g. Type/Namespace/.../Usage/Example/
-// 2. type aliasing, need a gensym type macro so I do not conflict with names.
-// 3. trybuild tests!
-// 4. worry about inlining, e.g. are the mechanisms in place to do the type conversions constant time,
-//    and inlined? or is there a way to make them so?
-// 5. can yet another crate solve the problem of housing typehandle/passingstyle/param/errorstrings/typedwrapper in the same place?
-
-/// Simple wrapper so the macro can infer the type of the Value at runtime to see if the value
-/// provided to the lisp environment was the type of value the rust function expected.
-
-
-/// Used by sl_sh_fn macro to embed information at runtime about the parameters of
-/// the rust native function, specifically whether it is a normal Type, or some
-/// supported wrapped type, e.g. Optional.
-#[derive(Copy, Clone, Debug, PartialEq)]
-enum TypeHandle {
-    Direct,
-    Optional,
-    VarArgs,
-}
-
-/// Used by sl_sh_fn macro to embed information at runtime about the parameters of
-/// the rust native function, specifically whether it is going to pass the value (a move),
-/// a reference, or mutable reference.
-#[derive(Copy, Clone, Debug, PartialEq)]
-enum PassingStyle {
-    Value,
-    Reference,
-    MutReference,
-}
-
-/// Struct used by sl_sh_fn macro to embed information in an array at runtime about each of
-/// the parameters of the rust native function.
-#[derive(Copy, Clone, Debug, PartialEq)]
-struct Param {
-    handle: TypeHandle,
-    passing_style: PassingStyle,
-}
-
 type MacroResult<T> = Result<T, Error>;
 
-const POSSIBLE_RETURN_TYPES: [&str; 2] = ["LispResult", "Option"];
+const POSSIBLE_RETURN_TYPES: [&str; 2] = ["VMResult", "Option"];
 const SPECIAL_ARG_TYPES: [&str; 2] = ["Option", "VarArgs"];
 const POSSIBLE_ARG_TYPES: [&str; 3] = ["Option", "VarArgs", "Vec"];
 
 #[derive(Copy, Clone)]
 enum SupportedGenericReturnTypes {
-    LispResult,
+    VMResult,
     Option,
 }
 
@@ -143,8 +86,8 @@ impl From<Type> for RustType {
 impl Display for SupportedGenericReturnTypes {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            SupportedGenericReturnTypes::LispResult => {
-                write!(f, "LispResult")
+            SupportedGenericReturnTypes::VMResult => {
+                write!(f, "VMResult")
             }
             SupportedGenericReturnTypes::Option => {
                 write!(f, "Option")
@@ -207,8 +150,8 @@ fn is_valid_generic_type(
         let ident = &path_segment.ident;
         for type_name in possible_types {
             if ident == type_name {
-                if type_name == &SupportedGenericReturnTypes::LispResult.to_string().as_str() {
-                    return Ok(SupportedGenericReturnTypes::LispResult);
+                if type_name == &SupportedGenericReturnTypes::VMResult.to_string().as_str() {
+                    return Ok(SupportedGenericReturnTypes::VMResult);
                 } else if type_name == &SupportedGenericReturnTypes::Option.to_string().as_str() {
                     return Ok(SupportedGenericReturnTypes::Option);
                 }
@@ -218,7 +161,7 @@ fn is_valid_generic_type(
     Err(Error::new(
         type_path.span(),
         format!(
-            "Functions can only return GenericArguments of type {possible_types:?}, try wrapping this value in Option or LispResult."
+            "Functions can only return GenericArguments of type {possible_types:?}, try wrapping this value in Option or VMResult."
         ),
     ))
 }
@@ -446,7 +389,7 @@ fn make_orig_fn_call(
     // the original function call must return an Expression object
     // this means all returned rust native types must implement TryIntoExpression
     // this is nested inside the builtin expression which must always
-    // return a LispResult.
+    // return a VMResult.
     let skip = usize::from(takes_env);
     let takes_env = if takes_env {
         quote! {environment, } // environment is the name that is passed in to this function
@@ -506,7 +449,7 @@ fn make_orig_fn_call(
     };
 
     let original_fn_call = match (return_type, lisp_return, returns_none) {
-        (Some(_), Some(SupportedGenericReturnTypes::LispResult), true) => quote! {
+        (Some(_), Some(SupportedGenericReturnTypes::VMResult), true) => quote! {
             #fn_body?;
             return Ok(crate::types::Expression::make_nil());
         },
@@ -514,7 +457,7 @@ fn make_orig_fn_call(
             #fn_body;
             return Ok(crate::types::Expression::make_nil());
         },
-        (Some(_), Some(SupportedGenericReturnTypes::LispResult), false) => quote! {
+        (Some(_), Some(SupportedGenericReturnTypes::VMResult), false) => quote! {
             return #fn_body.map(Into::into);
         },
         (Some(_), Some(SupportedGenericReturnTypes::Option), false) => quote! {
@@ -529,7 +472,7 @@ fn make_orig_fn_call(
             return Ok(#fn_body.into());
         },
         (None, Some(_), _) => {
-            unreachable!("If this functions returns a LispResult it must also return a value.");
+            unreachable!("If this functions returns a VMResult it must also return a value.");
         }
         // no return
         (None, None, _) => quote! {
@@ -649,7 +592,7 @@ fn parse_variadic_args_type(
                     .map(|#arg_name| {
                         #arg_name.clone().try_into_for(#fn_name)
                     })
-                    .collect::<crate::LispResult<#ty>>()?;
+                    .collect::<crate::VMResult<#ty>>()?;
                 #inner
             }})
         }
@@ -711,7 +654,7 @@ fn parse_variadic_args_type(
                                 }
                             }
                         })
-                        .collect::<crate::LispResult<#collect_type<(#(#types),*)>>>()?;
+                        .collect::<crate::VMResult<#collect_type<(#(#types),*)>>>()?;
                     #inner
                 }})
             } else {
@@ -843,7 +786,7 @@ fn parse_direct_type(
                         )
                     };
                 let callback_declaration = quote! {
-                    let callback = |#arg_name: #fn_ref| -> crate::LispResult<crate::types::Expression> {
+                    let callback = |#arg_name: #fn_ref| -> crate::VMResult<crate::types::Expression> {
                         #inner
                     };
                 };
@@ -1091,7 +1034,7 @@ fn generate_parse_fn(
         fn #parse_name(
             environment: &mut crate::environment::Environment,
             args: &mut dyn Iterator<Item = crate::types::Expression>,
-        ) -> crate::LispResult<crate::types::Expression> {
+        ) -> crate::VMResult<crate::types::Expression> {
             #make_args
             let #fn_name_ident = #fn_name;
             const #const_params_len: usize = #args_len;
