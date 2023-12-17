@@ -1,7 +1,6 @@
 //! TODO PC need explanation for the emulation for TryFrom/TryInto/AsRef/AsMut
 use compile_state::state::SloshVm;
 use slvm::{Value, VMError, VMResult};
-use bridge_types::LooseString;
 
 pub trait SlFrom<T>: Sized {
     /// Converts to this type from the input type.
@@ -17,12 +16,6 @@ impl<T, U> SlInto<U> for T
 where U: SlFrom<T> {
     fn sl_into(self, vm: &mut SloshVm) -> VMResult<U> {
         U::sl_from(self, vm)
-    }
-}
-
-impl SlFrom<String> for Value {
-    fn sl_from(value: String, vm: &mut SloshVm) -> VMResult<Self> {
-        Ok(vm.alloc_string(value))
     }
 }
 
@@ -150,6 +143,48 @@ impl<'a> SlAsRef<'a, str> for &Value {
     }
 }
 
+impl SlFrom<&Value> for char {
+    fn sl_from(value: &Value, _vm: &mut SloshVm) -> VMResult<Self> {
+        match value {
+            Value::CodePoint(char) => {
+                Ok(*char)
+            }
+            _ => {
+                Err(VMError::new("conv", "Wrong type, expected something that can be cast to a char."))
+            }
+        }
+    }
+}
+
+impl SlFrom<char> for Value {
+    fn sl_from(value: char, vm: &mut SloshVm) -> VMResult<Self> {
+        // TODO PC resolve w/ sstanfield how to do this more efficiently
+        Ok(vm.alloc_char(value.to_string().as_str()))
+    }
+}
+
+impl SlFrom<String> for Value {
+    fn sl_from(value: String, vm: &mut SloshVm) -> VMResult<Self> {
+        Ok(vm.alloc_string(value))
+    }
+}
+
+impl<'a> SlAsMut<'a, String> for Value {
+    fn sl_as_mut(&mut self, vm: &'a mut SloshVm) -> VMResult<&'a mut String> {
+        match self {
+            Value::String(h) => {
+                Ok(vm.get_string_mut(*h))
+            }
+            _ => {
+                Err(VMError::new("conv", "Wrong type, expected something that can be cast to a &mut String."))
+            }
+        }
+    }
+}
+
+// TODO PC preference would be for String to just be Value::String & Value::StringConst
+// and let LooseString handle the rest, also avoids needless allocations the user of
+// the macro may not care for.
 impl SlFrom<&Value> for String {
     fn sl_from(value: &Value, vm: &mut SloshVm) -> VMResult<Self> {
         match value {
