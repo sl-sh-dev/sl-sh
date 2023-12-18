@@ -126,23 +126,6 @@ impl<'a, T: ?Sized, U: ?Sized> SlAsMut<'a, U> for &'a mut T
 //    }
 //}
 
-impl<'a> SlAsRef<'a, str> for &Value {
-    fn sl_as_ref(&self, vm: &'a mut SloshVm) -> VMResult<&'a str> {
-        match self {
-            Value::String(h) => {
-                Ok(vm.get_string(*h))
-            }
-            Value::StringConst(i) => {
-                Ok(vm.get_interned(*i))
-            }
-            _ => {
-                Err(VMError::new("conv", "Wrong type, expected something that can be cast to a &str."))
-            }
-
-        }
-    }
-}
-
 impl SlFrom<&Value> for char {
     fn sl_from(value: &Value, _vm: &mut SloshVm) -> VMResult<Self> {
         match value {
@@ -163,13 +146,35 @@ impl SlFrom<char> for Value {
     }
 }
 
+impl<'a> SlAsRef<'a, str> for &Value {
+    fn sl_as_ref(&self, vm: &'a mut SloshVm) -> VMResult<&'a str> {
+        match self {
+            Value::String(h) => {
+                Ok(vm.get_string(*h))
+            }
+            Value::StringConst(i) => {
+                Ok(vm.get_interned(*i))
+            }
+            _ => {
+                Err(VMError::new("conv", "Wrong type, expected something that can be cast to a &str."))
+            }
+
+        }
+    }
+}
 impl SlFrom<String> for Value {
     fn sl_from(value: String, vm: &mut SloshVm) -> VMResult<Self> {
         Ok(vm.alloc_string(value))
     }
 }
 
-impl<'a> SlAsMut<'a, String> for Value {
+impl<'a> SlAsRef<'a, String> for &Value {
+    fn sl_as_ref(&self, vm: &'a mut SloshVm) -> VMResult<&'a String> {
+        self.sl_as_ref(vm).map(Into::into)
+    }
+}
+
+impl<'a> SlAsMut<'a, String> for &Value {
     fn sl_as_mut(&mut self, vm: &'a mut SloshVm) -> VMResult<&'a mut String> {
         match self {
             Value::String(h) => {
@@ -283,6 +288,81 @@ mod test {
         }
     }
 
+    #[test]
+    fn try_str_mut() {
+        let mut vm = new_slosh_vm();
+        let to_mutate = " hello world ";
+        let test_str = vm.alloc_string(to_mutate.to_string());
+        let args = &[test_str];
+        str_test_mut(&mut vm, args).unwrap();
+        match args[0] {
+            Value::String(handle) => {
+                println!("handle2: {:?}", handle);
+                let to_test = vm.get_string(handle);
+                assert_eq!(to_test, " hello world 0");
+            }
+            _ => {
+                panic!("Should return a string!")
+            }
+        }
+    }
+
+    fn str_test_mut(vm: &mut SloshVm, args: &[Value]) -> VMResult<()> {
+        let fn_name = "str_trim";
+        const PARAMS_LEN: usize = 1usize;
+        let arg_types: [bridge_types::Param; PARAMS_LEN] =
+            [bridge_types::Param {
+                handle: bridge_types::TypeHandle::Direct,
+                passing_style: bridge_types::PassingStyle::MutReference,
+            }];
+
+        let param = arg_types[0usize];
+        match param.handle {
+            bridge_types::TypeHandle::Direct =>
+                match args.get(0usize) {
+                    None => {
+                        return Err(crate::VMError::new_vm(&*{
+                            let res =
+                                format!("{} not given enough arguments, expected at least {} arguments, got {}.", fn_name, 1usize, args.len());
+                            res
+                        }));
+                    }
+                    Some(mut arg_0) => {
+                        {
+                            match args.get(PARAMS_LEN) {
+                                Some(_) if
+                                PARAMS_LEN == 0 ||
+                                    arg_types[PARAMS_LEN - 1].handle !=
+                                        bridge_types::TypeHandle::VarArgs => {
+                                    return Err(crate::VMError::new_vm(&*{
+                                        let res =
+                                            format!("{} given too many arguments, expected at least {} arguments, got {}.",
+                                                    fn_name, 1usize, args.len());
+                                        res
+                                    }));
+                                }
+                                _ => {
+                                    {
+                                        let arg: &mut String = arg_0.sl_as_mut(vm)?;
+                                        arg.push_str("0");
+                                        Ok(())
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+            _ => {
+                return Err(crate::VMError::new_vm(&*{
+                    let res =
+                        format!("{} failed to parse its arguments, internal error.",
+                                fn_name);
+                    res
+                }));
+            }
+        }
+    }
+
     fn str_trim_test(vm: &mut SloshVm, test_str: String) -> VMResult<Value> {
         let test_str = vm.alloc_string(test_str);
         let args = [test_str];
@@ -299,7 +379,7 @@ mod test {
             bridge_types::TypeHandle::Direct =>
                 match args.get(0usize) {
                     None => {
-                        return Err(crate::VMError::new("conv", &*{
+                        return Err(crate::VMError::new_vm(&*{
                             let res =
                                 format!("{} not given enough arguments, expected at least {} arguments, got {}.", fn_name, 1usize, args.len());
                             res
@@ -312,7 +392,7 @@ mod test {
                                 PARAMS_LEN == 0 ||
                                     arg_types[PARAMS_LEN - 1].handle !=
                                         bridge_types::TypeHandle::VarArgs => {
-                                    return Err(crate::VMError::new("conv", &*{
+                                    return Err(crate::VMError::new_vm(&*{
                                         let res =
                                             format!("{} given too many arguments, expected at least {} arguments, got {}.",
                                                     fn_name, 1usize, args.len());
@@ -330,7 +410,7 @@ mod test {
                     }
                 },
             _ => {
-                return Err(crate::VMError::new("conv", &*{
+                return Err(crate::VMError::new_vm(&*{
                     let res =
                         format!("{} failed to parse its arguments, internal error.",
                                 fn_name);
