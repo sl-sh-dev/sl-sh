@@ -7,7 +7,7 @@
 //! #. To convert a slosh &Value to a mutable reference type implement `impl SlAsMut<&Value> for MutRefType`.
 //! #. To convert some rust type back to a value that the rust native function
 //!     annotated by the bridge macro returns implement `impl SlFrom<&Value> for RustType`.
-//!     TODO PC blanket impl so impl SlFrom<Value> works, and taking a ref isn't required?
+//!     TODO PC blanket impl so impl `SlFrom<Value>` works, and taking a ref isn't required?
 //! #. To avoid allocations when converting a slosh &Value back to a rust type that was mutated
 //!     don't return anything. If it is necessary for the API to return some value,
 //!     TODO PC annotated or liftime? AKA [the extant value problem]
@@ -36,18 +36,12 @@
 //!                             |                             |     &emsp;- take `&mut `[`String`]
 //!                             |                             |     &emsp;* uses Clone unless TODO PC [the extant value problem]
 //!                             |                             |
-//! `&`[`str`]                  | [`Value`]`::String`         |
+//! `&`[`str`]                  | [`Value`]`::String` / [`Value`]`::StringConst` |
 //!                             |                             | S -> R
 //!                             |                             |     &emsp;- [`SlAsRef`] [`str`] for `&`[`Value`]
 //!                             |                             | R -> S
 //!                             |                             |     &emsp;- [`SlFrom`] for [`Value`]
 //!                             |                             |     &emsp;* uses Clone unless TODO PC [the extant value problem]
-//!                             |                             |
-//! `&`[`str`]                  | [`Value`]`::StringConst`    |
-//!                             |                             | S -> R
-//!                             |                             |     &emsp;- [`SlAsRef`] for `&`[`Value`]
-//!                             |                             | R -> S
-//!                             |                             |     &emsp;- TODO PC [the extant value problem]
 //!                             |                             |     &emsp;- TODO PC is it even possible to call vm.alloc_string_ro on something that was *newly* created in the current fcn and returned as a RO value OR should that be made as a custom type so the user can declare their intent.
 //!                             |                             |
 //! [`char`]                    | [`Value`]`::CodePoint`      |

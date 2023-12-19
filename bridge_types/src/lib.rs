@@ -7,6 +7,7 @@ use std::borrow::Cow;
 /// that appear in slosh as functions that can receive any number of arguments.
 pub type VarArgs<T> = Vec<T>;
 
+/// [Value](../slvm/value/enum.Value.html)
 /// Type to hold anything in Slosh that can be represented as a string.
 ///
 /// Public type used by rust native -> slosh bridge macro to represent
@@ -17,6 +18,7 @@ pub type VarArgs<T> = Vec<T>;
 /// type is passed in use this function.
 pub type LooseString<'a, T> = Cow<'a, T>;
 
+/// [Value](../slvm/value/enum.Value.html)
 /// Type to hold Slosh's notion of a char.
 ///
 /// In slosh a character can either be an actual char, e.g. a [`Value`]`::CodePoint`
