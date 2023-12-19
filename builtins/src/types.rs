@@ -14,53 +14,55 @@
 //!
 //!
 //! ## rosetta stone for bridge macros
-//! Rust Type                   | Slosh Type & Traits   <br>&emsp; <br> S -> R Conversion Slosh -> Rust <br> R -> S Conversion Rust -> Slosh                                             |
+//! Rust Type                   | Slosh Type & Traits   <br>&emsp; <br> S -> R Convert Slosh -> Rust <br> R -> S Convert Rust -> Slosh                                             |
 //! ----------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|
 //! [`String`]                  | [`Value`]`::String`         |
 //!                             |                             | S -> R
-//!                             |                             |    -  [`SlInto`] [`String`] for `&`[`Value`]
+//!                             |                             |     &emsp;- [`SlInto`] [`String`] for `&`[`Value`]
 //!                             |                             | R -> S
-//!                             |                             |    - [`SlFrom`] `&`[`Value`] for [`String`]
+//!                             |                             |     &emsp;- [`SlFrom`] `&`[`Value`] for [`String`]
 //!                             |                             |
 //! `&`[`String`]               | [`Value`]`::String`         |
 //!                             |                             | S -> R
-//!                             |                             |    - [`SlInto`] `&`[`String`] for `&`[`Value`]
+//!                             |                             |     &emsp;- [`SlInto`] `&`[`String`] for `&`[`Value`]
 //!                             |                             | R -> S
-//!                             |                             |    - take [`String`]
-//!                             |                             |    * uses Clone unless TODO PC [the extant value problem]
+//!                             |                             |     &emsp;- take [`String`]
+//!                             |                             |     &emsp;* uses Clone unless TODO PC [the extant value problem]
 //!                             |                             |
 //! `&mut `[`String`]           | [`Value`]`::String`         |
 //!                             |                             | S -> R
-//!                             |                             |    - [`SlAsMut`] [`String`] for `&`[`Value`]
+//!                             |                             |     &emsp;- [`SlAsMut`] [`String`] for `&`[`Value`]
 //!                             |                             | R -> S
-//!                             |                             |    - take `&mut `[`String`]
-//!                             |                             |    * uses Clone unless TODO PC [the extant value problem]
+//!                             |                             |     &emsp;- take `&mut `[`String`]
+//!                             |                             |     &emsp;* uses Clone unless TODO PC [the extant value problem]
 //!                             |                             |
 //! `&`[`str`]                  | [`Value`]`::String`         |
 //!                             |                             | S -> R
-//!                             |                             |    - [`SlAsRef`] [`str`] for `&`[`Value`]
+//!                             |                             |     &emsp;- [`SlAsRef`] [`str`] for `&`[`Value`]
 //!                             |                             | R -> S
-//!                             |                             |    - [`SlFrom`] for [`Value`]
-//!                             |                             |    * uses Clone unless TODO PC [the extant value problem]
+//!                             |                             |     &emsp;- [`SlFrom`] for [`Value`]
+//!                             |                             |     &emsp;* uses Clone unless TODO PC [the extant value problem]
 //!                             |                             |
 //! `&`[`str`]                  | [`Value`]`::StringConst`    |
 //!                             |                             | S -> R
-//!                             |                             |    - [`SlAsRef`] for `&`[`Value`]
+//!                             |                             |     &emsp;- [`SlAsRef`] for `&`[`Value`]
 //!                             |                             | R -> S
-//!                             |                             |    - TODO PC [the extant value problem]
-//!                             |                             |    - TODO PC is it even possible to call vm.alloc_string_ro on something that was *newly* created in the current fcn and returned as a RO value OR should that be made as a custom type so the user can declare their intent.
+//!                             |                             |     &emsp;- TODO PC [the extant value problem]
+//!                             |                             |     &emsp;- TODO PC is it even possible to call vm.alloc_string_ro on something that was *newly* created in the current fcn and returned as a RO value OR should that be made as a custom type so the user can declare their intent.
 //!                             |                             |
 //! [`char`]                    | [`Value`]`::CodePoint`      |
 //!                             |                             | S -> R
-//!                             |                             |    - [`SlInto`] [`char`] for `&`[`Value`]
+//!                             |                             |     &emsp;- [`SlInto`] [`char`] for `&`[`Value`]
 //!                             |                             | R -> S
-//!                             |                             |    - [`SlFrom`] `&`[`Value`] for [`char`]
+//!                             |                             |     &emsp;- [`SlFrom`] `&`[`Value`] for [`char`]
 //!                             |                             |
-//! [`SloshChar`]               |                             |
-//!                             | [`Value`]`::CharClusterLong`| S -> R
-//!                             | [`Value`]`::CharCluster`    | - [`SlIntoRef`] [`SloshChar`] for `&`[`Value`]
-//!                             |                             | - [`SlFromRef`] `&`[`Value`] for [`SloshChar`]
+//! [`SloshChar`]               |  [`Value`]`::CharClusterLong` / [`Value`]`::CharCluster` / [`Value`]`::CodePoint` |
+//!                             |                             | S -> R
+//!                             |                             |     &emsp;- [`SlIntoRef`] [`SloshChar`] for `&`[`Value`]
 //!                             |                             | R -> S
+//!                             |                             |     &emsp;- [`SlFromRef`] `&`[`Value`] for [`SloshChar`]
+//!                             |                             |
+//!                             |                             |
 //! Value::StringConst          |                             |
 //! Value::CharCluster          |                             |
 //! Value::CharClusterLong      |                             |
