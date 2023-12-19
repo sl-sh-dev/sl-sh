@@ -1,65 +1,95 @@
 //! TODO PC need explanation for the emulation for TryFrom/TryInto/AsRef/AsMut
 //! My notes:
-//! 1. To convert a &Value (which is what comes from registers) to an owned
-//!     type implement `impl SlFrom<&Value> for OwnedType`.
-//! 2. To convert a &Value to a reference type
+//! #. To convert a slosh &Value to an owned type implement `impl SlFrom<&Value> for OwnedType`,
+//!     this allows rust native functions annotated with the bridge macro to receive normal
+//!     rust types.
+//! #. To convert a slosh &Value to a reference type implement `impl SlAsRef<&Value> for RefType`.
+//! #. To convert a slosh &Value to a mutable reference type implement `impl SlAsMut<&Value> for MutRefType`.
+//! #. To convert some rust type back to a value that the rust native function
+//!     annotated by the bridge macro returns implement `impl SlFrom<&Value> for RustType`.
+//!     TODO PC blanket impl so impl SlFrom<Value> works, and taking a ref isn't required?
+//! #. To avoid allocations when converting a slosh &Value back to a rust type that was mutated
+//!     don't return anything. If it is necessary for the API to return some value,
+//!     TODO PC annotated or liftime? AKA [the extant value problem]
 //!
-//! Rosetta Stone for Macros
-//! ====================================================================================
-//! Slosh Type                  | Rust Type            | Traits
-//!                             |                      | S -> R Conversion Slosh -> Rust
-//!                             |                      | R -> S Conversion Rust -> Slosh
-//! ====================================================================================
-//! Value::String               | String               |
-//!                             |                      | S -> R
-//!                             |                      |    -  SlInto<String> for &Value
-//!                             |                      | R -> S
-//!                             |                      |    1. SlFrom<&Value> for String
-//!                             |                      |
-//!                             | &String              |
-//!                             |                      |
-//!                             | &mut String          |
-//!                             |                      | S -> R
-//!                             |                      |    1.  impl<'a> SlAsMut<'a, String> for &Value
-//!                             | &str                 |
-//!                             |                      | S -> R
-//!                             |                      |    1. impl<'a> SlAsRef<'a, str> for &Value
-//! ------------------------------------------------------------------------------------
-//! Value::StringConst          | String               | SlFrom<&Value> for String
-//!                             |                      |
-//! ------------------------------------------------------------------------------------
-//! Value::CodePoint
-//! Value::CharCluster
-//! Value::CharClusterLong
-//! Value::Byte
-//! Value::Int32
-//! Value::UInt32
-//! Value::Int64
-//! Value::UInt64
-//! Value::Float64
-//! Value::Symbol
-//! Value::Keyword
-//! Value::Special
-//! Value::Builtin
-//! Value::True
-//! Value::False
-//! Value::Nil
-//! Value::Undefined
-//! Value::Vector
-//! Value::PersistentVec
-//! Value::VecNode
-//! Value::PersistentMap
-//! Value::MapNode
-//! Value::Map
-//! Value::Bytes
-//! Value::Pair
-//! Value::List
-//! Value::Lambda
-//! Value::Closure
-//! Value::Continuation
-//! Value::CallFrame
-//! Value::Value
-//! Value::Error
+//! ## rosetta stone for bridge macros
+//! | Slosh Type                  | Rust Type            | Traits
+//! |                             |                      | S -> R Conversion Slosh -> Rust
+//! |                             |                      | R -> S Conversion Rust -> Slosh
+//! | ====================================================================================
+//! | Value::String               | String               |
+//! |                             |                      | S -> R
+//! |                             |                      |    -  `SlInto<String>` for &Value
+//! |                             |                      | R -> S
+//! |                             |                      |    - `SlFrom<&Value>` for String
+//! |                             |                      |
+//! |                             | &String              |
+//! |                             |                      | S -> R
+//! |                             |                      |    - `SlInto<String>` for &Value
+//! |                             |                      | R -> S
+//! |                             |                      |    - take [`&String`]
+//! |                             |                      |    * uses Clone unless TODO PC [the extant value problem]
+//! |                             |                      |
+//! |                             | &mut String          |
+//! |                             |                      | S -> R
+//! |                             |                      |    - impl<'a> SlAsMut<'a, String> for &Value
+//! |                             |                      | R -> S
+//! |                             |                      |    - take [`&mut String`]
+//! |                             |                      |    * uses Clone unless TODO PC [the extant value problem]
+//! |                             |                      |
+//! |                             | &str                 |
+//! |                             |                      | S -> R
+//! |                             |                      |    - impl<'a> SlAsRef<'a, str> for &Value
+//! |                             |                      | R -> S
+//! |                             |                      |    - SlFrom<&str> for Value
+//! |                             |                      |    * uses Clone unless TODO PC [the extant value problem]
+//! | ------------------------------------------------------------------------------------
+//! | Value::StringConst          | &str                 |
+//! |                             |                      | S -> R
+//! |                             |                      |    - impl<'a> SlAsRef<'a, str> for &Value
+//! |                             |                      | R -> S
+//! |                             |                      |    - is it even possible to call vm.alloc_string_ro
+//! |                             |                      |      on something that was *newly* created in the current fcn
+//! |                             |                      |      and returned as a RO value OR should that be made as a custom
+//! |                             |                      |      type so the user can declare their intent.
+//! | ------------------------------------------------------------------------------------
+//! | Value::CodePoint
+//! |                             |                      | S -> R
+//! |                             |                      |    - SlFrom<&Value> for char
+//! |                             |                      | R -> S
+//! |                             |                      |    - SlFrom<&Value> for char
+//! | ------------------------------------------------------------------------------------
+//! | Value::CharCluster
+//! | Value::CharClusterLong
+//! | Value::Byte
+//! | Value::Int32
+//! | Value::UInt32
+//! | Value::Int64
+//! | Value::UInt64
+//! | Value::Float64
+//! | Value::Symbol
+//! | Value::Keyword
+//! | Value::Special
+//! | Value::Builtin
+//! | Value::True
+//! | Value::False
+//! | Value::Nil
+//! | Value::Undefined
+//! | Value::Vector
+//! | Value::PersistentVec
+//! | Value::VecNode
+//! | Value::PersistentMap
+//! | Value::MapNode
+//! | Value::Map
+//! | Value::Bytes
+//! | Value::Pair
+//! | Value::List
+//! | Value::Lambda
+//! | Value::Closure
+//! | Value::Continuation
+//! | Value::CallFrame
+//! | Value::Value
+//! | Value::Error
 use compile_state::state::SloshVm;
 use slvm::{Value, VMError, VMResult};
 
@@ -258,27 +288,28 @@ impl SlFrom<&Value> for String {
             Value::String(h) => {
                 Ok(vm.get_string(*h).to_string())
             }
-            Value::CodePoint(char) => {
-                let s = char;
-                Ok(s.encode_utf8(&mut [0; 4]).to_string())
-            }
-            Value::CharCluster(l, c) => {
-                Ok(format!("{}", String::from_utf8_lossy(&c[0..*l as usize])))
-            }
-            Value::CharClusterLong(h) => {
-                Ok(vm.get_string(*h).to_string())
-            }
-            Value::Symbol(i) => {
-                Ok(vm.get_interned(*i).to_string())
-            },
-            Value::Keyword(i) => {
-                Ok(vm.get_interned(*i).to_string())
-            },
-            Value::StringConst(i) => {
-                Ok(vm.get_interned(*i).to_string())
-            },
+// TODO PC if [`LooseString`] exists then none of these should be implemented
+//            Value::CodePoint(char) => {
+//                let s = char;
+//                Ok(s.encode_utf8(&mut [0; 4]).to_string())
+//            }
+//            Value::CharCluster(l, c) => {
+//                Ok(format!("{}", String::from_utf8_lossy(&c[0..*l as usize])))
+//            }
+//            Value::CharClusterLong(h) => {
+//                Ok(vm.get_string(*h).to_string())
+//            }
+//            Value::Symbol(i) => {
+//                Ok(vm.get_interned(*i).to_string())
+//            },
+//            Value::Keyword(i) => {
+//                Ok(vm.get_interned(*i).to_string())
+//            },
+//            Value::StringConst(i) => {
+//                Ok(vm.get_interned(*i).to_string())
+//            },
             _ => {
-                Err(VMError::new("conv", "Wrong type, expected something that can be cast to a string."))
+                Err(VMError::new_vm("Wrong type, expected something that can be cast to a string."))
             }
         }
     }
@@ -290,7 +321,38 @@ mod test {
     use compile_state::state::new_slosh_vm;
 
     #[test]
-    fn test_string_conversions() {
+    fn test_char_conversions_value_to_rust() {
+        let mut vm = new_slosh_vm();
+        let vm = &mut vm;
+
+        let test_char = 'a';
+        let val = Value::CodePoint(test_char);
+        let _c: char = (&val).sl_into(vm).expect("&Value can be converted to char");
+    }
+
+    #[test]
+    fn test_char_conversions_rust_to_value() {
+        let mut vm = new_slosh_vm();
+        let vm = &mut vm;
+
+        let test_char = 'a';
+        let _val: Value = (&test_char).sl_into(vm).expect("char can be converted to Value");
+    }
+
+    #[test]
+    fn test_string_conversions_value_to_rust() {
+        let mut vm = new_slosh_vm();
+        let vm = &mut vm;
+        let test_string = &mut "hello world".to_string();
+        let val: Value = test_string.sl_into(vm).expect("&mut String can be converted to Value");
+
+        let _s: String = (&val).sl_into(vm).expect("&Value can be converted to String");
+        let _s: &str = (&val).sl_as_ref(vm).expect("&Value can be converted to &str");
+        let _s: &mut String = (&val).sl_as_mut(vm).expect("&Value can be converted to &mut String");
+    }
+
+    #[test]
+    fn test_string_conversions_rust_to_value() {
         let mut vm = new_slosh_vm();
         let vm = &mut vm;
 
@@ -303,12 +365,8 @@ mod test {
         let test_string = "hello world".to_string();
         let _val: Value = (&test_string).sl_into(vm).expect("&String can be converted to Value");
 
-        let test_string = &mut "hello world".to_string();
-        let val: Value = test_string.sl_into(vm).expect("&mut String can be converted to Value");
-
-        let _s: String = (&val).sl_into(vm).expect("&Value can be converted to String");
-        let _s: &str = (&val).sl_as_ref(vm).expect("&Value can be converted to &str");
-        let _s: &mut String = (&val).sl_as_mut(vm).expect("&Value can be converted to &mut String");
+        let mut test_string = "hello world".to_string();
+        let _val: Value = (&mut test_string).sl_into(vm).expect("&String can be converted to Value");
     }
 
     fn str_trim(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
@@ -360,7 +418,6 @@ mod test {
         let val = str_trim_test(&mut vm, to_trim.to_string()).unwrap();
         match val {
             Value::String(handle) => {
-                println!("handle2: {:?}", handle);
                 let to_test = vm.get_string(handle);
                 assert_eq!(to_test, "hello world");
             }
@@ -379,7 +436,6 @@ mod test {
         str_test_mut(&mut vm, args).unwrap();
         match args[0] {
             Value::String(handle) => {
-                println!("handle2: {:?}", handle);
                 let to_test = vm.get_string(handle);
                 assert_eq!(to_test, " hello world 0");
             }
