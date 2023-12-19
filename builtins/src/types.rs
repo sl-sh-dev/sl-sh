@@ -12,86 +12,92 @@
 //!     don't return anything. If it is necessary for the API to return some value,
 //!     TODO PC annotated or liftime? AKA [the extant value problem]
 //!
+//!
 //! ## rosetta stone for bridge macros
-//! | Slosh Type                  | Rust Type            | Traits
-//! |                             |                      | S -> R Conversion Slosh -> Rust
-//! |                             |                      | R -> S Conversion Rust -> Slosh
-//! | ====================================================================================
-//! | Value::String               | String               |
-//! |                             |                      | S -> R
-//! |                             |                      |    -  `SlInto<String>` for &Value
-//! |                             |                      | R -> S
-//! |                             |                      |    - `SlFrom<&Value>` for String
-//! |                             |                      |
-//! |                             | &String              |
-//! |                             |                      | S -> R
-//! |                             |                      |    - `SlInto<String>` for &Value
-//! |                             |                      | R -> S
-//! |                             |                      |    - take [`&String`]
-//! |                             |                      |    * uses Clone unless TODO PC [the extant value problem]
-//! |                             |                      |
-//! |                             | &mut String          |
-//! |                             |                      | S -> R
-//! |                             |                      |    - impl<'a> SlAsMut<'a, String> for &Value
-//! |                             |                      | R -> S
-//! |                             |                      |    - take [`&mut String`]
-//! |                             |                      |    * uses Clone unless TODO PC [the extant value problem]
-//! |                             |                      |
-//! |                             | &str                 |
-//! |                             |                      | S -> R
-//! |                             |                      |    - impl<'a> SlAsRef<'a, str> for &Value
-//! |                             |                      | R -> S
-//! |                             |                      |    - SlFrom<&str> for Value
-//! |                             |                      |    * uses Clone unless TODO PC [the extant value problem]
-//! | ------------------------------------------------------------------------------------
-//! | Value::StringConst          | &str                 |
-//! |                             |                      | S -> R
-//! |                             |                      |    - impl<'a> SlAsRef<'a, str> for &Value
-//! |                             |                      | R -> S
-//! |                             |                      |    - is it even possible to call vm.alloc_string_ro
-//! |                             |                      |      on something that was *newly* created in the current fcn
-//! |                             |                      |      and returned as a RO value OR should that be made as a custom
-//! |                             |                      |      type so the user can declare their intent.
-//! | ------------------------------------------------------------------------------------
-//! | Value::CodePoint
-//! |                             |                      | S -> R
-//! |                             |                      |    - SlFrom<&Value> for char
-//! |                             |                      | R -> S
-//! |                             |                      |    - SlFrom<&Value> for char
-//! | ------------------------------------------------------------------------------------
-//! | Value::CharCluster
-//! | Value::CharClusterLong
-//! | Value::Byte
-//! | Value::Int32
-//! | Value::UInt32
-//! | Value::Int64
-//! | Value::UInt64
-//! | Value::Float64
-//! | Value::Symbol
-//! | Value::Keyword
-//! | Value::Special
-//! | Value::Builtin
-//! | Value::True
-//! | Value::False
-//! | Value::Nil
-//! | Value::Undefined
-//! | Value::Vector
-//! | Value::PersistentVec
-//! | Value::VecNode
-//! | Value::PersistentMap
-//! | Value::MapNode
-//! | Value::Map
-//! | Value::Bytes
-//! | Value::Pair
-//! | Value::List
-//! | Value::Lambda
-//! | Value::Closure
-//! | Value::Continuation
-//! | Value::CallFrame
-//! | Value::Value
-//! | Value::Error
+//! Rust Type                   | Slosh Type & Traits   <br>&emsp; <br> S -> R Conversion Slosh -> Rust <br> R -> S Conversion Rust -> Slosh                                             |
+//! ----------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|
+//! [`String`]                  | [`Value`]`::String`         |
+//!                             |                             | S -> R
+//!                             |                             |    -  [`SlInto`] [`String`] for `&`[`Value`]
+//!                             |                             | R -> S
+//!                             |                             |    - [`SlFrom`] `&`[`Value`] for [`String`]
+//!                             |                             |
+//! `&`[`String`]               | [`Value`]`::String`         |
+//!                             |                             | S -> R
+//!                             |                             |    - [`SlInto`] `&`[`String`] for `&`[`Value`]
+//!                             |                             | R -> S
+//!                             |                             |    - take [`String`]
+//!                             |                             |    * uses Clone unless TODO PC [the extant value problem]
+//!                             |                             |
+//! `&mut `[`String`]           | [`Value`]`::String`         |
+//!                             |                             | S -> R
+//!                             |                             |    - [`SlAsMut`] [`String`] for `&`[`Value`]
+//!                             |                             | R -> S
+//!                             |                             |    - take `&mut `[`String`]
+//!                             |                             |    * uses Clone unless TODO PC [the extant value problem]
+//!                             |                             |
+//! `&`[`str`]                  | [`Value`]`::String`         |
+//!                             |                             | S -> R
+//!                             |                             |    - [`SlAsRef`] [`str`] for `&`[`Value`]
+//!                             |                             | R -> S
+//!                             |                             |    - [`SlFrom`] for [`Value`]
+//!                             |                             |    * uses Clone unless TODO PC [the extant value problem]
+//!                             |                             |
+//! `&`[`str`]                  | [`Value`]`::StringConst`    |
+//!                             |                             | S -> R
+//!                             |                             |    - [`SlAsRef`] for `&`[`Value`]
+//!                             |                             | R -> S
+//!                             |                             |    - TODO PC [the extant value problem]
+//!                             |                             |    - TODO PC is it even possible to call vm.alloc_string_ro on something that was *newly* created in the current fcn and returned as a RO value OR should that be made as a custom type so the user can declare their intent.
+//!                             |                             |
+//! [`char`]                    | [`Value`]`::CodePoint`      |
+//!                             |                             | S -> R
+//!                             |                             |    - [`SlInto`] [`char`] for `&`[`Value`]
+//!                             |                             | R -> S
+//!                             |                             |    - [`SlFrom`] `&`[`Value`] for [`char`]
+//!                             |                             |
+//! [`SloshChar`]               |                             |
+//!                             | [`Value`]`::CharClusterLong`| S -> R
+//!                             | [`Value`]`::CharCluster`    | - [`SlIntoRef`] [`SloshChar`] for `&`[`Value`]
+//!                             |                             | - [`SlFromRef`] `&`[`Value`] for [`SloshChar`]
+//!                             |                             | R -> S
+//! Value::StringConst          |                             |
+//! Value::CharCluster          |                             |
+//! Value::CharClusterLong      |                             |
+//! Value::Byte                 |                             |
+//! Value::Int32                |                             |
+//! Value::UInt32               |                             |
+//! Value::Int64                |                             |
+//! Value::UInt64               |                             |
+//! Value::Float64              |                             |
+//! Value::Symbol               |                             |
+//! Value::Keyword              |                             |
+//! Value::Special              |                             |
+//! Value::Builtin              |                             |
+//! Value::True                 |                             |
+//! Value::False                |                             |
+//! Value::Nil                  |                             |
+//! Value::Undefined            |                             |
+//! Value::Vector               |                             |
+//! Value::PersistentVec        |                             |
+//! Value::VecNode              |                             |
+//! Value::PersistentMap        |                             |
+//! Value::MapNode              |                             |
+//! Value::Map                  |                             |
+//! Value::Bytes                |                             |
+//! Value::Pair                 |                             |
+//! Value::List                 |                             |
+//! Value::Lambda               |                             |
+//! Value::Closure              |                             |
+//! Value::Continuation         |                             |
+//! Value::CallFrame            |                             |
+//! Value::Value                |                             |
+//! Value::Error                |                             |
+
+use std::borrow::Cow;
+use bridge_types::SloshChar;
 use compile_state::state::SloshVm;
-use slvm::{Value, VMError, VMResult};
+use slvm::{SLOSH_CHAR, Value, VMError, VMResult};
 
 pub trait SlFrom<T>: Sized {
     /// Converts to this type from the input type.
@@ -107,6 +113,23 @@ impl<T, U> SlInto<U> for T
 where U: SlFrom<T> {
     fn sl_into(self, vm: &mut SloshVm) -> VMResult<U> {
         U::sl_from(self, vm)
+    }
+}
+
+pub trait SlFromRef<'a, T>: Sized where Self: 'a {
+    /// Converts to this type from the input type.
+    fn sl_from_ref(value: T, vm: &'a mut SloshVm) -> VMResult<Self>;
+}
+
+pub trait SlIntoRef<'a, T>: Sized where T: 'a {
+    /// Converts to this type from the input type.
+    fn sl_into_ref(self, vm: &'a mut SloshVm) -> VMResult<T>;
+}
+
+impl<'a, T, U> SlIntoRef<'a, U> for T
+    where U: SlFromRef<'a, T>, U: 'a {
+    fn sl_into_ref(self, vm: &'a mut SloshVm) -> VMResult<U> {
+        U::sl_from_ref(self, vm)
     }
 }
 
@@ -211,7 +234,7 @@ impl<'a, T: ?Sized, U: ?Sized> SlAsMut<'a, U> for &'a mut T
 //                Ok(LooseString::Owned(s))
 //            },
 //            _ => {
-//                Err(VMError::new("conv", "Wrong type, expected something that can be cast to a string."))
+//                Err(VMError::new_vm("Wrong type, expected something that can be cast to a string."))
 //            }
 //        }
 //    }
@@ -224,9 +247,15 @@ impl SlFrom<&Value> for char {
                 Ok(*char)
             }
             _ => {
-                Err(VMError::new("conv", "Wrong type, expected something that can be cast to a char."))
+                Err(VMError::new_vm("Wrong type, expected something that can be cast to a char."))
             }
         }
+    }
+}
+
+impl SlFrom<char> for Value {
+    fn sl_from(value: char, _vm: &mut SloshVm) -> VMResult<Self> {
+        Ok(Value::CodePoint(value))
     }
 }
 
@@ -240,9 +269,48 @@ impl<'a> SlAsRef<'a, str> for &Value {
                 Ok(vm.get_interned(*i))
             }
             _ => {
-                Err(VMError::new("conv", "Wrong type, expected something that can be cast to a &str."))
+                Err(VMError::new_vm("Wrong type, expected something that can be cast to a &str."))
             }
 
+        }
+    }
+}
+
+impl<'a> SlFromRef<'a, &Value> for SloshChar<'a> {
+    fn sl_from_ref(value: &Value, vm: &'a mut SloshVm) -> VMResult<Self> {
+        match value {
+            Value::CodePoint(ch) => {
+                Ok(SloshChar::Char(*ch))
+            }
+            Value::CharCluster(l, c) => {
+                Ok(SloshChar::String(Cow::Owned(format!("{}", String::from_utf8_lossy(&c[0..*l as usize])))))
+            }
+            Value::CharClusterLong(h) => {
+                Ok(SloshChar::String(Cow::Borrowed(vm.get_string(*h))))
+            }
+            _ => {
+                Err(VMError::new_vm(format!("Wrong type, expected something that can be cast to a {SLOSH_CHAR}.")))
+            }
+        }
+    }
+}
+
+impl<'a> SlFromRef<'a, SloshChar<'a>> for Value {
+    fn sl_from_ref(value: SloshChar, vm: &'a mut SloshVm) -> VMResult<Self> {
+        match value {
+            SloshChar::Char(ch) => {
+                Ok(Value::CodePoint(ch))
+            }
+            SloshChar::String(cow) => {
+                match cow {
+                    Cow::Borrowed(s) => {
+                        Ok(vm.alloc_char(s))
+                    }
+                    Cow::Owned(s) => {
+                        Ok(vm.alloc_char(s.as_str()))
+                    }
+                }
+            }
         }
     }
 }
@@ -254,7 +322,7 @@ impl<'a> SlAsMut<'a, String> for &Value {
                 Ok(vm.get_string_mut(*h))
             }
             _ => {
-                Err(VMError::new("conv", "Wrong type, expected something that can be cast to a &mut String."))
+                Err(VMError::new_vm("Wrong type, expected something that can be cast to a &mut String."))
             }
         }
     }
@@ -319,97 +387,6 @@ impl SlFrom<&Value> for String {
 mod test {
     use super::*;
     use compile_state::state::new_slosh_vm;
-
-    #[test]
-    fn test_char_conversions_value_to_rust() {
-        let mut vm = new_slosh_vm();
-        let vm = &mut vm;
-
-        let test_char = 'a';
-        let val = Value::CodePoint(test_char);
-        let _c: char = (&val).sl_into(vm).expect("&Value can be converted to char");
-    }
-
-    #[test]
-    fn test_char_conversions_rust_to_value() {
-        let mut vm = new_slosh_vm();
-        let vm = &mut vm;
-
-        let test_char = 'a';
-        let _val: Value = (&test_char).sl_into(vm).expect("char can be converted to Value");
-    }
-
-    #[test]
-    fn test_string_conversions_value_to_rust() {
-        let mut vm = new_slosh_vm();
-        let vm = &mut vm;
-        let test_string = &mut "hello world".to_string();
-        let val: Value = test_string.sl_into(vm).expect("&mut String can be converted to Value");
-
-        let _s: String = (&val).sl_into(vm).expect("&Value can be converted to String");
-        let _s: &str = (&val).sl_as_ref(vm).expect("&Value can be converted to &str");
-        let _s: &mut String = (&val).sl_as_mut(vm).expect("&Value can be converted to &mut String");
-    }
-
-    #[test]
-    fn test_string_conversions_rust_to_value() {
-        let mut vm = new_slosh_vm();
-        let vm = &mut vm;
-
-        let test_string = "hello world";
-        let _val: Value = test_string.sl_into(vm).expect("&str can be converted to Value");
-
-        let test_string = "hello world".to_string();
-        let _val: Value = test_string.sl_into(vm).expect("String can be converted to Value");
-
-        let test_string = "hello world".to_string();
-        let _val: Value = (&test_string).sl_into(vm).expect("&String can be converted to Value");
-
-        let mut test_string = "hello world".to_string();
-        let _val: Value = (&mut test_string).sl_into(vm).expect("&String can be converted to Value");
-    }
-
-    fn str_trim(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
-        let mut i = registers.iter();
-        let right = vm.intern("right");
-        let left = vm.intern("left");
-        match (i.next(), i.next(), i.next()) {
-            (Some(string), None, None) => {
-                let string = string.get_string(vm)?.trim().to_string();
-                Ok(vm.alloc_string(string))
-            }
-            (Some(string), Some(Value::Keyword(i)), None) if *i == right => {
-                let string = string.get_string(vm)?.trim_end().to_string();
-                Ok(vm.alloc_string(string))
-            }
-            (Some(string), Some(Value::Keyword(i)), None) if *i == left => {
-                let string = string.get_string(vm)?.trim_start().to_string();
-                Ok(vm.alloc_string(string))
-            }
-            _ => Err(VMError::new_vm(
-                "str-trim: takes one argument with optional left/right keyword".to_string(),
-            )),
-        }
-    }
-
-
-    #[test]
-    fn try_orig_str_trim() {
-        let to_trim = " hello world ";
-        let mut vm = new_slosh_vm();
-        let test_str = vm.alloc_string(to_trim.to_string());
-        let args = [test_str];
-        let val = str_trim(&mut vm, &args).unwrap();
-        match val {
-            Value::String(handle) => {
-                let to_test = vm.get_string(handle);
-                assert_eq!(to_test, "hello world");
-            }
-            _ => {
-                panic!("Should return a string!")
-            }
-        }
-    }
 
     #[test]
     fn try_str_trim() {
@@ -556,5 +533,92 @@ mod test {
                 }));
             }
         }
+    }
+
+    #[test]
+    fn test_string_conversions_value_to_rust() {
+        let mut vm = new_slosh_vm();
+        let vm = &mut vm;
+        let test_string = &mut "hello world".to_string();
+        let val: Value = test_string.sl_into(vm).expect("&mut String can be converted to Value");
+        assert!(matches!(val, Value::String(_)));
+
+        let _s: String = (&val).sl_into(vm).expect("&Value::String can be converted to String");
+        let _s: &str = (&val).sl_as_ref(vm).expect("&Value::String can be converted to &str");
+        let _s: &mut String = (&val).sl_as_mut(vm).expect("&Value::String can be converted to &mut String");
+    }
+
+    #[test]
+    fn test_string_conversions_rust_to_value() {
+        let mut vm = new_slosh_vm();
+        let vm = &mut vm;
+
+        let test_string = "hello world";
+        let val: Value = test_string.sl_into(vm).expect("&str can be converted to Value");
+        assert!(matches!(val, Value::String(_)));
+
+        let test_string = "hello world".to_string();
+        let val: Value = test_string.sl_into(vm).expect("String can be converted to Value");
+        assert!(matches!(val, Value::String(_)));
+
+        let test_string = "hello world".to_string();
+        let val: Value = (&test_string).sl_into(vm).expect("&String can be converted to Value");
+        assert!(matches!(val, Value::String(_)));
+
+        let mut test_string = "hello world".to_string();
+        let val: Value = (&mut test_string).sl_into(vm).expect("&String can be converted to Value");
+        assert!(matches!(val, Value::String(_)));
+    }
+
+    #[test]
+    fn test_char_conversions_value_to_rust() {
+        let mut vm = new_slosh_vm();
+        let vm = &mut vm;
+
+        let test_char = 'न';
+        let val = Value::CodePoint(test_char);
+        let _c: char = (&val).sl_into(vm).expect("&Value::CodePoint can be converted to char");
+    }
+
+    #[test]
+    fn test_char_conversions_rust_to_value() {
+        let mut vm = new_slosh_vm();
+        let vm = &mut vm;
+
+        let test_char: char = 'न';
+        let val: Value = test_char.sl_into(vm).expect("char can be converted to Value");
+        assert!(matches!(val, Value::CodePoint(_)));
+    }
+
+    #[test]
+    fn test_char_cluster_conversions_value_to_rust() {
+        let mut vm = new_slosh_vm();
+        let vm = &mut vm;
+
+        let char_cluster = "ते";
+        let val = vm.alloc_char(char_cluster);
+        assert!(matches!(val, Value::CharCluster(_, _)));
+        let _c: SloshChar = (&val).sl_into_ref(vm).expect("&Value::CharCluster can be converted to SloshChar");
+
+        let char_cluster_long = "👩‍💻";
+        let val = vm.alloc_char(char_cluster_long);
+        assert!(matches!(val, Value::CharClusterLong(_)));
+        let _c: SloshChar = (&val).sl_into_ref(vm).expect("&Value::CharClusterLong can be converted to SloshChar");
+    }
+
+    #[test]
+    fn test_char_cluster_conversions_rust_to_value() {
+        let mut vm = new_slosh_vm();
+        let vm = &mut vm;
+
+        let char_cluster = "ते";
+        let rust_char_cluster = SloshChar::String(Cow::Owned(char_cluster.to_string()));
+        let val: Value = SlFromRef::sl_from_ref(rust_char_cluster, vm).expect("&SloshChar can be converted to &Value");
+        assert!(matches!(val, Value::CharCluster(_, _)));
+
+        let char_cluster_long = "👩‍💻";
+        let rust_char_cluster = SloshChar::String(Cow::Borrowed(char_cluster_long));
+        let val: Value = SlFromRef::sl_from_ref(rust_char_cluster, vm).expect("&SloshChar can be converted to &Value");
+        assert!(matches!(val, Value::CharClusterLong(_)));
     }
 }

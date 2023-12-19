@@ -9,6 +9,8 @@ use crate::heap::*;
 use crate::interner::*;
 use crate::vm::GVm;
 
+pub const SLOSH_CHAR: &'static str = "Char";
+
 pub type CallFuncSig<ENV> = fn(vm: &mut GVm<ENV>, registers: &[Value]) -> VMResult<Value>;
 #[derive(Copy, Clone)]
 pub struct CallFunc<ENV> {
@@ -487,9 +489,9 @@ impl Value {
             Value::Keyword(_) => "Keyword",
             Value::StringConst(_) => "String",
             Value::Special(_) => "Special",
-            Value::CodePoint(_) => "Char",
-            Value::CharCluster(_, _) => "Char",
-            Value::CharClusterLong(_) => "Char",
+            Value::CodePoint(_) => SLOSH_CHAR,
+            Value::CharCluster(_, _) => SLOSH_CHAR,
+            Value::CharClusterLong(_) => SLOSH_CHAR,
             Value::Builtin(_) => "Builtin",
             Value::Byte(_) => "Byte",
             Value::Nil => "Nil",

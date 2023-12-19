@@ -7,13 +7,25 @@ use std::borrow::Cow;
 /// that appear in slosh as functions that can receive any number of arguments.
 pub type VarArgs<T> = Vec<T>;
 
+/// Type to hold anything in Slosh that can be represented as a string.
+///
 /// Public type used by rust native -> slosh bridge macro to represent
 /// arguments that can be loosely cast to strings. Unlike the [`String`]
 /// and [`&str`] types, in slosh there are various types that can be
 /// represented as strings. When the rust native function doesn't
-/// require *strict* type checking on whether or not the [`Value::String`]
+/// require *strict* type checking on whether or not the [`Value`]`::String`
 /// type is passed in use this function.
 pub type LooseString<'a, T> = Cow<'a, T>;
+
+/// Type to hold Slosh's notion of a char.
+///
+/// In slosh a character can either be an actual char, e.g. a [`Value`]`::CodePoint`
+/// or a [`Value`]`::CharCluster`/[`Value`]`::CharClusterLong` in which case it will
+/// be stored in an &str.
+pub enum SloshChar<'a> {
+    Char(char),
+    String(Cow<'a, str>),
+}
 
 /// Used by sl_sh_fn macro to embed information at runtime about the parameters of
 /// the rust native function, specifically whether it is a normal Type, or some
