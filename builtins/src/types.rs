@@ -1,4 +1,65 @@
 //! TODO PC need explanation for the emulation for TryFrom/TryInto/AsRef/AsMut
+//! My notes:
+//! 1. To convert a &Value (which is what comes from registers) to an owned
+//!     type implement `impl SlFrom<&Value> for OwnedType`.
+//! 2. To convert a &Value to a reference type
+//!
+//! Rosetta Stone for Macros
+//! ====================================================================================
+//! Slosh Type                  | Rust Type            | Traits
+//!                             |                      | S -> R Conversion Slosh -> Rust
+//!                             |                      | R -> S Conversion Rust -> Slosh
+//! ====================================================================================
+//! Value::String               | String               |
+//!                             |                      | S -> R
+//!                             |                      |    -  SlInto<String> for &Value
+//!                             |                      | R -> S
+//!                             |                      |    1. SlFrom<&Value> for String
+//!                             |                      |
+//!                             | &String              |
+//!                             |                      |
+//!                             | &mut String          |
+//!                             |                      | S -> R
+//!                             |                      |    1.  impl<'a> SlAsMut<'a, String> for &Value
+//!                             | &str                 |
+//!                             |                      | S -> R
+//!                             |                      |    1. impl<'a> SlAsRef<'a, str> for &Value
+//! ------------------------------------------------------------------------------------
+//! Value::StringConst          | String               | SlFrom<&Value> for String
+//!                             |                      |
+//! ------------------------------------------------------------------------------------
+//! Value::CodePoint
+//! Value::CharCluster
+//! Value::CharClusterLong
+//! Value::Byte
+//! Value::Int32
+//! Value::UInt32
+//! Value::Int64
+//! Value::UInt64
+//! Value::Float64
+//! Value::Symbol
+//! Value::Keyword
+//! Value::Special
+//! Value::Builtin
+//! Value::True
+//! Value::False
+//! Value::Nil
+//! Value::Undefined
+//! Value::Vector
+//! Value::PersistentVec
+//! Value::VecNode
+//! Value::PersistentMap
+//! Value::MapNode
+//! Value::Map
+//! Value::Bytes
+//! Value::Pair
+//! Value::List
+//! Value::Lambda
+//! Value::Closure
+//! Value::Continuation
+//! Value::CallFrame
+//! Value::Value
+//! Value::Error
 use compile_state::state::SloshVm;
 use slvm::{Value, VMError, VMResult};
 
@@ -139,13 +200,6 @@ impl SlFrom<&Value> for char {
     }
 }
 
-impl SlFrom<char> for Value {
-    fn sl_from(value: char, vm: &mut SloshVm) -> VMResult<Self> {
-        // TODO PC resolve w/ sstanfield how to do this more efficiently
-        Ok(vm.alloc_char(value.to_string().as_str()))
-    }
-}
-
 impl<'a> SlAsRef<'a, str> for &Value {
     fn sl_as_ref(&self, vm: &'a mut SloshVm) -> VMResult<&'a str> {
         match self {
@@ -162,17 +216,6 @@ impl<'a> SlAsRef<'a, str> for &Value {
         }
     }
 }
-impl SlFrom<String> for Value {
-    fn sl_from(value: String, vm: &mut SloshVm) -> VMResult<Self> {
-        Ok(vm.alloc_string(value))
-    }
-}
-
-impl<'a> SlAsRef<'a, String> for &Value {
-    fn sl_as_ref(&self, vm: &'a mut SloshVm) -> VMResult<&'a String> {
-        self.sl_as_ref(vm).map(Into::into)
-    }
-}
 
 impl<'a> SlAsMut<'a, String> for &Value {
     fn sl_as_mut(&mut self, vm: &'a mut SloshVm) -> VMResult<&'a mut String> {
@@ -186,6 +229,25 @@ impl<'a> SlAsMut<'a, String> for &Value {
         }
     }
 }
+
+impl SlFrom<String> for Value {
+    fn sl_from(value: String, vm: &mut SloshVm) -> VMResult<Self> {
+        Ok(vm.alloc_string(value))
+    }
+}
+
+impl<T> SlFrom<&T> for Value where T: ToString + ?Sized {
+    fn sl_from(value: &T, vm: &mut SloshVm) -> VMResult<Self> {
+        Ok(vm.alloc_string(value.to_string()))
+    }
+}
+
+impl<T> SlFrom<&mut T> for Value where T: ToString + ?Sized {
+    fn sl_from(value: &mut T, vm: &mut SloshVm) -> VMResult<Self> {
+        Ok(vm.alloc_string(value.to_string()))
+    }
+}
+
 
 // TODO PC preference would be for String to just be Value::String & Value::StringConst
 // and let LooseString handle the rest, also avoids needless allocations the user of
@@ -222,12 +284,32 @@ impl SlFrom<&Value> for String {
     }
 }
 
-
-
 #[cfg(test)]
 mod test {
-    use compile_state::state::new_slosh_vm;
     use super::*;
+    use compile_state::state::new_slosh_vm;
+
+    #[test]
+    fn test_string_conversions() {
+        let mut vm = new_slosh_vm();
+        let vm = &mut vm;
+
+        let test_string = "hello world";
+        let _val: Value = test_string.sl_into(vm).expect("&str can be converted to Value");
+
+        let test_string = "hello world".to_string();
+        let _val: Value = test_string.sl_into(vm).expect("String can be converted to Value");
+
+        let test_string = "hello world".to_string();
+        let _val: Value = (&test_string).sl_into(vm).expect("&String can be converted to Value");
+
+        let test_string = &mut "hello world".to_string();
+        let val: Value = test_string.sl_into(vm).expect("&mut String can be converted to Value");
+
+        let _s: String = (&val).sl_into(vm).expect("&Value can be converted to String");
+        let _s: &str = (&val).sl_as_ref(vm).expect("&Value can be converted to &str");
+        let _s: &mut String = (&val).sl_as_mut(vm).expect("&Value can be converted to &mut String");
+    }
 
     fn str_trim(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         let mut i = registers.iter();

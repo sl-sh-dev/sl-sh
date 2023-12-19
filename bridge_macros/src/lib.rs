@@ -6,6 +6,12 @@
 //! 4. worry about inlining, e.g. are the mechanisms in place to do the type conversions constant time,
 //!    and inlined? or is there a way to make them so?
 //! 5. can yet another crate solve the problem of housing typehandle/passingstyle/param/errorstrings/typedwrapper in the same place?
+//! 6. EVERY macro doesn't need the check for VarArgs, only signatures that have
+//!    VarArgs, this can be addressed in the macro.
+//! 7. Port tuple tests: https://github.com/sl-sh-dev/sl-sh/blob/83cd1c93d1eea726ba138a83610155bdbfcab7aa/src/builtins_types.rs#L628
+//! 8. To avoid needing to do lifetimes, if the return value is one of the INPUT values have
+//!     that marked in the annotation... OTHERWISE data may be copied!
+//!     OR allow for simple lifetimes?
 
 use bridge_types::TypeHandle;
 use bridge_types::PassingStyle;
