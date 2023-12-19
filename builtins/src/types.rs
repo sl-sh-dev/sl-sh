@@ -91,7 +91,7 @@
 //! Value::Error                |                             |
 
 use std::borrow::Cow;
-use bridge_types::SloshChar;
+use bridge_types::{LooseString, SloshChar};
 use compile_state::state::SloshVm;
 use slvm::{SLOSH_CHAR, Value, VMError, VMResult};
 
@@ -173,68 +173,37 @@ impl<'a, T: ?Sized, U: ?Sized> SlAsMut<'a, U> for &'a mut T
     }
 }
 
-// TODO PC work out how the LooseString stuff work as a Cow type
-// is what
-// #[macro_export]
-//macro_rules! try_inner_string {
-//    ($fn_name:ident, $expression:expr, $name:ident, $eval:expr) => {{
-//        use $crate::ErrorStrings;
-//        match &$expression.get().data {
-//            Value::String($name, _) => $eval,
-//            Value::Symbol($name, _) => $eval,
-//            Value::Char($name) => $eval,
-//            _ => {
-//                return Err($crate::LispError::new(ErrorStrings::mismatched_type(
-//                    $fn_name,
-//                    &format!(
-//                        "{}, {}, or {}, ",
-//                        Value::String(Default::default(), Default::default()).to_string(),
-//                        Value::Symbol(Default::default(), Default::default()).to_string(),
-//                        Value::Char(Default::default()).to_string()
-//                    ),
-//                    &$expression.to_string(),
-//                )))
-//            }
-//        }
-//    }};
-//}
-//
-//impl<'a> SlFrom<&Value> for LooseString<'a, str> {
-//    fn sl_from(value: &Value, vm: &'a mut SloshVm) -> VMResult<LooseString<'a, str>> {
-//        // TODO PC which other of these types do we consider to be "cast"-able to a
-//        // string in the context of Rust functions that implement "this" macro.
-//        match value {
-//            Value::String(h) => {
-//                Ok(LooseString::Borrowed(vm.get_string(*h)))
-//            }
-//            Value::CodePoint(char) => {
-//                Ok(LooseString::Owned(char.to_string()))
-//            }
-//            Value::CharCluster(l, c) => {
-//                let s = format!("{}", String::from_utf8_lossy(&c[0..*l as usize]));
-//                Ok(LooseString::Owned(s))
-//            }
-//            Value::CharClusterLong(h) => {
-//                let ch = vm.get_string(*h);
-//                Ok(LooseString::Borrowed(ch))
-//            }
-//            Value::Symbol(i) => {
-//                Ok(LooseString::Borrowed(vm.get_interned(*i)))
-//            },
-//            Value::Keyword(i) => {
-//                let s = format!(":{}", vm.get_interned(*i));
-//                Ok(LooseString::Owned(s))
-//            },
-//            Value::StringConst(i) => {
-//                let s = format!("\"{}\"", vm.get_interned(*i));
-//                Ok(LooseString::Owned(s))
-//            },
-//            _ => {
-//                Err(VMError::new_vm("Wrong type, expected something that can be cast to a string."))
-//            }
-//        }
-//    }
-//}
+impl<'a> SlFromRef<'a, &Value> for LooseString<'a, str> {
+    fn sl_from_ref(value: &Value, vm: &'a mut SloshVm) -> VMResult<Self> {
+        match value {
+            Value::String(h) => {
+                Ok(LooseString::Borrowed(vm.get_string(*h)))
+            }
+            Value::CodePoint(char) => {
+                Ok(LooseString::Owned(char.to_string()))
+            }
+            Value::CharCluster(l, c) => {
+                Ok(LooseString::Owned(format!("{}", String::from_utf8_lossy(&c[0..*l as usize]))))
+            }
+            Value::CharClusterLong(h) => {
+                let ch = vm.get_string(*h);
+                Ok(LooseString::Borrowed(ch))
+            }
+            Value::Symbol(i) => {
+                Ok(LooseString::Borrowed(vm.get_interned(*i)))
+            },
+            Value::Keyword(i) => {
+                Ok(LooseString::Borrowed(vm.get_interned(*i)))
+            },
+            Value::StringConst(i) => {
+                Ok(LooseString::Borrowed(vm.get_interned(*i)))
+            },
+            _ => {
+                Err(VMError::new_vm("Wrong type, expected something that can be loosely cast to a String."))
+            }
+        }
+    }
+}
 
 impl SlFrom<&Value> for char {
     fn sl_from(value: &Value, _vm: &mut SloshVm) -> VMResult<Self> {
@@ -352,26 +321,6 @@ impl SlFrom<&Value> for String {
             Value::String(h) => {
                 Ok(vm.get_string(*h).to_string())
             }
-// TODO PC if [`LooseString`] exists then none of these should be implemented
-//            Value::CodePoint(char) => {
-//                let s = char;
-//                Ok(s.encode_utf8(&mut [0; 4]).to_string())
-//            }
-//            Value::CharCluster(l, c) => {
-//                Ok(format!("{}", String::from_utf8_lossy(&c[0..*l as usize])))
-//            }
-//            Value::CharClusterLong(h) => {
-//                Ok(vm.get_string(*h).to_string())
-//            }
-//            Value::Symbol(i) => {
-//                Ok(vm.get_interned(*i).to_string())
-//            },
-//            Value::Keyword(i) => {
-//                Ok(vm.get_interned(*i).to_string())
-//            },
-//            Value::StringConst(i) => {
-//                Ok(vm.get_interned(*i).to_string())
-//            },
             _ => {
                 Err(VMError::new_vm("Wrong type, expected something that can be cast to a string."))
             }
