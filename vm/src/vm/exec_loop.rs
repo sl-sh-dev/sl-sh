@@ -251,28 +251,24 @@ impl<ENV> GVm<ENV> {
                 let idx = self.register_int(i as usize)?;
                 if idx >= 0 {
                     let idx = idx as usize;
-                    if let Some((_car, cdr)) = data.get_pair(self) {
-                        let mut last_cdr = cdr;
-                        for _ in 0..idx {
-                            if let Some((_car, cdr_in)) = cdr.get_pair(self) {
-                                last_cdr = cdr_in;
-                            } else {
-                                return Err(VMError::new_vm(format!(
-                                    "index out of bounds (pair), {}.",
-                                    i,
-                                )));
-                            }
+                    let mut last_cdr = data;
+                    for _ in 0..idx {
+                        if let Some((_car, cdr_in)) = last_cdr.get_pair(self) {
+                            last_cdr = cdr_in;
+                        } else {
+                            return Err(VMError::new_vm(format!(
+                                "index out of bounds (pair), {}.",
+                                i,
+                            )));
                         }
-                        match &last_cdr {
-                            Value::Pair(handle) => {
-                                let (car, _) = self.get_pair_mut(*handle)?;
-                                *car = src;
-                            }
-                            Value::List(_, _) => return Err(VMError::new_vm("pair is read only")),
-                            _ => return Err(VMError::new_vm("not a pair/conscell")),
+                    }
+                    match &last_cdr {
+                        Value::Pair(handle) => {
+                            let (car, _) = self.get_pair_mut(*handle)?;
+                            *car = src;
                         }
-                    } else {
-                        panic!("pair not a pair!")
+                        Value::List(_, _) => return Err(VMError::new_vm("pair is read only")),
+                        _ => return Err(VMError::new_vm("not a pair/conscell")),
                     }
                 } else {
                     return Err(VMError::new_vm(format!(
