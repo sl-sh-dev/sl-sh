@@ -14,7 +14,7 @@
 //!
 //!
 //! ## rosetta stone for bridge macros
-//! Rust Type                   | Slosh Type & Traits   <br>&emsp; <br> S -> R Convert Slosh -> Rust <br> R -> S Convert Rust -> Slosh                                             |
+//! Rust Type                   | Slosh Type & Traits   <br>&emsp; <br> S -> R Convert Slosh -> Rust <br> &emsp; - Occurs when coercing slush arguments to the parameter types in the signature of the annotated Rust function. <br> R -> S Convert Rust -> Slosh <br> &emsp; - Occurs when coercing some returned Rust type to a Slosh type. |
 //! ----------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|
 //! [`String`]                  | [`Value`]`::String`         |
 //!                             |                             | S -> R
@@ -55,6 +55,13 @@
 //!                             |                             |     &emsp;- [`SlIntoRef`] [`SloshChar`] for `&`[`Value`]
 //!                             |                             | R -> S
 //!                             |                             |     &emsp;- [`SlFromRef`] `&`[`Value`] for [`SloshChar`]
+//!                             |                             |
+//! [`LooseString`]             | [`Value`]`::String` / [`Value`]`::CodePoint` / [`Value`]`::CharCluster` / [`Value`]`::CharClusterLong` / [`Value`]`::Symbol` / [`Value`]`::Keyword` / [`Value`]`::StringConst` |
+//!                             |                             | S -> R
+//!                             |                             |     &emsp;- [`SlIntoRef`] [`LooseString`] for `&`[`Value`]
+//!                             |                             | R -> S
+//!                             |                             |     &emsp;* Note: Always does an allocation and returns a [`Value`]`::String` type.
+//!                             |                             |     &emsp;- [`SlFromRef`] `&`[`Value`] for [`LooseString`]
 //!                             |                             |
 //!                             |                             |
 //! Value::StringConst          |                             |
@@ -205,6 +212,19 @@ impl<'a> SlFromRef<'a, &Value> for LooseString<'a, str> {
     }
 }
 
+impl<'a> SlFromRef<'a, LooseString<'a, str>> for Value {
+    fn sl_from_ref(value: LooseString<'a, str>, vm: &'a mut SloshVm) -> VMResult<Self> {
+        match value {
+            LooseString::Borrowed(s) => {
+                Ok(vm.alloc_string(s.to_string()))
+            }
+            LooseString::Owned(s) => {
+                Ok(vm.alloc_string(s))
+            }
+        }
+    }
+}
+
 impl SlFrom<&Value> for char {
     fn sl_from(value: &Value, _vm: &mut SloshVm) -> VMResult<Self> {
         match value {
@@ -311,10 +331,6 @@ impl<T> SlFrom<&mut T> for Value where T: ToString + ?Sized {
     }
 }
 
-
-// TODO PC preference would be for String to just be Value::String & Value::StringConst
-// and let LooseString handle the rest, also avoids needless allocations the user of
-// the macro may not care for.
 impl SlFrom<&Value> for String {
     fn sl_from(value: &Value, vm: &mut SloshVm) -> VMResult<Self> {
         match value {
@@ -332,6 +348,66 @@ impl SlFrom<&Value> for String {
 mod test {
     use super::*;
     use compile_state::state::new_slosh_vm;
+    use crate::gensym;
+
+    pub const CODE_POINT: char = 'न';
+    pub const CHAR_CLUSTER: &'static str = "ते";
+    pub const CHAR_CLUSTER_LONG: &'static str = "👩‍💻";
+
+    pub fn create_char_cluster(vm: &mut SloshVm) -> Value {
+        let val = vm.alloc_char(CHAR_CLUSTER);
+        assert!(matches!(val, Value::CharCluster(_, _)));
+        val
+    }
+
+    pub fn create_char_cluster_long(vm: &mut SloshVm) -> Value {
+        let val = vm.alloc_char(CHAR_CLUSTER_LONG);
+        assert!(matches!(val, Value::CharClusterLong(_)));
+        val
+    }
+
+    pub fn create_code_point() -> Value {
+        Value::CodePoint(CODE_POINT)
+    }
+
+    pub fn create_string(vm: &mut SloshVm) -> Value {
+        let val = vm.alloc_string(CHAR_CLUSTER.to_string() + CHAR_CLUSTER_LONG + CODE_POINT.to_string().as_str());
+        assert!(matches!(val, Value::String(_)));
+        val
+    }
+
+    pub fn create_symbol(vm: &mut SloshVm) -> Value {
+        let v = vec![];
+        let val = gensym(vm, v.as_slice()).unwrap();
+        assert!(matches!(val, Value::Symbol(_)));
+        val
+    }
+
+    pub fn create_keyword(vm: &mut SloshVm) -> Value {
+        let v = vec![];
+        let val = gensym(vm, v.as_slice()).unwrap();
+        match val {
+            Value::Symbol(i) => {
+                let val = Value::Keyword(i);
+                assert!(matches!(val, Value::Keyword(_)));
+                val
+            }
+            _ => {
+                unreachable!("gensym should always return a symbol.")
+            }
+        }
+    }
+
+    pub fn create_string_const(vm: &mut SloshVm) -> Value {
+        //TODO PC need more clarification on distincution between
+        // 1. mutable Value::String
+        // 2. immutable Value::String
+        // 3. and Value::StringConst
+        let val = vm.intern_static("read_only");
+        let val = Value::StringConst(val);
+        assert!(matches!(val, Value::StringConst(_)));
+        val
+    }
 
     #[test]
     fn try_str_trim() {
@@ -520,8 +596,7 @@ mod test {
         let mut vm = new_slosh_vm();
         let vm = &mut vm;
 
-        let test_char = 'न';
-        let val = Value::CodePoint(test_char);
+        let val = create_code_point();
         let _c: char = (&val).sl_into(vm).expect("&Value::CodePoint can be converted to char");
     }
 
@@ -530,8 +605,7 @@ mod test {
         let mut vm = new_slosh_vm();
         let vm = &mut vm;
 
-        let test_char: char = 'न';
-        let val: Value = test_char.sl_into(vm).expect("char can be converted to Value");
+        let val: Value = CODE_POINT.sl_into(vm).expect("char can be converted to Value");
         assert!(matches!(val, Value::CodePoint(_)));
     }
 
@@ -540,14 +614,10 @@ mod test {
         let mut vm = new_slosh_vm();
         let vm = &mut vm;
 
-        let char_cluster = "ते";
-        let val = vm.alloc_char(char_cluster);
-        assert!(matches!(val, Value::CharCluster(_, _)));
+        let val = create_char_cluster(vm);
         let _c: SloshChar = (&val).sl_into_ref(vm).expect("&Value::CharCluster can be converted to SloshChar");
 
-        let char_cluster_long = "👩‍💻";
-        let val = vm.alloc_char(char_cluster_long);
-        assert!(matches!(val, Value::CharClusterLong(_)));
+        let val = create_char_cluster_long(vm);
         let _c: SloshChar = (&val).sl_into_ref(vm).expect("&Value::CharClusterLong can be converted to SloshChar");
     }
 
@@ -556,14 +626,46 @@ mod test {
         let mut vm = new_slosh_vm();
         let vm = &mut vm;
 
-        let char_cluster = "ते";
-        let rust_char_cluster = SloshChar::String(Cow::Owned(char_cluster.to_string()));
+        let rust_char_cluster = SloshChar::String(Cow::Owned(CHAR_CLUSTER.to_string()));
         let val: Value = SlFromRef::sl_from_ref(rust_char_cluster, vm).expect("&SloshChar can be converted to &Value");
         assert!(matches!(val, Value::CharCluster(_, _)));
 
-        let char_cluster_long = "👩‍💻";
-        let rust_char_cluster = SloshChar::String(Cow::Borrowed(char_cluster_long));
+        let rust_char_cluster = SloshChar::String(Cow::Borrowed(CHAR_CLUSTER_LONG));
         let val: Value = SlFromRef::sl_from_ref(rust_char_cluster, vm).expect("&SloshChar can be converted to &Value");
         assert!(matches!(val, Value::CharClusterLong(_)));
+    }
+
+    pub fn get_values_that_can_be_cast_to_loose_strings(vm: &mut SloshVm) -> Vec<Value> {
+        vec![
+            create_string(vm),
+            create_code_point(),
+            create_string_const(vm),
+            create_char_cluster(vm),
+            create_char_cluster_long(vm),
+            create_symbol(vm),
+            create_keyword(vm),
+        ]
+    }
+
+    #[test]
+    fn test_loose_string_conversions_value_to_rust() {
+        let mut vm = new_slosh_vm();
+        let vm = &mut vm;
+
+        let loose_strings_as_vals = get_values_that_can_be_cast_to_loose_strings(vm);
+
+        for val in loose_strings_as_vals {
+            let _loose_string: LooseString<str> = (&val).sl_into_ref(vm).expect("This value should be convertable to a LooseString");
+        }
+    }
+
+    #[test]
+    fn test_loose_string_conversion_rust_to_value() {
+        let mut vm = new_slosh_vm();
+        let vm = &mut vm;
+
+        let sample = LooseString::Owned("hello world".to_string());
+        let val: Value = SlFromRef::sl_from_ref(sample, vm).expect("This LooseString should be convertable to a Value");
+        assert!(matches!(val, Value::String(_)));
     }
 }

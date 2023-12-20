@@ -8,7 +8,7 @@ use std::borrow::Cow;
 pub type VarArgs<T> = Vec<T>;
 
 /// [Value](../slvm/value/enum.Value.html)
-/// Type to hold anything in Slosh that can be represented as a string.
+/// Type to hold anything in Slosh that can be represented as a [`String`].
 ///
 /// Public type used by rust native -> slosh bridge macro to represent
 /// arguments that can be loosely cast to strings. Unlike the [`String`]
@@ -16,6 +16,17 @@ pub type VarArgs<T> = Vec<T>;
 /// represented as strings. When the rust native function doesn't
 /// require *strict* type checking on whether or not the [`Value`]`::String`
 /// type is passed in use this function.
+///
+/// Can represent SlRefInto [`Value`] types:
+/// - String
+/// - CodePoint
+/// - CharCluster
+/// - CharClusterLong
+/// - Symbol
+/// - Keyword
+/// - StringConst
+///
+/// Always does an allocation and returns a [`Value`]`::String` type.
 pub type LooseString<'a, T> = Cow<'a, T>;
 
 /// [Value](../slvm/value/enum.Value.html)
