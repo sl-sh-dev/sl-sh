@@ -1,3 +1,4 @@
+//! TODO PC these 2 links are broken.
 //! [LooseString]: [bridge_types::LooseString]
 //! [SloshChar]: [bridge_types::SloshChar]
 //!
@@ -95,7 +96,7 @@
 //! Value::CallFrame            |                             |
 //! Value::Value                |                             |
 //! Value::Error                |                             |
-//! Value::StringConst          | ?TODO PC talk to sstanfield |
+//! Value::StringConst          |                             |
 
 pub mod string_char;
 
