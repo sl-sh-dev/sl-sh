@@ -414,7 +414,6 @@ fn compile_list(
             println!("Boo, {}", car.display_value(env));
         }
     }
-    state.doc_string = None;
     Ok(())
 }
 

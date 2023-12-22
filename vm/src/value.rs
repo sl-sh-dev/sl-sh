@@ -589,6 +589,11 @@ impl Globals {
         self.objects.iter().for_each(|obj| {
             heap.mark(*obj);
         });
+        self.props.iter().for_each(|(_, map)| {
+            for val in map.values() {
+                heap.mark(*val);
+            }
+        });
     }
 
     pub fn get_property(&self, global: u32, prop: Interned) -> Option<Value> {

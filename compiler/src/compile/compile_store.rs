@@ -16,6 +16,7 @@ pub(crate) fn compile_def(
             if let Some(doc_string) = state.doc_string {
                 let key = env.intern("doc-string");
                 env.set_global_property(si_const, key, doc_string);
+                state.doc_string = None;
             }
         }
         (2, Some(Value::Symbol(si))) => {
@@ -23,6 +24,7 @@ pub(crate) fn compile_def(
             if let Some(doc_string) = state.doc_string {
                 let key = env.intern("doc-string");
                 env.set_global_property(si_const, key, doc_string);
+                state.doc_string = None;
             }
             compile(env, state, cdr[1], result)?;
             state

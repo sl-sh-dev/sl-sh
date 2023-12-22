@@ -562,6 +562,8 @@ impl<ENV> GVm<ENV> {
 
     fn mark_roots(&mut self, heap: &mut Heap) -> VMResult<()> {
         self.globals.mark(heap);
+        // TODO- add a bound to ENV so we can call a mark_roots?  I think we need this for the
+        // temporarily held doc_string for instance but also generally useful?
         for i in 0..self.stack_max {
             heap.mark(self.stack(i));
         }
