@@ -32,6 +32,42 @@ pub struct DestructState {
     destructures: Vec<Destructure>,
 }
 
+/// When doing destructuring we need to turn 'vec' and 'make-hash' calls into the literal vectors and
+/// maps outside of execution.
+/// Takes a Value and either returns it or the literal vec or hash-map if it is a call to create one.
+/// Only works with Value::List for detection currently, this is what will come from the reader in
+/// these cases, may need to expand this to handle Value::Pair as well for macros (? TODO).
+pub fn resolve_destruct_containers(env: &mut SloshVm, arg: Value) -> Value {
+    let i_hash = env.intern("make-hash");
+    if let Value::List(h, s) = arg {
+        let v = env.get_vector(h);
+        let s = s as usize;
+        let i_vec = env.specials().vec;
+        match &v[s] {
+            Value::Symbol(i) if *i == i_vec => {
+                let v = env.alloc_vector(v[s + 1..].to_vec());
+                env.heap_sticky(v);
+                v
+            }
+            Value::Symbol(i) if *i == i_hash => {
+                let mut iter = v[s + 1..].iter();
+                let mut map = HashMap::new();
+                while let Some(key) = iter.next() {
+                    if let Some(val) = iter.next() {
+                        map.insert(*key, *val);
+                    }
+                }
+                let v = env.alloc_map(map);
+                env.heap_sticky(v);
+                v
+            }
+            _ => arg,
+        }
+    } else {
+        arg
+    }
+}
+
 pub fn setup_dbg(env: &SloshVm, state: &mut CompileState, reg: usize, name: Interned) {
     if let Some(dbg_args) = state.chunk.dbg_args.as_mut() {
         if dbg_args.len() < reg - 1 {
@@ -150,7 +186,8 @@ impl DestructState {
         stack: &mut Vec<DestructType>,
         next_reg: &mut usize,
     ) -> VMResult<()> {
-        let vector = env.get_vector(vector_handle);
+        // Unnecessary allocation(s) to appease the borrow checker because of the call to resolve_destruct_containers...
+        let vector: Vec<Value> = env.get_vector(vector_handle).to_vec();
         let mut len = vector.len();
         let mut rest = false;
         let mut opt = false;
@@ -160,7 +197,7 @@ impl DestructState {
         let mut allow_extra = false;
         let mut register_labels = Vec::new();
         let start_reg = *next_reg;
-        for name in vector {
+        for name in &vector {
             if opt_set_next {
                 len -= 1;
                 opt_set_next = false;
@@ -168,7 +205,8 @@ impl DestructState {
                     opt_comps.push((reg, *name));
                 }
             } else {
-                match name {
+                let name = resolve_destruct_containers(env, *name);
+                match &name {
                     Value::Symbol(i) if *i == env.specials().rest => {
                         len -= 1;
                         rest = true;
@@ -243,25 +281,26 @@ impl DestructState {
         next_reg: &mut usize,
     ) -> VMResult<()> {
         let or_i = env.intern("or");
-        let map = env.get_map(map_handle);
+        // Unnecessary allocation(s) to appease the borrow checker because of the call to resolve_destruct_containers...
+        let map = env.get_map(map_handle).clone();
         let mut keys = Vec::new();
         let mut opt_comps = Vec::new();
         let mut len = map.len();
-        let opt_map;
         let mut register_labels = Vec::new();
         let optionals = if let Some(opts) = map.get(&Value::Keyword(or_i)) {
+            let opts = resolve_destruct_containers(env, *opts);
             if let Value::Map(handle) = opts {
-                env.get_map(*handle)
+                env.get_map(handle).clone()
             } else {
                 return Err(VMError::new_compile(":or must be followed by a map"));
             }
         } else {
-            opt_map = HashMap::new();
-            &opt_map
+            HashMap::new()
         };
         let start_reg = *next_reg;
-        for (key, val) in map {
-            match key {
+        for (key, val) in &map {
+            let key = resolve_destruct_containers(env, *key);
+            match &key {
                 Value::Keyword(i) if *i == or_i => {
                     len -= 1;
                     continue; // Skip checking for optionals.
@@ -318,10 +357,12 @@ impl DestructState {
         while let Some(destruct_type) = stack.pop() {
             match destruct_type {
                 DestructType::Vector(vector, reg) => {
-                    self.do_vector_destructure(env, vector, reg, &mut stack, &mut next_reg)?
+                    self.do_vector_destructure(env, vector, reg, &mut stack, &mut next_reg)?;
+                    env.heap_unsticky(Value::Vector(vector));
                 }
                 DestructType::Map(map, reg) => {
-                    self.do_map_destructure(env, map, reg, &mut stack, &mut next_reg)?
+                    self.do_map_destructure(env, map, reg, &mut stack, &mut next_reg)?;
+                    env.heap_unsticky(Value::Map(map));
                 }
             }
         }

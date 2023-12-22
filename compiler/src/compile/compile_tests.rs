@@ -2,6 +2,7 @@
 mod tests {
     use super::super::*;
     use crate::test_utils::{assert_vals, exec, read_test};
+    use builtins::collections::make_hash;
     use builtins::print::{dasm, prn};
 
     #[test]
@@ -54,6 +55,7 @@ mod tests {
         let mut env = new_slosh_vm();
         env.set_global_builtin("prn", prn);
         env.set_global_builtin("dasm", dasm);
+        env.set_global_builtin("make-hash", make_hash);
         let result = exec(&mut env, "((fn () 1))");
         let expected = read_test(&mut env, "1");
         assert_vals(&env, expected, result);
@@ -109,21 +111,21 @@ mod tests {
 
         let result = exec(
             &mut env,
-            "(do (def fnx (fn (a b [x [y y2] % z := 10]) `(~a ~b ~x ~y ~y2 ~z))) (dasm fnx) (fnx 1 2 '(3 [4 5])))",
+            "(do (def fnx (fn (a b [x [y y2] % z := 10]) `(~a ~b ~x ~y ~y2 ~z))) (dasm fnx) (fnx 1 2 (list 3 [4 5])))",
         );
         let expected = read_test(&mut env, "(1 2 3 4 5 10)");
         assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
-            "(do (def fnx (fn (a b [x [y y2] % z := 10] [d d2]) `(~a ~b ~x ~y ~y2 ~z ~d ~d2))) (dasm fnx) (fnx 1 2 '(3 [4 5]) [23 24]))",
+            "(do (def fnx (fn (a b [x [y y2] % z := 10] [d d2]) `(~a ~b ~x ~y ~y2 ~z ~d ~d2))) (dasm fnx) (fnx 1 2 `(3 ~[4 5]) [23 24]))",
         );
         let expected = read_test(&mut env, "(1 2 3 4 5 10 23 24)");
         assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
-            "(do (def fnx (fn (a b [x [y y2] % z := 10] % [d d2] := [20 21]) `(~a ~b ~x ~y ~y2 ~z ~d ~d2))) (fnx 1 2 '(3 [4 5])))",
+            "(do (def fnx (fn (a b [x [y y2] % z := 10] % [d d2] := [20 21]) `(~a ~b ~x ~y ~y2 ~z ~d ~d2))) (fnx 1 2 (list 3 [4 5])))",
         );
         let expected = read_test(&mut env, "(1 2 3 4 5 10 20 21)");
         assert_vals(&env, expected, result);

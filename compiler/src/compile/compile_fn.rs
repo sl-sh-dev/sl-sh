@@ -1,4 +1,4 @@
-use crate::compile::destructure::{DestructState, DestructType};
+use crate::compile::destructure::{resolve_destruct_containers, DestructState, DestructType};
 use crate::compile::util::get_args_iter;
 use crate::pass1::pass1;
 use crate::{compile, CompileState, SloshVm};
@@ -29,6 +29,7 @@ pub fn mk_state(
             next_is_opt = false;
             continue;
         }
+        let a = resolve_destruct_containers(env, a);
         match a {
             Value::Symbol(i) => {
                 if i == env.specials().rest {

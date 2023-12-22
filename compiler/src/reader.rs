@@ -668,9 +668,13 @@ impl<'vm> Reader<'vm> {
         &mut self,
         buffer: &mut String,
         in_back_quote: bool,
-    ) -> Result<Vec<Value>, ReadError> {
+    ) -> Result<Value, ReadError> {
         let mut v: Vec<Value> = Vec::new();
         let mut cont = true;
+        let make_vec = self.vm.intern("vec");
+        v.push(Value::Symbol(make_vec));
+        let line = self.line() as u32;
+        let column = self.column() as u32;
 
         let close_intern = self.vm.intern("]");
         while cont {
@@ -678,7 +682,7 @@ impl<'vm> Reader<'vm> {
                 Ok(exp) => {
                     if let Some(Value::Symbol(i)) = &exp {
                         if *i == close_intern {
-                            return Ok(v);
+                            return Ok(self.alloc_list(v, line, column));
                         }
                     }
                     exp
@@ -699,21 +703,22 @@ impl<'vm> Reader<'vm> {
         })
     }
 
-    fn read_map(
-        &mut self,
-        buffer: &mut String,
-        in_back_quote: bool,
-    ) -> Result<HashMap<Value, Value>, ReadError> {
-        let mut map: HashMap<Value, Value> = HashMap::new();
+    fn read_map(&mut self, buffer: &mut String, in_back_quote: bool) -> Result<Value, ReadError> {
+        //let mut map: HashMap<Value, Value> = HashMap::new();
         let mut cont = true;
 
         let close_intern = self.vm.intern("}");
+        let make_hash = self.vm.intern("make-hash");
+        let mut list = Vec::new();
+        list.push(Value::Symbol(make_hash));
+        let line = self.line() as u32;
+        let column = self.column() as u32;
         while cont {
             let key = match self.read_inner(buffer, in_back_quote, ReadReturn::Map) {
                 Ok(exp) => {
                     if let Some(Value::Symbol(i)) = &exp {
                         if *i == close_intern {
-                            return Ok(map);
+                            return Ok(self.alloc_list(list, line, column));
                         }
                     }
                     exp
@@ -739,7 +744,8 @@ impl<'vm> Reader<'vm> {
             };
             let pch = self.chars().peek();
             if let (Some(key), Some(val)) = (key, val) {
-                map.insert(key, val);
+                list.push(key);
+                list.push(val);
             } else if pch.is_none() {
                 cont = false;
             }
@@ -1114,8 +1120,7 @@ impl<'vm> Reader<'vm> {
                     return Err(ReadError { reason });
                 }
                 "{" => {
-                    let exp = self.read_map(buffer, in_back_quote)?;
-                    return Ok(Some(self.vm.alloc_map_ro(exp)));
+                    return Ok(Some(self.read_map(buffer, in_back_quote)?));
                 }
                 "}" if matches!(return_close, ReadReturn::Map) => {
                     return Ok(Some(Value::Symbol(self.vm.intern("}"))));
@@ -1129,8 +1134,7 @@ impl<'vm> Reader<'vm> {
                     return Err(ReadError { reason });
                 }
                 "[" => {
-                    let exp = self.read_vector(buffer, in_back_quote)?;
-                    return Ok(Some(self.vm.alloc_vector_ro(exp)));
+                    return Ok(Some(self.read_vector(buffer, in_back_quote)?));
                 }
                 "]" if matches!(return_close, ReadReturn::Vector) => {
                     return Ok(Some(Value::Symbol(self.vm.intern("]"))));
@@ -1309,19 +1313,21 @@ mod tests {
         assert!(tokens[3] == "UInt:3");
         assert!(tokens[4] == ")");
         let tokens = tokenize(&mut vm, "[\\A 2 3]");
-        assert!(tokens.len() == 5);
-        assert!(tokens[0] == "[");
-        assert!(tokens[1] == "Char:\\A");
-        assert!(tokens[2] == "UInt:2");
-        assert!(tokens[3] == "UInt:3");
-        assert!(tokens[4] == "]");
+        assert!(tokens.len() == 6);
+        assert!(tokens[0] == "(");
+        assert!(tokens[1] == "Symbol:vec");
+        assert!(tokens[2] == "Char:\\A");
+        assert!(tokens[3] == "UInt:2");
+        assert!(tokens[4] == "UInt:3");
+        assert!(tokens[5] == ")");
         let tokens = tokenize(&mut vm, "[\\  2 3]");
-        assert!(tokens.len() == 5);
-        assert!(tokens[0] == "[");
-        assert!(tokens[1] == "Char:\\ ");
-        assert!(tokens[2] == "UInt:2");
-        assert!(tokens[3] == "UInt:3");
-        assert!(tokens[4] == "]");
+        assert!(tokens.len() == 6);
+        assert!(tokens[0] == "(");
+        assert!(tokens[1] == "Symbol:vec");
+        assert!(tokens[2] == "Char:\\ ");
+        assert!(tokens[3] == "UInt:2");
+        assert!(tokens[4] == "UInt:3");
+        assert!(tokens[5] == ")");
         let tokens = tokenize(&mut vm, "'((1 2 (3)))");
         assert!(tokens.len() == 12);
         assert!(tokens[0] == "(");
@@ -1476,18 +1482,19 @@ mod tests {
         assert!(tokens[10] == ")");
 
         let tokens = tokenize(&mut vm, "[one 2 3.0 \"four\" \\B #t nil 3.5 ()]");
-        assert!(tokens.len() == 11);
-        assert!(tokens[0] == "[");
-        assert!(tokens[1] == "Symbol:one");
-        assert!(tokens[2] == "UInt:2");
-        assert!(tokens[3] == "Float:3");
-        assert!(tokens[4] == "String:\"four\"");
-        assert!(tokens[5] == "Char:\\B");
-        assert!(tokens[6] == "True:true");
-        assert!(tokens[7] == "nil");
-        assert!(tokens[8] == "Float:3.5");
-        assert!(tokens[9] == "nil");
-        assert!(tokens[10] == "]");
+        assert!(tokens.len() == 12);
+        assert!(tokens[0] == "(");
+        assert!(tokens[1] == "Symbol:vec");
+        assert!(tokens[2] == "Symbol:one");
+        assert!(tokens[3] == "UInt:2");
+        assert!(tokens[4] == "Float:3");
+        assert!(tokens[5] == "String:\"four\"");
+        assert!(tokens[6] == "Char:\\B");
+        assert!(tokens[7] == "True:true");
+        assert!(tokens[8] == "nil");
+        assert!(tokens[9] == "Float:3.5");
+        assert!(tokens[10] == "nil");
+        assert!(tokens[11] == ")");
 
         let tokens = tokenize(&mut vm, "one 2 3.0 \"four\" \\B #t nil 3.5 ()");
         assert!(tokens.len() == 11);
@@ -1508,7 +1515,6 @@ mod tests {
     fn test_wrap() {
         let mut vm = build_def_vm();
         let tokens = tokenize(&mut vm, "(1 2 3)");
-        println!("XXXX toks {tokens:?}");
         assert!(tokens.len() == 5);
         assert!(tokens[0] == "(");
         assert!(tokens[1] == "UInt:1");
