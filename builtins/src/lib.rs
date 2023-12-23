@@ -9,6 +9,19 @@ pub mod io;
 pub mod print;
 pub mod string;
 
+fn get_globals(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    if !registers.is_empty() {
+        return Err(VMError::new_vm(
+            "sizeof-value: takes no arguments".to_string(),
+        ));
+    }
+    let mut result = vec![];
+    for g in vm.globals().keys() {
+        result.push(Value::Symbol(*g));
+    }
+    Ok(vm.alloc_vector(result))
+}
+
 fn get_prop(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if registers.len() != 2 {
         return Err(VMError::new_vm(
@@ -187,6 +200,17 @@ Example:
 (test::assert-error (% 1))
 (test::assert-error (% 1 2 3))
 (test::assert-error (% 1 2.0))
+",
+    );
+    add_builtin(
+        env,
+        "get-globals",
+        get_globals,
+        "Usage: (get-globals)
+
+Return a vector containing all the symbols currently defined in the globally.
+
+Section: core
 ",
     );
 }
