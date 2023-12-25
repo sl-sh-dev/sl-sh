@@ -436,11 +436,6 @@ pub fn mkconst(
                 .chunk
                 .encode2(REGI, result as u16, i as u16, env.own_line())?;
         }
-        Value::UInt32(i) if i <= u16::MAX as u32 => {
-            state
-                .chunk
-                .encode2(REGU, result as u16, i as u16, env.own_line())?;
-        }
         _ => {
             let const_i = state.add_constant(exp);
             state
@@ -506,11 +501,6 @@ pub fn compile(
             state
                 .chunk
                 .encode2(REGI, result as u16, i as u16, env.own_line())?
-        }
-        Value::UInt32(i) if i <= u16::MAX as u32 => {
-            state
-                .chunk
-                .encode2(REGU, result as u16, i as u16, env.own_line())?
         }
         _ => {
             let const_i = state.add_constant(exp);

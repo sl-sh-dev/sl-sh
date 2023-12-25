@@ -25,8 +25,6 @@ const DEAD_CODE: [u8; 3] = [HALT, HALT, HALT];
 pub struct GVm<ENV> {
     interner: Interner,
     heap: Option<Heap>,
-    //stack: Vec<Value>,
-    numbers: [Numeric64; STACK_CAP],
     //stack: [Value; STACK_CAP],
     stack: *mut Value,
     registers: *mut Value,
@@ -78,7 +76,6 @@ impl<ENV> GVm<ENV> {
         Self {
             interner: Interner::with_capacity(8192),
             heap: Some(Heap::new()),
-            numbers: [Numeric64 { int: 0 }; STACK_CAP],
             stack, //: [Value::Undefined; STACK_CAP],
             registers: stack,
             globals,
@@ -134,9 +131,7 @@ impl<ENV> GVm<ENV> {
         match reg {
             Value::Byte(b) => Ok(b as i64),
             Value::Int32(i) => Ok(i as i64),
-            Value::UInt32(i) => Ok(i as i64),
             Value::Int64(handle) => Ok(self.get_int(handle)),
-            Value::UInt64(handle) => Ok(self.get_uint(handle) as i64), // XXX TODO- overflow.
             _ => Err(VMError::new_value(format!("Not an integer: {:?}", reg))),
         }
     }

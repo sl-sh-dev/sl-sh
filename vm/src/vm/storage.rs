@@ -9,6 +9,7 @@ use crate::persistent_map::{MapNode, PersistentMap};
 use crate::persistent_vec::{PersistentVec, VecNode};
 use crate::value::*;
 use crate::GVm;
+use crate::handle::Numeric64Handle;
 
 /// Vm code to access storage, heap, stack, globals, etc.
 
@@ -90,7 +91,6 @@ impl<ENV> GVm<ENV> {
     }
 
     pub fn set_global(&mut self, slot: u32, value: Value) {
-        let value = self.promote_number(value);
         self.globals.set(slot, value);
     }
 
@@ -107,9 +107,7 @@ impl<ENV> GVm<ENV> {
     }
 
     pub fn alloc_int(&mut self, num: i64) -> Value {
-        if num >= 0 && num < u32::MAX as i64 {
-            Value::UInt32(num as u32)
-        } else if num > i32::MIN as i64 && num < i32::MAX as i64 {
+        if num > i32::MIN as i64 && num < i32::MAX as i64 {
             Value::Int32(num as i32)
         } else {
             let mut heap = self.heap.take().expect("VM must have a Heap!");
@@ -119,33 +117,11 @@ impl<ENV> GVm<ENV> {
         }
     }
 
-    pub fn local_i64(&mut self, reg: usize, num: i64) -> Value {
-        self.numbers[reg].int = num;
-        Value::Int64(Numeric::Local(reg as u16))
-    }
-
     pub fn alloc_i64(&mut self, num: i64) -> Value {
         let mut heap = self.heap.take().expect("VM must have a Heap!");
         let res = heap.alloc_i64(num, MutState::Mutable, |heap| self.mark_roots(heap));
         self.heap = Some(heap);
         res
-    }
-
-    pub fn local_u64(&mut self, reg: usize, num: u64) -> Value {
-        self.numbers[reg].uint = num;
-        Value::UInt64(Numeric::Local(reg as u16))
-    }
-
-    pub fn alloc_u64(&mut self, num: u64) -> Value {
-        let mut heap = self.heap.take().expect("VM must have a Heap!");
-        let res = heap.alloc_u64(num, MutState::Mutable, |heap| self.mark_roots(heap));
-        self.heap = Some(heap);
-        res
-    }
-
-    pub fn local_f64(&mut self, reg: usize, num: f64) -> Value {
-        self.numbers[reg].float = num;
-        Value::Float64(Numeric::Local(reg as u16))
     }
 
     pub fn alloc_f64(&mut self, num: f64) -> Value {
@@ -310,26 +286,9 @@ impl<ENV> GVm<ENV> {
         res
     }
 
-    /// If val is a 64 bit number stored on the number stack then promote to the heap.  Otherwise
-    /// just return val.
-    fn promote_number(&mut self, mut val: Value) -> Value {
-        // If we have a number stored locally then put it on the heap as well as the value that references it.
-        if let Value::Int64(Numeric::Local(idx)) = val {
-            val = self.alloc_i64(unsafe { self.numbers[idx as usize].int });
-        }
-        if let Value::UInt64(Numeric::Local(idx)) = val {
-            val = self.alloc_u64(unsafe { self.numbers[idx as usize].uint });
-        }
-        if let Value::Float64(Numeric::Local(idx)) = val {
-            val = self.alloc_f64(unsafe { self.numbers[idx as usize].float });
-        }
-        val
-    }
-
     /// Allocate a Value on the heap.  Moving a value to the heap is useful for captured variable
     /// for instance.
     pub fn alloc_value(&mut self, val: Value) -> Value {
-        let val = self.promote_number(val);
         let mut heap = self.heap.take().expect("VM must have a Heap!");
         let res = heap.alloc_value(val, MutState::Mutable, |heap| self.mark_roots(heap));
         self.heap = Some(heap);
@@ -401,46 +360,20 @@ impl<ENV> GVm<ENV> {
         self.globals.get(idx)
     }
 
-    pub fn get_int(&self, handle: Numeric) -> i64 {
-        match handle {
-            Numeric::Local(idx) => unsafe { self.numbers[idx as usize].int },
-            Numeric::Heap(handle) => self.heap().get_int(handle),
-        }
+    pub fn get_int(&self, handle: Numeric64Handle) -> i64 {
+            self.heap().get_int(handle)
     }
 
-    pub fn get_int_mut(&mut self, handle: Numeric) -> &mut i64 {
-        match handle {
-            Numeric::Local(idx) => unsafe { &mut self.numbers[idx as usize].int },
-            Numeric::Heap(handle) => self.heap_mut().get_int_mut(handle),
-        }
+    pub fn get_int_mut(&mut self, handle: Numeric64Handle) -> &mut i64 {
+            self.heap_mut().get_int_mut(handle)
     }
 
-    pub fn get_uint(&self, handle: Numeric) -> u64 {
-        match handle {
-            Numeric::Local(idx) => unsafe { self.numbers[idx as usize].uint },
-            Numeric::Heap(handle) => self.heap().get_uint(handle),
-        }
+    pub fn get_float(&self, handle: Numeric64Handle) -> f64 {
+            self.heap().get_float(handle)
     }
 
-    pub fn get_uint_mut(&mut self, handle: Numeric) -> &mut u64 {
-        match handle {
-            Numeric::Local(idx) => unsafe { &mut self.numbers[idx as usize].uint },
-            Numeric::Heap(handle) => self.heap_mut().get_uint_mut(handle),
-        }
-    }
-
-    pub fn get_float(&self, handle: Numeric) -> f64 {
-        match handle {
-            Numeric::Local(idx) => unsafe { self.numbers[idx as usize].float },
-            Numeric::Heap(handle) => self.heap().get_float(handle),
-        }
-    }
-
-    pub fn get_float_mut(&mut self, handle: Numeric) -> &mut f64 {
-        match handle {
-            Numeric::Local(idx) => unsafe { &mut self.numbers[idx as usize].float },
-            Numeric::Heap(handle) => self.heap_mut().get_float_mut(handle),
-        }
+    pub fn get_float_mut(&mut self, handle: Numeric64Handle) -> &mut f64 {
+            self.heap_mut().get_float_mut(handle)
     }
 
     pub fn get_string(&self, handle: Handle) -> &str {

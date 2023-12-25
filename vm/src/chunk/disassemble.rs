@@ -288,14 +288,6 @@ impl Chunk {
                 println!();
                 Ok(false)
             }
-            REGU => {
-                print!("REGU({REGU:#04x})   \t");
-                disassemble_operand!(code, true, wide);
-                print!("\t");
-                disassemble_immediate!(code, wide);
-                println!();
-                Ok(false)
-            }
             CLOSE => {
                 print!("CLOSE({CLOSE:#04x})  \t");
                 disassemble_operand!(code, true, wide);

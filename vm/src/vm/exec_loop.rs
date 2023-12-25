@@ -556,10 +556,6 @@ impl<ENV> GVm<ENV> {
                     let (dest, i) = decode2!(self.ip_ptr, wide);
                     set_register!(self, dest as usize, Value::Int32(i as i32));
                 }
-                REGU => {
-                    let (dest, i) = decode2!(self.ip_ptr, wide);
-                    set_register!(self, dest as usize, Value::UInt32(i as u32));
-                }
                 CLOSE => {
                     let (dest, src) = decode2!(self.ip_ptr, wide);
                     //let lambda = self.register(src as usize);
@@ -932,11 +928,7 @@ impl<ENV> GVm<ENV> {
                         Value::Int32(v) => {
                             *self.register_mut(dest as usize) = Value::Int32(v + i as i32)
                         }
-                        Value::UInt32(v) => {
-                            *self.register_mut(dest as usize) = Value::UInt32(v + i as u32)
-                        }
                         Value::Int64(handle) => *self.get_int_mut(handle) += i as i64,
-                        Value::UInt64(handle) => *self.get_uint_mut(handle) += i as u64,
                         _ => {
                             return Err((
                                 VMError::new_vm(format!(
@@ -958,21 +950,7 @@ impl<ENV> GVm<ENV> {
                         Value::Int32(v) => {
                             *self.register_mut(dest as usize) = Value::Int32(v - i as i32)
                         }
-                        Value::UInt32(v) => {
-                            if (i as u32) < v {
-                                *self.register_mut(dest as usize) = Value::UInt32(v - i as u32)
-                            } else {
-                                *self.register_mut(dest as usize) = Value::UInt32(0)
-                            }
-                        }
                         Value::Int64(handle) => *self.get_int_mut(handle) -= i as i64,
-                        Value::UInt64(handle) => {
-                            if (i as u64) < self.get_uint(handle) {
-                                *self.get_uint_mut(handle) -= i as u64;
-                            } else {
-                                *self.get_uint_mut(handle) = 0;
-                            }
-                        }
                         _ => {
                             return Err((
                                 VMError::new_vm(format!(
@@ -1158,13 +1136,31 @@ impl<ENV> GVm<ENV> {
                         if i >= v.len() {
                             return Err((VMError::new_vm("VECSTH: Index out of range."), chunk));
                         }
-                        // Break off v's lifetime so we can use the macro below.  We are not making
-                        // any other changes to v during this (just updating an element in place) so
-                        // should be safe.
-                        let v: &mut Vec<Value> =
-                            unsafe { (v as *mut Vec<Value>).as_mut().unwrap() };
-                        set_value!(self, v[i], val);
-                        //v[i] = val;
+                        match (v[i], val) {
+                            (Value::Float64(handle_to), Value::Float64(handle_from)) => {
+                                *self.get_float_mut(handle_to) = self.get_float(handle_from);
+                            }
+                            (Value::Int64(handle_to), Value::Int64(handle_from)) => {
+                                *self.get_int_mut(handle_to) = self.get_int(handle_from);
+                            }
+                            (_, Value::Float64(handle_from)) => {
+                                let f = self.get_float(handle_from);
+                                let f_a = self.alloc_f64(f);
+                                self
+                                    .heap_mut()
+                                    .get_vector_mut(h)
+                                    .map_err(|e| (e, chunk.clone()))?[i] = f_a;
+                            }
+                            (_, Value::Int64(handle_from)) => {
+                                let n = self.get_int(handle_from);
+                                let i_a = self.alloc_i64(n);
+                                self
+                                    .heap_mut()
+                                    .get_vector_mut(h)
+                                    .map_err(|e| (e, chunk.clone()))?[i] = i_a;
+                            }
+                            _ => v[i] =val,
+                        }
                     } else {
                         return Err((VMError::new_vm("VECSTH: Not a vector."), chunk));
                     };
@@ -1195,12 +1191,12 @@ impl<ENV> GVm<ENV> {
                     match self.register(v as usize) {
                         Value::Vector(h) => {
                             let v = self.get_vector(h);
-                            let len = Value::UInt32(v.len() as u32); // XXX TODO- overflow
+                            let len = Value::Int32(v.len() as i32); // XXX TODO- overflow
                             set_register!(self, dest as usize, len);
                         }
                         Value::List(h, start) => {
                             let v = self.get_vector(h);
-                            let len = Value::UInt32((v.len() - start as usize) as u32); // XXX TODO- overflow
+                            let len = Value::Int32((v.len() - start as usize) as i32); // XXX TODO- overflow
                             set_register!(self, dest as usize, len);
                         }
                         _ => return Err((VMError::new_vm("VECLEN: Not a vector."), chunk)),

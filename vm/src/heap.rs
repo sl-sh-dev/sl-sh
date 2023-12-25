@@ -81,7 +81,6 @@ enum Object {
 #[derive(Clone, Copy)]
 pub union Numeric64 {
     pub int: i64,
-    pub uint: u64,
     pub float: f64,
 }
 
@@ -141,23 +140,12 @@ macro_rules! value_op {
             Value::CallFrame(handle) => $heap.objects.$op(handle.idx()),
             Value::Value(handle) => $heap.objects.$op(handle.idx()),
 
-            Value::Int64(handle) => match handle {
-                Numeric::Local(_) => $default,
-                Numeric::Heap(handle) => $heap.numerics.$op(handle.into()),
-            },
-            Value::UInt64(handle) => match handle {
-                Numeric::Local(_) => $default,
-                Numeric::Heap(handle) => $heap.numerics.$op(handle.into()),
-            },
-            Value::Float64(handle) => match handle {
-                Numeric::Local(_) => $default,
-                Numeric::Heap(handle) => $heap.numerics.$op(handle.into()),
-            },
+            Value::Int64(handle) => $heap.numerics.$op(handle.into()),
+            Value::Float64(handle) => $heap.numerics.$op(handle.into()),
             Value::Error(handle) => $heap.errors.$op(handle.idx()),
 
             Value::Byte(_)
             | Value::Int32(_)
-            | Value::UInt32(_)
             | Value::CodePoint(_)
             | Value::CharCluster(_, _)
             | Value::Symbol(_)
@@ -229,24 +217,6 @@ impl Heap {
         Handle::new32(self.objects.alloc(obj, flags))
     }
 
-    pub fn alloc_u64<MarkFunc>(
-        &mut self,
-        num: u64,
-        mutable: MutState,
-        mark_roots: MarkFunc,
-    ) -> Value
-    where
-        MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
-    {
-        if self.numerics.live_objects() >= self.numerics.capacity() && self.paused == 0 {
-            self.collect(mark_roots);
-        }
-        let num = Numeric64 { uint: num };
-        Value::Int64(Numeric::Heap(
-            self.numerics.alloc(num, mutable.flag()).into(),
-        ))
-    }
-
     pub fn alloc_i64<MarkFunc>(
         &mut self,
         num: i64,
@@ -260,9 +230,7 @@ impl Heap {
             self.collect(mark_roots);
         }
         let num = Numeric64 { int: num };
-        Value::UInt64(Numeric::Heap(
-            self.numerics.alloc(num, mutable.flag()).into(),
-        ))
+        Value::Int64(self.numerics.alloc(num, mutable.flag()).into())
     }
 
     pub fn alloc_f64<MarkFunc>(
@@ -278,9 +246,7 @@ impl Heap {
             self.collect(mark_roots);
         }
         let num = Numeric64 { float: num };
-        Value::Float64(Numeric::Heap(
-            self.numerics.alloc(num, mutable.flag()).into(),
-        ))
+        Value::Float64(self.numerics.alloc(num, mutable.flag()).into())
     }
 
     pub fn alloc_pair<MarkFunc>(
@@ -471,26 +437,6 @@ impl Heap {
                 int
             } else {
                 panic!("Handle {handle} is not a valid int!");
-            }
-        }
-    }
-
-    pub fn get_uint(&self, handle: Numeric64Handle) -> u64 {
-        unsafe {
-            if let Some(Numeric64 { uint }) = self.numerics.get(handle.as_usize()) {
-                *uint
-            } else {
-                panic!("Handle {handle} is not a valid uint!");
-            }
-        }
-    }
-
-    pub fn get_uint_mut(&mut self, handle: Numeric64Handle) -> &mut u64 {
-        unsafe {
-            if let Some(Numeric64 { uint }) = self.numerics.get_mut(handle.as_usize()) {
-                uint
-            } else {
-                panic!("Handle {handle} is not a valid uint!");
             }
         }
     }
@@ -714,7 +660,7 @@ impl Heap {
         }
     }
 
-    /// If val is o the heap is it still alive after GC
+    /// If val is on the heap is it still alive after GC
     /// Return true if val is not a heap object.
     pub fn is_live(&self, val: Value) -> bool {
         value_op!(self, val, is_live, true)
@@ -876,11 +822,9 @@ impl Heap {
             }
 
             Value::Int64(_)
-            | Value::UInt64(_)
             | Value::Float64(_)
             | Value::Byte(_)
             | Value::Int32(_)
-            | Value::UInt32(_)
             | Value::CodePoint(_)
             | Value::CharCluster(_, _)
             | Value::Symbol(_)

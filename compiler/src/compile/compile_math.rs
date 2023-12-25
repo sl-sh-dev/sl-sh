@@ -62,10 +62,6 @@ pub(crate) fn compile_math(
                     Value::Int32(_) => {
                         return Err(VMError::new_compile("inc!: second arg to large"))
                     }
-                    Value::UInt32(i) if i <= u16::MAX as u32 => i as u16,
-                    Value::UInt32(_) => {
-                        return Err(VMError::new_compile("inc!: second arg < 0 or to large"))
-                    }
                     _ => return Err(VMError::new_compile("inc!: second arg must be integer")),
                 };
                 state
@@ -100,10 +96,6 @@ pub(crate) fn compile_math(
                     Value::Int32(i) if i >= 0 && i <= u16::MAX as i32 => i as u16,
                     Value::Int32(_) => {
                         return Err(VMError::new_compile("inc!: second arg to large"))
-                    }
-                    Value::UInt32(i) if i <= u16::MAX as u32 => i as u16,
-                    Value::UInt32(_) => {
-                        return Err(VMError::new_compile("inc!: second arg < 0 or to large"))
                     }
                     _ => return Err(VMError::new_compile("inc!: second arg must be integer")),
                 };

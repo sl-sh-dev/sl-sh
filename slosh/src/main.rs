@@ -203,8 +203,18 @@ fn main() {
             let euid = Sys::effective_uid();
             env::set_var("UID", format!("{uid}"));
             env::set_var("EUID", format!("{euid}"));
-            env.set_named_global("*uid*", Value::UInt32(uid));
-            env.set_named_global("*euid*", Value::UInt32(euid));
+            if uid <= i32::MAX as u32 {
+                env.set_named_global("*uid*", Value::Int32(uid as i32));
+            } else {
+                let uid = env.alloc_i64(uid as i64);
+                env.set_named_global("*uid*", uid);
+            }
+            if euid <= i32::MAX as u32 {
+                env.set_named_global("*euid*", Value::Int32(euid as i32));
+            } else {
+                let euid = env.alloc_i64(euid as i64);
+                env.set_named_global("*euid*", euid);
+            }
             env.set_named_global("*last-status*", Value::Int32(0));
             // Initialize the HOST variable
             let host: OsString = Sys::gethostname().unwrap_or_else(|| "???".into());

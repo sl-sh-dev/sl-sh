@@ -20,7 +20,6 @@ pub const REGN: OpCode = STACK_BASE + 10; // REGN A - R(A) = NIL
 pub const REGC: OpCode = STACK_BASE + 11; // REGC A - R(A) = UNDEFINED
 pub const REGB: OpCode = STACK_BASE + 12; // REGB A B - R(A) = Byte(B)
 pub const REGI: OpCode = STACK_BASE + 13; // REGI A B - R(A) = Int(B)
-pub const REGU: OpCode = STACK_BASE + 14; // REGU A B - R(A) = UInt(B)
 pub const CLOSE: OpCode = STACK_BASE + 15; // CLOSE A B - R(A) = closure derived from lambda in R(B)
 pub const BMOV: OpCode = STACK_BASE + 16; // BMOV A B C - R(A)..R(A+C) = R(B)..R(B+C) does not respect closed over values
 pub const LDSC: OpCode = STACK_BASE + 17; // LDSC A B C - R(A)..R(A+B) = destructured list or vec in R(C) (ignore leftover values)

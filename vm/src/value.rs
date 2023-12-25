@@ -105,19 +105,11 @@ impl Hash for F64Wrap {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub enum Numeric {
-    Local(u16),
-    Heap(Numeric64Handle),
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum Value {
     Byte(u8),
     Int32(i32),
-    UInt32(u32),
-    Int64(Numeric),
-    UInt64(Numeric),
-    Float64(Numeric),
+    Int64(Numeric64Handle),
+    Float64(Numeric64Handle),
     CodePoint(char),
     CharCluster(u8, [u8; 6]),
     CharClusterLong(Handle), // Handle points to a String on the heap.
@@ -217,9 +209,7 @@ impl Value {
             &self,
             Value::Byte(_)
                 | Value::Int32(_)
-                | Value::UInt32(_)
                 | Value::Int64(_)
-                | Value::UInt64(_)
         )
     }
 
@@ -228,9 +218,7 @@ impl Value {
             &self,
             Value::Byte(_)
                 | Value::Int32(_)
-                | Value::UInt32(_)
                 | Value::Int64(_)
-                | Value::UInt64(_)
                 | Value::Float64(_)
         )
     }
@@ -239,9 +227,7 @@ impl Value {
         match &self {
             Value::Byte(b) => Ok(*b as i64),
             Value::Int32(i) => Ok(*i as i64),
-            Value::UInt32(i) => Ok(*i as i64),
             Value::Int64(handle) => Ok(vm.get_int(*handle)),
-            Value::UInt64(handle) => Ok(vm.get_uint(*handle) as i64), // XXX TODO- overflow.
             _ => Err(VMError::new_value(format!("Not an integer: {self:?}"))),
         }
     }
@@ -250,10 +236,8 @@ impl Value {
         match &self {
             Value::Byte(b) => Ok(*b as f64),
             Value::Int32(i) => Ok(*i as f64),
-            Value::UInt32(i) => Ok(*i as f64),
             Value::Float64(handle) => Ok(vm.get_float(*handle)),
             Value::Int64(handle) => Ok(vm.get_int(*handle) as f64),
-            Value::UInt64(handle) => Ok(vm.get_uint(*handle) as f64),
             _ => Err(VMError::new_value(format!("Not a float: {self:?}"))),
         }
     }
@@ -289,9 +273,7 @@ impl Value {
 
             Value::Byte(_) => None,
             Value::Int32(_) => None,
-            Value::UInt32(_) => None,
             Value::Int64(_) => None,
-            Value::UInt64(_) => None,
             Value::Float64(_) => None,
             Value::CodePoint(_) => None,
             Value::CharCluster(_, _) => None,
@@ -393,10 +375,8 @@ impl Value {
             Value::True => "true".to_string(),
             Value::False => "false".to_string(),
             Value::Int32(i) => format!("{i}"),
-            Value::UInt32(i) => format!("{i}"),
             Value::Float64(handle) => format!("{}", vm.get_float(*handle)),
             Value::Int64(handle) => format!("{}", vm.get_int(*handle)),
-            Value::UInt64(handle) => format!("{}", vm.get_uint(*handle)),
             Value::Byte(b) => format!("{b}"),
             Value::Symbol(i) => vm.get_interned(*i).to_string(),
             Value::Keyword(i) => format!(":{}", vm.get_interned(*i)),
@@ -498,10 +478,8 @@ impl Value {
             Value::True => "True",
             Value::False => "False",
             Value::Int32(_) => "Int",
-            Value::UInt32(_) => "UInt",
             Value::Float64(_) => "Float",
             Value::Int64(_) => "Int",
-            Value::UInt64(_) => "UInt",
             Value::Symbol(_) => "Symbol",
             Value::Keyword(_) => "Keyword",
             Value::StringConst(_) => "String",
