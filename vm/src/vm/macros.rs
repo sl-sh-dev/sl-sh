@@ -249,6 +249,9 @@ macro_rules! div_math {
 macro_rules! set_register {
     ($vm:expr, $idx:expr, $val:expr) => {{
         match (&$vm.register($idx as usize), $val) {
+            (Value::Value(_), Value::Value(_)) => {
+                panic!("Do not set recursive Values...")
+            }
             (Value::Value(handle), _) => {
                 *($vm.heap_mut().get_value_mut(*handle)) = $val;
             }
