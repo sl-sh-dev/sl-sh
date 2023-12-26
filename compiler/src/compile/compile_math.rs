@@ -137,7 +137,7 @@ pub(crate) fn compile_math(
                     // XXX TODO- handle int 64
                     compile(env, state, Value::Int32(-i as i32), result)?;
                 } else if let Ok(f) = cdr[0].get_float(env) {
-                    let var = env.alloc_f64(-f);
+                    let var = (-f).into();
                     compile(env, state, var, result)?;
                 }
             } else {

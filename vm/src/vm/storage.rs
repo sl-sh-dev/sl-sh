@@ -3,13 +3,13 @@ use std::sync::Arc;
 
 use crate::chunk::*;
 use crate::error::*;
+use crate::handle::Numeric64Handle;
 use crate::heap::*;
 use crate::interner::*;
 use crate::persistent_map::{MapNode, PersistentMap};
 use crate::persistent_vec::{PersistentVec, VecNode};
 use crate::value::*;
 use crate::GVm;
-use crate::handle::Numeric64Handle;
 
 /// Vm code to access storage, heap, stack, globals, etc.
 
@@ -120,13 +120,6 @@ impl<ENV> GVm<ENV> {
     pub fn alloc_i64(&mut self, num: i64) -> Value {
         let mut heap = self.heap.take().expect("VM must have a Heap!");
         let res = heap.alloc_i64(num, MutState::Mutable, |heap| self.mark_roots(heap));
-        self.heap = Some(heap);
-        res
-    }
-
-    pub fn alloc_f64(&mut self, num: f64) -> Value {
-        let mut heap = self.heap.take().expect("VM must have a Heap!");
-        let res = heap.alloc_f64(num, MutState::Mutable, |heap| self.mark_roots(heap));
         self.heap = Some(heap);
         res
     }
@@ -361,19 +354,19 @@ impl<ENV> GVm<ENV> {
     }
 
     pub fn get_int(&self, handle: Numeric64Handle) -> i64 {
-            self.heap().get_int(handle)
+        self.heap().get_int(handle)
     }
 
     pub fn get_int_mut(&mut self, handle: Numeric64Handle) -> &mut i64 {
-            self.heap_mut().get_int_mut(handle)
+        self.heap_mut().get_int_mut(handle)
     }
 
     pub fn get_float(&self, handle: Numeric64Handle) -> f64 {
-            self.heap().get_float(handle)
+        self.heap().get_float(handle)
     }
 
     pub fn get_float_mut(&mut self, handle: Numeric64Handle) -> &mut f64 {
-            self.heap_mut().get_float_mut(handle)
+        self.heap_mut().get_float_mut(handle)
     }
 
     pub fn get_string(&self, handle: Handle) -> &str {

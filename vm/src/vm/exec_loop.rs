@@ -489,7 +489,7 @@ impl<ENV> GVm<ENV> {
                 }
                 SET => {
                     let (dest, src) = decode2!(self.ip_ptr, wide);
-                    let val = self.register(src as usize);
+                    let val = self.register_unref(src as usize);
                     set_register!(self, dest as usize, val);
                 }
                 CONST => {
@@ -1137,29 +1137,17 @@ impl<ENV> GVm<ENV> {
                             return Err((VMError::new_vm("VECSTH: Index out of range."), chunk));
                         }
                         match (v[i], val) {
-                            (Value::Float64(handle_to), Value::Float64(handle_from)) => {
-                                *self.get_float_mut(handle_to) = self.get_float(handle_from);
-                            }
                             (Value::Int64(handle_to), Value::Int64(handle_from)) => {
                                 *self.get_int_mut(handle_to) = self.get_int(handle_from);
-                            }
-                            (_, Value::Float64(handle_from)) => {
-                                let f = self.get_float(handle_from);
-                                let f_a = self.alloc_f64(f);
-                                self
-                                    .heap_mut()
-                                    .get_vector_mut(h)
-                                    .map_err(|e| (e, chunk.clone()))?[i] = f_a;
                             }
                             (_, Value::Int64(handle_from)) => {
                                 let n = self.get_int(handle_from);
                                 let i_a = self.alloc_i64(n);
-                                self
-                                    .heap_mut()
+                                self.heap_mut()
                                     .get_vector_mut(h)
                                     .map_err(|e| (e, chunk.clone()))?[i] = i_a;
                             }
-                            _ => v[i] =val,
+                            _ => v[i] = val,
                         }
                     } else {
                         return Err((VMError::new_vm("VECSTH: Not a vector."), chunk));
@@ -1174,14 +1162,7 @@ impl<ENV> GVm<ENV> {
                     let dfn = self.register(dfn as usize);
                     let mut v = Vec::with_capacity(len as usize);
                     for _ in 0..len {
-                        let dfn2 = match dfn {
-                            Value::Float64(handle) => {
-                                let f = self.get_float(handle);
-                                self.alloc_f64(f)
-                            }
-                            _ => dfn,
-                        };
-                        v.push(dfn2);
+                        v.push(dfn);
                     }
                     let val = self.alloc_vector(v);
                     set_register!(self, dest as usize, val);

@@ -527,7 +527,7 @@ impl<'vm> Reader<'vm> {
                 Err(_) => {
                     let potential_float: Result<f64, ParseFloatError> = num_str.parse();
                     match potential_float {
-                        Ok(f) => self.vm.alloc_f64(f),
+                        Ok(f) => f.into(),
                         Err(_) => Value::Symbol(self.vm.intern(symbol)),
                     }
                 }

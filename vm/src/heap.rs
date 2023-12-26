@@ -141,11 +141,11 @@ macro_rules! value_op {
             Value::Value(handle) => $heap.objects.$op(handle.idx()),
 
             Value::Int64(handle) => $heap.numerics.$op(handle.into()),
-            Value::Float64(handle) => $heap.numerics.$op(handle.into()),
             Value::Error(handle) => $heap.errors.$op(handle.idx()),
 
             Value::Byte(_)
             | Value::Int32(_)
+            | Value::Float(_)
             | Value::CodePoint(_)
             | Value::CharCluster(_, _)
             | Value::Symbol(_)
@@ -231,22 +231,6 @@ impl Heap {
         }
         let num = Numeric64 { int: num };
         Value::Int64(self.numerics.alloc(num, mutable.flag()).into())
-    }
-
-    pub fn alloc_f64<MarkFunc>(
-        &mut self,
-        num: f64,
-        mutable: MutState,
-        mark_roots: MarkFunc,
-    ) -> Value
-    where
-        MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
-    {
-        if self.numerics.live_objects() >= self.numerics.capacity() && self.paused == 0 {
-            self.collect(mark_roots);
-        }
-        let num = Numeric64 { float: num };
-        Value::Float64(self.numerics.alloc(num, mutable.flag()).into())
     }
 
     pub fn alloc_pair<MarkFunc>(
@@ -822,7 +806,7 @@ impl Heap {
             }
 
             Value::Int64(_)
-            | Value::Float64(_)
+            | Value::Float(_)
             | Value::Byte(_)
             | Value::Int32(_)
             | Value::CodePoint(_)

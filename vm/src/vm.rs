@@ -223,7 +223,7 @@ impl<ENV> GVm<ENV> {
                 val = Value::True;
             }
         } else if val1.is_number() && val2.is_number() {
-            if (val1.get_float(self)? - val2.get_float(self)?).abs() < f64::EPSILON {
+            if (val1.get_float(self)? - val2.get_float(self)?).abs() < f32::EPSILON {
                 val = Value::True;
             }
         } else {
@@ -853,13 +853,13 @@ mod tests {
         vm.pause_gc();
         let mut chunk = Chunk::new("no_file", 1);
         let n = chunk.add_constant(Value::Int32(5000)) as u16;
-        let x = chunk.add_constant(vm.alloc_f64(0.2)) as u16;
-        let su = chunk.add_constant(vm.alloc_f64(0.0)) as u16;
-        let mu = chunk.add_constant(vm.alloc_f64(10.0)) as u16;
-        let pu = chunk.add_constant(vm.alloc_f64(0.0)) as u16;
+        let x = chunk.add_constant(0.2.into()) as u16;
+        let su = chunk.add_constant(0.0.into()) as u16;
+        let mu = chunk.add_constant(10.0.into()) as u16;
+        let pu = chunk.add_constant(0.0.into()) as u16;
         let zero = chunk.add_constant(Value::Int32(0)) as u16;
-        let zerof = chunk.add_constant(vm.alloc_f64(0.0)) as u16;
-        let twof = chunk.add_constant(vm.alloc_f64(2.0)) as u16;
+        let zerof = chunk.add_constant(0.0.into()) as u16;
+        let twof = chunk.add_constant(2.0.into()) as u16;
         let hundred = chunk.add_constant(Value::Int32(100)) as u16;
         let one = chunk.add_constant(Value::Int32(1)) as u16;
         let line = 1;
@@ -1312,7 +1312,7 @@ mod tests {
         assert!(vm.stack(0).get_int(&vm)? == 6);
 
         let mut chunk = Chunk::new("no_file", 1);
-        let const0 = chunk.add_constant(vm.alloc_f64(2_f64)) as u16;
+        let const0 = chunk.add_constant(2_f32.into()) as u16;
         let const1 = chunk.add_constant(Value::Int32(3_i32)) as u16;
         let const2 = chunk.add_constant(Value::Byte(1)) as u16;
         chunk.encode2(CONST, 0, const0, Some(line))?;
@@ -1371,7 +1371,7 @@ mod tests {
         assert_eq!(vm.stack(0).get_int(&vm)?, -2);
 
         let mut chunk = Chunk::new("no_file", 1);
-        let const0 = chunk.add_constant(vm.alloc_f64(5_f64)) as u16;
+        let const0 = chunk.add_constant(5_f32.into()) as u16;
         let const1 = chunk.add_constant(Value::Int32(3_i32)) as u16;
         let const2 = chunk.add_constant(Value::Byte(1)) as u16;
         chunk.encode2(CONST, 0, const0, Some(line))?;
@@ -1430,7 +1430,7 @@ mod tests {
         assert!(vm.stack(0).get_int(&vm)? == 6);
 
         let mut chunk = Chunk::new("no_file", 1);
-        let const0 = chunk.add_constant(vm.alloc_f64(5_f64)) as u16;
+        let const0 = chunk.add_constant(5_f32.into()) as u16;
         let const1 = chunk.add_constant(Value::Int32(3_i32)) as u16;
         let const2 = chunk.add_constant(Value::Byte(2)) as u16;
         chunk.encode2(CONST, 0, const0, Some(line))?;
@@ -1484,8 +1484,8 @@ mod tests {
         chunk.encode2(DIV, 0, 2, Some(line)).unwrap();
         chunk.encode0(RET, Some(line))?;
         let mut vm = Vm::new();
-        let val10 = vm.alloc_f64(10_f64);
-        let val0 = vm.alloc_f64(0_f64);
+        let val10 = 10_f32.into();
+        let val0 = 0_f32.into();
         let chunk = Arc::new(chunk);
         vm.execute(chunk)?;
         assert!(vm.stack(0).get_int(&vm)? == 3);

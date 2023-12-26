@@ -88,19 +88,20 @@ impl<'vm, ENV> Iterator for PairIter<'vm, ENV> {
 
 // Do this wrap nonsense so that Value is hashable...
 #[derive(Copy, Clone, Debug)]
-pub struct F64Wrap(pub f64);
+pub struct F32Wrap(pub f32);
 
-impl PartialEq for F64Wrap {
+impl PartialEq for F32Wrap {
     fn eq(&self, other: &Self) -> bool {
-        self.0.to_bits() == other.0.to_bits()
+        (self.0 - other.0).abs() < f32::EPSILON
+        //self.0.to_bits() == other.0.to_bits()
     }
 }
 
-impl Eq for F64Wrap {}
+impl Eq for F32Wrap {}
 
-impl Hash for F64Wrap {
+impl Hash for F32Wrap {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write_u64(self.0.to_bits());
+        state.write_u32(self.0.to_bits());
     }
 }
 
@@ -109,7 +110,7 @@ pub enum Value {
     Byte(u8),
     Int32(i32),
     Int64(Numeric64Handle),
-    Float64(Numeric64Handle),
+    Float(F32Wrap),
     CodePoint(char),
     CharCluster(u8, [u8; 6]),
     CharClusterLong(Handle), // Handle points to a String on the heap.
@@ -144,6 +145,18 @@ pub enum Value {
 impl Default for Value {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl From<f32> for Value {
+    fn from(value: f32) -> Self {
+        Self::Float(F32Wrap(value))
+    }
+}
+
+impl From<f64> for Value {
+    fn from(value: f64) -> Self {
+        Self::Float(F32Wrap(value as f32))
     }
 }
 
@@ -205,21 +218,13 @@ impl Value {
     }
 
     pub fn is_int(&self) -> bool {
-        matches!(
-            &self,
-            Value::Byte(_)
-                | Value::Int32(_)
-                | Value::Int64(_)
-        )
+        matches!(&self, Value::Byte(_) | Value::Int32(_) | Value::Int64(_))
     }
 
     pub fn is_number(&self) -> bool {
         matches!(
             &self,
-            Value::Byte(_)
-                | Value::Int32(_)
-                | Value::Int64(_)
-                | Value::Float64(_)
+            Value::Byte(_) | Value::Int32(_) | Value::Int64(_) | Value::Float(_)
         )
     }
 
@@ -232,12 +237,12 @@ impl Value {
         }
     }
 
-    pub fn get_float<ENV>(&self, vm: &GVm<ENV>) -> VMResult<f64> {
+    pub fn get_float<ENV>(&self, vm: &GVm<ENV>) -> VMResult<f32> {
         match &self {
-            Value::Byte(b) => Ok(*b as f64),
-            Value::Int32(i) => Ok(*i as f64),
-            Value::Float64(handle) => Ok(vm.get_float(*handle)),
-            Value::Int64(handle) => Ok(vm.get_int(*handle) as f64),
+            Value::Byte(b) => Ok(*b as f32),
+            Value::Int32(i) => Ok(*i as f32),
+            Value::Float(f) => Ok(f.0),
+            Value::Int64(handle) => Ok(vm.get_int(*handle) as f32),
             _ => Err(VMError::new_value(format!("Not a float: {self:?}"))),
         }
     }
@@ -274,7 +279,7 @@ impl Value {
             Value::Byte(_) => None,
             Value::Int32(_) => None,
             Value::Int64(_) => None,
-            Value::Float64(_) => None,
+            Value::Float(_) => None,
             Value::CodePoint(_) => None,
             Value::CharCluster(_, _) => None,
             Value::Symbol(_) => None,
@@ -375,7 +380,7 @@ impl Value {
             Value::True => "true".to_string(),
             Value::False => "false".to_string(),
             Value::Int32(i) => format!("{i}"),
-            Value::Float64(handle) => format!("{}", vm.get_float(*handle)),
+            Value::Float(f) => format!("{}", f.0),
             Value::Int64(handle) => format!("{}", vm.get_int(*handle)),
             Value::Byte(b) => format!("{b}"),
             Value::Symbol(i) => vm.get_interned(*i).to_string(),
@@ -478,7 +483,7 @@ impl Value {
             Value::True => "True",
             Value::False => "False",
             Value::Int32(_) => "Int",
-            Value::Float64(_) => "Float",
+            Value::Float(_) => "Float",
             Value::Int64(_) => "Int",
             Value::Symbol(_) => "Symbol",
             Value::Keyword(_) => "Keyword",

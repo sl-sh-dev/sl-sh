@@ -30,14 +30,14 @@ fn main() -> Result<(), VMError> {
     let mut chunk = Chunk::new("no_file", 1);
     chunk.extra_regs = 150;
     let n = chunk.add_constant(Value::Int32(500_000)) as u16;
-    let x = chunk.add_constant(vm.alloc_f64(0.2)) as u16;
-    let su = chunk.add_constant(vm.alloc_f64(0.0)) as u16;
-    let mu = chunk.add_constant(vm.alloc_f64(10.0)) as u16;
-    let pu = chunk.add_constant(vm.alloc_f64(0.0)) as u16;
+    let x = chunk.add_constant(0.2.into()) as u16;
+    let su = chunk.add_constant(0.0.into()) as u16;
+    let mu = chunk.add_constant(10.0.into()) as u16;
+    let pu = chunk.add_constant(0.0.into()) as u16;
     let zero = chunk.add_constant(Value::Int32(0)) as u16;
     //let five_hundred = chunk.add_constant(Value::Int(500)) as u16;
-    let zerof = chunk.add_constant(vm.alloc_f64(0.0)) as u16;
-    let twof = chunk.add_constant(vm.alloc_f64(2.0)) as u16;
+    let zerof = chunk.add_constant(0.0.into()) as u16;
+    let twof = chunk.add_constant(2.0.into()) as u16;
     let hundred = chunk.add_constant(Value::Int32(100)) as u16;
     //let hundred = chunk.add_constant(Value::Int(600)) as u16;
     let one = chunk.add_constant(Value::Int32(1)) as u16;
@@ -97,16 +97,21 @@ fn main() -> Result<(), VMError> {
     //chunk.encode_jump_offset(-59)?;
     //chunk.encode_jump_offset(-57)?;
 
-    chunk.encode0(RET, None)?;
+    chunk.encode1(SRET, 5, None)?;
 
-    //chunk.disassemble_chunk(&vm, 1)?;
-    //assert!(false);
-
-    //chunk.disassemble_chunk(&vm, 0);
     let chunk = Arc::new(chunk);
-    vm.execute(chunk)?;
-    let result = vm.get_stack(5).get_float(&vm)?;
-    println!("{result}");
+    match vm.execute(chunk.clone()) {
+        Err(e) => {
+            println!("ERROR: {e}");
+            chunk
+                .disassemble_chunk(&vm, 0)
+                .expect("failed to disassemble chunk");
+            println!("STACK: {:?}", &vm.stack_slice()[..vm.stack_max()]);
+        }
+        Ok(result) => {
+            println!("{result:?}");
+        }
+    }
 
     Ok(())
 }
