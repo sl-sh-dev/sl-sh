@@ -430,7 +430,7 @@ impl<'vm, ENV> Iterator for PersistentVecIter<'vm, ENV> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{VMResult, Value, Vm};
+    use crate::{to_i56, VMResult, Value, Vm};
 
     #[test]
     fn test_pvec() -> VMResult<()> {
@@ -442,58 +442,58 @@ mod tests {
         vm.set_global(global, pvec_val);
         assert_eq!(pvec.len(), 0);
         assert!(pvec.is_empty());
-        let pvec2 = pvec.push(Value::Int32(0), &mut vm);
+        let pvec2 = pvec.push(0.into(), &mut vm);
         assert_eq!(pvec.len(), 0);
         assert!(pvec.is_empty());
         assert_eq!(pvec2.len(), 1);
         assert!(!pvec2.is_empty());
-        assert_eq!(pvec2.get(0, &vm), Some(Value::Int32(0)));
+        assert_eq!(pvec2.get(0, &vm), Some(0.into()));
         let mut pvec3 = pvec2;
         for i in 1..33 {
-            pvec3 = pvec3.push(Value::Int32(i), &mut vm);
+            pvec3 = pvec3.push(i.into(), &mut vm);
         }
         assert_eq!(pvec3.len(), 33);
         assert!(!pvec3.is_empty());
-        assert_eq!(pvec3.get(0, &vm), Some(Value::Int32(0)));
-        assert_eq!(pvec3.get(16, &vm), Some(Value::Int32(16)));
-        assert_eq!(pvec3.get(31, &vm), Some(Value::Int32(31)));
-        assert_eq!(pvec3.get(32, &vm), Some(Value::Int32(32)));
+        assert_eq!(pvec3.get(0, &vm), Some(0.into()));
+        assert_eq!(pvec3.get(16, &vm), Some(16.into()));
+        assert_eq!(pvec3.get(31, &vm), Some(31.into()));
+        assert_eq!(pvec3.get(32, &vm), Some(32.into()));
         let old_pvec3 = pvec3;
 
         for i in 33..1000 {
-            pvec3 = pvec3.push(Value::Int32(i), &mut vm);
+            pvec3 = pvec3.push(i.into(), &mut vm);
         }
         assert_eq!(old_pvec3.len(), 33);
         assert_eq!(pvec3.len(), 1000);
         assert!(!pvec3.is_empty());
-        assert_eq!(pvec3.get(0, &vm), Some(Value::Int32(0)));
-        assert_eq!(pvec3.get(16, &vm), Some(Value::Int32(16)));
-        assert_eq!(pvec3.get(31, &vm), Some(Value::Int32(31)));
-        assert_eq!(pvec3.get(32, &vm), Some(Value::Int32(32)));
-        assert_eq!(pvec3.get(48, &vm), Some(Value::Int32(48)));
-        assert_eq!(pvec3.get(63, &vm), Some(Value::Int32(63)));
-        assert_eq!(pvec3.get(64, &vm), Some(Value::Int32(64)));
-        assert_eq!(pvec3.get(512, &vm), Some(Value::Int32(512)));
-        assert_eq!(pvec3.get(888, &vm), Some(Value::Int32(888)));
-        assert_eq!(pvec3.get(999, &vm), Some(Value::Int32(999)));
+        assert_eq!(pvec3.get(0, &vm), Some(0.into()));
+        assert_eq!(pvec3.get(16, &vm), Some(16.into()));
+        assert_eq!(pvec3.get(31, &vm), Some(31.into()));
+        assert_eq!(pvec3.get(32, &vm), Some(32.into()));
+        assert_eq!(pvec3.get(48, &vm), Some(48.into()));
+        assert_eq!(pvec3.get(63, &vm), Some(63.into()));
+        assert_eq!(pvec3.get(64, &vm), Some(64.into()));
+        assert_eq!(pvec3.get(512, &vm), Some(512.into()));
+        assert_eq!(pvec3.get(888, &vm), Some(888.into()));
+        assert_eq!(pvec3.get(999, &vm), Some(999.into()));
 
         for i in 1000..5000 {
-            pvec3 = pvec3.push(Value::Int32(i), &mut vm);
+            pvec3 = pvec3.push(i.into(), &mut vm);
         }
         assert_eq!(pvec3.len(), 5000);
         assert!(!pvec3.is_empty());
-        assert_eq!(pvec3.get(0, &vm), Some(Value::Int32(0)));
-        assert_eq!(pvec3.get(16, &vm), Some(Value::Int32(16)));
-        assert_eq!(pvec3.get(31, &vm), Some(Value::Int32(31)));
-        assert_eq!(pvec3.get(32, &vm), Some(Value::Int32(32)));
-        assert_eq!(pvec3.get(48, &vm), Some(Value::Int32(48)));
-        assert_eq!(pvec3.get(63, &vm), Some(Value::Int32(63)));
-        assert_eq!(pvec3.get(64, &vm), Some(Value::Int32(64)));
-        assert_eq!(pvec3.get(512, &vm), Some(Value::Int32(512)));
-        assert_eq!(pvec3.get(888, &vm), Some(Value::Int32(888)));
-        assert_eq!(pvec3.get(999, &vm), Some(Value::Int32(999)));
-        assert_eq!(pvec3.get(3999, &vm), Some(Value::Int32(3999)));
-        assert_eq!(pvec3.get(4999, &vm), Some(Value::Int32(4999)));
+        assert_eq!(pvec3.get(0, &vm), Some(0.into()));
+        assert_eq!(pvec3.get(16, &vm), Some(16.into()));
+        assert_eq!(pvec3.get(31, &vm), Some(31.into()));
+        assert_eq!(pvec3.get(32, &vm), Some(32.into()));
+        assert_eq!(pvec3.get(48, &vm), Some(48.into()));
+        assert_eq!(pvec3.get(63, &vm), Some(63.into()));
+        assert_eq!(pvec3.get(64, &vm), Some(64.into()));
+        assert_eq!(pvec3.get(512, &vm), Some(512.into()));
+        assert_eq!(pvec3.get(888, &vm), Some(888.into()));
+        assert_eq!(pvec3.get(999, &vm), Some(999.into()));
+        assert_eq!(pvec3.get(3999, &vm), Some(3999.into()));
+        assert_eq!(pvec3.get(4999, &vm), Some(4999.into()));
         Ok(())
     }
 
@@ -507,26 +507,26 @@ mod tests {
         assert!(pvec.replace(0, Value::Nil, &mut vm).is_none());
         assert!(pvec.replace(32, Value::Nil, &mut vm).is_none());
         for i in 0..5000 {
-            pvec = pvec.push(Value::Int32(i), &mut vm);
+            pvec = pvec.push(i.into(), &mut vm);
         }
         assert_eq!(pvec.len(), 5000);
         assert!(!pvec.is_empty());
-        assert_eq!(pvec.get(0, &vm), Some(Value::Int32(0)));
+        assert_eq!(pvec.get(0, &vm), Some(0.into()));
         pvec = pvec.replace(0, Value::Nil, &mut vm).unwrap();
         assert_eq!(pvec.get(0, &vm), Some(Value::Nil));
-        assert_eq!(pvec.get(31, &vm), Some(Value::Int32(31)));
+        assert_eq!(pvec.get(31, &vm), Some(31.into()));
         pvec = pvec.replace(31, Value::Nil, &mut vm).unwrap();
         assert_eq!(pvec.get(31, &vm), Some(Value::Nil));
-        assert_eq!(pvec.get(32, &vm), Some(Value::Int32(32)));
+        assert_eq!(pvec.get(32, &vm), Some(32.into()));
         pvec = pvec.replace(32, Value::Nil, &mut vm).unwrap();
         assert_eq!(pvec.get(32, &vm), Some(Value::Nil));
-        assert_eq!(pvec.get(1024, &vm), Some(Value::Int32(1024)));
+        assert_eq!(pvec.get(1024, &vm), Some(1024.into()));
         pvec = pvec.replace(1024, Value::Nil, &mut vm).unwrap();
         assert_eq!(pvec.get(1024, &vm), Some(Value::Nil));
-        assert_eq!(pvec.get(2000, &vm), Some(Value::Int32(2000)));
+        assert_eq!(pvec.get(2000, &vm), Some(2000.into()));
         pvec = pvec.replace(2000, Value::Nil, &mut vm).unwrap();
         assert_eq!(pvec.get(2000, &vm), Some(Value::Nil));
-        assert_eq!(pvec.get(4999, &vm), Some(Value::Int32(4999)));
+        assert_eq!(pvec.get(4999, &vm), Some(4999.into()));
         pvec = pvec.replace(4999, Value::Nil, &mut vm).unwrap();
         assert_eq!(pvec.get(4999, &vm), Some(Value::Nil));
         Ok(())
@@ -542,14 +542,14 @@ mod tests {
         assert!(pvec.replace(0, Value::Nil, &mut vm).is_none());
         assert!(pvec.replace(32, Value::Nil, &mut vm).is_none());
         for i in 0..5000 {
-            pvec = pvec.push(Value::Int32(i), &mut vm);
+            pvec = pvec.push(i.into(), &mut vm);
         }
         assert_eq!(pvec.len(), 5000);
         assert!(!pvec.is_empty());
         let iter = vm.alloc_persistent_vector(pvec).iter(&vm);
         let mut max = 0;
         for (i, val) in iter.enumerate() {
-            assert_eq!(val, Value::Int32(i as i32));
+            assert_eq!(val, to_i56(i as i64));
             max = i;
         }
         assert_eq!(max, 4999);
@@ -564,7 +564,7 @@ mod tests {
         assert_eq!(pvec.len(), 0);
         assert!(pvec.is_empty());
         for i in 0..5000 {
-            pvec = pvec.push(Value::Int32(i), &mut vm);
+            pvec = pvec.push(i.into(), &mut vm);
         }
         assert_eq!(pvec.len(), 5000);
         assert!(!pvec.is_empty());
@@ -576,7 +576,7 @@ mod tests {
         let iter = vm.alloc_persistent_vector(pvec).iter(&vm);
         let mut max = 0;
         for (i, val) in iter.enumerate() {
-            assert_eq!(val, Value::Int32(i as i32));
+            assert_eq!(val, to_i56(i as i64));
             max = i;
         }
         assert_eq!(max, 2999);
@@ -589,7 +589,7 @@ mod tests {
         let iter = vm.alloc_persistent_vector(pvec).iter(&vm);
         let mut max = 0;
         for (i, val) in iter.enumerate() {
-            assert_eq!(val, Value::Int32(i as i32));
+            assert_eq!(val, to_i56(i as i64));
             max = i;
         }
         assert_eq!(max, 15);
@@ -609,7 +609,7 @@ mod tests {
         assert_eq!(pvec.len(), 0);
         assert!(pvec.is_empty());
         for i in 0..16 {
-            pvec = pvec.push(Value::Int32(i), &mut vm);
+            pvec = pvec.push(i.into(), &mut vm);
         }
         assert_eq!(pvec.len(), 16);
         assert!(!pvec.is_empty());
@@ -621,7 +621,7 @@ mod tests {
         let iter = vm.alloc_persistent_vector(pvec).iter(&vm);
         let mut max = 0;
         for (i, val) in iter.enumerate() {
-            assert_eq!(val, Value::Int32(i as i32));
+            assert_eq!(val, to_i56(i as i64));
             max = i;
         }
         assert_eq!(max, 7);
@@ -633,7 +633,7 @@ mod tests {
         let iter = vm.alloc_persistent_vector(pvec).iter(&vm);
         let mut max = 0;
         for (i, val) in iter.enumerate() {
-            assert_eq!(val, Value::Int32(i as i32));
+            assert_eq!(val, to_i56(i as i64));
             max = i;
         }
         assert_eq!(max, 0);

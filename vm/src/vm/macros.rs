@@ -151,8 +151,7 @@ macro_rules! get_int {
     ($vm:expr, $val:expr) => {{
         match $val {
             Value::Byte(b) => Ok(b as i64),
-            Value::Int32(i) => Ok(i as i64),
-            Value::Int64(handle) => Ok($vm.get_int(handle)),
+            Value::Int(i) => Ok(crate::from_i56(&i)),
             _ => Err(VMError::new_value(format!("Not an integer: {:?}", $val))),
         }
     }};
@@ -162,8 +161,7 @@ macro_rules! get_float {
     ($vm:expr, $val:expr) => {{
         match $val {
             Value::Byte(b) => Ok(b as f32),
-            Value::Int32(i) => Ok(i as f32),
-            Value::Int64(handle) => Ok($vm.get_int(handle) as f32),
+            Value::Int(i) => Ok(crate::from_i56(&i) as f32),
             Value::Float(f) => Ok(f.0),
             _ => Err(VMError::new_value(format!("Not a float: {:?}", $val))),
         }
@@ -193,32 +191,12 @@ macro_rules! binary_math {
                 )
                 .into();
             }
-            (Value::Int64(op1_handle), Value::Int64(op2_handle)) => {
-                *$vm.get_int_mut(op1_handle) =
-                    $bin_fn($vm.get_int(op1_handle), $vm.get_int(op2_handle));
-            }
-            (Value::Int64(op1_handle), _) => {
-                *$vm.get_int_mut(op1_handle) = $bin_fn(
-                    $vm.get_int(op1_handle),
-                    get_int!($vm, op2).map_err(|e| (e, $chunk.clone()))?,
-                );
-            }
-            (Value::Int32(op1_val), _) => {
-                let val = $bin_fn(
-                    op1_val as i64,
-                    get_int!($vm, op2).map_err(|e| (e, $chunk.clone()))?,
-                );
-                if val > i32::MIN as i64 && val < i32::MAX as i64 {
-                    *$vm.register_mut(dest as usize) = Value::Int32(val as i32);
-                } else {
-                    *$vm.register_mut(dest as usize) = $vm.alloc_i64(val);
-                }
-            }
             (_, _) => {
-                *$vm.register_mut(dest as usize) = $vm.alloc_i64($bin_fn(
+                *$vm.register_mut(dest as usize) = $bin_fn(
                     get_int!($vm, op1).map_err(|e| (e, $chunk.clone()))?,
                     get_int!($vm, op2).map_err(|e| (e, $chunk.clone()))?,
-                ));
+                )
+                .into();
             }
         }
     }};
@@ -254,35 +232,6 @@ macro_rules! div_math {
                 }
                 *$vm.register_mut(dest as usize) = (op1 / op2).into();
             }
-            (Value::Int64(op1_handle), Value::Int64(op2_handle)) => {
-                let op1 = $vm.get_int(op1_handle);
-                let op2 = $vm.get_int(op2_handle);
-                if op2 == 0 {
-                    return Err((VMError::new_vm("Divide by zero error."), $chunk));
-                }
-                *$vm.get_int_mut(op1_handle) = op1 / op2;
-            }
-            (Value::Int64(op1_handle), _) => {
-                let op1 = $vm.get_int(op1_handle);
-                let op2 = get_int!($vm, op2).map_err(|e| (e, $chunk.clone()))?;
-                if op2 == 0 {
-                    return Err((VMError::new_vm("Divide by zero error."), $chunk));
-                }
-                *$vm.get_int_mut(op1_handle) = op1 / op2;
-            }
-            (Value::Int32(op1_val), _) => {
-                let op1 = op1_val as i64;
-                let op2 = get_int!($vm, op2).map_err(|e| (e, $chunk.clone()))?;
-                if op2 == 0 {
-                    return Err((VMError::new_vm("Divide by zero error."), $chunk));
-                }
-                let val = op1 / op2;
-                if val >= i32::MIN as i64 && val <= i32::MAX as i64 {
-                    *$vm.register_mut(dest as usize) = Value::Int32(val as i32);
-                } else {
-                    *$vm.register_mut(dest as usize) = $vm.alloc_i64(val);
-                }
-            }
             (_, _) => {
                 let op1 = get_int!($vm, op1).map_err(|e| (e, $chunk.clone()))?;
                 let op2 = get_int!($vm, op2).map_err(|e| (e, $chunk.clone()))?;
@@ -290,11 +239,7 @@ macro_rules! div_math {
                     return Err((VMError::new_vm("Divide by zero error."), $chunk));
                 }
                 let val = op1 / op2;
-                if val >= i32::MIN as i64 && val <= i32::MAX as i64 {
-                    *$vm.register_mut(dest as usize) = Value::Int32(val as i32);
-                } else {
-                    *$vm.register_mut(dest as usize) = $vm.alloc_i64(val);
-                }
+                *$vm.register_mut(dest as usize) = val.into();
             }
         }
     }};
@@ -307,12 +252,6 @@ macro_rules! set_register {
             (Value::Value(handle), _) => {
                 *($vm.heap_mut().get_value_mut(*handle)) = $val;
             }
-            (Value::Int64(handle_to), Value::Int64(handle_from)) => {
-                *$vm.get_int_mut(*handle_to) = $vm.get_int(handle_from);
-            }
-            (_, Value::Int64(handle_from)) => {
-                *$vm.register_mut($idx) = $vm.alloc_i64($vm.get_int(handle_from));
-            }
             _ => *$vm.register_mut($idx) = $val,
         }
     }};
@@ -322,20 +261,5 @@ macro_rules! set_register {
 macro_rules! mov_register {
     ($vm:expr, $idx:expr, $val:expr) => {{
         *$vm.register_mut($idx) = $val;
-    }};
-}
-
-#[macro_export]
-macro_rules! mov_register_num {
-    ($vm:expr, $idx:expr, $val:expr) => {{
-        match (&$vm.register($idx as usize), $val) {
-            (Value::Int64(handle_to), Value::Int64(handle_from)) => {
-                *$vm.get_int_mut(*handle_to) = $vm.get_int(handle_from);
-            }
-            (_, Value::Int64(handle_from)) => {
-                *$vm.register_mut($idx) = $vm.alloc_i64($vm.get_int(handle_from));
-            }
-            _ => *$vm.register_mut($idx) = $val,
-        }
     }};
 }

@@ -1,5 +1,3 @@
-use std::fmt::{Display, Formatter};
-
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Handle {
     idx: u32,
@@ -22,38 +20,5 @@ impl Handle {
 impl From<u32> for Handle {
     fn from(idx: u32) -> Self {
         Self { idx }
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Numeric64Handle(u16);
-
-impl From<u32> for Numeric64Handle {
-    fn from(idx: u32) -> Self {
-        Self(idx as u16)
-    }
-}
-
-impl From<Numeric64Handle> for u32 {
-    fn from(handle: Numeric64Handle) -> Self {
-        handle.0 as u32
-    }
-}
-
-impl From<Numeric64Handle> for usize {
-    fn from(handle: Numeric64Handle) -> Self {
-        handle.0 as usize
-    }
-}
-
-impl Display for Numeric64Handle {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
-impl Numeric64Handle {
-    pub fn as_usize(&self) -> usize {
-        self.0 as usize
     }
 }

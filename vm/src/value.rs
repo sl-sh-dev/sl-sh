@@ -5,7 +5,6 @@ use std::iter;
 use std::sync::Arc;
 
 use crate::error::*;
-use crate::handle::Numeric64Handle;
 use crate::heap::*;
 use crate::interner::*;
 use crate::persistent_vec::PersistentVecIter;
@@ -105,11 +104,32 @@ impl Hash for F32Wrap {
     }
 }
 
+pub const INT_BITS: u8 = 56;
+pub const INT_MAX: i64 = 2_i64.pow(INT_BITS as u32 - 1) - 1;
+pub const INT_MIN: i64 = -(2_i64.pow(INT_BITS as u32 - 1));
+
+pub fn from_i56(arr: &[u8; 7]) -> i64 {
+    let mut bytes = [0x00, arr[0], arr[1], arr[2], arr[3], arr[4], arr[5], arr[6]];
+    if (arr[0] & 0x80) > 0 {
+        bytes[0] = 0xff;
+        i64::from_be_bytes(bytes)
+    } else {
+        i64::from_be_bytes(bytes)
+    }
+}
+
+pub fn to_i56(i: i64) -> Value {
+    let bytes = i.to_be_bytes();
+    let bytes7 = [
+        bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+    ];
+    Value::Int(bytes7)
+}
+
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum Value {
     Byte(u8),
-    Int32(i32),
-    Int64(Numeric64Handle),
+    Int([u8; 7]), // Store a 7 byte int (i56...).
     Float(F32Wrap),
     CodePoint(char),
     CharCluster(u8, [u8; 6]),
@@ -157,6 +177,24 @@ impl From<f32> for Value {
 impl From<f64> for Value {
     fn from(value: f64) -> Self {
         Self::Float(F32Wrap(value as f32))
+    }
+}
+
+impl From<i64> for Value {
+    fn from(value: i64) -> Self {
+        to_i56(value)
+    }
+}
+
+impl From<i32> for Value {
+    fn from(value: i32) -> Self {
+        to_i56(value as i64)
+    }
+}
+
+impl From<u32> for Value {
+    fn from(value: u32) -> Self {
+        to_i56(value as i64)
     }
 }
 
@@ -218,31 +256,26 @@ impl Value {
     }
 
     pub fn is_int(&self) -> bool {
-        matches!(&self, Value::Byte(_) | Value::Int32(_) | Value::Int64(_))
+        matches!(&self, Value::Byte(_) | Value::Int(_))
     }
 
     pub fn is_number(&self) -> bool {
-        matches!(
-            &self,
-            Value::Byte(_) | Value::Int32(_) | Value::Int64(_) | Value::Float(_)
-        )
+        matches!(&self, Value::Byte(_) | Value::Int(_) | Value::Float(_))
     }
 
-    pub fn get_int<ENV>(&self, vm: &GVm<ENV>) -> VMResult<i64> {
+    pub fn get_int<ENV>(&self, _vm: &GVm<ENV>) -> VMResult<i64> {
         match &self {
             Value::Byte(b) => Ok(*b as i64),
-            Value::Int32(i) => Ok(*i as i64),
-            Value::Int64(handle) => Ok(vm.get_int(*handle)),
+            Value::Int(i) => Ok(from_i56(i)),
             _ => Err(VMError::new_value(format!("Not an integer: {self:?}"))),
         }
     }
 
-    pub fn get_float<ENV>(&self, vm: &GVm<ENV>) -> VMResult<f32> {
+    pub fn get_float<ENV>(&self, _vm: &GVm<ENV>) -> VMResult<f32> {
         match &self {
             Value::Byte(b) => Ok(*b as f32),
-            Value::Int32(i) => Ok(*i as f32),
+            Value::Int(i) => Ok(from_i56(i) as f32),
             Value::Float(f) => Ok(f.0),
-            Value::Int64(handle) => Ok(vm.get_int(*handle) as f32),
             _ => Err(VMError::new_value(format!("Not a float: {self:?}"))),
         }
     }
@@ -277,8 +310,7 @@ impl Value {
             Value::Error(handle) => Some(*handle),
 
             Value::Byte(_) => None,
-            Value::Int32(_) => None,
-            Value::Int64(_) => None,
+            Value::Int(_) => None,
             Value::Float(_) => None,
             Value::CodePoint(_) => None,
             Value::CharCluster(_, _) => None,
@@ -379,9 +411,8 @@ impl Value {
         match self {
             Value::True => "true".to_string(),
             Value::False => "false".to_string(),
-            Value::Int32(i) => format!("{i}"),
+            Value::Int(i) => format!("{}", from_i56(i)),
             Value::Float(f) => format!("{}", f.0),
-            Value::Int64(handle) => format!("{}", vm.get_int(*handle)),
             Value::Byte(b) => format!("{b}"),
             Value::Symbol(i) => vm.get_interned(*i).to_string(),
             Value::Keyword(i) => format!(":{}", vm.get_interned(*i)),
@@ -482,9 +513,8 @@ impl Value {
         match self {
             Value::True => "True",
             Value::False => "False",
-            Value::Int32(_) => "Int",
+            Value::Int(_) => "Int",
             Value::Float(_) => "Float",
-            Value::Int64(_) => "Int",
             Value::Symbol(_) => "Symbol",
             Value::Keyword(_) => "Keyword",
             Value::StringConst(_) => "String",

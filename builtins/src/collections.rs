@@ -182,33 +182,33 @@ fn length(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if let (Some(val), None) = (i.next(), i.next()) {
         match val {
             Value::String(h) => {
-                let mut len: i32 = 0;
+                let mut len: i64 = 0;
                 for _ in UnicodeSegmentation::graphemes(vm.get_string(*h), true) {
                     len += 1;
                 }
-                Ok(Value::Int32(len))
+                Ok(len.into())
             }
             Value::StringConst(i) => {
-                let mut len: i32 = 0;
+                let mut len: i64 = 0;
                 for _ in UnicodeSegmentation::graphemes(vm.get_interned(*i), true) {
                     len += 1;
                 }
-                Ok(Value::Int32(len))
+                Ok(len.into())
             }
-            Value::Vector(h) => Ok(Value::Int32(vm.get_vector(*h).len() as i32)),
-            Value::List(h, i) => Ok(Value::Int32(vm.get_vector(*h).len() as i32 - *i as i32)),
+            Value::Vector(h) => Ok((vm.get_vector(*h).len() as i64).into()),
+            Value::List(h, i) => Ok((vm.get_vector(*h).len() as i64 - *i as i64).into()),
             Value::Pair(h) => {
-                let mut len: i32 = 1;
+                let mut len: i64 = 1;
                 let (_, mut cdr) = vm.get_pair(*h);
                 while let Value::Pair(h) = cdr {
                     let (_, c) = vm.get_pair(h);
                     cdr = c;
                     len += 1;
                 }
-                Ok(Value::Int32(len))
+                Ok(len.into())
             }
-            Value::Map(h) => Ok(Value::Int32(vm.get_map(*h).len() as i32)),
-            Value::Nil => Ok(Value::Int32(0)),
+            Value::Map(h) => Ok((vm.get_map(*h).len() as i64).into()),
+            Value::Nil => Ok(0.into()),
             _ => Err(VMError::new_vm(format!(
                 "len: net valid for value of type {}",
                 val.display_type(vm)

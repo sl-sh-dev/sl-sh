@@ -29,7 +29,7 @@ fn fs_meta(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         map.insert(Value::Keyword(vm.intern_static("readonly")), ro);
         map.insert(
             Value::Keyword(vm.intern_static("len")),
-            vm.alloc_i64(meta.len() as i64),
+            (meta.len() as i64).into(),
         );
         map.insert(
             Value::Keyword(vm.intern_static("type")),

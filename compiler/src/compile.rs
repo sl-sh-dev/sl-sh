@@ -431,10 +431,18 @@ pub fn mkconst(
         Value::Byte(i) => state
             .chunk
             .encode2(REGB, result as u16, i as u16, env.own_line())?,
-        Value::Int32(i) if i >= 0 && i <= u16::MAX as i32 => {
-            state
-                .chunk
-                .encode2(REGI, result as u16, i as u16, env.own_line())?;
+        Value::Int(i) => {
+            let i = from_i56(&i);
+            if i >= 0 && i <= u16::MAX as i64 {
+                state
+                    .chunk
+                    .encode2(REGI, result as u16, i as u16, env.own_line())?;
+            } else {
+                let const_i = state.add_constant(exp);
+                state
+                    .chunk
+                    .encode2(CONST, result as u16, const_i as u16, env.own_line())?;
+            }
         }
         _ => {
             let const_i = state.add_constant(exp);
@@ -497,10 +505,18 @@ pub fn compile(
         Value::Byte(i) => state
             .chunk
             .encode2(REGB, result as u16, i as u16, env.own_line())?,
-        Value::Int32(i) if i >= 0 && i <= u16::MAX as i32 => {
-            state
-                .chunk
-                .encode2(REGI, result as u16, i as u16, env.own_line())?
+        Value::Int(i) => {
+            let i = from_i56(&i);
+            if i >= 0 && i <= u16::MAX as i64 {
+                state
+                    .chunk
+                    .encode2(REGI, result as u16, i as u16, env.own_line())?
+            } else {
+                let const_i = state.add_constant(exp);
+                state
+                    .chunk
+                    .encode2(CONST, result as u16, const_i as u16, env.own_line())?;
+            }
         }
         _ => {
             let const_i = state.add_constant(exp);

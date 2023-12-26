@@ -530,13 +530,14 @@ pub fn new_slosh_vm() -> SloshVm {
 
 impl SloshVmTrait for SloshVm {
     fn set_line_val(&mut self, state: &mut CompileState, val: Value) {
-        if let (Some(Value::Int32(dline)), Some(Value::StringConst(file_intern))) = (
+        if let (Some(Value::Int(dline)), Some(Value::StringConst(file_intern))) = (
             self.get_heap_property(val, "dbg-line"),
             self.get_heap_property(val, "dbg-file"),
         ) {
+            let dline = from_i56(&dline) as u32;
             let file_name = self.get_interned(file_intern);
-            if file_name == state.chunk.file_name && dline as u32 > self.env().line {
-                self.env_mut().line = dline as u32;
+            if file_name == state.chunk.file_name && dline > self.env().line {
+                self.env_mut().line = dline;
             }
         }
     }

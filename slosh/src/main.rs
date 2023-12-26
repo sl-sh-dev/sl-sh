@@ -37,7 +37,7 @@ use config::*;
 use debug::*;
 use shell::platform::{Platform, Sys, STDIN_FILENO};
 use sl_compiler::pass1::pass1;
-use slvm::Value;
+use slvm::{Value, INT_BITS, INT_MAX, INT_MIN};
 
 thread_local! {
     /// Env (job control status, etc) for the shell.
@@ -203,19 +203,12 @@ fn main() {
             let euid = Sys::effective_uid();
             env::set_var("UID", format!("{uid}"));
             env::set_var("EUID", format!("{euid}"));
-            if uid <= i32::MAX as u32 {
-                env.set_named_global("*uid*", Value::Int32(uid as i32));
-            } else {
-                let uid = env.alloc_i64(uid as i64);
-                env.set_named_global("*uid*", uid);
-            }
-            if euid <= i32::MAX as u32 {
-                env.set_named_global("*euid*", Value::Int32(euid as i32));
-            } else {
-                let euid = env.alloc_i64(euid as i64);
-                env.set_named_global("*euid*", euid);
-            }
-            env.set_named_global("*last-status*", Value::Int32(0));
+            env.set_named_global("*uid*", uid.into());
+            env.set_named_global("*euid*", euid.into());
+            env.set_named_global("*last-status*", 0.into());
+            env.set_named_global("*int-bits*", (INT_BITS as i64).into());
+            env.set_named_global("*int-max*", INT_MAX.into());
+            env.set_named_global("*int-min*", INT_MIN.into());
             // Initialize the HOST variable
             let host: OsString = Sys::gethostname().unwrap_or_else(|| "???".into());
             env::set_var("HOST", host);
@@ -303,7 +296,7 @@ fn main() {
                         });
                         ENV.with(|env| {
                             env.borrow_mut()
-                                .set_named_global("*last-status*", Value::Int32(status));
+                                .set_named_global("*last-status*", status.into());
                         })
                     }
                 }
@@ -337,7 +330,7 @@ fn main() {
                         });
                         ENV.with(|env| {
                             env.borrow_mut()
-                                .set_named_global("*last-status*", Value::Int32(status));
+                                .set_named_global("*last-status*", status.into());
                         })
                     }
                     res.clear();

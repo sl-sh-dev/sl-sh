@@ -223,10 +223,8 @@ impl<'vm> Reader<'vm> {
         let file_name = self.vm.intern_static(self.file_name);
         self.vm
             .set_heap_property(result, "dbg-file", Value::StringConst(file_name));
-        self.vm
-            .set_heap_property(result, "dbg-line", Value::Int32(line as i32));
-        self.vm
-            .set_heap_property(result, "dbg-col", Value::Int32(column as i32));
+        self.vm.set_heap_property(result, "dbg-line", line.into());
+        self.vm.set_heap_property(result, "dbg-col", column.into());
         result
     }
 
@@ -235,10 +233,8 @@ impl<'vm> Reader<'vm> {
         let file_name = self.vm.intern_static(self.file_name);
         self.vm
             .set_heap_property(result, "dbg-file", Value::StringConst(file_name));
-        self.vm
-            .set_heap_property(result, "dbg-line", Value::Int32(line as i32));
-        self.vm
-            .set_heap_property(result, "dbg-col", Value::Int32(column as i32));
+        self.vm.set_heap_property(result, "dbg-line", line.into());
+        self.vm.set_heap_property(result, "dbg-col", column.into());
         result
     }
 
@@ -523,7 +519,7 @@ impl<'vm> Reader<'vm> {
             num_str.retain(|ch| ch != '_');
             let potential_int: Result<i64, ParseIntError> = num_str.parse();
             match potential_int {
-                Ok(v) => self.vm.alloc_int(v),
+                Ok(v) => v.into(),
                 Err(_) => {
                     let potential_float: Result<f64, ParseFloatError> = num_str.parse();
                     match potential_float {
@@ -919,7 +915,7 @@ impl<'vm> Reader<'vm> {
                         let i_p = self.vm.intern(&p[1..]);
                         vals.push(Value::Symbol(i_p));
                     } else if let Ok(num) = p.parse::<i32>() {
-                        vals.push(Value::Int32(num));
+                        vals.push(num.into());
                     } else if i % 2 == 0 {
                         let i_p = self.vm.intern(p);
                         vals.push(Value::Symbol(i_p));
@@ -1073,17 +1069,17 @@ impl<'vm> Reader<'vm> {
                         // Read an octal int
                         "o" => {
                             let exp = self.read_num_radix(buffer, 8, &read_table_term)?;
-                            return Ok(Some(self.vm.alloc_int(exp)));
+                            return Ok(Some(exp.into()));
                         }
                         // Read a hex int
                         "x" => {
                             let exp = self.read_num_radix(buffer, 16, &read_table_term)?;
-                            return Ok(Some(self.vm.alloc_int(exp)));
+                            return Ok(Some(exp.into()));
                         }
                         // Read a binary int
                         "b" => {
                             let exp = self.read_num_radix(buffer, 2, &read_table_term)?;
-                            return Ok(Some(self.vm.alloc_int(exp)));
+                            return Ok(Some(exp.into()));
                         }
                         ";" => {
                             match self.read_inner(buffer, in_back_quote, ReadReturn::None) {

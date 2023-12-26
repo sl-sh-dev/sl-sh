@@ -130,8 +130,7 @@ impl<ENV> GVm<ENV> {
         let reg = self.register(idx);
         match reg {
             Value::Byte(b) => Ok(b as i64),
-            Value::Int32(i) => Ok(i as i64),
-            Value::Int64(handle) => Ok(self.get_int(handle)),
+            Value::Int(i) => Ok(from_i56(&i)),
             _ => Err(VMError::new_value(format!("Not an integer: {:?}", reg))),
         }
     }
@@ -469,8 +468,8 @@ mod tests {
     use crate::opcodes::*;
 
     fn get_int(_vm: &Vm, val: &Value) -> VMResult<i64> {
-        if let Value::Int32(i) = val {
-            Ok(*i as i64)
+        if let Value::Int(i) = val {
+            Ok(from_i56(i))
         } else {
             Err(VMError::new_vm("Not an int"))
         }
@@ -488,10 +487,10 @@ mod tests {
     fn test_list() -> VMResult<()> {
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
-        chunk.add_constant(Value::Int32(1));
-        chunk.add_constant(Value::Int32(2));
-        chunk.add_constant(Value::Int32(3));
-        chunk.add_constant(Value::Int32(4));
+        chunk.add_constant(1.into());
+        chunk.add_constant(2.into());
+        chunk.add_constant(3.into());
+        chunk.add_constant(4.into());
         chunk.add_constant(Value::Nil);
         chunk.encode2(CONST, 0, 0, Some(line)).unwrap();
         chunk.encode2(CONST, 1, 1, Some(line)).unwrap();
@@ -651,7 +650,7 @@ mod tests {
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
         for i in 0..257 {
-            chunk.add_constant(Value::Int32(i));
+            chunk.add_constant(i.into());
         }
         chunk.encode2(CONST, 0, 0, Some(line)).unwrap();
         chunk.encode2(CONST, 1, 255, Some(line)).unwrap();
@@ -687,9 +686,9 @@ mod tests {
         assert!(result == 255 + 256);
 
         let mut vm = Vm::new();
-        *vm.stack_mut(0) = vm.new_upval(Value::Int32(1));
-        *vm.stack_mut(1) = Value::Int32(10);
-        *vm.stack_mut(2) = Value::Int32(1);
+        *vm.stack_mut(0) = vm.new_upval(1.into());
+        *vm.stack_mut(1) = 10.into();
+        *vm.stack_mut(2) = 1.into();
         let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         chunk.encode2(MOV, 1, 0, Some(line)).unwrap();
@@ -714,8 +713,8 @@ mod tests {
         let mut vm = Vm::new();
         let slot = vm.globals.reserve();
         let slot2 = vm.globals.reserve();
-        let const2 = chunk.add_constant(Value::Int32(42)) as u16;
-        vm.globals.set(slot, Value::Int32(11));
+        let const2 = chunk.add_constant(42.into()) as u16;
+        vm.globals.set(slot, 11.into());
         chunk.encode_refi(1, slot, Some(line))?;
         chunk.encode0(RET, Some(line))?;
         let chunk = Arc::new(chunk);
@@ -734,9 +733,9 @@ mod tests {
 
         let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
-        vm.globals.set(slot, Value::Int32(11));
-        let const2 = chunk.add_constant(Value::Int32(43)) as u16;
-        let const3 = chunk.add_constant(Value::Int32(53)) as u16;
+        vm.globals.set(slot, 11.into());
+        let const2 = chunk.add_constant(43.into()) as u16;
+        let const3 = chunk.add_constant(53.into()) as u16;
         chunk.encode2(CONST, 1, const2, Some(line))?;
         chunk.encode2(CONST, 3, const3, Some(line))?;
         chunk.encode_def(1, slot2, Some(line), false)?;
@@ -749,10 +748,10 @@ mod tests {
 
         let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
-        vm.globals.set(slot2, Value::Int32(11));
+        vm.globals.set(slot2, 11.into());
         assert!(vm.globals.get(slot2).get_int(&vm)? == 11);
-        let const2 = chunk.add_constant(Value::Int32(43)) as u16;
-        let const3 = chunk.add_constant(Value::Int32(53)) as u16;
+        let const2 = chunk.add_constant(43.into()) as u16;
+        let const3 = chunk.add_constant(53.into()) as u16;
         chunk.encode2(CONST, 1, const2, Some(line))?;
         chunk.encode2(CONST, 3, const3, Some(line))?;
         chunk.encode_def(1, slot, Some(line), false)?;
@@ -771,8 +770,8 @@ mod tests {
         let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         let slot = vm.globals.reserve();
-        let const2 = chunk.add_constant(Value::Int32(44)) as u16;
-        let const3 = chunk.add_constant(Value::Int32(53)) as u16;
+        let const2 = chunk.add_constant(44.into()) as u16;
+        let const3 = chunk.add_constant(53.into()) as u16;
         chunk.encode2(CONST, 2, const2, Some(line))?;
         chunk.encode2(CONST, 3, const3, Some(line))?;
         chunk.encode_def(2, slot, Some(line), true)?;
@@ -787,8 +786,8 @@ mod tests {
         let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         let slot = vm.globals.reserve();
-        let const2 = chunk.add_constant(Value::Int32(45)) as u16;
-        let const3 = chunk.add_constant(Value::Int32(55)) as u16;
+        let const2 = chunk.add_constant(45.into()) as u16;
+        let const3 = chunk.add_constant(55.into()) as u16;
         chunk.encode2(CONST, 2, const2, Some(line))?;
         chunk.encode2(CONST, 3, const3, Some(line))?;
         chunk.encode_def(2, slot, Some(line), true)?;
@@ -803,8 +802,8 @@ mod tests {
         let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         let slot = vm.globals.reserve();
-        let const2 = chunk.add_constant(Value::Int32(45)) as u16;
-        let const3 = chunk.add_constant(Value::Int32(1)) as u16;
+        let const2 = chunk.add_constant(45.into()) as u16;
+        let const3 = chunk.add_constant(1.into()) as u16;
         chunk.encode2(CONST, 2, const2, Some(line))?;
         chunk.encode2(CONST, 3, const3, Some(line))?;
         chunk.encode_def(2, slot, Some(line), true)?;
@@ -852,16 +851,16 @@ mod tests {
         // XXX TODO- get rid of this pause when gc fixed.
         vm.pause_gc();
         let mut chunk = Chunk::new("no_file", 1);
-        let n = chunk.add_constant(Value::Int32(5000)) as u16;
+        let n = chunk.add_constant(5000.into()) as u16;
         let x = chunk.add_constant(0.2.into()) as u16;
         let su = chunk.add_constant(0.0.into()) as u16;
         let mu = chunk.add_constant(10.0.into()) as u16;
         let pu = chunk.add_constant(0.0.into()) as u16;
-        let zero = chunk.add_constant(Value::Int32(0)) as u16;
+        let zero = chunk.add_constant(0.into()) as u16;
         let zerof = chunk.add_constant(0.0.into()) as u16;
         let twof = chunk.add_constant(2.0.into()) as u16;
-        let hundred = chunk.add_constant(Value::Int32(100)) as u16;
-        let one = chunk.add_constant(Value::Int32(1)) as u16;
+        let hundred = chunk.add_constant(100.into()) as u16;
+        let one = chunk.add_constant(1.into()) as u16;
         let line = 1;
         chunk.encode2(CONST, 1, n, Some(line))?;
         chunk.encode2(CONST, 2, x, Some(line))?;
@@ -932,7 +931,7 @@ mod tests {
 
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
-        let const1 = chunk.add_constant(Value::Int32(10)) as u16;
+        let const1 = chunk.add_constant(10.into()) as u16;
         chunk.encode2(CONST, 2, const1, Some(line)).unwrap();
         chunk.encode2(ADD, 1, 2, Some(line)).unwrap();
         chunk.encode2(MOV, 3, 1, Some(line)).unwrap();
@@ -944,9 +943,9 @@ mod tests {
         let line = 1;
         *vm.stack_mut(0) = add;
         *vm.stack_mut(1) = add_ten;
-        *vm.stack_mut(3) = Value::Int32(5);
-        *vm.stack_mut(4) = Value::Int32(2);
-        *vm.stack_mut(6) = Value::Int32(2);
+        *vm.stack_mut(3) = 5.into();
+        *vm.stack_mut(4) = 2.into();
+        *vm.stack_mut(6) = 2.into();
         chunk.encode3(CALL, 0, 2, 2, Some(line)).unwrap();
         chunk.encode3(CALL, 1, 1, 5, Some(line)).unwrap();
         chunk.encode0(RET, Some(line))?;
@@ -976,7 +975,7 @@ mod tests {
 
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
-        let const1 = chunk.add_constant(Value::Int32(10)) as u16;
+        let const1 = chunk.add_constant(10.into()) as u16;
         let const2 = chunk.add_constant(add) as u16;
         chunk.encode2(CONST, 2, const1, Some(line)).unwrap();
         chunk.encode2(CONST, 3, const2, Some(line)).unwrap();
@@ -988,9 +987,9 @@ mod tests {
 
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
-        *vm.stack_mut(1) = Value::Int32(5);
-        *vm.stack_mut(2) = Value::Int32(2);
-        *vm.stack_mut(4) = Value::Int32(2);
+        *vm.stack_mut(1) = 5.into();
+        *vm.stack_mut(2) = 2.into();
+        *vm.stack_mut(4) = 2.into();
         *vm.stack_mut(50) = add;
         *vm.stack_mut(60) = add_ten;
         chunk.encode3(CALL, 60, 1, 3, Some(line)).unwrap();
@@ -1014,15 +1013,13 @@ mod tests {
             if registers.len() != 2 {
                 return Err(VMError::new_vm("test add: wrong number of args."));
             }
-            Ok(Value::Int32(
-                (registers[0].get_int(vm)? + registers[1].get_int(vm)?) as i32,
-            ))
+            Ok((registers[0].get_int(vm)? + registers[1].get_int(vm)?).into())
         }
         fn add_10(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
             if registers.len() != 1 {
                 return Err(VMError::new_vm("test add_10: wrong number of args."));
             }
-            Ok(Value::Int32(registers[0].get_int(vm)? as i32 + 10))
+            Ok((registers[0].get_int(vm)? + 10).into())
         }
         fn make_str(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
             if !registers.is_empty() {
@@ -1066,9 +1063,9 @@ mod tests {
         let line = 1;
         *vm.stack_mut(0) = add;
         *vm.stack_mut(1) = add_ten;
-        *vm.stack_mut(3) = Value::Int32(6);
-        *vm.stack_mut(4) = Value::Int32(3);
-        *vm.stack_mut(8) = Value::Int32(12);
+        *vm.stack_mut(3) = 6.into();
+        *vm.stack_mut(4) = 3.into();
+        *vm.stack_mut(8) = 12.into();
         let const1 = chunk.add_constant(vm.add_builtin(make_str)) as u16;
         chunk.encode3(CALL, 0, 2, 2, Some(line)).unwrap();
         chunk.encode3(CALL, 1, 1, 7, Some(line)).unwrap();
@@ -1093,9 +1090,9 @@ mod tests {
         }
         *vm.stack_mut(0) = tadd;
         *vm.stack_mut(1) = add_ten;
-        *vm.stack_mut(3) = Value::Int32(6);
-        *vm.stack_mut(4) = Value::Int32(3);
-        *vm.stack_mut(6) = Value::Int32(12);
+        *vm.stack_mut(3) = 6.into();
+        *vm.stack_mut(4) = 3.into();
+        *vm.stack_mut(6) = 12.into();
         let const1 = chunk.add_constant(vm.add_builtin(make_str)) as u16;
         chunk.encode3(CALL, 0, 2, 2, Some(line)).unwrap();
         chunk.encode3(CALL, 1, 1, 5, Some(line)).unwrap();
@@ -1120,12 +1117,12 @@ mod tests {
     fn test_jumps() -> VMResult<()> {
         let mut vm = Vm::new();
         let mut chunk = Chunk::new("no_file", 1);
-        let const0 = chunk.add_constant(Value::Int32(2_i32)) as u16;
-        let const1 = chunk.add_constant(Value::Int32(3_i32)) as u16;
+        let const0 = chunk.add_constant(2.into()) as u16;
+        let const1 = chunk.add_constant(3.into()) as u16;
         *vm.stack_mut(0) = Value::True;
         *vm.stack_mut(1) = Value::False;
         *vm.stack_mut(2) = Value::Nil;
-        *vm.stack_mut(3) = Value::Int32(0);
+        *vm.stack_mut(3) = 0.into();
         let line = 1;
         chunk.encode2(CONST, 4, const0, Some(line))?;
         let jmp = chunk.add_jump(chunk.code.len() as u32 + 5);
@@ -1228,9 +1225,9 @@ mod tests {
     fn test_vecs() -> VMResult<()> {
         let mut vm = Vm::new();
         let mut chunk = Chunk::new("no_file", 1);
-        let zero = chunk.add_constant(Value::Int32(0)) as u16;
-        let hundred = chunk.add_constant(Value::Int32(100)) as u16;
-        let one = chunk.add_constant(Value::Int32(1)) as u16;
+        let zero = chunk.add_constant(0.into()) as u16;
+        let hundred = chunk.add_constant(100.into()) as u16;
+        let one = chunk.add_constant(1.into()) as u16;
         let line = 1;
         chunk.encode2(CONST, 2, hundred, Some(line))?;
         chunk.encode2(CONST, 3, zero, Some(line))?;
@@ -1297,8 +1294,8 @@ mod tests {
     fn test_add() -> VMResult<()> {
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
-        let const0 = chunk.add_constant(Value::Int32(2_i32)) as u16;
-        let const1 = chunk.add_constant(Value::Int32(3_i32)) as u16;
+        let const0 = chunk.add_constant(2.into()) as u16;
+        let const1 = chunk.add_constant(3.into()) as u16;
         let const2 = chunk.add_constant(Value::Byte(1)) as u16;
         chunk.encode2(CONST, 0, const0, Some(line))?;
         chunk.encode2(CONST, 1, const1, Some(line))?;
@@ -1313,7 +1310,7 @@ mod tests {
 
         let mut chunk = Chunk::new("no_file", 1);
         let const0 = chunk.add_constant(2_f32.into()) as u16;
-        let const1 = chunk.add_constant(Value::Int32(3_i32)) as u16;
+        let const1 = chunk.add_constant(3.into()) as u16;
         let const2 = chunk.add_constant(Value::Byte(1)) as u16;
         chunk.encode2(CONST, 0, const0, Some(line))?;
         chunk.encode2(CONST, 1, const1, Some(line))?;
@@ -1330,7 +1327,7 @@ mod tests {
 
         let mut chunk = Chunk::new("no_file", 1);
         for i in 0..501 {
-            chunk.add_constant(Value::Int32(i));
+            chunk.add_constant(i.into());
         }
         chunk.encode2(CONST, 1, 1, Some(line))?;
         chunk.encode2(CONST, 2, 2, Some(line))?;
@@ -1356,8 +1353,8 @@ mod tests {
     fn test_sub() -> VMResult<()> {
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
-        let const0 = chunk.add_constant(Value::Int32(2_i32)) as u16;
-        let const1 = chunk.add_constant(Value::Int32(3_i32)) as u16;
+        let const0 = chunk.add_constant(2.into()) as u16;
+        let const1 = chunk.add_constant(3.into()) as u16;
         let const2 = chunk.add_constant(Value::Byte(1)) as u16;
         chunk.encode2(CONST, 0, const0, Some(line))?;
         chunk.encode2(CONST, 1, const1, Some(line))?;
@@ -1372,7 +1369,7 @@ mod tests {
 
         let mut chunk = Chunk::new("no_file", 1);
         let const0 = chunk.add_constant(5_f32.into()) as u16;
-        let const1 = chunk.add_constant(Value::Int32(3_i32)) as u16;
+        let const1 = chunk.add_constant(3.into()) as u16;
         let const2 = chunk.add_constant(Value::Byte(1)) as u16;
         chunk.encode2(CONST, 0, const0, Some(line))?;
         chunk.encode2(CONST, 1, const1, Some(line))?;
@@ -1389,7 +1386,7 @@ mod tests {
 
         let mut chunk = Chunk::new("no_file", 1);
         for i in 0..501 {
-            chunk.add_constant(Value::Int32(i));
+            chunk.add_constant(i.into());
         }
         chunk.encode2(CONST, 1, 1, Some(line))?;
         chunk.encode2(CONST, 2, 2, Some(line))?;
@@ -1415,8 +1412,8 @@ mod tests {
     fn test_mul() -> VMResult<()> {
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
-        let const0 = chunk.add_constant(Value::Int32(2_i32)) as u16;
-        let const1 = chunk.add_constant(Value::Int32(3_i32)) as u16;
+        let const0 = chunk.add_constant(2.into()) as u16;
+        let const1 = chunk.add_constant(3.into()) as u16;
         let const2 = chunk.add_constant(Value::Byte(1)) as u16;
         chunk.encode2(CONST, 0, const0, Some(line))?;
         chunk.encode2(CONST, 1, const1, Some(line))?;
@@ -1431,7 +1428,7 @@ mod tests {
 
         let mut chunk = Chunk::new("no_file", 1);
         let const0 = chunk.add_constant(5_f32.into()) as u16;
-        let const1 = chunk.add_constant(Value::Int32(3_i32)) as u16;
+        let const1 = chunk.add_constant(3.into()) as u16;
         let const2 = chunk.add_constant(Value::Byte(2)) as u16;
         chunk.encode2(CONST, 0, const0, Some(line))?;
         chunk.encode2(CONST, 1, const1, Some(line))?;
@@ -1448,7 +1445,7 @@ mod tests {
 
         let mut chunk = Chunk::new("no_file", 1);
         for i in 0..501 {
-            chunk.add_constant(Value::Int32(i));
+            chunk.add_constant(i.into());
         }
         chunk.encode2(CONST, 1, 1, Some(line))?;
         chunk.encode2(CONST, 2, 2, Some(line))?;
@@ -1474,8 +1471,8 @@ mod tests {
     fn test_div() -> VMResult<()> {
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
-        let const0 = chunk.add_constant(Value::Int32(18_i32)) as u16;
-        let const1 = chunk.add_constant(Value::Int32(2_i32)) as u16;
+        let const0 = chunk.add_constant(18.into()) as u16;
+        let const1 = chunk.add_constant(2.into()) as u16;
         let const2 = chunk.add_constant(Value::Byte(3)) as u16;
         chunk.encode2(CONST, 0, const0, Some(line))?;
         chunk.encode2(CONST, 1, const1, Some(line))?;
@@ -1492,7 +1489,7 @@ mod tests {
 
         let mut chunk = Chunk::new("no_file", 1);
         let const0 = chunk.add_constant(val10) as u16;
-        let const1 = chunk.add_constant(Value::Int32(2_i32)) as u16;
+        let const1 = chunk.add_constant(2.into()) as u16;
         let const2 = chunk.add_constant(Value::Byte(2)) as u16;
         chunk.encode2(CONST, 0, const0, Some(line))?;
         chunk.encode2(CONST, 1, const1, Some(line))?;
@@ -1509,7 +1506,7 @@ mod tests {
 
         let mut chunk = Chunk::new("no_file", 1);
         for i in 0..501 {
-            chunk.add_constant(Value::Int32(i));
+            chunk.add_constant(i.into());
         }
         chunk.encode2(CONST, 1, 1, Some(line))?;
         chunk.encode2(CONST, 2, 2, Some(line))?;
@@ -1531,8 +1528,8 @@ mod tests {
         assert!(item2.get_int(&vm)? == 100);
 
         let mut chunk = Chunk::new("no_file", 1);
-        let const0 = chunk.add_constant(Value::Int32(10_i32)) as u16;
-        let const1 = chunk.add_constant(Value::Int32(0_i32)) as u16;
+        let const0 = chunk.add_constant(10.into()) as u16;
+        let const1 = chunk.add_constant(0.into()) as u16;
         chunk.encode2(CONST, 0, const0, Some(line))?;
         chunk.encode2(CONST, 1, const1, Some(line))?;
         chunk.encode2(DIV, 0, 1, Some(line)).unwrap();

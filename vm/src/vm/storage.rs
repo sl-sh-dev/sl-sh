@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use crate::chunk::*;
 use crate::error::*;
-use crate::handle::Numeric64Handle;
 use crate::heap::*;
 use crate::interner::*;
 use crate::persistent_map::{MapNode, PersistentMap};
@@ -104,24 +103,6 @@ impl<ENV> GVm<ENV> {
 
     pub fn sizeof_heap_object() -> usize {
         Heap::sizeof_object()
-    }
-
-    pub fn alloc_int(&mut self, num: i64) -> Value {
-        if num > i32::MIN as i64 && num < i32::MAX as i64 {
-            Value::Int32(num as i32)
-        } else {
-            let mut heap = self.heap.take().expect("VM must have a Heap!");
-            let res = heap.alloc_i64(num, MutState::Mutable, |heap| self.mark_roots(heap));
-            self.heap = Some(heap);
-            res
-        }
-    }
-
-    pub fn alloc_i64(&mut self, num: i64) -> Value {
-        let mut heap = self.heap.take().expect("VM must have a Heap!");
-        let res = heap.alloc_i64(num, MutState::Mutable, |heap| self.mark_roots(heap));
-        self.heap = Some(heap);
-        res
     }
 
     pub fn alloc_pair(&mut self, car: Value, cdr: Value) -> Value {
@@ -351,22 +332,6 @@ impl<ENV> GVm<ENV> {
 
     pub fn get_global(&self, idx: u32) -> Value {
         self.globals.get(idx)
-    }
-
-    pub fn get_int(&self, handle: Numeric64Handle) -> i64 {
-        self.heap().get_int(handle)
-    }
-
-    pub fn get_int_mut(&mut self, handle: Numeric64Handle) -> &mut i64 {
-        self.heap_mut().get_int_mut(handle)
-    }
-
-    pub fn get_float(&self, handle: Numeric64Handle) -> f64 {
-        self.heap().get_float(handle)
-    }
-
-    pub fn get_float_mut(&mut self, handle: Numeric64Handle) -> &mut f64 {
-        self.heap_mut().get_float_mut(handle)
     }
 
     pub fn get_string(&self, handle: Handle) -> &str {

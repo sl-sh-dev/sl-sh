@@ -36,7 +36,7 @@ fn sh(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         fork_res = shell::run::run_job(&run, jobs, false);
     });
     fork_res
-        .map(Value::Int32)
+        .map(|i| i.into())
         .map_err(|e| VMError::new_compile(format!("sh: {e}")))
 }
 

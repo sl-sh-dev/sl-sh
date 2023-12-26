@@ -1,6 +1,6 @@
 use crate::compile_fn::mk_state;
 use crate::{CompileState, SloshVm};
-use slvm::{VMResult, Value};
+use slvm::{from_i56, VMResult, Value};
 
 pub fn pass1(env: &mut SloshVm, state: &mut CompileState, exp: Value) -> VMResult<()> {
     let fn_ = env.intern("fn");
@@ -40,8 +40,13 @@ pub fn pass1(env: &mut SloshVm, state: &mut CompileState, exp: Value) -> VMResul
         Value::Nil => {}
         Value::Undefined => {}
         Value::Byte(_) => {}
-        Value::Int32(i) if i >= 0 && i <= u16::MAX as i32 => {}
-        // XXX TODO- cover 64?
+        Value::Int(i) => {
+            let i = from_i56(&i);
+            if i < 0 || i > u16::MAX as i64 {
+                env.heap_immutable(exp);
+                state.add_constant(exp);
+            }
+        }
         Value::String(_) => {}
         Value::Bytes(_) => {}
         Value::Lambda(_) => {}

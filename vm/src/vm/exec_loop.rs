@@ -1,6 +1,7 @@
 use crate::opcodes::*;
 use crate::{
-    CallFrame, Chunk, Continuation, Error, GVm, VMError, VMErrorObj, VMResult, Value, STACK_CAP,
+    from_i56, CallFrame, Chunk, Continuation, Error, GVm, VMError, VMErrorObj, VMResult, Value,
+    STACK_CAP,
 };
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -137,12 +138,12 @@ impl<ENV> GVm<ENV> {
                 let idx = self.register_int(i as usize)?;
                 let idx = if idx >= 0 { idx } else { v.len() as i64 + idx };
                 if idx < 0 {
-                    let iv = self.alloc_int(idx);
+                    let iv = idx.into();
                     self.make_err("vm-missing", iv)
                 } else if let Some(val) = v.get(idx as usize) {
                     *val
                 } else {
-                    let iv = self.alloc_int(idx);
+                    let iv = idx.into();
                     self.make_err("vm-missing", iv)
                 }
             }
@@ -150,12 +151,12 @@ impl<ENV> GVm<ENV> {
                 let v = self.get_vector(h);
                 let idx = self.register_int(i as usize)?;
                 if idx < 0 {
-                    let iv = self.alloc_int(idx);
+                    let iv = idx.into();
                     self.make_err("vm-missing", iv)
                 } else if let Some(val) = v.get(start as usize + idx as usize) {
                     *val
                 } else {
-                    let iv = self.alloc_int(idx);
+                    let iv = idx.into();
                     self.make_err("vm-missing", iv)
                 }
             }
@@ -169,7 +170,7 @@ impl<ENV> GVm<ENV> {
                                 car_out = car;
                                 cdr = cdr_in;
                             } else {
-                                let iv = self.alloc_int(idx as i64);
+                                let iv = (idx as i64).into();
                                 car_out = self.make_err("vm-missing", iv);
                             }
                         }
@@ -399,7 +400,7 @@ impl<ENV> GVm<ENV> {
                     // XXX TODO- figure out proper mov symantics...
                     let val = self.register_unref(src as usize);
                     //let val = self.register(src as usize);
-                    mov_register_num!(self, dest as usize, val);
+                    mov_register!(self, dest as usize, val);
                 }
                 MOVI => {
                     let (dest, src) = decode2!(self.ip_ptr, wide);
@@ -407,7 +408,7 @@ impl<ENV> GVm<ENV> {
                     let dest = self
                         .register_int(dest as usize)
                         .map_err(|e| (e, chunk.clone()))?;
-                    mov_register_num!(self, dest as usize, val);
+                    mov_register!(self, dest as usize, val);
                 }
                 MOVII => {
                     let (dest, src) = decode2!(self.ip_ptr, wide);
@@ -415,14 +416,14 @@ impl<ENV> GVm<ENV> {
                         .register_int(src as usize)
                         .map_err(|e| (e, chunk.clone()))?;
                     let val = self.register_unref(src as usize);
-                    mov_register_num!(self, dest as usize, val);
+                    mov_register!(self, dest as usize, val);
                 }
                 GET => self.get(wide).map_err(|e| (e, chunk.clone()))?,
                 SETCOL => self.set_data(wide).map_err(|e| (e, chunk.clone()))?,
                 BMOV => {
                     let (dest, src, len) = decode3!(self.ip_ptr, wide);
                     for i in 0..len as usize {
-                        mov_register_num!(self, dest as usize + i, self.register(src as usize + i));
+                        mov_register!(self, dest as usize + i, self.register(src as usize + i));
                     }
                 }
                 LDSC => {
@@ -526,7 +527,7 @@ impl<ENV> GVm<ENV> {
                     } else {
                         decode_u16!(self.ip_ptr) as u32
                     };
-                    mov_register_num!(self, dest as usize, self.globals.get(idx));
+                    mov_register!(self, dest as usize, self.globals.get(idx));
                 }
                 CLRREG => {
                     let dest = decode1!(self.ip_ptr, wide);
@@ -554,7 +555,8 @@ impl<ENV> GVm<ENV> {
                 }
                 REGI => {
                     let (dest, i) = decode2!(self.ip_ptr, wide);
-                    set_register!(self, dest as usize, Value::Int32(i as i32));
+                    let i: Value = (i as i64).into();
+                    set_register!(self, dest as usize, i);
                 }
                 CLOSE => {
                     let (dest, src) = decode2!(self.ip_ptr, wide);
@@ -921,14 +923,13 @@ impl<ENV> GVm<ENV> {
                 INC => {
                     let (dest, i) = decode2!(self.ip_ptr, wide);
                     match self.register(dest as usize) {
-                        // XXX TODO- int 64, overflow
                         Value::Byte(v) => {
                             *self.register_mut(dest as usize) = Value::Byte(v + i as u8)
                         }
-                        Value::Int32(v) => {
-                            *self.register_mut(dest as usize) = Value::Int32(v + i as i32)
+                        Value::Int(v) => {
+                            let v = from_i56(&v);
+                            *self.register_mut(dest as usize) = (v + i as i64).into()
                         }
-                        Value::Int64(handle) => *self.get_int_mut(handle) += i as i64,
                         _ => {
                             return Err((
                                 VMError::new_vm(format!(
@@ -943,14 +944,13 @@ impl<ENV> GVm<ENV> {
                 DEC => {
                     let (dest, i) = decode2!(self.ip_ptr, wide);
                     match self.register(dest as usize) {
-                        // XXX TODO- int 64, overflow
                         Value::Byte(v) => {
                             *self.register_mut(dest as usize) = Value::Byte(v - i as u8)
                         }
-                        Value::Int32(v) => {
-                            *self.register_mut(dest as usize) = Value::Int32(v - i as i32)
+                        Value::Int(v) => {
+                            let v = from_i56(&v);
+                            *self.register_mut(dest as usize) = (v - i as i64).into()
                         }
-                        Value::Int64(handle) => *self.get_int_mut(handle) -= i as i64,
                         _ => {
                             return Err((
                                 VMError::new_vm(format!(
@@ -1136,19 +1136,7 @@ impl<ENV> GVm<ENV> {
                         if i >= v.len() {
                             return Err((VMError::new_vm("VECSTH: Index out of range."), chunk));
                         }
-                        match (v[i], val) {
-                            (Value::Int64(handle_to), Value::Int64(handle_from)) => {
-                                *self.get_int_mut(handle_to) = self.get_int(handle_from);
-                            }
-                            (_, Value::Int64(handle_from)) => {
-                                let n = self.get_int(handle_from);
-                                let i_a = self.alloc_i64(n);
-                                self.heap_mut()
-                                    .get_vector_mut(h)
-                                    .map_err(|e| (e, chunk.clone()))?[i] = i_a;
-                            }
-                            _ => v[i] = val,
-                        }
+                        v[i] = val;
                     } else {
                         return Err((VMError::new_vm("VECSTH: Not a vector."), chunk));
                     };
@@ -1172,12 +1160,12 @@ impl<ENV> GVm<ENV> {
                     match self.register(v as usize) {
                         Value::Vector(h) => {
                             let v = self.get_vector(h);
-                            let len = Value::Int32(v.len() as i32); // XXX TODO- overflow
+                            let len = (v.len() as i64).into();
                             set_register!(self, dest as usize, len);
                         }
                         Value::List(h, start) => {
                             let v = self.get_vector(h);
-                            let len = Value::Int32((v.len() - start as usize) as i32); // XXX TODO- overflow
+                            let len = ((v.len() - start as usize) as i64).into();
                             set_register!(self, dest as usize, len);
                         }
                         _ => return Err((VMError::new_vm("VECLEN: Not a vector."), chunk)),

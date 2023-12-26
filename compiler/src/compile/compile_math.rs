@@ -55,12 +55,15 @@ pub(crate) fn compile_math(
             if cdr.len() == 1 {
                 state.chunk.encode2(INC, dest as u16, 1, env.own_line())?;
             } else if cdr.len() == 2 {
-                // XXX TODO- int 64s
                 let amount = match cdr[1] {
                     Value::Byte(i) => i as u16,
-                    Value::Int32(i) if i >= 0 && i <= u16::MAX as i32 => i as u16,
-                    Value::Int32(_) => {
-                        return Err(VMError::new_compile("inc!: second arg to large"))
+                    Value::Int(i) => {
+                        let i = from_i56(&i);
+                        if i >= 0 && i <= u16::MAX as i64 {
+                            i as u16
+                        } else {
+                            return Err(VMError::new_compile("inc!: second arg to large"));
+                        }
                     }
                     _ => return Err(VMError::new_compile("inc!: second arg must be integer")),
                 };
@@ -93,11 +96,15 @@ pub(crate) fn compile_math(
                 // XXX TODO- int 64s
                 let amount = match cdr[1] {
                     Value::Byte(i) => i as u16,
-                    Value::Int32(i) if i >= 0 && i <= u16::MAX as i32 => i as u16,
-                    Value::Int32(_) => {
-                        return Err(VMError::new_compile("inc!: second arg to large"))
+                    Value::Int(i) => {
+                        let i = from_i56(&i);
+                        if i >= 0 && i <= u16::MAX as i64 {
+                            i as u16
+                        } else {
+                            return Err(VMError::new_compile("dec!: second arg to large"));
+                        }
                     }
-                    _ => return Err(VMError::new_compile("inc!: second arg must be integer")),
+                    _ => return Err(VMError::new_compile("dec!: second arg must be integer")),
                 };
                 state
                     .chunk
@@ -108,7 +115,7 @@ pub(crate) fn compile_math(
         }
         Value::Special(i) if i == env.specials().add => {
             if cdr.is_empty() {
-                compile(env, state, Value::Int32(0), result)?;
+                compile(env, state, 0.into(), result)?;
             } else if cdr.len() == 1 {
                 compile(env, state, cdr[0], result)?;
             } else {
@@ -135,7 +142,7 @@ pub(crate) fn compile_math(
             } else if cdr.len() == 1 {
                 if let Ok(i) = cdr[0].get_int(env) {
                     // XXX TODO- handle int 64
-                    compile(env, state, Value::Int32(-i as i32), result)?;
+                    compile(env, state, (-i).into(), result)?;
                 } else if let Ok(f) = cdr[0].get_float(env) {
                     let var = (-f).into();
                     compile(env, state, var, result)?;
@@ -158,7 +165,7 @@ pub(crate) fn compile_math(
         }
         Value::Special(i) if i == env.specials().mul => {
             if cdr.is_empty() {
-                compile(env, state, Value::Int32(1), result)?;
+                compile(env, state, 1.into(), result)?;
             } else if cdr.len() == 1 {
                 compile(env, state, cdr[0], result)?;
             } else {

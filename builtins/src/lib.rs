@@ -81,7 +81,7 @@ fn sizeof_heap_object(_vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value>
             "sizeof-heap-object: takes no arguments".to_string(),
         ));
     }
-    Ok(Value::Int32(SloshVm::sizeof_heap_object() as i32))
+    Ok((SloshVm::sizeof_heap_object() as i64).into())
 }
 
 fn sizeof_value(_vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
@@ -90,7 +90,7 @@ fn sizeof_value(_vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
             "sizeof-value: takes no arguments".to_string(),
         ));
     }
-    Ok(Value::Int32(std::mem::size_of::<Value>() as i32))
+    Ok((std::mem::size_of::<Value>() as i64).into())
 }
 
 fn gensym(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
@@ -156,7 +156,7 @@ fn remainder(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if let (Some(val1), Some(val2), None) = (i.next(), i.next(), i.next()) {
         let i1 = val1.get_int(vm)?;
         let i2 = val2.get_int(vm)?;
-        Ok(vm.alloc_int(i1 % i2))
+        Ok((i1 % i2).into())
     } else {
         Err(VMError::new_vm("requires two integers".to_string()))
     }

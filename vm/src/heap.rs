@@ -9,7 +9,6 @@ use crate::{get_code, FxHashMap, Interned};
 
 pub mod handle;
 pub use crate::handle::Handle;
-use crate::handle::Numeric64Handle;
 use crate::heap::storage::Storage;
 use crate::persistent_map::{MapNode, PersistentMap};
 use crate::persistent_vec::{PersistentVec, VecNode};
@@ -79,12 +78,6 @@ enum Object {
 }
 
 #[derive(Clone, Copy)]
-pub union Numeric64 {
-    pub int: i64,
-    pub float: f64,
-}
-
-#[derive(Clone, Copy)]
 pub struct Error {
     pub keyword: Interned,
     pub data: Value,
@@ -107,7 +100,6 @@ impl MutState {
 //#[derive(Debug)]
 pub struct Heap {
     objects: Storage<Object>,
-    numerics: Storage<Numeric64>,
     errors: Storage<Error>,
     props: Option<FxHashMap<Value, Arc<FxHashMap<Interned, Value>>>>,
     greys: Vec<Value>,
@@ -140,11 +132,10 @@ macro_rules! value_op {
             Value::CallFrame(handle) => $heap.objects.$op(handle.idx()),
             Value::Value(handle) => $heap.objects.$op(handle.idx()),
 
-            Value::Int64(handle) => $heap.numerics.$op(handle.into()),
             Value::Error(handle) => $heap.errors.$op(handle.idx()),
 
             Value::Byte(_)
-            | Value::Int32(_)
+            | Value::Int(_)
             | Value::Float(_)
             | Value::CodePoint(_)
             | Value::CharCluster(_, _)
@@ -171,7 +162,6 @@ impl Heap {
     pub fn new() -> Self {
         Heap {
             objects: Storage::default(),
-            numerics: Storage::default(),
             errors: Storage::default(),
             props: Some(FxHashMap::default()),
             greys: vec![],
@@ -215,22 +205,6 @@ impl Heap {
             self.collect(mark_roots);
         }
         Handle::new32(self.objects.alloc(obj, flags))
-    }
-
-    pub fn alloc_i64<MarkFunc>(
-        &mut self,
-        num: i64,
-        mutable: MutState,
-        mark_roots: MarkFunc,
-    ) -> Value
-    where
-        MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
-    {
-        if self.numerics.live_objects() >= self.numerics.capacity() && self.paused == 0 {
-            self.collect(mark_roots);
-        }
-        let num = Numeric64 { int: num };
-        Value::Int64(self.numerics.alloc(num, mutable.flag()).into())
     }
 
     pub fn alloc_pair<MarkFunc>(
@@ -403,46 +377,6 @@ impl Heap {
             self.collect(mark_roots);
         }
         Value::Error(self.errors.alloc(error, mutable.flag()).into())
-    }
-
-    pub fn get_int(&self, handle: Numeric64Handle) -> i64 {
-        unsafe {
-            if let Some(Numeric64 { int }) = self.numerics.get(handle.as_usize()) {
-                *int
-            } else {
-                panic!("Handle {handle} is not a valid int!");
-            }
-        }
-    }
-
-    pub fn get_int_mut(&mut self, handle: Numeric64Handle) -> &mut i64 {
-        unsafe {
-            if let Some(Numeric64 { int }) = self.numerics.get_mut(handle.as_usize()) {
-                int
-            } else {
-                panic!("Handle {handle} is not a valid int!");
-            }
-        }
-    }
-
-    pub fn get_float(&self, handle: Numeric64Handle) -> f64 {
-        unsafe {
-            if let Some(Numeric64 { float }) = self.numerics.get(handle.as_usize()) {
-                *float
-            } else {
-                panic!("Handle {handle} is not a valid float!");
-            }
-        }
-    }
-
-    pub fn get_float_mut(&mut self, handle: Numeric64Handle) -> &mut f64 {
-        unsafe {
-            if let Some(Numeric64 { float }) = self.numerics.get_mut(handle.as_usize()) {
-                float
-            } else {
-                panic!("Handle {handle} is not a valid float!");
-            }
-        }
     }
 
     pub fn get_string(&self, handle: Handle) -> &str {
@@ -805,10 +739,9 @@ impl Heap {
                 self.mark_trace(err.data);
             }
 
-            Value::Int64(_)
-            | Value::Float(_)
+            Value::Float(_)
             | Value::Byte(_)
-            | Value::Int32(_)
+            | Value::Int(_)
             | Value::CodePoint(_)
             | Value::CharCluster(_, _)
             | Value::Symbol(_)
@@ -828,7 +761,6 @@ impl Heap {
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
         self.objects.clear_marks();
-        self.numerics.clear_marks();
         self.errors.clear_marks();
         mark_roots(self).expect("Failed to mark the roots!");
         let mut objs = Vec::new();
@@ -856,7 +788,7 @@ impl Heap {
     }
 
     pub fn live_objects(&self) -> usize {
-        self.objects.live_objects() + self.numerics.live_objects()
+        self.objects.live_objects()
     }
 
     pub fn get_property(&self, value: Value, prop: Interned) -> Option<Value> {
@@ -902,22 +834,22 @@ mod tests {
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 0);
         for x in 0..512 {
-            heap.alloc_pair(Value::Int32(x), Value::Nil, MutState::Mutable, mark_roots);
+            heap.alloc_pair(x.into(), Value::Nil, MutState::Mutable, mark_roots);
         }
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 512);
         for x in 0..512 {
-            if let (Value::Int32(v), Value::Nil) = heap.get_pair(Handle::new(x)) {
-                assert!(x == v as usize);
+            if let (Value::Int(v), Value::Nil) = heap.get_pair(Handle::new(x)) {
+                assert!(x == from_i56(&v) as usize);
             } else {
                 panic!();
             }
         }
-        heap.alloc_pair(Value::Int32(512), Value::Nil, MutState::Mutable, mark_roots);
+        heap.alloc_pair(512.into(), Value::Nil, MutState::Mutable, mark_roots);
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 1);
-        if let (Value::Int32(v), Value::Nil) = heap.get_pair(Handle::new(0)) {
-            assert!(512 == v);
+        if let (Value::Int(v), Value::Nil) = heap.get_pair(Handle::new(0)) {
+            assert!(512 == from_i56(&v));
         } else {
             panic!();
         }
@@ -928,16 +860,16 @@ mod tests {
             Ok(())
         };
         for x in 0..512 {
-            heap.alloc_pair(Value::Int32(x), Value::Nil, MutState::Mutable, mark_roots);
+            heap.alloc_pair(x.into(), Value::Nil, MutState::Mutable, mark_roots);
         }
         assert!(heap.capacity() == 1024);
         assert!(heap.live_objects() == 513);
         for x in 0..513 {
-            if let (Value::Int32(v), Value::Nil) = heap.get_pair(Handle::new(x)) {
+            if let (Value::Int(v), Value::Nil) = heap.get_pair(Handle::new(x)) {
                 if x == 0 {
-                    assert!(512 == v);
+                    assert!(512 == from_i56(&v));
                 } else {
-                    assert!(x - 1 == v as usize);
+                    assert!(x - 1 == from_i56(&v) as usize);
                 }
             } else {
                 panic!();
@@ -959,14 +891,14 @@ mod tests {
         assert!(heap.capacity() == 1024);
         assert!(heap.live_objects() == 0);
         for x in 0..512 {
-            let h = heap.alloc_pair(Value::Int32(x), Value::Nil, MutState::Mutable, mark_roots);
+            let h = heap.alloc_pair(x.into(), Value::Nil, MutState::Mutable, mark_roots);
             heap.sticky(h);
         }
         heap.collect(mark_roots);
         assert!(heap.capacity() == 1024);
         assert!(heap.live_objects() == 512);
         for x in 512..1024 {
-            let _h = heap.alloc_pair(Value::Int32(x), Value::Nil, MutState::Mutable, mark_roots);
+            let _h = heap.alloc_pair(x.into(), Value::Nil, MutState::Mutable, mark_roots);
         }
         let mark_roots = |heap: &mut Heap| -> VMResult<()> {
             for idx in 0..1024 {
@@ -998,7 +930,7 @@ mod tests {
             Ok(())
         };
         for x in 0..256 {
-            let inner = heap.alloc_pair(Value::Int32(x), Value::Nil, MutState::Mutable, mark_roots);
+            let inner = heap.alloc_pair(x.into(), Value::Nil, MutState::Mutable, mark_roots);
             outers.borrow_mut().push(heap.alloc_pair(
                 inner,
                 Value::Nil,
@@ -1010,8 +942,8 @@ mod tests {
         assert!(heap.live_objects() == 512);
         for (i, h) in outers.borrow().iter().enumerate() {
             if let (Value::Pair(inner), Value::Nil) = heap.get_pair(h.get_handle().unwrap()) {
-                if let (Value::Int32(v), Value::Nil) = heap.get_pair(inner) {
-                    assert!(i == v as usize);
+                if let (Value::Int(v), Value::Nil) = heap.get_pair(inner) {
+                    assert!(i == from_i56(&v) as usize);
                 } else {
                     panic!();
                 }
@@ -1056,7 +988,7 @@ mod tests {
         };
         let mut v = vec![];
         for x in 0..256 {
-            let inner = heap.alloc_pair(Value::Int32(x), Value::Nil, MutState::Mutable, mark_roots);
+            let inner = heap.alloc_pair(x.into(), Value::Nil, MutState::Mutable, mark_roots);
             v.push(inner);
         }
         outers.borrow_mut().push(Value::Vector(heap.alloc(
@@ -1070,8 +1002,8 @@ mod tests {
             let v = heap.get_vector(h.get_handle().unwrap());
             for (i, hv) in v.iter().enumerate() {
                 if let Value::Pair(hv) = hv {
-                    if let (Value::Int32(v), Value::Nil) = heap.get_pair(*hv) {
-                        assert!(i == v as usize);
+                    if let (Value::Int(v), Value::Nil) = heap.get_pair(*hv) {
+                        assert!(i == from_i56(&v) as usize);
                     } else {
                         panic!();
                     }
@@ -1087,8 +1019,8 @@ mod tests {
             let v = heap.get_vector(h.get_handle().unwrap());
             for (i, hv) in v.iter().enumerate() {
                 if let Value::Pair(hv) = hv {
-                    if let (Value::Int32(v), Value::Nil) = heap.get_pair(*hv) {
-                        assert!(i == v as usize);
+                    if let (Value::Int(v), Value::Nil) = heap.get_pair(*hv) {
+                        assert!(i == from_i56(&v) as usize);
                     } else {
                         panic!();
                     }
@@ -1129,25 +1061,19 @@ mod tests {
             Ok(())
         };
         outers.borrow_mut().push(heap.alloc_pair(
-            Value::Int32(1),
-            Value::Int32(2),
+            1.into(),
+            2.into(),
             MutState::Mutable,
             mark_roots,
         ));
-        let car_h = heap.alloc_pair(Value::Int32(3), Value::Nil, MutState::Mutable, mark_roots);
-        let cdr_h = heap.alloc_pair(Value::Int32(4), Value::Nil, MutState::Mutable, mark_roots);
-        outers.borrow_mut().push(heap.alloc_pair(
-            car_h,
-            Value::Int32(2),
-            MutState::Mutable,
-            mark_roots,
-        ));
-        outers.borrow_mut().push(heap.alloc_pair(
-            Value::Int32(1),
-            cdr_h,
-            MutState::Mutable,
-            mark_roots,
-        ));
+        let car_h = heap.alloc_pair(3.into(), Value::Nil, MutState::Mutable, mark_roots);
+        let cdr_h = heap.alloc_pair(4.into(), Value::Nil, MutState::Mutable, mark_roots);
+        outers
+            .borrow_mut()
+            .push(heap.alloc_pair(car_h, 2.into(), MutState::Mutable, mark_roots));
+        outers
+            .borrow_mut()
+            .push(heap.alloc_pair(1.into(), cdr_h, MutState::Mutable, mark_roots));
         outers
             .borrow_mut()
             .push(heap.alloc_pair(car_h, cdr_h, MutState::Mutable, mark_roots));
@@ -1159,11 +1085,11 @@ mod tests {
         for (i, h) in outers.borrow().iter().enumerate() {
             let (car, cdr) = heap.get_pair(h.get_handle().unwrap());
             if i == 0 {
-                let (car, cdr) = if let Value::Int32(car) = car {
-                    if let Value::Int32(cdr) = cdr {
-                        (car, cdr)
+                let (car, cdr) = if let Value::Int(car) = car {
+                    if let Value::Int(cdr) = cdr {
+                        (from_i56(&car), from_i56(&cdr))
                     } else {
-                        (car, 0)
+                        (from_i56(&car), 0)
                     }
                 } else {
                     (0, 0)
@@ -1172,11 +1098,11 @@ mod tests {
                 assert!(cdr == 2);
             } else if i == 1 {
                 let (car, cdr) = if let Value::Pair(car_h) = car {
-                    if let (Value::Int32(car), Value::Nil) = heap.get_pair(car_h) {
-                        if let Value::Int32(cdr) = cdr {
-                            (car, cdr)
+                    if let (Value::Int(car), Value::Nil) = heap.get_pair(car_h) {
+                        if let Value::Int(cdr) = cdr {
+                            (from_i56(&car), from_i56(&cdr))
                         } else {
-                            (car, 0)
+                            (from_i56(&car), 0)
                         }
                     } else {
                         (0, 0)
@@ -1188,11 +1114,11 @@ mod tests {
                 assert_eq!(cdr, 2);
             } else if i == 2 {
                 let (car, cdr) = if let Value::Pair(cdr_h) = cdr {
-                    if let (Value::Int32(cdr), Value::Nil) = heap.get_pair(cdr_h) {
-                        if let Value::Int32(car) = car {
-                            (car, cdr)
+                    if let (Value::Int(cdr), Value::Nil) = heap.get_pair(cdr_h) {
+                        if let Value::Int(car) = car {
+                            (from_i56(&car), from_i56(&cdr))
                         } else {
-                            (0, cdr)
+                            (0, from_i56(&cdr))
                         }
                     } else {
                         (0, 0)
@@ -1204,12 +1130,12 @@ mod tests {
                 assert!(cdr == 4);
             } else if i == 3 {
                 let (car, cdr) = if let Value::Pair(car_h) = car {
-                    if let (Value::Int32(car), Value::Nil) = heap.get_pair(car_h) {
+                    if let (Value::Int(car), Value::Nil) = heap.get_pair(car_h) {
                         if let Value::Pair(cdr_h) = cdr {
-                            if let (Value::Int32(cdr), Value::Nil) = heap.get_pair(cdr_h) {
-                                (car, cdr)
+                            if let (Value::Int(cdr), Value::Nil) = heap.get_pair(cdr_h) {
+                                (from_i56(&car), from_i56(&cdr))
                             } else {
-                                (car, 0)
+                                (from_i56(&car), 0)
                             }
                         } else {
                             (0, 0)
