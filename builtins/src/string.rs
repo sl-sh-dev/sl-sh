@@ -163,7 +163,10 @@ fn str_map_inner(vm: &mut SloshVm, func: Value, string: Value) -> VMResult<Strin
             tmp_str = format!("{}", String::from_utf8_lossy(&c[0..l as usize]));
             &tmp_str
         }
-        //Value::CharClusterLong(_) => "Char".to_string(), // XXX TODO- move this to Object?
+        Value::CharClusterLong(handle) => {
+            tmp_str = vm.get_string(*handle).to_string();
+            &tmp_str
+        },
         Value::String(handle) => {
             tmp_str = vm.get_string(handle).to_string();
             &tmp_str
