@@ -53,7 +53,7 @@ pub fn start_interactive() -> i32 {
     env::set_var("EUID", format!("{}", euid));
     // Initialize the HOST variable
     let host: OsString = Sys::gethostname().unwrap_or_else(|| "???".into());
-    env::set_var("HOST", &host);
+    env::set_var("HOST", host);
     if let Ok(dir) = env::current_dir() {
         env::set_var("PWD", dir);
     }
