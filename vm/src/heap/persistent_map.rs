@@ -8,7 +8,7 @@ const MASK: u64 = (WIDTH as u64) - 1; // 31, or 0x1f
 const PUSH_STACK_SIZE: usize = 13;
 
 /// Simple little stack based "stack" for tracking paths through a tree.
-/// This saves allocations or for some operations.
+/// This saves allocations for some operations.
 /// 13 levels deep at a width of 5 bits covers 64 bit hashes.
 struct PathStack {
     path: [Option<(MapNode, usize)>; PUSH_STACK_SIZE],
@@ -237,6 +237,7 @@ impl Default for PersistentMap {
         Self::new()
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;

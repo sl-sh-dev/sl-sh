@@ -57,7 +57,6 @@ pub struct Continuation {
 enum Object {
     String(Arc<String>),
     Vector(Arc<Vec<Value>>),
-    //Vector(Vec<Value>),
     Map(Arc<HashMap<Value, Value>>),
     Bytes(Arc<Vec<u8>>),
     Pair(Arc<(Value, Value)>),
@@ -70,7 +69,7 @@ enum Object {
 
     // Everything below here is always read only.
     Lambda(Arc<Chunk>),
-    Closure(Arc<Chunk>, Arc<Vec<Handle>>),
+    Closure(Arc<(Arc<Chunk>, Vec<Handle>)>),
     // Place holder for an empty object slot.
     Empty,
 }
@@ -337,7 +336,7 @@ impl Heap {
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        Value::Closure(self.alloc(Object::Closure(l, Arc::new(v)), 0, mark_roots))
+        Value::Closure(self.alloc(Object::Closure(Arc::new((l, v))), 0, mark_roots))
     }
 
     pub fn alloc_continuation<MarkFunc>(&mut self, k: Continuation, mark_roots: MarkFunc) -> Value
@@ -530,16 +529,16 @@ impl Heap {
     }
 
     pub fn get_closure(&self, handle: Handle) -> (Arc<Chunk>, &[Handle]) {
-        if let Some(Object::Closure(lambda, captures)) = self.objects.get(handle.idx()) {
-            (lambda.clone(), captures)
+        if let Some(Object::Closure(clos))/*lambda, captures))*/ = self.objects.get(handle.idx()) {
+            (clos.0.clone(), &clos.1)
         } else {
             panic!("Handle {} is not a closure!", handle.idx());
         }
     }
 
     pub fn get_closure_captures(&self, handle: Handle) -> &[Handle] {
-        if let Some(Object::Closure(_, captures)) = self.objects.get(handle.idx()) {
-            captures
+        if let Some(Object::Closure(clos)) = self.objects.get(handle.idx()) {
+            &clos.1
         } else {
             panic!("Handle {} is not a closure!", handle.idx());
         }
@@ -657,9 +656,9 @@ impl Heap {
                 self.mark_trace(data.1);
             }
             Object::Lambda(chunk) => self.mark_chunk(chunk),
-            Object::Closure(chunk, closures) => {
-                self.mark_chunk(chunk);
-                for close in closures.iter() {
+            Object::Closure(clos) => {
+                self.mark_chunk(&clos.0);
+                for close in clos.1.iter() {
                     self.mark_trace(Value::Value(*close));
                 }
             }
