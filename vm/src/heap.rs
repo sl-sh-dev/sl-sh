@@ -10,12 +10,8 @@ use crate::{get_code, FxHashMap, Interned};
 pub mod handle;
 pub use crate::handle::Handle;
 use crate::heap::storage::Storage;
-use crate::persistent_map::{MapNode, PersistentMap};
-use crate::persistent_vec::{PersistentVec, VecNode};
 
 pub mod bits;
-pub mod persistent_map;
-pub mod persistent_vec;
 mod storage;
 
 #[derive(Clone, Debug)]
@@ -61,11 +57,6 @@ enum Object {
     Bytes(Arc<Vec<u8>>),
     Pair(Arc<(Value, Value)>),
     Value(Value),
-
-    PersistentVec(Arc<PersistentVec>),
-    VecNode(Arc<VecNode>),
-    PersistentMap(Arc<PersistentMap>),
-    MapNode(Arc<MapNode>),
 
     // Everything below here is always read only.
     Lambda(Arc<Chunk>),
@@ -117,10 +108,6 @@ macro_rules! value_op {
             Value::CharClusterLong(handle) => $heap.objects.$op(handle.idx()),
             Value::String(handle) => $heap.objects.$op(handle.idx()),
             Value::Vector(handle) => $heap.objects.$op(handle.idx()),
-            Value::PersistentVec(handle) => $heap.objects.$op(handle.idx()),
-            Value::PersistentMap(handle) => $heap.objects.$op(handle.idx()),
-            Value::VecNode(handle) => $heap.objects.$op(handle.idx()),
-            Value::MapNode(handle) => $heap.objects.$op(handle.idx()),
             Value::Map(handle) => $heap.objects.$op(handle.idx()),
             Value::Bytes(handle) => $heap.objects.$op(handle.idx()),
             Value::Pair(handle) => $heap.objects.$op(handle.idx()),
@@ -250,52 +237,6 @@ impl Heap {
         //Value::Vector(self.alloc(Object::Vector(v), mutable.flag(), mark_roots))
     }
 
-    pub fn alloc_persistent_vector<MarkFunc>(
-        &mut self,
-        v: PersistentVec,
-        mutable: MutState,
-        mark_roots: MarkFunc,
-    ) -> Value
-    where
-        MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
-    {
-        Value::PersistentVec(self.alloc(
-            Object::PersistentVec(Arc::new(v)),
-            mutable.flag(),
-            mark_roots,
-        ))
-    }
-
-    pub(crate) fn alloc_vecnode<MarkFunc>(&mut self, node: VecNode, mark_roots: MarkFunc) -> Value
-    where
-        MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
-    {
-        Value::VecNode(self.alloc(Object::VecNode(Arc::new(node)), FLAG_MUT, mark_roots))
-    }
-
-    pub fn alloc_persistent_map<MarkFunc>(
-        &mut self,
-        v: PersistentMap,
-        mutable: MutState,
-        mark_roots: MarkFunc,
-    ) -> Value
-    where
-        MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
-    {
-        Value::PersistentMap(self.alloc(
-            Object::PersistentMap(Arc::new(v)),
-            mutable.flag(),
-            mark_roots,
-        ))
-    }
-
-    pub(crate) fn alloc_mapnode<MarkFunc>(&mut self, node: MapNode, mark_roots: MarkFunc) -> Value
-    where
-        MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
-    {
-        Value::MapNode(self.alloc(Object::MapNode(Arc::new(node)), FLAG_MUT, mark_roots))
-    }
-
     pub fn alloc_map<MarkFunc>(
         &mut self,
         map: HashMap<Value, Value>,
@@ -418,49 +359,6 @@ impl Heap {
             Ok(Arc::make_mut(v))
         } else {
             panic!("Handle {} is not a vector!", handle.idx());
-        }
-    }
-
-    pub(crate) fn get_persistent_vector(&self, handle: Handle) -> &PersistentVec {
-        if let Some(Object::PersistentVec(vec)) = self.objects.get(handle.idx()) {
-            vec
-        } else {
-            panic!("Handle {} is not a persistent vector!", handle.idx());
-        }
-    }
-
-    pub(crate) fn get_vecnode(&self, handle: Handle) -> &VecNode {
-        if let Some(Object::VecNode(node)) = self.objects.get(handle.idx()) {
-            node
-        } else {
-            panic!("Handle {} is not a vector node!", handle.idx());
-        }
-    }
-
-    /*pub(crate) fn _get_vecnode_mut(&mut self, handle: Handle) -> VMResult<&mut VecNode> {
-        if !self.is_mutable(handle) {
-            return Err(VMError::new_heap("VecNode is not mutable!"));
-        }
-        if let Some(Object::VecNode(node)) = self.objects.get_mut(handle.idx()) {
-            Ok(node)
-        } else {
-            panic!("Handle {} is not a vector node!", handle.idx());
-        }
-    }*/
-
-    pub(crate) fn _get_persistent_map(&self, handle: Handle) -> &PersistentMap {
-        if let Some(Object::PersistentMap(map)) = self.objects.get(handle.idx()) {
-            map
-        } else {
-            panic!("Handle {} is not a persistent map!", handle.idx());
-        }
-    }
-
-    pub(crate) fn get_mapnode(&self, handle: Handle) -> &MapNode {
-        if let Some(Object::MapNode(node)) = self.objects.get(handle.idx()) {
-            node
-        } else {
-            panic!("Handle {} is not a map node!", handle.idx());
         }
     }
 
@@ -665,33 +563,6 @@ impl Heap {
             Object::Value(val) => {
                 self.mark_trace(*val);
             }
-            Object::PersistentVec(pvec) => {
-                if let Some(root) = pvec.root() {
-                    if let Some(nodes) = root.nodes() {
-                        nodes
-                            .iter()
-                            .filter(|n| !n.is_undef())
-                            .for_each(|val| self.mark_trace(*val));
-                    }
-                    if let Some(leaf) = root.leaf() {
-                        leaf.iter().for_each(|val| self.mark_trace(*val));
-                    }
-                    pvec.tail().iter().for_each(|val| self.mark_trace(*val));
-                }
-            }
-            Object::VecNode(node) => {
-                if let Some(nodes) = node.nodes() {
-                    nodes
-                        .iter()
-                        .filter(|n| !n.is_undef())
-                        .for_each(|val| self.mark_trace(*val));
-                }
-                if let Some(leaf) = node.leaf() {
-                    leaf.iter().for_each(|val| self.mark_trace(*val));
-                }
-            }
-            Object::PersistentMap(_pmap) => {} // TODO- trace me!
-            Object::MapNode(_node) => {}       // TODO- trace me!
             Object::Empty => panic!("An empty object can not be live!"),
         }
     }
@@ -710,10 +581,6 @@ impl Heap {
             Value::CharClusterLong(handle)
             | Value::String(handle)
             | Value::Vector(handle)
-            | Value::PersistentVec(handle)
-            | Value::PersistentMap(handle)
-            | Value::VecNode(handle)
-            | Value::MapNode(handle)
             | Value::Map(handle)
             | Value::Bytes(handle)
             | Value::Pair(handle)

@@ -5,8 +5,6 @@ use crate::chunk::*;
 use crate::error::*;
 use crate::heap::*;
 use crate::interner::*;
-use crate::persistent_map::{MapNode, PersistentMap};
-use crate::persistent_vec::{PersistentVec, VecNode};
 use crate::value::*;
 use crate::GVm;
 
@@ -157,39 +155,6 @@ impl<ENV> GVm<ENV> {
     pub fn alloc_vector_ro(&mut self, v: Vec<Value>) -> Value {
         let mut heap = self.heap.take().expect("VM must have a Heap!");
         let res = heap.alloc_vector(v, MutState::Immutable, |heap| self.mark_roots(heap));
-        self.heap = Some(heap);
-        res
-    }
-
-    pub fn alloc_persistent_vector(&mut self, vec: PersistentVec) -> Value {
-        let mut heap = self.heap.take().expect("VM must have a Heap!");
-        let res =
-            heap.alloc_persistent_vector(vec, MutState::Immutable, |heap| self.mark_roots(heap));
-        self.heap = Some(heap);
-        res
-    }
-
-    pub fn alloc_vecnode(&mut self, node: VecNode) -> Value {
-        let mut heap = self.heap.take().expect("VM must have a Heap!");
-        let res = heap.alloc_vecnode(node, |heap| self.mark_roots(heap));
-        self.heap = Some(heap);
-        res
-    }
-
-    pub fn alloc_persistent_map(&mut self, map: PersistentMap) -> Value {
-        let mut heap = self.heap.take().expect("VM must have a Heap!");
-        let res = heap.alloc_persistent_map(map, MutState::Immutable, |heap| self.mark_roots(heap));
-        self.heap = Some(heap);
-        res
-    }
-
-    pub fn alloc_mapnode(&mut self, node: MapNode) -> Handle {
-        let mut heap = self.heap.take().expect("VM must have a Heap!");
-        // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        let res = heap
-            .alloc_mapnode(node, |heap| self.mark_roots(heap))
-            .get_handle()
-            .unwrap();
         self.heap = Some(heap);
         res
     }
@@ -348,22 +313,6 @@ impl<ENV> GVm<ENV> {
 
     pub fn get_vector_mut(&mut self, handle: Handle) -> VMResult<&mut Vec<Value>> {
         self.heap_mut().get_vector_mut(handle)
-    }
-
-    pub(crate) fn get_persistent_vector(&self, handle: Handle) -> &PersistentVec {
-        self.heap().get_persistent_vector(handle)
-    }
-
-    pub fn get_vecnode(&self, handle: Handle) -> &VecNode {
-        self.heap().get_vecnode(handle)
-    }
-
-    pub(crate) fn _get_persistent_map(&self, handle: Handle) -> &PersistentMap {
-        self.heap()._get_persistent_map(handle)
-    }
-
-    pub fn get_mapnode(&self, handle: Handle) -> &MapNode {
-        self.heap().get_mapnode(handle)
     }
 
     pub fn get_map(&self, handle: Handle) -> &HashMap<Value, Value> {
