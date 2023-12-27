@@ -68,11 +68,9 @@ enum Object {
     PersistentMap(Arc<PersistentMap>),
     MapNode(Arc<MapNode>),
 
-    CallFrame(CallFrame),
     // Everything below here is always read only.
     Lambda(Arc<Chunk>),
     Closure(Arc<Chunk>, Arc<Vec<Handle>>),
-    Continuation(Continuation),
     // Place holder for an empty object slot.
     Empty,
 }
@@ -100,6 +98,8 @@ impl MutState {
 //#[derive(Debug)]
 pub struct Heap {
     objects: Storage<Object>,
+    callframes: Storage<CallFrame>,
+    continuations: Storage<Continuation>,
     errors: Storage<Error>,
     props: Option<FxHashMap<Value, Arc<FxHashMap<Interned, Value>>>>,
     greys: Vec<Value>,
@@ -128,8 +128,8 @@ macro_rules! value_op {
             Value::List(handle, _) => $heap.objects.$op(handle.idx()),
             Value::Lambda(handle) => $heap.objects.$op(handle.idx()),
             Value::Closure(handle) => $heap.objects.$op(handle.idx()),
-            Value::Continuation(handle) => $heap.objects.$op(handle.idx()),
-            Value::CallFrame(handle) => $heap.objects.$op(handle.idx()),
+            Value::Continuation(handle) => $heap.continuations.$op(handle.idx()),
+            Value::CallFrame(handle) => $heap.callframes.$op(handle.idx()),
             Value::Value(handle) => $heap.objects.$op(handle.idx()),
 
             Value::Error(handle) => $heap.errors.$op(handle.idx()),
@@ -162,6 +162,8 @@ impl Heap {
     pub fn new() -> Self {
         Heap {
             objects: Storage::default(),
+            callframes: Storage::default(),
+            continuations: Storage::default(),
             errors: Storage::default(),
             props: Some(FxHashMap::default()),
             greys: vec![],
@@ -342,14 +344,20 @@ impl Heap {
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        Value::Continuation(self.alloc(Object::Continuation(k), 0, mark_roots))
+        if self.continuations.live_objects() >= self.continuations.capacity() && self.paused == 0 {
+            self.collect(mark_roots);
+        }
+        Value::Continuation(Handle::new32(self.continuations.alloc(k, 0)))
     }
 
     pub fn alloc_callframe<MarkFunc>(&mut self, frame: CallFrame, mark_roots: MarkFunc) -> Value
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        Value::CallFrame(self.alloc(Object::CallFrame(frame), 0, mark_roots))
+        if self.callframes.live_objects() >= self.callframes.capacity() && self.paused == 0 {
+            self.collect(mark_roots);
+        }
+        Value::CallFrame(Handle::new32(self.callframes.alloc(frame, 0)))
     }
 
     pub fn alloc_value<MarkFunc>(
@@ -538,7 +546,7 @@ impl Heap {
     }
 
     pub fn get_continuation(&self, handle: Handle) -> &Continuation {
-        if let Some(Object::Continuation(cont)) = self.objects.get(handle.idx()) {
+        if let Some(cont) = self.continuations.get(handle.idx()) {
             cont
         } else {
             panic!("Handle {} is not a continuation!", handle.idx());
@@ -546,10 +554,10 @@ impl Heap {
     }
 
     pub fn get_callframe(&self, handle: Handle) -> &CallFrame {
-        if let Some(Object::CallFrame(call_frame)) = self.objects.get(handle.idx()) {
+        if let Some(call_frame) = self.callframes.get(handle.idx()) {
             call_frame
         } else {
-            panic!("Handle {} is not a continuation!", handle.idx());
+            panic!("Handle {} is not a call frame!", handle.idx());
         }
     }
 
@@ -655,13 +663,6 @@ impl Heap {
                     self.mark_trace(Value::Value(*close));
                 }
             }
-            Object::Continuation(continuation) => {
-                self.mark_call_frame(&continuation.frame);
-                for obj in &continuation.stack {
-                    self.mark_trace(*obj);
-                }
-            }
-            Object::CallFrame(call_frame) => self.mark_call_frame(call_frame),
             Object::Value(val) => {
                 self.mark_trace(*val);
             }
@@ -720,8 +721,6 @@ impl Heap {
             | Value::List(handle, _)
             | Value::Lambda(handle)
             | Value::Closure(handle)
-            | Value::Continuation(handle)
-            | Value::CallFrame(handle)
             | Value::Value(handle) => {
                 let obj = self
                     .objects
@@ -737,6 +736,25 @@ impl Heap {
                     .get(handle.idx())
                     .expect("Invalid error handle!");
                 self.mark_trace(err.data);
+            }
+            Value::Continuation(handle) => {
+                let k = self
+                    .continuations
+                    .get(handle.idx())
+                    .expect("Invalid error handle!")
+                    .clone();
+                self.mark_call_frame(&k.frame);
+                for obj in &k.stack {
+                    self.mark_trace(*obj);
+                }
+            }
+            Value::CallFrame(handle) => {
+                let call_frame = self
+                    .callframes
+                    .get(handle.idx())
+                    .expect("Invalid error handle!")
+                    .clone();
+                self.mark_call_frame(&call_frame)
             }
 
             Value::Float(_)
