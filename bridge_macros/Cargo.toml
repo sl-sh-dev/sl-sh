@@ -1,0 +1,13 @@
+[package]
+name = "sl-sh-proc-macros"
+version = "0.3.1"
+edition = "2021"
+
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "1.0.95", features = ["full"] }
+quote = "1.0.18"
+static_assertions = "1.1.0"

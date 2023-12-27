@@ -9,6 +9,7 @@ members = [
     "builtins",
     "compile_state",
     "shell",
+    "bridge_macros",
 ]
 
 [profile.release]
@@ -17,4 +18,3 @@ lto = true
 #opt-level = 'z'
 debug = true
 #panic = "abort"
-
