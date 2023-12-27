@@ -177,9 +177,9 @@ fn get_generic_argument_from_type_path(
     type_path: &TypePath,
 ) -> Option<(&GenericArgument, &TypePath)> {
     if type_path.path.segments.len() == 1 {
-        for path_segment in &type_path.path.segments.iter().rev().next() {
+        for path_segment in &type_path.path.segments.iter().next_back() {
             if let PathArguments::AngleBracketed(args) = &path_segment.arguments {
-                if let Some(ty) = args.args.iter().rev().next() {
+                if let Some(ty) = args.args.iter().next_back() {
                     return Some((ty, type_path));
                 }
             }
@@ -277,10 +277,10 @@ fn get_type_handle(type_path: &TypePath) -> TypeHandle {
     if let Some((_generic, type_path)) = get_generic_argument_from_type_path(type_path) {
         let wrapper = opt_is_valid_generic_type(type_path, SPECIAL_ARG_TYPES.as_slice());
         match wrapper {
-            Some(wrapper) if wrapper == "Option" => {
+            Some("Option") => {
                 return TypeHandle::Optional;
             }
-            Some(wrapper) if wrapper == "VarArgs" => {
+            Some("VarArgs") => {
                 return TypeHandle::VarArgs;
             }
             _ => {}
