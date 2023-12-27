@@ -166,7 +166,7 @@ fn str_map_inner(vm: &mut SloshVm, func: Value, string: Value) -> VMResult<Strin
         Value::CharClusterLong(handle) => {
             tmp_str = vm.get_string(*handle).to_string();
             &tmp_str
-        },
+        }
         Value::String(handle) => {
             tmp_str = vm.get_string(handle).to_string();
             &tmp_str

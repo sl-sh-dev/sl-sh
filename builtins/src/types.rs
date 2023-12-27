@@ -1,13 +1,13 @@
 use compile_state::state::SloshVm;
-use slvm::{Value, VMResult};
+use slvm::{VMResult, Value};
 
 /// Type wrapper to use in [`RustProcedure`] and [`RustProcedureRefMut`] declarations for
 /// partial application.
 pub trait VmToRustType<'a, T, F>
-    where
-        Self: Sized,
-        T: 'a,
-        F: FnOnce(&'a mut SloshVm) -> T,
+where
+    Self: Sized,
+    T: 'a,
+    F: FnOnce(&'a mut SloshVm) -> T,
 {
     fn apply(&self, fun: F) -> VMResult<Value>;
 }
