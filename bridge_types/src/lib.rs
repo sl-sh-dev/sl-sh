@@ -1,3 +1,5 @@
+pub mod value;
+
 use std::borrow::Cow;
 
 /// Public type used by rust native -> slosh bridge macro to represent

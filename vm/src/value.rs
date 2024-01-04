@@ -3,6 +3,7 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::iter;
 use std::sync::Arc;
+use bridge_types::value::ValueType;
 use crate::interner::Interned;
 
 use crate::error::*;
@@ -484,36 +485,42 @@ impl Value {
         }
     }
 
-    pub fn display_type<ENV>(&self, vm: &GVm<ENV>) -> &'static str {
+    /// Map a [`Value`] to a [`ValueType`] which implements [`Display`] and does not require
+    /// passing in a [`GVm`] to do so.
+    pub fn value_type<ENV>(&self, vm: &GVm<ENV>) -> ValueType {
         match self {
-            Value::True => SLOSH_BOOL_TRUE,
-            Value::False => SLOSH_BOOL_FALSE,
-            Value::Int(_) => SLOSH_INT,
-            Value::Float(_) => SLOSH_FLOAT,
-            Value::Symbol(_) => "Symbol",
-            Value::Keyword(_) => "Keyword",
-            Value::StringConst(_) => SLOSH_STRING,
-            Value::Special(_) => "Special",
-            Value::CodePoint(_) => SLOSH_CHAR,
-            Value::CharCluster(_, _) => SLOSH_CHAR,
-            Value::CharClusterLong(_) => SLOSH_CHAR,
-            Value::Builtin(_) => "Builtin",
-            Value::Byte(_) => "Byte",
-            Value::Nil => "Nil",
-            Value::Undefined => "Undefined", //panic!("Tried to get type for undefined!"),
-            Value::Lambda(_) => "Lambda",
-            Value::Closure(_) => "Lambda",
-            Value::Continuation(_) => "Continuation",
-            Value::CallFrame(_) => "CallFrame",
-            Value::Vector(_) => "Vector",
-            Value::Map(_) => "Map",
-            Value::Pair(_) => "Pair",
-            Value::List(_, _) => "Pair",
-            Value::String(_) => SLOSH_STRING,
-            Value::Bytes(_) => "Bytes",
-            Value::Value(handle) => vm.get_value(*handle).display_type(vm),
-            Value::Error(_) => "Error",
+            Value::Byte(_) => ValueType::Byte,
+            Value::Int(_) => ValueType::Int,
+            Value::Float(_) => ValueType::Float,
+            Value::CodePoint(_) => ValueType::CodePoint,
+            Value::CharCluster(_, _) => ValueType::CharCluster,
+            Value::CharClusterLong(_) => ValueType::CharClusterLong,
+            Value::Symbol(_) => ValueType::Symbol,
+            Value::Keyword(_) => ValueType::Keyword,
+            Value::StringConst(_) => ValueType::StringConst,
+            Value::Special(_) => ValueType::Special,
+            Value::Builtin(_) => ValueType::Builtin,
+            Value::True => ValueType::True,
+            Value::False => ValueType::False,
+            Value::Nil => ValueType::Nil,
+            Value::Undefined => ValueType::Undefined,
+            Value::String(_) => ValueType::String,
+            Value::Vector(_) => ValueType::Vector,
+            Value::Map(_) => ValueType::Map,
+            Value::Bytes(_) => ValueType::Bytes,
+            Value::Pair(_) => ValueType::Pair,
+            Value::List(_, _) => ValueType::List,
+            Value::Lambda(_) => ValueType::Lambda,
+            Value::Closure(_) => ValueType::Closure,
+            Value::Continuation(_) => ValueType::Continuation,
+            Value::CallFrame(_) => ValueType::CallFrame,
+            Value::Error(_) => ValueType::Error,
+            Value::Value(handle) => vm.get_value(*handle).value_type(vm),
         }
+    }
+
+    pub fn display_type<ENV>(&self, vm: &GVm<ENV>) -> &'static str {
+        self.value_type(vm).into()
     }
 
     pub fn is_proper_list<ENV>(&self, vm: &GVm<ENV>) -> bool {
