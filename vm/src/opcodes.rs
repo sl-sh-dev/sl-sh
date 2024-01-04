@@ -160,13 +160,15 @@ pub const VECSTH: OpCode = VEC_BASE + 5;
 pub const VECMKD: OpCode = VEC_BASE + 6;
 // VEC A B C - R(A) = vec(elements R(B)..R(C)) (R(B) inclusive, R(C) exclusive)
 pub const VEC: OpCode = VEC_BASE + 7;
-// VECLEN A B - R(A) = vector length of vector in R(B)
-pub const VECLEN: OpCode = VEC_BASE + 8;
-// VECCLR A - Clear the vector in R(A)
-pub const VECCLR: OpCode = VEC_BASE + 9;
+// LEN A B - R(A) = length of data in R(B)
+pub const LEN: OpCode = VEC_BASE + 8;
+// CLR A - Clear the collection in R(A)
+pub const CLR: OpCode = VEC_BASE + 9;
+// MAPMK A B C - R(A) = map(elements R(B)..R(C)) (R(B) inclusive, R(C) exclusive), alternating key, val pairs
+pub const MAPMK: OpCode = VEC_BASE + 10;
 
 // Strings
-const STRING_BASE: OpCode = VEC_BASE + 10;
+const STRING_BASE: OpCode = VEC_BASE + 11;
 // STR A B C - R(A) = string concatinated from objects in R(A) - R(B) (inclusive)
 pub const STR: OpCode = STRING_BASE;
 

@@ -434,6 +434,9 @@ dependencies = [
 [[package]]
 name = "slvm"
 version = "0.1.0"
+dependencies = [
+ "unicode-segmentation",
+]
 
 [[package]]
 name = "smallvec"

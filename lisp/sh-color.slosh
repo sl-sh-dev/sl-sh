@@ -87,7 +87,7 @@ Example:
         (str-contains com "/")(fs-exists? (str "./" com))
         (str-starts-with com "~/") (fs-exists? (str-replace com "~/" (env "HOME")))
         ((fn (paths idx) 
-            (if (< idx (vec-len paths))
+            (if (< idx (len paths))
                 (if (fs-exists? (str (paths idx) "/" com)) #t (recur paths (+ idx 1)))
                 #f))
          (str-split (env "PATH") ":") 0)))
@@ -211,7 +211,7 @@ Section: shell
                  (set! last-ch \space)
                  (set! is-lisp (str-starts-with line \())
 
-                 (if (<= (len line) 1) (hash-clear! sys-syms))
+                 (if (<= (len line) 1) (clear! sys-syms))
                  (set! out (str-map line str-mapper-fn))
                  (if in-quote (str-push! out (prrawtoken)) (str-push! out (prtoken)))
                  out))

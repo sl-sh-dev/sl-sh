@@ -172,7 +172,6 @@ pub(crate) fn compile_let(
 mod tests {
     use super::*;
     use crate::test_utils::{assert_vals, exec, exec_compile_error, exec_runtime_error, read_test};
-    use builtins::collections::make_hash;
     use builtins::print::{dasm, prn};
 
     #[test]
@@ -315,7 +314,6 @@ mod tests {
     fn test_let_destructure() {
         let mut env = new_slosh_vm();
         env.set_global_builtin("prn", prn);
-        env.set_global_builtin("make-hash", make_hash);
 
         let result = exec(
             &mut env,
@@ -478,7 +476,6 @@ mod tests {
         let mut env = new_slosh_vm();
         env.set_global_builtin("prn", prn);
         env.set_global_builtin("dasm", dasm);
-        env.set_global_builtin("make-hash", make_hash);
 
         let result = exec(
             &mut env,

@@ -2,7 +2,6 @@
 mod tests {
     use super::super::*;
     use crate::test_utils::{assert_vals, exec, read_test};
-    use builtins::collections::make_hash;
     use builtins::print::{dasm, prn};
 
     #[test]
@@ -55,7 +54,6 @@ mod tests {
         let mut env = new_slosh_vm();
         env.set_global_builtin("prn", prn);
         env.set_global_builtin("dasm", dasm);
-        env.set_global_builtin("make-hash", make_hash);
         let result = exec(&mut env, "((fn () 1))");
         let expected = read_test(&mut env, "1");
         assert_vals(&env, expected, result);

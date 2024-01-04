@@ -130,6 +130,21 @@ pub(crate) fn compile_vec(
     result: usize,
 ) -> VMResult<bool> {
     match car {
+        Value::Special(i) if i == env.specials().make_hash => {
+            state.tail = false;
+            let mut max = 0;
+            for r in cdr {
+                compile(env, state, *r, result + max + 1)?;
+                max += 1;
+            }
+            state.chunk.encode3(
+                MAPMK,
+                result as u16,
+                (result + 1) as u16,
+                (result + max + 1) as u16,
+                env.own_line(),
+            )?;
+        }
         Value::Special(i) if i == env.specials().vec => {
             state.tail = false;
             let mut max = 0;
@@ -246,7 +261,7 @@ pub(crate) fn compile_vec(
                 env.own_line(),
             )?;
         }
-        Value::Special(i) if i == env.specials().vec_len => {
+        Value::Special(i) if i == env.specials().len => {
             state.tail = false;
             if cdr.len() != 1 {
                 return Err(VMError::new_compile(format!(
@@ -258,9 +273,9 @@ pub(crate) fn compile_vec(
             compile(env, state, cdr[0], result + 1)?;
             state
                 .chunk
-                .encode2(VECLEN, result as u16, (result + 1) as u16, env.own_line())?;
+                .encode2(LEN, result as u16, (result + 1) as u16, env.own_line())?;
         }
-        Value::Special(i) if i == env.specials().vec_clr => {
+        Value::Special(i) if i == env.specials().clear => {
             state.tail = false;
             if cdr.len() != 1 {
                 return Err(VMError::new_compile(format!(
@@ -270,7 +285,7 @@ pub(crate) fn compile_vec(
                 )));
             }
             compile(env, state, cdr[0], result)?;
-            state.chunk.encode1(VECCLR, result as u16, env.own_line())?;
+            state.chunk.encode1(CLR, result as u16, env.own_line())?;
         }
         _ => return Ok(false),
     }

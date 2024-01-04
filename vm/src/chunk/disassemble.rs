@@ -826,16 +826,26 @@ impl Chunk {
                 println!();
                 Ok(false)
             }
-            VECLEN => {
-                print!("VECLEN  \t");
+            MAPMK => {
+                print!("MAPMK   \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_operand!(code, true, wide);
                 println!();
                 Ok(false)
             }
-            VECCLR => {
-                print!("VECCLR  \t");
+            LEN => {
+                print!("LEN  \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(false)
+            }
+            CLR => {
+                print!("CLR     \t");
                 disassemble_operand!(code, true, wide);
                 println!();
                 Ok(false)

@@ -168,6 +168,7 @@ pub struct Specials {
     pub cdr: Interned,
     pub xar: Interned,
     pub xdr: Interned,
+    pub make_hash: Interned,
     pub vec: Interned,
     pub make_vec: Interned,
     pub vec_pop: Interned,
@@ -191,8 +192,8 @@ pub struct Specials {
     pub and: Interned,
     pub or: Interned,
     pub err: Interned,
-    pub vec_len: Interned,
-    pub vec_clr: Interned,
+    pub len: Interned,
+    pub clear: Interned,
     pub str_: Interned,
     pub let_: Interned,
     pub call_cc: Interned,
@@ -233,6 +234,21 @@ impl Specials {
             cdr: add_special(vm, "cdr", ""),
             xar: add_special(vm, "xar!", ""),
             xdr: add_special(vm, "xdr!", ""),
+            make_hash: add_special(
+                vm,
+                "make-hash",
+                "Usage: (make-hash associations?)
+
+Make a new hash map.
+
+If associations is provided (makes an empty map if not) then it is a list of
+pairs (key . value) that populate the initial map.  Neither key nor value in the
+associations will be evaluated.
+
+Section: hashmap
+
+",
+            ),
             vec: add_special(
                 vm,
                 "vec",
@@ -352,20 +368,42 @@ Example:
             and: add_special(vm, "and", ""),
             or: add_special(vm, "or", ""),
             err: add_special(vm, "err", ""),
-            vec_len: add_special(vm, "vec-len", ""),
-            vec_clr: add_special(
+            len: add_special(
                 vm,
-                "vec-clear!",
-                "Usage: (vec-clear! vector)
+                "len",
+                r#"Usage: (len expression) -> int
 
-Clears a vector.  This is destructive!
+Return length of supplied expression.
 
-Section: vector
+Section: core
+
+Example:
+(test::assert-equal 0 (len nil))
+(test::assert-equal 5 (len \"12345\"))
+; Note the unicode symbol is only one char even though it is more then one byte.
+(test::assert-equal 6 (len \"12345Σ\"))
+(test::assert-equal 3 (len '(1 2 3)))
+(test::assert-equal 3 (len '#(1 2 3)))
+(test::assert-equal 3 (len (list 1 2 3)))
+(test::assert-equal 3 (len (vec 1 2 3)))
+(test::assert-error (len 100))
+(test::assert-error (len 100.0))
+(test::assert-error (len #\\x))
+"#,
+            ),
+            clear: add_special(
+                vm,
+                "clear!",
+                "Usage: (clear! container)
+
+Clears a container (vector, hash-map, string).  This is destructive!
+
+Section: collection
 
 Example:
 (def test-clear-vec (vec 1 2 3))
 (test::assert-false (vec-empty? test-clear-vec))
-(vec-clear! test-clear-vec)
+(clear! test-clear-vec)
 (test::assert-true (vec-empty? test-clear-vec))
 ",
             ),

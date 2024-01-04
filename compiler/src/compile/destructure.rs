@@ -38,11 +38,11 @@ pub struct DestructState {
 /// Only works with Value::List for detection currently, this is what will come from the reader in
 /// these cases, may need to expand this to handle Value::Pair as well for macros (? TODO).
 pub fn resolve_destruct_containers(env: &mut SloshVm, arg: Value) -> Value {
-    let i_hash = env.intern("make-hash");
     if let Value::List(h, s) = arg {
         let v = env.get_vector(h);
         let s = s as usize;
         let i_vec = env.specials().vec;
+        let i_hash = env.specials().make_hash;
         match &v[s] {
             Value::Symbol(i) if *i == i_vec => {
                 let v = env.alloc_vector(v[s + 1..].to_vec());

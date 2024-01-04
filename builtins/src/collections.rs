@@ -1,7 +1,5 @@
 use crate::{add_builtin, SloshVm};
 use slvm::{VMError, VMResult, Value};
-use std::collections::HashMap;
-use unicode_segmentation::UnicodeSegmentation;
 
 pub fn vec_slice(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let (vector, start, end) = match registers.len() {
@@ -71,35 +69,6 @@ pub fn vec_to_list(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-pub fn make_hash(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
-    if registers.len() % 2 != 0 {
-        return Err(VMError::new_vm(
-            "make-hash: Invalid arguments (must be even, [key val]*)".to_string(),
-        ));
-    }
-    let mut map = HashMap::new();
-    let mut args = registers.iter();
-    while let (Some(key), Some(val)) = (args.next(), args.next()) {
-        map.insert(*key, *val);
-    }
-    Ok(vm.alloc_map(map))
-}
-
-pub fn hash_set(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
-    let mut i = registers.iter();
-    if let (Some(Value::Map(map_handle)), Some(key), Some(val), None) =
-        (i.next(), i.next(), i.next(), i.next())
-    {
-        let map = vm.get_map_mut(*map_handle)?;
-        map.insert(*key, *val);
-        Ok(Value::Map(*map_handle))
-    } else {
-        Err(VMError::new_vm(
-            "takes three arguments (hash-map key value)".to_string(),
-        ))
-    }
-}
-
 pub fn hash_remove(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();
     if let (Some(Value::Map(map_handle)), Some(key), None) = (i.next(), i.next(), i.next()) {
@@ -112,26 +81,6 @@ pub fn hash_remove(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     } else {
         Err(VMError::new_vm(
             "takes three arguments (hash-map key value)".to_string(),
-        ))
-    }
-}
-
-pub fn hash_get(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
-    let mut i = registers.iter();
-    if let (Some(Value::Map(map_handle)), Some(key), default, None) =
-        (i.next(), i.next(), i.next(), i.next())
-    {
-        let map = vm.get_map(*map_handle);
-        if let Some(val) = map.get(key) {
-            Ok(*val)
-        } else if let Some(val) = default {
-            Ok(*val)
-        } else {
-            Ok(Value::Nil)
-        }
-    } else {
-        Err(VMError::new_vm(
-            "takes two or three arguments (hash-map key default?)".to_string(),
         ))
     }
 }
@@ -163,59 +112,6 @@ pub fn hash_keys(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         Ok(vm.alloc_vector(keys))
     } else {
         Err(VMError::new_vm("takes one argument (hash-map)".to_string()))
-    }
-}
-
-fn hash_clear(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
-    let mut i = registers.iter();
-    if let (Some(Value::Map(map_handle)), None) = (i.next(), i.next()) {
-        let map = vm.get_map_mut(*map_handle)?;
-        map.clear();
-        Ok(Value::Map(*map_handle))
-    } else {
-        Err(VMError::new_vm("takes one argument (hash-map)".to_string()))
-    }
-}
-
-fn length(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
-    let mut i = registers.iter();
-    if let (Some(val), None) = (i.next(), i.next()) {
-        match val {
-            Value::String(h) => {
-                let mut len: i64 = 0;
-                for _ in UnicodeSegmentation::graphemes(vm.get_string(*h), true) {
-                    len += 1;
-                }
-                Ok(len.into())
-            }
-            Value::StringConst(i) => {
-                let mut len: i64 = 0;
-                for _ in UnicodeSegmentation::graphemes(vm.get_interned(*i), true) {
-                    len += 1;
-                }
-                Ok(len.into())
-            }
-            Value::Vector(h) => Ok((vm.get_vector(*h).len() as i64).into()),
-            Value::List(h, i) => Ok((vm.get_vector(*h).len() as i64 - *i as i64).into()),
-            Value::Pair(h) => {
-                let mut len: i64 = 1;
-                let (_, mut cdr) = vm.get_pair(*h);
-                while let Value::Pair(h) = cdr {
-                    let (_, c) = vm.get_pair(h);
-                    cdr = c;
-                    len += 1;
-                }
-                Ok(len.into())
-            }
-            Value::Map(h) => Ok((vm.get_map(*h).len() as i64).into()),
-            Value::Nil => Ok(0.into()),
-            _ => Err(VMError::new_vm(format!(
-                "len: net valid for value of type {}",
-                val.display_type(vm)
-            ))),
-        }
-    } else {
-        Err(VMError::new_vm("len: takes one argument".to_string()))
     }
 }
 
@@ -292,68 +188,4 @@ Section: vector
     ",
         );
          */
-    add_builtin(
-        env,
-        "make-hash",
-        make_hash,
-        "Usage: (make-hash associations?)
-
-Make a new hash map.
-
-If associations is provided (makes an empty map if not) then it is a list of
-pairs (key . value) that populate the initial map.  Neither key nor value in the
-associations will be evaluated.
-
-Section: hashmap
-
-",
-    );
-    add_builtin(
-        env,
-        "hash-clear!",
-        hash_clear,
-    "Usage: (hash-clear! hashmap)
-
-Clears a hashmap.  This is a destructive form!
-
-Section: hashmap
-
-Example:
-(def tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\")(#\\S . \"val S\"))))
-(test::assert-equal 4 (length (hash-keys tst-hash)))
-(test::assert-true (hash-haskey tst-hash :key1))
-(test::assert-true (hash-haskey tst-hash 'key2))
-(test::assert-true (hash-haskey tst-hash \"key3\"))
-(test::assert-true (hash-haskey tst-hash #\\S))
-(hash-clear! tst-hash)
-(test::assert-equal 0 (length (hash-keys tst-hash)))
-(test::assert-false (hash-haskey tst-hash :key1))
-(test::assert-false (hash-haskey tst-hash 'key2))
-(test::assert-false (hash-haskey tst-hash \"key3\"))
-(test::assert-false (hash-haskey tst-hash #\\S))",
-    );
-    add_builtin(
-        env,
-        "len",
-        length,
-        r#"Usage: (length expression) -> int
-
-Return length of supplied expression.
-
-Section: core
-
-Example:
-(test::assert-equal 0 (length nil))
-(test::assert-equal 5 (length \"12345\"))
-; Note the unicode symbol is only one char even though it is more then one byte.
-(test::assert-equal 6 (length \"12345Σ\"))
-(test::assert-equal 3 (length '(1 2 3)))
-(test::assert-equal 3 (length '#(1 2 3)))
-(test::assert-equal 3 (length (list 1 2 3)))
-(test::assert-equal 3 (length (vec 1 2 3)))
-(test::assert-error (length 100))
-(test::assert-error (length 100.0))
-(test::assert-error (length #\\x))
-"#,
-    );
 }

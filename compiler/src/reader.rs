@@ -6,7 +6,7 @@ use std::fs::File;
 use std::io::{BufReader, Cursor};
 use std::num::{ParseFloatError, ParseIntError};
 
-use compile_state::state::SloshVm;
+use compile_state::state::{SloshVm, SloshVmTrait};
 use slvm::value::*;
 use slvm::Chunk;
 use unicode_reader::Graphemes;
@@ -704,7 +704,7 @@ impl<'vm> Reader<'vm> {
         let mut cont = true;
 
         let close_intern = self.vm.intern("}");
-        let make_hash = self.vm.intern("make-hash");
+        let make_hash = self.vm.specials().make_hash;
         let mut list = Vec::new();
         list.push(Value::Symbol(make_hash));
         let line = self.line() as u32;

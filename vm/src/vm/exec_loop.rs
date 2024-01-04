@@ -3,8 +3,10 @@ use crate::{
     from_i56, CallFrame, Chunk, Continuation, Error, GVm, VMError, VMErrorObj, VMResult, Value,
     STACK_CAP,
 };
+use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
+use unicode_segmentation::UnicodeSegmentation;
 
 impl<ENV> GVm<ENV> {
     #[inline]
@@ -1029,6 +1031,28 @@ impl<ENV> GVm<ENV> {
                         set_register!(self, dest as usize, vh);
                     }
                 }
+                MAPMK => {
+                    let (dest, start, end) = decode3!(self.ip_ptr, wide);
+                    let map = if end == start {
+                        HashMap::new()
+                    } else if (end - start) % 2 != 0 {
+                        return Err((
+                            VMError::new_vm(
+                                "make-hash: Invalid arguments (must be even, [key val]*)"
+                                    .to_string(),
+                            ),
+                            chunk.clone(),
+                        ));
+                    } else {
+                        let mut map = HashMap::new();
+                        for i in (start..end).step_by(2) {
+                            map.insert(self.register(i as usize), self.register(i as usize + 1));
+                        }
+                        map
+                    };
+                    let mh = self.alloc_map(map);
+                    set_register!(self, dest as usize, mh);
+                }
                 VECMK => {
                     let (dest, op) = decode2!(self.ip_ptr, wide);
                     let len = self
@@ -1155,30 +1179,71 @@ impl<ENV> GVm<ENV> {
                     let val = self.alloc_vector(v);
                     set_register!(self, dest as usize, val);
                 }
-                VECLEN => {
+                LEN => {
                     let (dest, v) = decode2!(self.ip_ptr, wide);
-                    match self.register(v as usize) {
-                        Value::Vector(h) => {
-                            let v = self.get_vector(h);
-                            let len = (v.len() as i64).into();
-                            set_register!(self, dest as usize, len);
+                    let len = match self.register(v as usize) {
+                        Value::String(h) => {
+                            let mut len: i64 = 0;
+                            for _ in UnicodeSegmentation::graphemes(self.get_string(h), true) {
+                                len += 1;
+                            }
+                            len
                         }
-                        Value::List(h, start) => {
-                            let v = self.get_vector(h);
-                            let len = ((v.len() - start as usize) as i64).into();
-                            set_register!(self, dest as usize, len);
+                        Value::StringConst(i) => {
+                            let mut len: i64 = 0;
+                            for _ in UnicodeSegmentation::graphemes(self.get_interned(i), true) {
+                                len += 1;
+                            }
+                            len
                         }
-                        _ => return Err((VMError::new_vm("VECLEN: Not a vector."), chunk)),
-                    }
+                        Value::Vector(h) => self.get_vector(h).len() as i64,
+                        Value::List(h, i) => self.get_vector(h).len() as i64 - i as i64,
+                        Value::Pair(h) => {
+                            let mut len: i64 = 1;
+                            let (_, mut cdr) = self.get_pair(h);
+                            while let Value::Pair(h) = cdr {
+                                let (_, c) = self.get_pair(h);
+                                cdr = c;
+                                len += 1;
+                            }
+                            len
+                        }
+                        Value::Map(h) => self.get_map(h).len() as i64,
+                        Value::Nil | Value::False => 0,
+                        _ => 1, /*Err(VMError::new_vm(format!(
+                                    "len: net valid for value of type {}",
+                                    val.display_type(vm)
+                                ))),
+                                */
+                    };
+                    set_register!(self, dest as usize, len.into());
                 }
-                VECCLR => {
+                CLR => {
                     let v = decode1!(self.ip_ptr, wide);
-                    if let Value::Vector(h) = self.register(v as usize) {
-                        let v = self
-                            .heap_mut()
-                            .get_vector_mut(h)
-                            .map_err(|e| (e, chunk.clone()))?;
-                        v.clear();
+                    let val = self.register(v as usize);
+                    match val {
+                        Value::Vector(h) => {
+                            let v = self
+                                .heap_mut()
+                                .get_vector_mut(h)
+                                .map_err(|e| (e, chunk.clone()))?;
+                            v.clear();
+                        }
+                        Value::Map(h) => {
+                            self.get_map_mut(h).map_err(|e| (e, chunk.clone()))?.clear();
+                        }
+                        Value::String(h) => {
+                            self.get_string_mut(h).clear();
+                        }
+                        _ => {
+                            return Err((
+                                VMError::new_vm(format!(
+                                    "clr: net valid for value of type {}",
+                                    val.display_type(self)
+                                )),
+                                chunk.clone(),
+                            ))
+                        }
                     }
                 }
                 STR => {
