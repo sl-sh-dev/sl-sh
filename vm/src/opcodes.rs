@@ -169,7 +169,7 @@ pub const MAPMK: OpCode = VEC_BASE + 10;
 
 // Strings
 const STRING_BASE: OpCode = VEC_BASE + 11;
-// STR A B C - R(A) = string concatinated from objects in R(A) - R(B) (inclusive)
+// STR A B C - R(A) = string concatenated from objects in R(A) - R(B) (inclusive)
 pub const STR: OpCode = STRING_BASE;
 
 // Types

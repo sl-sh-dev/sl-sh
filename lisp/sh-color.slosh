@@ -82,7 +82,7 @@ Example:
 (assert-false (sys-command? "rst-not-a-comand-strsnt"))
 !#
 (defn sys-command? (com)
-    (if (or (str-empty? com)(eq? (str-nth com 0) \/)(eq? (str-nth com 0) \.))
+    (if (or (str-empty? com)(eq? com.0 \/)(eq? com.0 \.))
             (fs-exists? com)
         (str-contains com "/")(fs-exists? (str "./" com))
         (str-starts-with com "~/") (fs-exists? (str-replace com "~/" (env "HOME")))
@@ -204,7 +204,7 @@ Section: shell
            (fn (line)
                  (set! plev 0)
                  (set! ch nil)
-                 (str-clear! token)
+                 (clear! token)
                  (set! tok-command #t)
                  (set! in-sys-command #f)
                  (set! in-quote #f)

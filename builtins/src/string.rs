@@ -31,7 +31,7 @@ fn str_trim_bang(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let left = vm.intern("left");
     match (i.next(), i.next(), i.next()) {
         (Some(Value::String(handle)), None, None) => {
-            let buffer = vm.get_string_mut(*handle);
+            let buffer = vm.get_string_mut(*handle)?;
             let trimmed = buffer.trim_end();
             buffer.truncate(trimmed.len());
             let trimmed = buffer.trim_start();
@@ -39,13 +39,13 @@ fn str_trim_bang(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
             Ok(Value::String(*handle))
         }
         (Some(Value::String(handle)), Some(Value::Keyword(i)), None) if *i == right => {
-            let buffer = vm.get_string_mut(*handle);
+            let buffer = vm.get_string_mut(*handle)?;
             let trimmed = buffer.trim_end();
             buffer.truncate(trimmed.len());
             Ok(Value::String(*handle))
         }
         (Some(Value::String(handle)), Some(Value::Keyword(i)), None) if *i == left => {
-            let buffer = vm.get_string_mut(*handle);
+            let buffer = vm.get_string_mut(*handle)?;
             let trimmed = buffer.trim_start();
             buffer.replace_range(..(buffer.len() - trimmed.len()), "");
             Ok(Value::String(*handle))
@@ -96,7 +96,7 @@ fn str_push(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
             // object) even though this handle should be safe since we are here.
             // Also, can NOT call get_string or get_string_mut on this handle while holding this
             // reference without UB (need to make sure this is the only reference to this string in existence)..
-            let buffer = unsafe { &mut *(vm.get_string_mut(handle) as *mut String) };
+            let buffer = unsafe { &mut *(vm.get_string_mut(handle)? as *mut String) };
             for next in i {
                 match next {
                     Value::String(h) => {
@@ -122,31 +122,6 @@ fn str_push(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     } else {
         Err(VMError::new_vm(
             "str-push!: takes a string with 0 more arguments to append".to_string(),
-        ))
-    }
-}
-
-fn str_clear(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
-    let mut i = registers.iter();
-    if let (Some(buffer), None) = (i.next(), i.next()) {
-        if let Value::String(handle) = *buffer {
-            let buffer = vm.get_string_mut(handle);
-            buffer.clear();
-            Ok(Value::String(handle))
-        } else if let Value::StringConst(_handle) = *buffer {
-            Err(VMError::new_vm(format!(
-                "str-clear!: takes a string (not a const), got string const {}",
-                buffer.display_value(vm)
-            )))
-        } else {
-            Err(VMError::new_vm(format!(
-                "str-clear!: takes one arg, must be a string (got a {})",
-                buffer.display_value(vm)
-            )))
-        }
-    } else {
-        Err(VMError::new_vm(
-            "str-push!: takes a single arg, a string to clear".to_string(),
         ))
     }
 }
@@ -251,30 +226,6 @@ fn str_empty(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         }
     } else {
         Err(VMError::new_vm("str-empty?: takes a string".to_string()))
-    }
-}
-
-fn str_nth(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
-    let mut i = registers.iter();
-    if let (Some(string), Some(idx), None) = (i.next(), i.next(), i.next()) {
-        let string = string.pretty_value(vm);
-        let idx = idx.get_int(vm)?;
-        if idx < 0 {
-            return Err(VMError::new_vm(
-                "str-nth: index must be positive".to_string(),
-            ));
-        }
-        let strng: &str = &string;
-        let mut chars = UnicodeSegmentation::graphemes(strng, true).skip(idx as usize);
-        if let Some(char) = chars.next() {
-            Ok(vm.alloc_char(char))
-        } else {
-            Err(VMError::new_vm("str-nth: index out of bounds".to_string()))
-        }
-    } else {
-        Err(VMError::new_vm(
-            "str-nth: takes a string and a index".to_string(),
-        ))
     }
 }
 
@@ -482,25 +433,6 @@ Example:
     );
     add_builtin(
         env,
-        "str-clear!",
-        str_clear,
-        r#"Usage: (str-clear! string) -> string
-
-Clears a string.  This is a destructive form.
-
-Returns the string it was given.
-
-Section: string
-
-Example:
-(test::assert-equal "" (str-clear! (str "string")))
-(def test-str-clear (str "def-string"))
-(test::assert-equal "" (str-clear! test-str-clear))
-(test::assert-equal "" test-str-clear)
-"#,
-    );
-    add_builtin(
-        env,
         "str-map",
         str_map,
         r#"Usage: (str-map string lambda) -> string
@@ -550,22 +482,6 @@ Example:
 (test::assert-true (str-empty? (str-trim "   ")))
 (test::assert-false (str-empty? " "))
 (test::assert-false (str-empty? "string"))
-"#,
-    );
-    add_builtin(
-        env,
-        "str-nth",
-        str_nth,
-        r#"Usage: (str-nth string index) -> char
-
-Get the nth char (idexx) of a string.  Index is 0 based.
-
-Section: string
-
-Example:
-(test::assert-equal #\a (str-nth "stau" 2))
-(test::assert-equal #\s (str-nth "stau" 0))
-(test::assert-equal #\u (str-nth "stau" 3))
 "#,
     );
     add_builtin(

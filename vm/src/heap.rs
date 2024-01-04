@@ -335,9 +335,12 @@ impl Heap {
         }
     }
 
-    pub fn get_string_mut(&mut self, handle: Handle) -> &mut String {
+    pub fn get_string_mut(&mut self, handle: Handle) -> VMResult<&mut String> {
+        if !self.objects.is_mutable(handle.idx()) {
+            return Err(VMError::new_heap("String is not mutable!"));
+        }
         if let Some(Object::String(ptr)) = self.objects.get_mut(handle.idx()) {
-            Arc::make_mut(ptr)
+            Ok(Arc::make_mut(ptr))
         } else {
             panic!("Handle {} is not a string!", handle.idx());
         }

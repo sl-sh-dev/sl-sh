@@ -303,7 +303,7 @@ impl<ENV> GVm<ENV> {
         self.heap().get_string(handle)
     }
 
-    pub fn get_string_mut(&mut self, handle: Handle) -> &mut String {
+    pub fn get_string_mut(&mut self, handle: Handle) -> VMResult<&mut String> {
         self.heap_mut().get_string_mut(handle)
     }
 

@@ -131,6 +131,36 @@ impl<ENV> GVm<ENV> {
         }
     }
 
+    fn get_string_idx(&mut self, val: Value, i: u16) -> VMResult<Value> {
+        let s = match val {
+            Value::StringConst(it) => self.get_interned(it),
+            Value::String(h) => self.get_string(h),
+            _ => panic!("Invalid call to get_string_idx!"),
+        };
+        let idx = self.register_int(i as usize)?;
+        let mut iter = UnicodeSegmentation::graphemes(s, true);
+        let ch = if idx >= 0 {
+            iter.nth(idx as usize)
+        } else {
+            iter.rev().nth(((0 - idx) - 1) as usize)
+        };
+        let v = if let Some(ch) = ch {
+            // borrow checker won;t let us use self.alloc_char(ch) here....
+            let len = ch.len();
+            if len <= 6 {
+                let mut b = [0_u8; 6];
+                b[0..len].copy_from_slice(ch.as_bytes());
+                Value::CharCluster(len as u8, b)
+            } else {
+                let h = self.alloc_string(ch.to_string());
+                Value::CharClusterLong(h.get_handle().expect("just allocated, missing handle!"))
+            }
+        } else {
+            return Err(VMError::new_vm("GET: Index out of range."));
+        };
+        Ok(v)
+    }
+
     fn get(&mut self, wide: bool) -> VMResult<()> {
         let (dest, data, i) = decode3!(self.ip_ptr, wide);
         let data = self.register(data as usize);
@@ -196,6 +226,8 @@ impl<ENV> GVm<ENV> {
                     self.make_err("vm-missing", key)
                 }
             }
+            Value::StringConst(_) => self.get_string_idx(data, i)?,
+            Value::String(_) => self.get_string_idx(data, i)?,
             Value::Error(_) => data, // Pass the error on (for stacked GETs).
             _ => {
                 return Err(VMError::new_vm("GET: Not a compound data structure."));
@@ -1233,7 +1265,15 @@ impl<ENV> GVm<ENV> {
                             self.get_map_mut(h).map_err(|e| (e, chunk.clone()))?.clear();
                         }
                         Value::String(h) => {
-                            self.get_string_mut(h).clear();
+                            self.get_string_mut(h)
+                                .map_err(|e| (e, chunk.clone()))?
+                                .clear();
+                        }
+                        Value::StringConst(_) => {
+                            return Err((
+                                VMError::new_vm("can not clear a string const".to_string()),
+                                chunk.clone(),
+                            ));
                         }
                         _ => {
                             return Err((
