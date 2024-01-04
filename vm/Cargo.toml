@@ -12,3 +12,4 @@ nohelmet = []
 
 [dependencies]
 unicode-segmentation = "1.10.1"
+bridge_types = { workspace = true }

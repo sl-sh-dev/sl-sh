@@ -128,7 +128,7 @@ impl<'a> SlAsMut<'a, String> for &Value {
     fn sl_as_mut(&mut self, vm: &'a mut SloshVm) -> VMResult<&'a mut String> {
         match self {
             Value::String(h) => {
-                Ok(vm.get_string_mut(*h))
+                vm.get_string_mut(*h)
             }
             _ => {
                 Err(VMError::new_vm("Wrong type, expected something that can be cast to a &mut String."))
@@ -224,10 +224,6 @@ mod test {
     }
 
     pub fn create_string_const(vm: &mut SloshVm) -> Value {
-        //TODO PC need more clarification on distincution between
-        // 1. mutable Value::String
-        // 2. immutable Value::String
-        // 3. and Value::StringConst
         let val = vm.intern_static("read_only");
         let val = Value::StringConst(val);
         assert!(matches!(val, Value::StringConst(_)));

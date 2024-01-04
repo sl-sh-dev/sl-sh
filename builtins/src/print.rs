@@ -1,7 +1,8 @@
 use crate::SloshVm;
 use compile_state::state::SloshVmTrait;
-use slvm::{Interned, VMError, VMResult, Value};
+use slvm::{Value, VMError, VMResult};
 use std::io::{stdout, Write};
+use slvm::interner::Interned;
 
 fn is_sym(vm: &SloshVm, name: &str, intern: Interned) -> bool {
     if let Some(i) = vm.get_if_interned(name) {

@@ -3,13 +3,18 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::iter;
 use std::sync::Arc;
+use crate::interner::Interned;
 
 use crate::error::*;
 use crate::heap::*;
-use crate::interner::*;
 use crate::vm::GVm;
 
 pub const SLOSH_CHAR: &'static str = "Char";
+pub const SLOSH_STRING: &'static str = "String";
+pub const SLOSH_INT: &'static str = "Int";
+pub const SLOSH_FLOAT: &'static str = "Float";
+pub const SLOSH_BOOL_TRUE: &'static str = "True";
+pub const SLOSH_BOOL_FALSE: &'static str = "False";
 
 pub type CallFuncSig<ENV> = fn(vm: &mut GVm<ENV>, registers: &[Value]) -> VMResult<Value>;
 #[derive(Copy, Clone)]
@@ -481,13 +486,13 @@ impl Value {
 
     pub fn display_type<ENV>(&self, vm: &GVm<ENV>) -> &'static str {
         match self {
-            Value::True => "True",
-            Value::False => "False",
-            Value::Int(_) => "Int",
-            Value::Float(_) => "Float",
+            Value::True => SLOSH_BOOL_TRUE,
+            Value::False => SLOSH_BOOL_FALSE,
+            Value::Int(_) => SLOSH_INT,
+            Value::Float(_) => SLOSH_FLOAT,
             Value::Symbol(_) => "Symbol",
             Value::Keyword(_) => "Keyword",
-            Value::StringConst(_) => "String",
+            Value::StringConst(_) => SLOSH_STRING,
             Value::Special(_) => "Special",
             Value::CodePoint(_) => SLOSH_CHAR,
             Value::CharCluster(_, _) => SLOSH_CHAR,
@@ -504,7 +509,7 @@ impl Value {
             Value::Map(_) => "Map",
             Value::Pair(_) => "Pair",
             Value::List(_, _) => "Pair",
-            Value::String(_) => "String",
+            Value::String(_) => SLOSH_STRING,
             Value::Bytes(_) => "Bytes",
             Value::Value(handle) => vm.get_value(*handle).display_type(vm),
             Value::Error(_) => "Error",

@@ -69,11 +69,14 @@ pub struct Param {
 }
 
 //TODO PC use this! need common error messages but want a more comprehensive approach?
-// ... talk to sstanfield.
 pub struct ErrorStrings {}
 
 impl ErrorStrings {
     pub fn mismatched_type(fn_name: &str, expected: &str, got: &str) -> String {
         format!("{fn_name}: mismatched type input, expected {expected}, got {got}.")
+    }
+
+    pub fn fix_me_mismatched_type(expected: &str, got: &str) -> String {
+        Self::mismatched_type("fixme", expected, got)
     }
 }

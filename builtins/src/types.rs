@@ -1,6 +1,7 @@
 //! TODO PC these 2 links are broken.
 //! [LooseString]: [bridge_types::LooseString]
 //! [SloshChar]: [bridge_types::SloshChar]
+//! [Value]: [slvm::Value]
 //!
 //! TODO PC need explanation for the emulation for TryFrom/TryInto/AsRef/AsMut
 //! My notes:
@@ -99,9 +100,10 @@
 //! Value::StringConst          |                             |
 
 pub mod string_char;
+mod numbers;
 
 use compile_state::state::SloshVm;
-use slvm::{Value, VMResult};
+use slvm::VMResult;
 
 pub trait SlFrom<T>: Sized {
     /// Converts to this type from the input type.

@@ -305,7 +305,7 @@ pub fn backquote(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ReadError, Reader};
+    use crate::{Reader, ReadError};
     use slvm::RET;
     use std::sync::Arc;
 

@@ -4,7 +4,7 @@ use std::rc::Rc;
 use slvm::error::*;
 use slvm::opcodes::*;
 use slvm::value::*;
-use slvm::Interned;
+use slvm::interner::Interned;
 
 use crate::compile::destructure::{
     resolve_destruct_containers, setup_dbg, DestructState, DestructType,

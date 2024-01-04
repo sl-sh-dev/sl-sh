@@ -16,7 +16,6 @@
 use bridge_types::TypeHandle;
 use bridge_types::PassingStyle;
 use bridge_types::Param;
-use bridge_types::ErrorStrings;
 use quote::quote;
 use quote::ToTokens;
 use quote::__private::TokenStream;

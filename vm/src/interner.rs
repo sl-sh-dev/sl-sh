@@ -1,24 +1,6 @@
 use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
 use std::mem;
-
-#[derive(Clone, Copy, Debug)]
-pub struct Interned {
-    pub id: u32,
-}
-
-impl PartialEq for Interned {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-    }
-}
-impl Eq for Interned {}
-
-impl Hash for Interned {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write_u32(self.id);
-    }
-}
+use std::hash::{Hash, Hasher};
 
 // This interner is initially based on this: https://matklad.github.io/2020/03/22/fast-simple-rust-interner.html
 // Inspiration also from: https://github.com/CAD97/simple-interner/blob/master/src/interner.rs
@@ -198,5 +180,24 @@ mod tests {
         assert!(i.capacity() == 56);
         assert!(i.used() == 25);
         assert!(i.len() == 5);
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Interned {
+    pub id: u32,
+}
+
+impl PartialEq for Interned {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for Interned {}
+
+impl Hash for Interned {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write_u32(self.id);
     }
 }

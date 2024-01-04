@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use crate::interner::Interned;
 
 use crate::bits::FLAG_MUT;
 use crate::chunk::*;
 use crate::error::*;
 use crate::value::*;
-use crate::{get_code, FxHashMap, Interned};
-
+use crate::{FxHashMap, get_code};
 pub mod handle;
 pub use crate::handle::Handle;
 use crate::heap::storage::Storage;

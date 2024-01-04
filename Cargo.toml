@@ -19,3 +19,6 @@ lto = true
 #opt-level = 'z'
 debug = true
 #panic = "abort"
+
+[workspace.dependencies]
+bridge_types = { path = "bridge_types" }

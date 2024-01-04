@@ -7,7 +7,7 @@ use slvm::opcodes::*;
 use slvm::value::*;
 use slvm::vm::*;
 use slvm::FxHasher;
-use slvm::Handle;
+use slvm::heap::handle::Handle;
 use std::collections::HashSet;
 use std::hash::Hasher;
 use std::sync::Arc;

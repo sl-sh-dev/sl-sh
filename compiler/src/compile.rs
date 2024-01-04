@@ -1,7 +1,7 @@
 use slvm::error::*;
 use slvm::opcodes::*;
 use slvm::value::*;
-use slvm::Handle;
+use slvm::heap::handle::Handle;
 
 use crate::backquote::*;
 use crate::compile::compile_call::{
