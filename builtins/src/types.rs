@@ -1,4 +1,4 @@
-//! TODO PC need explanation for the emulation for TryFrom/TryInto/AsRef/AsMut
+//! TODO PC ISSUE #8 need explanation for the emulation for TryFrom/TryInto/AsRef/AsMut
 //! My notes:
 //! #. To convert a slosh &Value to an owned type implement `impl SlFrom<&Value> for OwnedType`,
 //!     this allows rust native functions annotated with the bridge macro to receive normal
@@ -7,10 +7,10 @@
 //! #. To convert a slosh &Value to a mutable reference type implement `impl SlAsMut<&Value> for MutRefType`.
 //! #. To convert some rust type back to a value that the rust native function
 //!     annotated by the bridge macro returns implement `impl SlFrom<&Value> for RustType`.
-//!     TODO PC blanket impl so impl `SlFrom<Value>` works, and taking a ref isn't required?
+//!     TODO PC ISSUE #8 blanket impl so impl `SlFrom<Value>` works, and taking a ref isn't required?
 //! #. To avoid allocations when converting a slosh &Value back to a rust type that was mutated
 //!     don't return anything. If it is necessary for the API to return some value,
-//!     TODO PC annotated or lifetime? AKA [the extant value problem]
+//!     TODO PC ISSUE #7 annotated or lifetime?
 //!
 //!
 //! ## rosetta stone for bridge macros
@@ -27,22 +27,22 @@
 //!                             |                             |     &emsp;- [`SlInto`] `&`[`String`] for `&`[`Value`]
 //!                             |                             | R -> S
 //!                             |                             |     &emsp;- take [`String`]
-//!                             |                             |     &emsp;* uses Clone unless TODO PC [the extant value problem]
+//!                             |                             |     &emsp;* uses Clone unless TODO PC ISSUE #7 the extant value problem
 //!                             |                             |
 //! `&mut `[`String`]           | [`Value`]`::String`         |
 //!                             |                             | S -> R
 //!                             |                             |     &emsp;- [`SlAsMut`] [`String`] for `&`[`Value`]
 //!                             |                             | R -> S
 //!                             |                             |     &emsp;- take `&mut `[`String`]
-//!                             |                             |     &emsp;* uses Clone unless TODO PC [the extant value problem]
+//!                             |                             |     &emsp;* uses Clone unless TODO PC ISSUE #7 the extant value problem
 //!                             |                             |
 //! `&`[`str`]                  | [`Value`]`::String` / [`Value`]`::StringConst` |
 //!                             |                             | S -> R
 //!                             |                             |     &emsp;- [`SlAsRef`] [`str`] for `&`[`Value`]
 //!                             |                             | R -> S
 //!                             |                             |     &emsp;- [`SlFrom`] for [`Value`]
-//!                             |                             |     &emsp;* uses Clone unless TODO PC [the extant value problem]
-//!                             |                             |     &emsp;- TODO PC is it even possible to call vm.alloc_string_ro on something that was *newly* created in the current fcn and returned as a RO value OR should that be made as a custom type so the user can declare their intent.
+//!                             |                             |     &emsp;* uses Clone unless TODO PC ISSUE #7 - the extant value problem
+//!                             |                             |     &emsp;- TODO PC ISSUE #7 adjacent is it even possible to call vm.alloc_string_ro on something that was *newly* created in the current fcn and returned as a RO value OR should that be made as a custom type so the user can declare their intent.
 //!                             |                             |
 //! [`char`]                    | [`Value`]`::CodePoint`      |
 //!                             |                             | S -> R

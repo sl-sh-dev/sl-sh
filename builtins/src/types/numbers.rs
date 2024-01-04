@@ -1,4 +1,5 @@
 use bridge_types::ErrorStrings;
+use bridge_types::value::ValueType;
 use compile_state::state::SloshVm;
 use slvm::{from_i56, SLOSH_INT, to_i56, Value, VMError, VMResult};
 use crate::types::SlFrom;
@@ -22,8 +23,7 @@ impl SlFrom<&Value> for i32 {
                 num.try_into().map_err(|_| VMError::new_vm("Provided slosh value too small to fit desired type.".to_string()))
             }
             _ => {
-                //TODO PC maybe use strum macros on Value:: enum so that we can derive display name w/o needing to instantiate anything?
-                Err(VMError::new_vm(ErrorStrings::fix_me_mismatched_type(SLOSH_INT, value.display_type(vm))))
+                Err(VMError::new_vm(ErrorStrings::fix_me_mismatched_type(ValueType::Int.into(), value.display_type(vm))))
             }
         }
     }
