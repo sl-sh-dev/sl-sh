@@ -1,8 +1,3 @@
-//! TODO PC these 2 links are broken.
-//! [LooseString]: [bridge_types::LooseString]
-//! [SloshChar]: [bridge_types::SloshChar]
-//! [Value]: [slvm::Value]
-//!
 //! TODO PC need explanation for the emulation for TryFrom/TryInto/AsRef/AsMut
 //! My notes:
 //! #. To convert a slosh &Value to an owned type implement `impl SlFrom<&Value> for OwnedType`,
@@ -15,13 +10,13 @@
 //!     TODO PC blanket impl so impl `SlFrom<Value>` works, and taking a ref isn't required?
 //! #. To avoid allocations when converting a slosh &Value back to a rust type that was mutated
 //!     don't return anything. If it is necessary for the API to return some value,
-//!     TODO PC annotated or liftime? AKA [the extant value problem]
+//!     TODO PC annotated or lifetime? AKA [the extant value problem]
 //!
 //!
 //! ## rosetta stone for bridge macros
 //! Rust Type                   | Slosh Type & Traits   <br>&emsp; <br> S -> R Convert Slosh -> Rust <br> &emsp; - Occurs when coercing slush arguments to the parameter types in the signature of the annotated Rust function. <br> R -> S Convert Rust -> Slosh <br> &emsp; - Occurs when coercing some returned Rust type to a Slosh type. |
 //! ----------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|
-//! [`String`]                  | [`Value`]`::String`         |
+//! [`String`]                  | [Value]`::String`         |
 //!                             |                             | S -> R
 //!                             |                             |     &emsp;- [`SlInto`] [`String`] for `&`[`Value`]
 //!                             |                             | R -> S
@@ -55,7 +50,7 @@
 //!                             |                             | R -> S
 //!                             |                             |     &emsp;- [`SlFrom`] `&`[`Value`] for [`char`]
 //!                             |                             |
-//! [`SloshChar`]               |  [`Value`]`::CharClusterLong` / [`Value`]`::CharCluster` / [`Value`]`::CodePoint` |
+//! [SloshChar]               |  [`Value`]`::CharClusterLong` / [`Value`]`::CharCluster` / [`Value`]`::CodePoint` |
 //!                             |                             | S -> R
 //!                             |                             |     &emsp;- [`SlIntoRef`] [`SloshChar`] for `&`[`Value`]
 //!                             |                             | R -> S
@@ -104,6 +99,12 @@ mod numbers;
 
 use compile_state::state::SloshVm;
 use slvm::VMResult;
+#[cfg(doc)]
+use {
+    bridge_types::{LooseString, SloshChar},
+    slvm::Value,
+};
+
 
 pub trait SlFrom<T>: Sized {
     /// Converts to this type from the input type.

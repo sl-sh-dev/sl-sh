@@ -485,8 +485,8 @@ impl Value {
         }
     }
 
-    /// Map a [`Value`] to a [`ValueType`] which implements [`Display`] and does not require
-    /// passing in a [`GVm`] to do so.
+    /// Map a [`Value`] to a [`ValueType`] which can be written to a debug string that refers to the
+    /// Slosh types and does not require passing in a [`GVm`] to do so.
     pub fn value_type<ENV>(&self, vm: &GVm<ENV>) -> ValueType {
         match self {
             Value::Byte(_) => ValueType::Byte,
