@@ -1,10 +1,10 @@
+use crate::{Handle, Heap, Interned, VMError, VMResult};
+use bridge_types::value::ValueType;
 use std::collections::HashMap;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::iter;
 use std::sync::Arc;
-use bridge_types::value::ValueType;
-use crate::{Handle, Heap, Interned, VMError, VMResult};
 
 use crate::vm::GVm;
 

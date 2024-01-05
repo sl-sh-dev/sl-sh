@@ -5,9 +5,9 @@ use std::io::ErrorKind;
 use std::sync::Arc;
 
 use compile_state::state::{SloshVm, SloshVmTrait};
-use sl_liner::{Context, Prompt};
 use sl_compiler::Reader;
-use slvm::{CallFrame, Chunk, Value, VMError, VMResult};
+use sl_liner::{Context, Prompt};
+use slvm::{CallFrame, Chunk, VMError, VMResult, Value};
 
 fn dump_regs(vm: &SloshVm, frame: &CallFrame) {
     let start = frame.stack_top;

@@ -1,8 +1,8 @@
-use bridge_types::ErrorStrings;
-use bridge_types::value::ValueType;
-use compile_state::state::SloshVm;
-use slvm::{from_i56, to_i56, Value, VMError, VMResult};
 use crate::types::SlFrom;
+use bridge_types::value::ValueType;
+use bridge_types::ErrorStrings;
+use compile_state::state::SloshVm;
+use slvm::{from_i56, to_i56, VMError, VMResult, Value};
 
 impl SlFrom<i32> for Value {
     fn sl_from(value: i32, _vm: &mut SloshVm) -> VMResult<Self> {
@@ -20,11 +20,16 @@ impl SlFrom<&Value> for i32 {
         match value {
             Value::Int(num) => {
                 let num = from_i56(num);
-                num.try_into().map_err(|_| VMError::new_vm("Provided slosh value too small to fit desired type.".to_string()))
+                num.try_into().map_err(|_| {
+                    VMError::new_vm(
+                        "Provided slosh value too small to fit desired type.".to_string(),
+                    )
+                })
             }
-            _ => {
-                Err(VMError::new_vm(ErrorStrings::fix_me_mismatched_type(ValueType::Int.into(), value.display_type(vm))))
-            }
+            _ => Err(VMError::new_vm(ErrorStrings::fix_me_mismatched_type(
+                ValueType::Int.into(),
+                value.display_type(vm),
+            ))),
         }
     }
 }

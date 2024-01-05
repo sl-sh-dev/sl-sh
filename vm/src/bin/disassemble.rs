@@ -1,5 +1,5 @@
-use slvm::{Chunk, FxHasher, Handle, Value, Vm, VMError};
 use slvm::opcodes::*;
+use slvm::{Chunk, FxHasher, Handle, VMError, Value, Vm};
 use std::collections::HashSet;
 use std::hash::Hasher;
 use std::sync::Arc;

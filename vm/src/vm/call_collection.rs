@@ -1,4 +1,4 @@
-use crate::{GVm, Value, VMError, VMResult, Handle};
+use crate::{GVm, Handle, VMError, VMResult, Value};
 
 impl<ENV> GVm<ENV> {
     pub(crate) fn call_map(

@@ -23,7 +23,6 @@ pub const SLOSH_MAP: &'static str = "Map";
 pub const SLOSH_PAIR: &'static str = "Pair";
 pub const SLOSH_ERROR: &'static str = "Error";
 
-
 /// Enum representing the various types of values in Slosh.
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum ValueType {

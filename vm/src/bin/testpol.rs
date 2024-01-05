@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use slvm::opcodes::*;
-use slvm::{Chunk, Vm, VMError};
+use slvm::{Chunk, VMError, Vm};
 
 fn main() -> Result<(), VMError> {
     // algorithm from http://dan.corlan.net/bench.html

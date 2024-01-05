@@ -1,7 +1,7 @@
-use slvm::opcodes::*;
-use slvm::{Handle, Interned, Value, VMError, VMResult};
-use std::collections::HashMap;
 use compile_state::state::CompileState;
+use slvm::opcodes::*;
+use slvm::{Handle, Interned, VMError, VMResult, Value};
+use std::collections::HashMap;
 
 use crate::{compile, mkconst, SloshVm, SloshVmTrait};
 

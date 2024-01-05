@@ -1,5 +1,5 @@
 use crate::opcodes::*;
-use crate::{Chunk, GVm, VMResult, Value, VMError};
+use crate::{Chunk, GVm, VMError, VMResult, Value};
 
 #[macro_export]
 macro_rules! decode_u8_enum {

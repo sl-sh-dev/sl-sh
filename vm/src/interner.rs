@@ -1,6 +1,6 @@
 use std::collections::HashMap;
-use std::mem;
 use std::hash::{Hash, Hasher};
+use std::mem;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Interned {

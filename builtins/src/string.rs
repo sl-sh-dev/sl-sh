@@ -1,5 +1,5 @@
 use crate::{add_builtin, SloshVm};
-use slvm::{Value, VMError, VMResult, Handle};
+use slvm::{Handle, VMError, VMResult, Value};
 use unicode_segmentation::UnicodeSegmentation;
 
 fn str_trim(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {

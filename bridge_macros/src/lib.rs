@@ -13,9 +13,9 @@
 //!     that marked in the annotation... OTHERWISE data may be copied!
 //!     OR allow for simple lifetimes?
 
-use bridge_types::TypeHandle;
-use bridge_types::PassingStyle;
 use bridge_types::Param;
+use bridge_types::PassingStyle;
+use bridge_types::TypeHandle;
 use quote::quote;
 use quote::ToTokens;
 use quote::__private::TokenStream;

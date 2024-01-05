@@ -94,8 +94,8 @@
 //! Value::Error                |                             |
 //! Value::StringConst          |                             |
 
-pub mod string_char;
 mod numbers;
+pub mod string_char;
 
 use compile_state::state::SloshVm;
 use slvm::VMResult;
@@ -104,7 +104,6 @@ use {
     bridge_types::{LooseString, SloshChar},
     slvm::Value,
 };
-
 
 pub trait SlFrom<T>: Sized {
     /// Converts to this type from the input type.
@@ -117,39 +116,49 @@ pub trait SlInto<T>: Sized {
 }
 
 impl<T, U> SlInto<U> for T
-where U: SlFrom<T> {
+where
+    U: SlFrom<T>,
+{
     fn sl_into(self, vm: &mut SloshVm) -> VMResult<U> {
         U::sl_from(self, vm)
     }
 }
 
-pub trait SlFromRef<'a, T>: Sized where Self: 'a {
+pub trait SlFromRef<'a, T>: Sized
+where
+    Self: 'a,
+{
     /// Converts to this type from the input type.
     fn sl_from_ref(value: T, vm: &'a mut SloshVm) -> VMResult<Self>;
 }
 
-pub trait SlIntoRef<'a, T>: Sized where T: 'a {
+pub trait SlIntoRef<'a, T>: Sized
+where
+    T: 'a,
+{
     /// Converts to this type from the input type.
     fn sl_into_ref(self, vm: &'a mut SloshVm) -> VMResult<T>;
 }
 
 impl<'a, T, U> SlIntoRef<'a, U> for T
-    where U: SlFromRef<'a, T>, U: 'a {
+where
+    U: SlFromRef<'a, T>,
+    U: 'a,
+{
     fn sl_into_ref(self, vm: &'a mut SloshVm) -> VMResult<U> {
         U::sl_from_ref(self, vm)
     }
 }
 
 pub trait SlAsRef<'a, T: ?Sized> {
-
     /// Converts this type into a shared reference of the (usually inferred) input type.
     fn sl_as_ref(&self, vm: &'a mut SloshVm) -> VMResult<&'a T>;
 }
 
 // SlAsRef lifts over &
 impl<'a, T: ?Sized, U: ?Sized> SlAsRef<'a, U> for &'a T
-    where
-        T: SlAsRef<'a, U>,
+where
+    T: SlAsRef<'a, U>,
 {
     #[inline]
     fn sl_as_ref(&self, vm: &'a mut SloshVm) -> VMResult<&'a U> {
@@ -159,8 +168,8 @@ impl<'a, T: ?Sized, U: ?Sized> SlAsRef<'a, U> for &'a T
 
 // SlAsRef lifts over &mut
 impl<'a, T: ?Sized, U: ?Sized> SlAsRef<'a, U> for &'a mut T
-    where
-        T: SlAsRef<'a, U>,
+where
+    T: SlAsRef<'a, U>,
 {
     #[inline]
     fn sl_as_ref(&self, vm: &'a mut SloshVm) -> VMResult<&'a U> {
@@ -175,8 +184,8 @@ pub trait SlAsMut<'a, T: ?Sized> {
 
 // SlAsMut lifts over &mut
 impl<'a, T: ?Sized, U: ?Sized> SlAsMut<'a, U> for &'a mut T
-    where
-        T: SlAsMut<'a, U>,
+where
+    T: SlAsMut<'a, U>,
 {
     #[inline]
     fn sl_as_mut(&mut self, vm: &'a mut SloshVm) -> VMResult<&'a mut U> {

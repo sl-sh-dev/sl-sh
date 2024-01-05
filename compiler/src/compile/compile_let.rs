@@ -1,9 +1,9 @@
+use compile_state::state::{CompileState, Symbols};
 use std::cell::RefCell;
 use std::rc::Rc;
-use compile_state::state::{CompileState, Symbols};
 
 use slvm::opcodes::*;
-use slvm::{Interned, Value, VMError, VMResult};
+use slvm::{Interned, VMError, VMResult, Value};
 
 use crate::compile::destructure::{
     resolve_destruct_containers, setup_dbg, DestructState, DestructType,

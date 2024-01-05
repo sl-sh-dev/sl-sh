@@ -1,8 +1,8 @@
 use compile_state::state::{CompileState, SloshVm, SloshVmTrait};
 use slvm::{Interned, VMError, VMResult, Value};
 
-use crate::pass1::pass1;
 use crate::compile;
+use crate::pass1::pass1;
 
 macro_rules! is_tag {
     ($vm:expr, $exp:expr, $form:expr) => {{
@@ -41,7 +41,9 @@ macro_rules! get_data {
                             $vm.get_heap_property(cdr, "dbg-line"),
                             $vm.get_heap_property(cdr, "dbg-col"),
                         );
-                        if let (Some(slvm::Value::Int(line)), Some(slvm::Value::Int(col))) = (line, col) {
+                        if let (Some(slvm::Value::Int(line)), Some(slvm::Value::Int(col))) =
+                            (line, col)
+                        {
                             let line = slvm::from_i56(&line);
                             let col = slvm::from_i56(&col);
                             return Err(slvm::VMError::new_compile(format!(
@@ -49,7 +51,9 @@ macro_rules! get_data {
                                 line, col
                             )));
                         } else {
-                            return Err(slvm::VMError::new_compile("Invalid tag, takes one expression."));
+                            return Err(slvm::VMError::new_compile(
+                                "Invalid tag, takes one expression.",
+                            ));
                         }
                     }
                 }
@@ -57,13 +61,17 @@ macro_rules! get_data {
             slvm::Value::Vector(handle) => {
                 let v = $vm.get_vector(handle);
                 if v.len() != 2 {
-                    return Err(slvm::VMError::new_compile("Invalid tag, takes one expression."));
+                    return Err(slvm::VMError::new_compile(
+                        "Invalid tag, takes one expression.",
+                    ));
                 }
                 return Ok(v[1]);
             }
             _ => {}
         }
-        Err(slvm::VMError::new_compile("Invalid tag, takes one expression."))
+        Err(slvm::VMError::new_compile(
+            "Invalid tag, takes one expression.",
+        ))
     }};
 }
 
@@ -303,10 +311,10 @@ pub fn backquote(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Reader, ReadError};
-    use slvm::{RET, Value, VMError, VMResult};
-    use std::sync::Arc;
+    use crate::{ReadError, Reader};
     use compile_state::state::new_slosh_vm;
+    use slvm::{VMError, VMResult, Value, RET};
+    use std::sync::Arc;
 
     fn read_test(vm: &mut SloshVm, text: &'static str) -> Result<Value, ReadError> {
         let reader = Reader::from_string(text.to_string(), vm, "", 1, 0);

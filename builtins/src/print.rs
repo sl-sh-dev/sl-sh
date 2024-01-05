@@ -1,6 +1,6 @@
 use crate::SloshVm;
 use compile_state::state::SloshVmTrait;
-use slvm::{Value, VMError, VMResult, Interned};
+use slvm::{Interned, VMError, VMResult, Value};
 use std::io::{stdout, Write};
 
 fn is_sym(vm: &SloshVm, name: &str, intern: Interned) -> bool {

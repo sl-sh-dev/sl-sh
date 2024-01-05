@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::bits::FLAG_MUT;
-use crate::{Chunk, FxHashMap, get_code, Interned, Value, VMError, VMResult};
+use crate::{get_code, Chunk, FxHashMap, Interned, VMError, VMResult, Value};
 pub mod handle;
 pub use crate::handle::Handle;
 use crate::heap::storage::Storage;
@@ -697,8 +697,8 @@ impl Heap {
 
 #[cfg(test)]
 mod tests {
-    use crate::from_i56;
     use super::*;
+    use crate::from_i56;
 
     fn _test_send_sync<T>(_t: T)
     where

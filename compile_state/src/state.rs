@@ -1,7 +1,7 @@
+use slvm::{from_i56, CallFuncSig, Chunk, GVm, Interned, Value};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use slvm::{CallFuncSig, Chunk, from_i56, GVm, Interned, Value};
 
 #[derive(Clone, Debug)]
 pub struct SymbolsInt {

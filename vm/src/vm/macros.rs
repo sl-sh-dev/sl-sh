@@ -110,7 +110,9 @@ macro_rules! compare_int {
         for reg in reg1..reg2 {
             let op1 = $vm.register_unref(reg as usize);
             let op2 = $vm.register_unref(reg as usize + 1);
-            val = if matches!(op1, $crate::Value::Float(_)) || matches!(op2, $crate::Value::Float(_)) {
+            val = if matches!(op1, $crate::Value::Float(_))
+                || matches!(op2, $crate::Value::Float(_))
+            {
                 // The macro expansion trips this.
                 #[allow(clippy::redundant_closure_call)]
                 $comp_fn(
@@ -132,7 +134,11 @@ macro_rules! compare_int {
         if $not {
             val = !val;
         }
-        let val = if val { $crate::Value::True } else { $crate::Value::False };
+        let val = if val {
+            $crate::Value::True
+        } else {
+            $crate::Value::False
+        };
         if $move {
             *$vm.register_mut(dest as usize) = val;
         } else {
@@ -152,7 +158,10 @@ macro_rules! get_int {
         match $val {
             $crate::Value::Byte(b) => Ok(b as i64),
             $crate::Value::Int(i) => Ok($crate::from_i56(&i)),
-            _ => Err($crate::VMError::new_value(format!("Not an integer: {:?}", $val))),
+            _ => Err($crate::VMError::new_value(format!(
+                "Not an integer: {:?}",
+                $val
+            ))),
         }
     }};
 }
@@ -163,7 +172,10 @@ macro_rules! get_float {
             $crate::Value::Byte(b) => Ok(b as f32),
             $crate::Value::Int(i) => Ok(crate::from_i56(&i) as f32),
             $crate::Value::Float(f) => Ok(f.0),
-            _ => Err($crate::VMError::new_value(format!("Not a float: {:?}", $val))),
+            _ => Err($crate::VMError::new_value(format!(
+                "Not a float: {:?}",
+                $val
+            ))),
         }
     }};
 }

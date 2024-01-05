@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 
 use crate::opcodes::*;
-use crate::{Value, Interned, VMResult, VMError};
+use crate::{Interned, VMError, VMResult, Value};
 
 #[macro_use]
 pub mod disassemble;
