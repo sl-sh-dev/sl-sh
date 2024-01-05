@@ -1,7 +1,7 @@
 use crate::types::{SlAsMut, SlAsRef, SlFrom, SlFromRef};
-use bridge_types::value::ValueType;
 use bridge_types::{ErrorStrings, LooseString, SloshChar};
 use compile_state::state::SloshVm;
+use slvm::value::ValueType;
 use slvm::{VMError, VMResult, Value};
 use std::borrow::Cow;
 

@@ -1,7 +1,7 @@
 use crate::types::SlFrom;
-use bridge_types::value::ValueType;
 use bridge_types::ErrorStrings;
 use compile_state::state::SloshVm;
+use slvm::value::ValueType;
 use slvm::{from_i56, to_i56, VMError, VMResult, Value};
 
 impl SlFrom<i32> for Value {

@@ -13,3 +13,4 @@ quote = "1.0.18"
 static_assertions = "1.1.0"
 bridge_types = { workspace = true }
 trybuild = "1.0.85"
+slvm = { path = "../vm" }
