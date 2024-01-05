@@ -152,23 +152,18 @@ pub const VECELS: OpCode = VEC_BASE + 1;
 pub const VECPSH: OpCode = VEC_BASE + 2;
 // VECPOP A B - pop from vec in R(A) to R(B)
 pub const VECPOP: OpCode = VEC_BASE + 3;
-// VECNTH A B C - get nth R(C) item from vec in R(A) to R(B)
-pub const VECNTH: OpCode = VEC_BASE + 4;
-// VECSTH A B C - set nth R(C) item in vec R(A) from R(B)
-pub const VECSTH: OpCode = VEC_BASE + 5;
-// VECMKD A B C - make a vector with R(B) elements and put it in R(A), each element defaulted to R(C)
-pub const VECMKD: OpCode = VEC_BASE + 6;
+pub const VECMKD: OpCode = VEC_BASE + 4;
 // VEC A B C - R(A) = vec(elements R(B)..R(C)) (R(B) inclusive, R(C) exclusive)
-pub const VEC: OpCode = VEC_BASE + 7;
+pub const VEC: OpCode = VEC_BASE + 5;
 // LEN A B - R(A) = length of data in R(B)
-pub const LEN: OpCode = VEC_BASE + 8;
+pub const LEN: OpCode = VEC_BASE + 6;
 // CLR A - Clear the collection in R(A)
-pub const CLR: OpCode = VEC_BASE + 9;
+pub const CLR: OpCode = VEC_BASE + 7;
 // MAPMK A B C - R(A) = map(elements R(B)..R(C)) (R(B) inclusive, R(C) exclusive), alternating key, val pairs
-pub const MAPMK: OpCode = VEC_BASE + 10;
+pub const MAPMK: OpCode = VEC_BASE + 8;
 
 // Strings
-const STRING_BASE: OpCode = VEC_BASE + 11;
+const STRING_BASE: OpCode = VEC_BASE + 9;
 // STR A B C - R(A) = string concatenated from objects in R(A) - R(B) (inclusive)
 pub const STR: OpCode = STRING_BASE;
 

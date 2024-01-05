@@ -319,7 +319,10 @@ impl<ENV> GVm<ENV> {
                 *slot.or_insert(Value::Undefined) = src;
             }
             _ => {
-                return Err(VMError::new_vm("Not a compound data structure."));
+                return Err(VMError::new_vm(format!(
+                    "Not a compound data structure: {}.",
+                    data.display_type(self)
+                )));
             }
         }
         Ok(())
@@ -1135,67 +1138,6 @@ impl<ENV> GVm<ENV> {
                         return Err((VMError::new_vm("VECPOP: Not a vector."), chunk));
                     };
                     set_register!(self, dest as usize, val);
-                }
-                VECNTH => {
-                    let (vc, dest, i) = decode3!(self.ip_ptr, wide);
-                    let i = self
-                        .register_int(i as usize)
-                        .map_err(|e| (e, chunk.clone()))? as usize;
-                    let val = match self.register(vc as usize) {
-                        Value::Vector(h) => {
-                            let v = self.get_vector(h);
-                            if let Some(val) = v.get(i) {
-                                *val
-                            } else {
-                                return Err((
-                                    VMError::new_vm(format!(
-                                        "VECNTH: index out of bounds, {}/{}.",
-                                        i,
-                                        v.len()
-                                    )),
-                                    chunk,
-                                ));
-                            }
-                        }
-                        Value::List(h, start) => {
-                            let v = self.get_vector(h);
-                            if let Some(val) = v.get(start as usize + i) {
-                                *val
-                            } else {
-                                return Err((
-                                    VMError::new_vm(format!(
-                                        "VECNTH: index out of bounds, {}/{}.",
-                                        i,
-                                        v.len()
-                                    )),
-                                    chunk,
-                                ));
-                            }
-                        }
-                        _ => {
-                            return Err((VMError::new_vm("VECNTH: Not a vector."), chunk));
-                        }
-                    };
-                    set_register!(self, dest as usize, val);
-                }
-                VECSTH => {
-                    let (vc, src, i) = decode3!(self.ip_ptr, wide);
-                    let i = self
-                        .register_int(i as usize)
-                        .map_err(|e| (e, chunk.clone()))? as usize;
-                    let val = self.register(src as usize);
-                    if let Value::Vector(h) = self.register(vc as usize) {
-                        let v = self
-                            .heap_mut()
-                            .get_vector_mut(h)
-                            .map_err(|e| (e, chunk.clone()))?;
-                        if i >= v.len() {
-                            return Err((VMError::new_vm("VECSTH: Index out of range."), chunk));
-                        }
-                        v[i] = val;
-                    } else {
-                        return Err((VMError::new_vm("VECSTH: Not a vector."), chunk));
-                    };
                 }
                 VECMKD => {
                     let (dest, len, dfn) = decode3!(self.ip_ptr, wide);

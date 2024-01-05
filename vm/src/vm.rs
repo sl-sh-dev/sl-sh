@@ -885,7 +885,7 @@ mod tests {
         chunk.encode2(ADD, 4, 8, Some(line))?;
         chunk.encode2(DIV, 4, 8, Some(line))?;
         // (vec-set! pol j mu)))
-        chunk.encode3(VECSTH, 10, 4, 7, Some(line))?;
+        chunk.encode3(SETCOL, 4, 10, 7, Some(line))?;
 
         chunk.encode2(INC, 7, 1, Some(line))?;
         chunk.encode3(JMPLT, 7, 100, jmp1_idx as u16, Some(line))?;
@@ -895,7 +895,7 @@ mod tests {
         // (dotimes-i j 100 (j2)
         //   (set! su (+ (vec-nth pol j) (* su x))))
         chunk.encode2(MUL, 3, 2, Some(line))?; // FROM 3
-        chunk.encode3(VECNTH, 10, 51, 7, Some(line))?;
+        chunk.encode3(GET, 51, 10, 7, Some(line))?;
         chunk.encode2(ADD, 3, 51, Some(line))?;
 
         chunk.encode2(INC, 7, 1, Some(line))?;
@@ -1238,9 +1238,9 @@ mod tests {
         chunk.encode2(VECPOP, 1, 6, Some(line))?;
         chunk.encode2(VECPSH, 1, 4, Some(line))?;
         chunk.encode2(VECPSH, 1, 4, Some(line))?;
-        chunk.encode3(VECNTH, 1, 7, 2, Some(line))?;
-        chunk.encode3(VECSTH, 1, 3, 2, Some(line))?;
-        chunk.encode3(VECNTH, 1, 8, 2, Some(line))?;
+        chunk.encode3(GET, 7, 1, 2, Some(line))?;
+        chunk.encode3(SETCOL, 3, 1, 2, Some(line))?;
+        chunk.encode3(GET, 8, 1, 2, Some(line))?;
         chunk.encode2(VECMK, 10, 2, Some(line))?;
         chunk.encode2(VECPSH, 10, 4, Some(line))?;
         chunk.encode2(VECPSH, 10, 3, Some(line))?;
@@ -1248,12 +1248,12 @@ mod tests {
         chunk.encode2(VECPOP, 10, 16, Some(line))?;
         chunk.encode2(VECPSH, 10, 4, Some(line))?;
         chunk.encode2(VECPSH, 10, 4, Some(line))?;
-        chunk.encode3(VECNTH, 10, 17, 3, Some(line))?;
-        chunk.encode3(VECSTH, 10, 3, 3, Some(line))?;
-        chunk.encode3(VECNTH, 10, 18, 3, Some(line))?;
+        chunk.encode3(GET, 17, 10, 3, Some(line))?;
+        chunk.encode3(SETCOL, 3, 10, 3, Some(line))?;
+        chunk.encode3(GET, 18, 10, 3, Some(line))?;
         chunk.encode2(VECMK, 20, 2, Some(line))?;
         chunk.encode2(VECELS, 20, 2, Some(line))?;
-        chunk.encode3(VECSTH, 20, 3, 3, Some(line))?;
+        chunk.encode3(SETCOL, 3, 20, 3, Some(line))?;
         chunk.encode0(RET, Some(line))?;
         let chunk = Arc::new(chunk);
         vm.execute(chunk)?;

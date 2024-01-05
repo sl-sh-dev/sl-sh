@@ -222,45 +222,6 @@ pub(crate) fn compile_vec(
                 .chunk
                 .encode2(VECPOP, (result + 1) as u16, result as u16, env.own_line())?;
         }
-        Value::Special(i) if i == env.specials().vec_nth => {
-            state.tail = false;
-            if cdr.len() != 2 {
-                return Err(VMError::new_compile(format!(
-                    "takes two arguments, got {}, line {}",
-                    cdr.len(),
-                    env.line_num()
-                )));
-            }
-            compile(env, state, cdr[0], result + 1)?;
-            compile(env, state, cdr[1], result + 2)?;
-            state.chunk.encode3(
-                VECNTH,
-                (result + 1) as u16,
-                result as u16,
-                (result + 2) as u16,
-                env.own_line(),
-            )?;
-        }
-        Value::Special(i) if i == env.specials().vec_set => {
-            state.tail = false;
-            if cdr.len() != 3 {
-                return Err(VMError::new_compile(format!(
-                    "takes three arguments, got {}, line {}",
-                    cdr.len(),
-                    env.line_num()
-                )));
-            }
-            compile(env, state, cdr[0], result)?;
-            compile(env, state, cdr[1], result + 1)?;
-            compile(env, state, cdr[2], result + 2)?;
-            state.chunk.encode3(
-                VECSTH,
-                result as u16,
-                (result + 2) as u16,
-                (result + 1) as u16,
-                env.own_line(),
-            )?;
-        }
         Value::Special(i) if i == env.specials().len => {
             state.tail = false;
             if cdr.len() != 1 {

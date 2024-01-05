@@ -785,26 +785,6 @@ impl Chunk {
                 println!();
                 Ok(false)
             }
-            VECNTH => {
-                print!("VECNTH \t");
-                disassemble_operand!(code, true, wide);
-                print!("\t");
-                disassemble_operand!(code, true, wide);
-                print!("\t");
-                disassemble_operand!(code, true, wide);
-                println!();
-                Ok(false)
-            }
-            VECSTH => {
-                print!("VECSTH \t");
-                disassemble_operand!(code, true, wide);
-                print!("\t");
-                disassemble_operand!(code, true, wide);
-                print!("\t");
-                disassemble_operand!(code, true, wide);
-                println!();
-                Ok(false)
-            }
             VECMKD => {
                 print!("VECMKD \t");
                 disassemble_operand!(code, true, wide);

@@ -66,7 +66,7 @@ fn main() -> Result<(), VMError> {
     chunk.encode2(ADD, 4, 8, None)?;
     chunk.encode2(DIV, 4, 8, None)?;
     // (vec-set! pol j mu)))
-    chunk.encode3(VECSTH, 10, 4, 7, None)?;
+    chunk.encode3(SETCOL, 4, 10, 7, None)?;
     //chunk.encode2(MOVI, 7, 4, None)?;
 
     chunk.encode2(INC, 7, 1, None)?;
@@ -80,7 +80,7 @@ fn main() -> Result<(), VMError> {
                                           //   (set! su (+ (vec-nth pol j) (* su x))))
     chunk.add_jump(chunk.code.len() as u32);
     chunk.encode2(MUL, 3, 2, None)?;
-    chunk.encode3(VECNTH, 10, 51, 7, None)?;
+    chunk.encode3(GET, 51, 10, 7, None)?;
     //chunk.encode2(MOVII, 51, 7, None)?;
     chunk.encode2(ADD, 3, 51, None)?;
 

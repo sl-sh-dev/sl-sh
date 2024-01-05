@@ -173,8 +173,6 @@ pub struct Specials {
     pub make_vec: Interned,
     pub vec_pop: Interned,
     pub vec_push: Interned,
-    pub vec_nth: Interned,
-    pub vec_set: Interned,
     pub quote: Interned,
     pub backquote: Interned,
     pub recur: Interned,
@@ -315,40 +313,6 @@ Example:
 (test::assert-equal '(1) test-pop-vec)
 (test::assert-equal 1 (vec-pop! test-pop-vec))
 (test::assert-equal '() test-pop-vec)
-",
-            ),
-            vec_nth: add_special(
-                vm,
-                "vec-nth",
-                "Usage: (vec-nth vector index) -> object
-
-Get the nth element (0 based) of a vector. If you need the equivalent operation
-on a list use [nth](root::nth).
-
-Section: vector
-
-Example:
-(test::assert-equal 5 (vec-nth '#(1 2 3 4 5 6) 4))
-(test::assert-equal 1 (vec-nth '#(1 2 3 4 5 6) 0))
-(test::assert-equal 3 (vec-nth '#(1 2 3 4 5 6) 2))
-(test::assert-equal 6 (vec-nth '#(1 2 3 4 5 6) 5))
-",
-            ),
-            vec_set: add_special(
-                vm,
-                "vec-set!",
-                "Usage: (vec-set! vector index value) -> vector
-
-Set the nth index (0 based) of a vector to value. This is destructive! If you
-need the equivalent operation on a list use [setnth!](root::setnth!).
-
-Section: vector
-
-Example:
-(def test-setnth-vec (vec 1 2 3))
-(test::assert-equal '(1 5 3) (vec-set! test-setnth-vec 1 5))
-(test::assert-equal '(7 5 3) (vec-set! test-setnth-vec 0 7))
-(test::assert-equal '(7 5 9) (vec-set! test-setnth-vec 2 9))
 ",
             ),
             quote: add_special(vm, "quote", ""),
