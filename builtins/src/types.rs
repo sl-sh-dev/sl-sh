@@ -94,7 +94,7 @@
 //! Value::Error                |                             |
 //! Value::StringConst          |                             |
 
-mod numbers;
+pub mod numbers;
 pub mod string_char;
 
 use compile_state::state::SloshVm;

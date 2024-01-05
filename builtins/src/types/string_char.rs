@@ -21,7 +21,7 @@ impl<'a> SlFromRef<'a, &Value> for LooseString<'a, str> {
             Value::Symbol(i) => Ok(LooseString::Borrowed(vm.get_interned(*i))),
             Value::Keyword(i) => Ok(LooseString::Borrowed(vm.get_interned(*i))),
             Value::StringConst(i) => Ok(LooseString::Borrowed(vm.get_interned(*i))),
-            _ => Err(VMError::new_vm(
+            _ => Err(VMError::new_conversion(
                 "Wrong type, expected something that can be loosely cast to a String.",
             )),
         }
@@ -41,7 +41,7 @@ impl SlFrom<&Value> for char {
     fn sl_from(value: &Value, _vm: &mut SloshVm) -> VMResult<Self> {
         match value {
             Value::CodePoint(char) => Ok(*char),
-            _ => Err(VMError::new_vm(
+            _ => Err(VMError::new_conversion(
                 "Wrong type, expected something that can be cast to a char.",
             )),
         }
@@ -59,7 +59,7 @@ impl<'a> SlAsRef<'a, str> for &Value {
         match self {
             Value::String(h) => Ok(vm.get_string(*h)),
             Value::StringConst(i) => Ok(vm.get_interned(*i)),
-            _ => Err(VMError::new_vm(
+            _ => Err(VMError::new_conversion(
                 "Wrong type, expected something that can be cast to a &str.",
             )),
         }
@@ -75,7 +75,7 @@ impl<'a> SlFromRef<'a, &Value> for SloshChar<'a> {
                 String::from_utf8_lossy(&c[0..*l as usize])
             )))),
             Value::CharClusterLong(h) => Ok(SloshChar::String(Cow::Borrowed(vm.get_string(*h)))),
-            _ => Err(VMError::new_vm(ErrorStrings::fix_me_mismatched_type(
+            _ => Err(VMError::new_conversion(ErrorStrings::fix_me_mismatched_type(
                 ValueType::CharCluster.into(),
                 value.display_type(vm),
             ))),
@@ -99,7 +99,7 @@ impl<'a> SlAsMut<'a, String> for &Value {
     fn sl_as_mut(&mut self, vm: &'a mut SloshVm) -> VMResult<&'a mut String> {
         match self {
             Value::String(h) => vm.get_string_mut(*h),
-            _ => Err(VMError::new_vm(
+            _ => Err(VMError::new_conversion(
                 "Wrong type, expected something that can be cast to a &mut String.",
             )),
         }
@@ -134,7 +134,7 @@ impl SlFrom<&Value> for String {
     fn sl_from(value: &Value, vm: &mut SloshVm) -> VMResult<Self> {
         match value {
             Value::String(h) => Ok(vm.get_string(*h).to_string()),
-            _ => Err(VMError::new_vm(
+            _ => Err(VMError::new_conversion(
                 "Wrong type, expected something that can be cast to a string.",
             )),
         }
@@ -251,7 +251,7 @@ mod test {
         match param.handle {
             bridge_types::TypeHandle::Direct => match args.get(0usize) {
                 None => {
-                    return Err(crate::VMError::new_vm(&*{
+                    return Err(crate::VMError::new_conversion(&*{
                         let res =
                                 format!("{} not given enough arguments, expected at least {} arguments, got {}.", fn_name, 1usize, args.len());
                         res
@@ -263,7 +263,7 @@ mod test {
                             || arg_types[PARAMS_LEN - 1].handle
                                 != bridge_types::TypeHandle::VarArgs =>
                     {
-                        return Err(crate::VMError::new_vm(&*{
+                        return Err(crate::VMError::new_conversion(&*{
                             let res =
                                             format!("{} given too many arguments, expected at least {} arguments, got {}.",
                                                     fn_name, 1usize, args.len());
@@ -278,7 +278,7 @@ mod test {
                 },
             },
             _ => {
-                return Err(crate::VMError::new_vm(&*{
+                return Err(crate::VMError::new_conversion(&*{
                     let res = format!("{} failed to parse its arguments, internal error.", fn_name);
                     res
                 }));
@@ -300,7 +300,7 @@ mod test {
         match param.handle {
             bridge_types::TypeHandle::Direct => match args.get(0usize) {
                 None => {
-                    return Err(crate::VMError::new_vm(&*{
+                    return Err(crate::VMError::new_conversion(&*{
                         let res =
                                 format!("{} not given enough arguments, expected at least {} arguments, got {}.", fn_name, 1usize, args.len());
                         res
@@ -312,7 +312,7 @@ mod test {
                             || arg_types[PARAMS_LEN - 1].handle
                                 != bridge_types::TypeHandle::VarArgs =>
                     {
-                        return Err(crate::VMError::new_vm(&*{
+                        return Err(crate::VMError::new_conversion(&*{
                             let res =
                                             format!("{} given too many arguments, expected at least {} arguments, got {}.",
                                                     fn_name, 1usize, args.len());
@@ -328,7 +328,7 @@ mod test {
                 },
             },
             _ => {
-                return Err(crate::VMError::new_vm(&*{
+                return Err(crate::VMError::new_conversion(&*{
                     let res = format!("{} failed to parse its arguments, internal error.", fn_name);
                     res
                 }));

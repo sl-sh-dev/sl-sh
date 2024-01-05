@@ -21,12 +21,12 @@ impl SlFrom<&Value> for i32 {
             Value::Int(num) => {
                 let num = from_i56(num);
                 num.try_into().map_err(|_| {
-                    VMError::new_vm(
+                    VMError::new_conversion(
                         "Provided slosh value too small to fit desired type.".to_string(),
                     )
                 })
             }
-            _ => Err(VMError::new_vm(ErrorStrings::fix_me_mismatched_type(
+            _ => Err(VMError::new_conversion(ErrorStrings::fix_me_mismatched_type(
                 ValueType::Int.into(),
                 value.display_type(vm),
             ))),
