@@ -1,27 +1,27 @@
 use std::fmt::{Display, Formatter};
 
-pub const SLOSH_CHAR: &'static str = "Char";
-pub const SLOSH_STRING: &'static str = "String";
-pub const SLOSH_INT: &'static str = "Int";
-pub const SLOSH_FLOAT: &'static str = "Float";
-pub const SLOSH_BOOL_TRUE: &'static str = "True";
-pub const SLOSH_BOOL_FALSE: &'static str = "False";
-pub const SLOSH_SYMBOL: &'static str = "Symbol";
-pub const SLOSH_KEYWORD: &'static str = "Keyword";
-pub const SLOSH_SPECIAL: &'static str = "Special";
-pub const SLOSH_BUILTIN: &'static str = "Builtin";
-pub const SLOSH_BYTE: &'static str = "Byte";
-pub const SLOSH_BYTES: &'static str = "Bytes";
-pub const SLOSH_NIL: &'static str = "Nil";
-pub const SLOSH_UNDEFINED: &'static str = "Undefined";
-pub const SLOSH_LAMBDA: &'static str = "Lambda";
-pub const SLOSH_CLOSURE: &'static str = "Lambda";
-pub const SLOSH_CONTINUATION: &'static str = "Continuation";
-pub const SLOSH_CALLFRAME: &'static str = "CallFrame";
-pub const SLOSH_VECTOR: &'static str = "Vector";
-pub const SLOSH_MAP: &'static str = "Map";
-pub const SLOSH_PAIR: &'static str = "Pair";
-pub const SLOSH_ERROR: &'static str = "Error";
+pub const SLOSH_CHAR: &str = "Char";
+pub const SLOSH_STRING: &str = "String";
+pub const SLOSH_INT: &str = "Int";
+pub const SLOSH_FLOAT: &str = "Float";
+pub const SLOSH_BOOL_TRUE: &str = "True";
+pub const SLOSH_BOOL_FALSE: &str = "False";
+pub const SLOSH_SYMBOL: &str = "Symbol";
+pub const SLOSH_KEYWORD: &str = "Keyword";
+pub const SLOSH_SPECIAL: &str = "Special";
+pub const SLOSH_BUILTIN: &str = "Builtin";
+pub const SLOSH_BYTE: &str = "Byte";
+pub const SLOSH_BYTES: &str = "Bytes";
+pub const SLOSH_NIL: &str = "Nil";
+pub const SLOSH_UNDEFINED: &str = "Undefined";
+pub const SLOSH_LAMBDA: &str = "Lambda";
+pub const SLOSH_CLOSURE: &str = "Lambda";
+pub const SLOSH_CONTINUATION: &str = "Continuation";
+pub const SLOSH_CALLFRAME: &str = "CallFrame";
+pub const SLOSH_VECTOR: &str = "Vector";
+pub const SLOSH_MAP: &str = "Map";
+pub const SLOSH_PAIR: &str = "Pair";
+pub const SLOSH_ERROR: &str = "Error";
 
 /// Enum representing the various types of values in Slosh.
 #[derive(Copy, Clone, PartialEq, Eq)]
