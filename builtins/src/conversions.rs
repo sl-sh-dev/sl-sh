@@ -49,9 +49,10 @@ fn global_ref(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
                     Err(VMError::new_conversion("ref: not a global var".to_string()))
                 }
             }
-            _ => Err(VMError::new_conversion(
-                format!("ref: expected a symbol, got a {}", symbol.display_type(vm)),
-            )),
+            _ => Err(VMError::new_conversion(format!(
+                "ref: expected a symbol, got a {}",
+                symbol.display_type(vm)
+            ))),
         }
     } else {
         Err(VMError::new_conversion("ref: takes one arg".to_string()))
@@ -69,9 +70,10 @@ fn is_def(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
                     Ok(Value::False)
                 }
             }
-            _ => Err(VMError::new_conversion(
-                format!("def?: expected a symbol, got a {}", symbol.display_type(vm)),
-            )),
+            _ => Err(VMError::new_conversion(format!(
+                "def?: expected a symbol, got a {}",
+                symbol.display_type(vm)
+            ))),
         }
     } else {
         Err(VMError::new_conversion("def?: takes one arg".to_string()))

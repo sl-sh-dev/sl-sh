@@ -26,10 +26,9 @@ impl SlFrom<&Value> for i32 {
                     )
                 })
             }
-            _ => Err(VMError::new_conversion(ErrorStrings::fix_me_mismatched_type(
-                ValueType::Int.into(),
-                value.display_type(vm),
-            ))),
+            _ => Err(VMError::new_conversion(
+                ErrorStrings::fix_me_mismatched_type(ValueType::Int.into(), value.display_type(vm)),
+            )),
         }
     }
 }

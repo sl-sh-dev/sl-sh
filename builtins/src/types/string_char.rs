@@ -75,10 +75,12 @@ impl<'a> SlFromRef<'a, &Value> for SloshChar<'a> {
                 String::from_utf8_lossy(&c[0..*l as usize])
             )))),
             Value::CharClusterLong(h) => Ok(SloshChar::String(Cow::Borrowed(vm.get_string(*h)))),
-            _ => Err(VMError::new_conversion(ErrorStrings::fix_me_mismatched_type(
-                ValueType::CharCluster.into(),
-                value.display_type(vm),
-            ))),
+            _ => Err(VMError::new_conversion(
+                ErrorStrings::fix_me_mismatched_type(
+                    ValueType::CharCluster.into(),
+                    value.display_type(vm),
+                ),
+            )),
         }
     }
 }
