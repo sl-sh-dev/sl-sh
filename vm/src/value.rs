@@ -4,18 +4,9 @@ use std::hash::{Hash, Hasher};
 use std::iter;
 use std::sync::Arc;
 use bridge_types::value::ValueType;
-use crate::interner::Interned;
+use crate::{Handle, Heap, Interned, VMError, VMResult};
 
-use crate::error::*;
-use crate::heap::*;
 use crate::vm::GVm;
-
-pub const SLOSH_CHAR: &'static str = "Char";
-pub const SLOSH_STRING: &'static str = "String";
-pub const SLOSH_INT: &'static str = "Int";
-pub const SLOSH_FLOAT: &'static str = "Float";
-pub const SLOSH_BOOL_TRUE: &'static str = "True";
-pub const SLOSH_BOOL_FALSE: &'static str = "False";
 
 pub type CallFuncSig<ENV> = fn(vm: &mut GVm<ENV>, registers: &[Value]) -> VMResult<Value>;
 #[derive(Copy, Clone)]

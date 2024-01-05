@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
-use crate::chunk::*;
-use crate::heap::*;
-use crate::{mov_register, GVm, VMError, VMResult, Value};
+use crate::{mov_register, GVm, VMError, VMResult, Value, Chunk, Continuation, CallFrame};
 
 /// Vm functions to handle runtime calling of anything callable.
 

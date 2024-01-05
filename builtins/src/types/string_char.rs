@@ -1,7 +1,8 @@
 use std::borrow::Cow;
-use bridge_types::{LooseString, SloshChar};
+use bridge_types::{ErrorStrings, LooseString, SloshChar};
+use bridge_types::value::ValueType;
 use compile_state::state::SloshVm;
-use slvm::{SLOSH_CHAR, Value, VMError, VMResult};
+use slvm::{Value, VMError, VMResult};
 use crate::types::{SlAsMut, SlAsRef, SlFrom, SlFromRef};
 
 impl<'a> SlFromRef<'a, &Value> for LooseString<'a, str> {
@@ -98,7 +99,7 @@ impl<'a> SlFromRef<'a, &Value> for SloshChar<'a> {
                 Ok(SloshChar::String(Cow::Borrowed(vm.get_string(*h))))
             }
             _ => {
-                Err(VMError::new_vm(format!("Wrong type, expected something that can be cast to a {SLOSH_CHAR}.")))
+                Err(VMError::new_vm(ErrorStrings::fix_me_mismatched_type(ValueType::CharCluster.into(), value.display_type(vm))))
             }
         }
     }

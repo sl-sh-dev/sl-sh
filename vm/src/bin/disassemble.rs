@@ -1,13 +1,5 @@
-//use std::iter::Iterator;
-//use std::borrow::Borrow;
-
-use slvm::chunk::*;
-use slvm::error::*;
+use slvm::{Chunk, FxHasher, Handle, Value, Vm, VMError};
 use slvm::opcodes::*;
-use slvm::value::*;
-use slvm::vm::*;
-use slvm::FxHasher;
-use slvm::heap::handle::Handle;
 use std::collections::HashSet;
 use std::hash::Hasher;
 use std::sync::Arc;

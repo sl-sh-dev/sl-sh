@@ -1,9 +1,8 @@
 use std::cmp::Ordering;
 
 use crate::error::*;
-use crate::interner::Interned;
 use crate::opcodes::*;
-use crate::value::*;
+use crate::{Value, Interned};
 
 #[macro_use]
 pub mod disassemble;

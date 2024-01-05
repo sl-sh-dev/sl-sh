@@ -377,7 +377,7 @@ mod tests {
     fn test_umask_octal() {
         let bs = 0b001001001;
         let m = to_mode(bs);
-        assert_eq!(bs, m.bits() as u32);
+        assert_eq!(bs, m.bits());
 
         let m = octal_string_to_mode("0522").unwrap();
         assert_eq!(338, m.bits() as u32);

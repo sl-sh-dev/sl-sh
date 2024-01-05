@@ -1,9 +1,7 @@
 use std::error::Error;
 use std::fmt;
 use std::io;
-
-use crate::value::*;
-use crate::vm::*;
+use crate::{GVm, Value};
 
 #[derive(Clone, Debug)]
 pub enum VMErrorObj {

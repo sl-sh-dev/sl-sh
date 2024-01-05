@@ -2,12 +2,7 @@ use std::alloc;
 use std::alloc::Layout;
 use std::sync::Arc;
 
-use crate::chunk::*;
-use crate::error::*;
-use crate::heap::*;
-use crate::interner::*;
-use crate::value::*;
-use crate::HALT;
+use crate::{CallFrame, CallFunc, CallFuncSig, Chunk, from_i56, Globals, HALT, Handle, Heap, Interner, Value, VMError, VMErrorObj, VMResult};
 
 mod cons;
 mod storage;

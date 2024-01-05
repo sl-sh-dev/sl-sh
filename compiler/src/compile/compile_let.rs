@@ -1,17 +1,15 @@
 use std::cell::RefCell;
 use std::rc::Rc;
+use compile_state::state::{CompileState, Symbols};
 
-use slvm::error::*;
 use slvm::opcodes::*;
-use slvm::value::*;
-use slvm::interner::Interned;
+use slvm::{Interned, Value, VMError, VMResult};
 
 use crate::compile::destructure::{
     resolve_destruct_containers, setup_dbg, DestructState, DestructType,
 };
 use crate::compile::util::get_args_iter;
-use crate::{compile, SloshVm};
-use compile_state::state::*;
+use crate::{compile, SloshVm, SloshVmTrait};
 
 type RightSideExp = (Option<Interned>, Option<usize>, Value, Option<DestructType>);
 
@@ -173,6 +171,7 @@ mod tests {
     use super::*;
     use crate::test_utils::{assert_vals, exec, exec_compile_error, exec_runtime_error, read_test};
     use builtins::print::{dasm, prn};
+    use compile_state::state::new_slosh_vm;
 
     #[test]
     fn test_let() {

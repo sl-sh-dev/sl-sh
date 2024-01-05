@@ -1,5 +1,5 @@
 use crate::opcodes::*;
-use crate::{Chunk, GVm, VMError, VMResult, Value};
+use crate::{Chunk, GVm, VMResult, Value, VMError};
 
 #[macro_export]
 macro_rules! decode_u8_enum {
@@ -7,7 +7,7 @@ macro_rules! decode_u8_enum {
         if let Some((_, val)) = $code.next() {
             Ok(val)
         } else {
-            Err(VMError::new_chunk(
+            Err($crate::VMError::new_chunk(
                 "Error decoding a u8 from chunk stream, missing operand.",
             ))
         }
@@ -21,7 +21,7 @@ macro_rules! decode_chunk_u16 {
         if let (Some(idx1), Some(idx2)) = ($code.next(), $code.next()) {
             Ok(((*idx1 as u16) << 8) | (*idx2 as u16))
         } else {
-            Err(VMError::new_chunk(
+            Err($crate::VMError::new_chunk(
                 "Error decoding a u16 from chunk stream.",
             ))
         }
@@ -34,7 +34,7 @@ macro_rules! decode_u16_enum {
         if let (Some((_, idx1)), Some((_, idx2))) = ($code.next(), $code.next()) {
             Ok(((idx1 as u16) << 8) | (idx2 as u16))
         } else {
-            Err(VMError::new_chunk(
+            Err($crate::VMError::new_chunk(
                 "Error decoding a u16 from chunk stream.",
             ))
         }
@@ -54,7 +54,7 @@ macro_rules! decode_u32_enum {
                     | (idx4 as u32),
             )
         } else {
-            Err(VMError::new_chunk(
+            Err($crate::VMError::new_chunk(
                 "Error decoding a u32 from chunk stream.",
             ))
         }
