@@ -2,17 +2,12 @@ extern crate sl_liner;
 
 use std::collections::VecDeque;
 use std::io::ErrorKind;
-use std::iter::*;
 use std::sync::Arc;
-
-use slvm::heap::*;
-use slvm::value::*;
-
-use sl_compiler::reader::*;
 
 use compile_state::state::{SloshVm, SloshVmTrait};
 use sl_liner::{Context, Prompt};
-use slvm::{Chunk, VMError, VMResult};
+use sl_compiler::Reader;
+use slvm::{CallFrame, Chunk, Value, VMError, VMResult};
 
 fn dump_regs(vm: &SloshVm, frame: &CallFrame) {
     let start = frame.stack_top;

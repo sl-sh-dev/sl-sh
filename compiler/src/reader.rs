@@ -7,8 +7,7 @@ use std::io::{BufReader, Cursor};
 use std::num::{ParseFloatError, ParseIntError};
 
 use compile_state::state::{SloshVm, SloshVmTrait};
-use slvm::value::*;
-use slvm::Chunk;
+use slvm::{Chunk, Value};
 use unicode_reader::Graphemes;
 
 pub trait PeekableIterator: std::iter::Iterator {
