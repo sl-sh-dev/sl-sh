@@ -27,8 +27,29 @@ impl SlFrom<&Value> for i32 {
                 })
             }
             _ => Err(VMError::new_conversion(
-                ErrorStrings::fix_me_mismatched_type(ValueType::Int.into(), value.display_type(vm)),
+                ErrorStrings::fix_me_mismatched_type(
+                    <&'static str>::from(ValueType::Int),
+                    value.display_type(vm),
+                ),
             )),
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::types::SlInto;
+    use compile_state::state::new_slosh_vm;
+    use slvm::Value;
+
+    #[test]
+    fn test_i32_conversions_rust_to_value() {
+        let mut vm = new_slosh_vm();
+        let vm = &mut vm;
+        let test_vals = vec![0_i32, 1_i32, -1_i32, i32::MIN, i32::MAX];
+        for val in test_vals {
+            let val: Value = val.sl_into(vm).expect("i32 can be converted to Value");
+            assert!(matches!(val, Value::Int(_)));
         }
     }
 }

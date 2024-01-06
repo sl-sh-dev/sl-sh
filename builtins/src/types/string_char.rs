@@ -2,7 +2,7 @@ use crate::types::{SlAsMut, SlAsRef, SlFrom, SlFromRef};
 use bridge_types::{ErrorStrings, LooseString, SloshChar};
 use compile_state::state::SloshVm;
 use slvm::value::ValueType;
-use slvm::{VMError, VMResult, Value};
+use slvm::{VMError, VMResult, Value, ValueTypes};
 use std::borrow::Cow;
 
 impl<'a> SlFromRef<'a, &Value> for LooseString<'a, str> {
@@ -22,7 +22,18 @@ impl<'a> SlFromRef<'a, &Value> for LooseString<'a, str> {
             Value::Keyword(i) => Ok(LooseString::Borrowed(vm.get_interned(*i))),
             Value::StringConst(i) => Ok(LooseString::Borrowed(vm.get_interned(*i))),
             _ => Err(VMError::new_conversion(
-                "Wrong type, expected something that can be loosely cast to a String.",
+                ErrorStrings::fix_me_mismatched_type(
+                    String::from(ValueTypes::from([
+                        ValueType::String,
+                        ValueType::StringConst,
+                        ValueType::Symbol,
+                        ValueType::Keyword,
+                        ValueType::CharCluster,
+                        ValueType::CharClusterLong,
+                        ValueType::CodePoint,
+                    ])),
+                    value.display_type(vm),
+                ),
             )),
         }
     }
@@ -38,11 +49,15 @@ impl<'a> SlFromRef<'a, LooseString<'a, str>> for Value {
 }
 
 impl SlFrom<&Value> for char {
-    fn sl_from(value: &Value, _vm: &mut SloshVm) -> VMResult<Self> {
+    fn sl_from(value: &Value, vm: &mut SloshVm) -> VMResult<Self> {
         match value {
             Value::CodePoint(char) => Ok(*char),
             _ => Err(VMError::new_conversion(
-                "Wrong type, expected something that can be cast to a char.",
+                ErrorStrings::fix_me_mismatched_type_with_context(
+                    String::from(ValueTypes::from([ValueType::CodePoint])),
+                    value.display_type(vm),
+                    "Provided value can not be more than one byte, e.g. a char.",
+                ),
             )),
         }
     }
@@ -60,7 +75,13 @@ impl<'a> SlAsRef<'a, str> for &Value {
             Value::String(h) => Ok(vm.get_string(*h)),
             Value::StringConst(i) => Ok(vm.get_interned(*i)),
             _ => Err(VMError::new_conversion(
-                "Wrong type, expected something that can be cast to a &str.",
+                ErrorStrings::fix_me_mismatched_type(
+                    String::from(ValueTypes::from([
+                        ValueType::String,
+                        ValueType::StringConst,
+                    ])),
+                    self.display_type(vm),
+                ),
             )),
         }
     }
@@ -77,7 +98,11 @@ impl<'a> SlFromRef<'a, &Value> for SloshChar<'a> {
             Value::CharClusterLong(h) => Ok(SloshChar::String(Cow::Borrowed(vm.get_string(*h)))),
             _ => Err(VMError::new_conversion(
                 ErrorStrings::fix_me_mismatched_type(
-                    ValueType::CharCluster.into(),
+                    String::from(ValueTypes::from([
+                        ValueType::CharCluster,
+                        ValueType::CharClusterLong,
+                        ValueType::CodePoint,
+                    ])),
                     value.display_type(vm),
                 ),
             )),
@@ -102,7 +127,10 @@ impl<'a> SlAsMut<'a, String> for &Value {
         match self {
             Value::String(h) => vm.get_string_mut(*h),
             _ => Err(VMError::new_conversion(
-                "Wrong type, expected something that can be cast to a &mut String.",
+                ErrorStrings::fix_me_mismatched_type(
+                    <&'static str>::from(ValueType::String),
+                    self.display_type(vm),
+                ),
             )),
         }
     }
@@ -137,12 +165,16 @@ impl SlFrom<&Value> for String {
         match value {
             Value::String(h) => Ok(vm.get_string(*h).to_string()),
             _ => Err(VMError::new_conversion(
-                "Wrong type, expected something that can be cast to a string.",
+                ErrorStrings::fix_me_mismatched_type(
+                    <&'static str>::from(ValueType::String),
+                    value.display_type(vm),
+                ),
             )),
         }
     }
 }
 
+//TODO PC finish testing negative cases e.g. asserting that errrors are thrown.
 #[cfg(test)]
 mod test {
     use super::*;
@@ -351,12 +383,24 @@ mod test {
         let _s: String = (&val)
             .sl_into(vm)
             .expect("&Value::String can be converted to String");
+        let kwd_val = create_keyword(vm);
+
+        let e: VMResult<String> = (&kwd_val).sl_into(vm);
+        e.expect_err("Can not convert keyword to String");
+
         let _s: &str = (&val)
             .sl_as_ref(vm)
             .expect("&Value::String can be converted to &str");
+
+        let e: VMResult<&str> = (&kwd_val).sl_as_ref(vm);
+        e.expect_err("Can not convert keyword to &str");
+
         let _s: &mut String = (&val)
             .sl_as_mut(vm)
             .expect("&Value::String can be converted to &mut String");
+
+        let e: VMResult<&mut String> = (&kwd_val).sl_as_mut(vm);
+        e.expect_err("Can not convert keyword to &mut String");
     }
 
     #[test]

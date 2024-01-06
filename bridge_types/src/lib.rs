@@ -72,11 +72,39 @@ pub struct Param {
 pub struct ErrorStrings {}
 
 impl ErrorStrings {
-    pub fn mismatched_type(fn_name: &str, expected: &str, got: &str) -> String {
-        format!("{fn_name}: mismatched type input, expected {expected}, got {got}.")
+    pub fn mismatched_type(
+        fn_name: impl AsRef<str>,
+        expected: impl AsRef<str>,
+        got: impl AsRef<str>,
+        additional: impl AsRef<str>,
+    ) -> String {
+        if additional.as_ref().is_empty() {
+            format!(
+                "{}: mismatched type input, expected value of type {}, got {}.",
+                fn_name.as_ref(),
+                expected.as_ref(),
+                got.as_ref(),
+            )
+        } else {
+            format!(
+                "{}: mismatched type input, expected value of type {}, got {}. {}",
+                fn_name.as_ref(),
+                expected.as_ref(),
+                got.as_ref(),
+                additional.as_ref(),
+            )
+        }
     }
 
-    pub fn fix_me_mismatched_type(expected: &str, got: &str) -> String {
-        Self::mismatched_type("fixme", expected, got)
+    pub fn fix_me_mismatched_type(expected: impl AsRef<str>, got: impl AsRef<str>) -> String {
+        Self::mismatched_type("fixme", expected, got, "")
+    }
+
+    pub fn fix_me_mismatched_type_with_context(
+        expected: impl AsRef<str>,
+        got: impl AsRef<str>,
+        additional: impl AsRef<str>,
+    ) -> String {
+        Self::mismatched_type("fixme", expected, got, additional)
     }
 }
