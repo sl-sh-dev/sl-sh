@@ -1,9 +1,8 @@
-use slvm::error::*;
+use compile_state::state::{CompileState, SloshVm, SloshVmTrait};
 use slvm::opcodes::*;
-use slvm::value::*;
-use slvm::Handle;
+use slvm::{from_i56, Handle, VMError, VMResult, Value};
 
-use crate::backquote::*;
+use crate::backquote;
 use crate::compile::compile_call::{
     compile_call, compile_call_myself, compile_call_reg, compile_callg,
 };
@@ -14,7 +13,6 @@ use crate::compile::compile_math::compile_math;
 use crate::compile::compile_seq::{compile_cons, compile_vec};
 use crate::compile::compile_store::{compile_def, compile_set};
 use crate::pass1::pass1;
-use compile_state::state::*;
 
 mod compile_call;
 mod compile_cond;

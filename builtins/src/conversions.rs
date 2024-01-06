@@ -16,7 +16,7 @@ fn to_sym(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
             }
         }
     } else {
-        Err(VMError::new("conv", "->sym: takes one arg".to_string()))
+        Err(VMError::new_conversion("->sym: takes one arg".to_string()))
     }
 }
 
@@ -34,7 +34,7 @@ fn to_key(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
             }
         }
     } else {
-        Err(VMError::new("conv", "->key: takes one arg".to_string()))
+        Err(VMError::new_conversion("->key: takes one arg".to_string()))
     }
 }
 
@@ -46,16 +46,16 @@ fn global_ref(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
                 if let Some(slot) = vm.global_intern_slot(*i) {
                     Ok(vm.get_global(slot))
                 } else {
-                    Err(VMError::new("conv", "ref: not a global var".to_string()))
+                    Err(VMError::new_conversion("ref: not a global var".to_string()))
                 }
             }
-            _ => Err(VMError::new(
-                "conv",
-                format!("ref: expected a symbol, got a {}", symbol.display_type(vm)),
-            )),
+            _ => Err(VMError::new_conversion(format!(
+                "ref: expected a symbol, got a {}",
+                symbol.display_type(vm)
+            ))),
         }
     } else {
-        Err(VMError::new("conv", "ref: takes one arg".to_string()))
+        Err(VMError::new_conversion("ref: takes one arg".to_string()))
     }
 }
 
@@ -70,13 +70,13 @@ fn is_def(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
                     Ok(Value::False)
                 }
             }
-            _ => Err(VMError::new(
-                "conv",
-                format!("def?: expected a symbol, got a {}", symbol.display_type(vm)),
-            )),
+            _ => Err(VMError::new_conversion(format!(
+                "def?: expected a symbol, got a {}",
+                symbol.display_type(vm)
+            ))),
         }
     } else {
-        Err(VMError::new("conv", "def?: takes one arg".to_string()))
+        Err(VMError::new_conversion("def?: takes one arg".to_string()))
     }
 }
 

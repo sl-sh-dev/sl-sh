@@ -1,12 +1,11 @@
+use crate::{Handle, Heap, Interned, VMError, VMResult};
 use std::collections::HashMap;
 use std::fmt;
+use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::iter;
 use std::sync::Arc;
 
-use crate::error::*;
-use crate::heap::*;
-use crate::interner::*;
 use crate::vm::GVm;
 
 pub type CallFuncSig<ENV> = fn(vm: &mut GVm<ENV>, registers: &[Value]) -> VMResult<Value>;
@@ -477,36 +476,42 @@ impl Value {
         }
     }
 
-    pub fn display_type<ENV>(&self, vm: &GVm<ENV>) -> &'static str {
+    /// Map a [`Value`] to a [`ValueType`] which can be written to a debug string that refers to the
+    /// Slosh types and does not require passing in a [`GVm`] to do so.
+    pub fn value_type<ENV>(&self, vm: &GVm<ENV>) -> ValueType {
         match self {
-            Value::True => "True",
-            Value::False => "False",
-            Value::Int(_) => "Int",
-            Value::Float(_) => "Float",
-            Value::Symbol(_) => "Symbol",
-            Value::Keyword(_) => "Keyword",
-            Value::StringConst(_) => "String",
-            Value::Special(_) => "Special",
-            Value::CodePoint(_) => "Char",
-            Value::CharCluster(_, _) => "Char",
-            Value::CharClusterLong(_) => "Char",
-            Value::Builtin(_) => "Builtin",
-            Value::Byte(_) => "Byte",
-            Value::Nil => "Nil",
-            Value::Undefined => "Undefined", //panic!("Tried to get type for undefined!"),
-            Value::Lambda(_) => "Lambda",
-            Value::Closure(_) => "Lambda",
-            Value::Continuation(_) => "Continuation",
-            Value::CallFrame(_) => "CallFrame",
-            Value::Vector(_) => "Vector",
-            Value::Map(_) => "Map",
-            Value::Pair(_) => "Pair",
-            Value::List(_, _) => "Pair",
-            Value::String(_) => "String",
-            Value::Bytes(_) => "Bytes",
-            Value::Value(handle) => vm.get_value(*handle).display_type(vm),
-            Value::Error(_) => "Error",
+            Value::Byte(_) => ValueType::Byte,
+            Value::Int(_) => ValueType::Int,
+            Value::Float(_) => ValueType::Float,
+            Value::CodePoint(_) => ValueType::CodePoint,
+            Value::CharCluster(_, _) => ValueType::CharCluster,
+            Value::CharClusterLong(_) => ValueType::CharClusterLong,
+            Value::Symbol(_) => ValueType::Symbol,
+            Value::Keyword(_) => ValueType::Keyword,
+            Value::StringConst(_) => ValueType::StringConst,
+            Value::Special(_) => ValueType::Special,
+            Value::Builtin(_) => ValueType::Builtin,
+            Value::True => ValueType::True,
+            Value::False => ValueType::False,
+            Value::Nil => ValueType::Nil,
+            Value::Undefined => ValueType::Undefined,
+            Value::String(_) => ValueType::String,
+            Value::Vector(_) => ValueType::Vector,
+            Value::Map(_) => ValueType::Map,
+            Value::Bytes(_) => ValueType::Bytes,
+            Value::Pair(_) => ValueType::Pair,
+            Value::List(_, _) => ValueType::List,
+            Value::Lambda(_) => ValueType::Lambda,
+            Value::Closure(_) => ValueType::Closure,
+            Value::Continuation(_) => ValueType::Continuation,
+            Value::CallFrame(_) => ValueType::CallFrame,
+            Value::Error(_) => ValueType::Error,
+            Value::Value(handle) => vm.get_value(*handle).value_type(vm),
         }
+    }
+
+    pub fn display_type<ENV>(&self, vm: &GVm<ENV>) -> &'static str {
+        self.value_type(vm).into()
     }
 
     pub fn is_proper_list<ENV>(&self, vm: &GVm<ENV>) -> bool {
@@ -590,6 +595,99 @@ impl Globals {
             let mut map = HashMap::new();
             map.insert(prop, value);
             self.props.insert(global, Arc::new(map));
+        }
+    }
+}
+
+pub const SLOSH_CHAR: &str = "Char";
+pub const SLOSH_STRING: &str = "String";
+pub const SLOSH_INT: &str = "Int";
+pub const SLOSH_FLOAT: &str = "Float";
+pub const SLOSH_BOOL_TRUE: &str = "True";
+pub const SLOSH_BOOL_FALSE: &str = "False";
+pub const SLOSH_SYMBOL: &str = "Symbol";
+pub const SLOSH_KEYWORD: &str = "Keyword";
+pub const SLOSH_SPECIAL: &str = "Special";
+pub const SLOSH_BUILTIN: &str = "Builtin";
+pub const SLOSH_BYTE: &str = "Byte";
+pub const SLOSH_BYTES: &str = "Bytes";
+pub const SLOSH_NIL: &str = "Nil";
+pub const SLOSH_UNDEFINED: &str = "Undefined";
+pub const SLOSH_LAMBDA: &str = "Lambda";
+pub const SLOSH_CLOSURE: &str = "Lambda";
+pub const SLOSH_CONTINUATION: &str = "Continuation";
+pub const SLOSH_CALLFRAME: &str = "CallFrame";
+pub const SLOSH_VECTOR: &str = "Vector";
+pub const SLOSH_MAP: &str = "Map";
+pub const SLOSH_PAIR: &str = "Pair";
+pub const SLOSH_ERROR: &str = "Error";
+
+/// Enum representing the various types of values in Slosh.
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum ValueType {
+    Byte,
+    Int,
+    Float,
+    CodePoint,
+    CharCluster,
+    CharClusterLong,
+    Symbol,
+    Keyword,
+    StringConst,
+    Special,
+    Builtin,
+    True,
+    False,
+    Nil,
+    Undefined,
+    String,
+    Vector,
+    Map,
+    Bytes,
+    Pair,
+    List,
+    Lambda,
+    Closure,
+    Continuation,
+    CallFrame,
+    Error,
+}
+
+impl Display for ValueType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", <ValueType as Into<&'static str>>::into(*self))
+    }
+}
+
+impl From<ValueType> for &'static str {
+    fn from(value: ValueType) -> Self {
+        match value {
+            ValueType::True => SLOSH_BOOL_TRUE,
+            ValueType::False => SLOSH_BOOL_FALSE,
+            ValueType::Int => SLOSH_INT,
+            ValueType::Float => SLOSH_FLOAT,
+            ValueType::Symbol => SLOSH_SYMBOL,
+            ValueType::Keyword => SLOSH_KEYWORD,
+            ValueType::StringConst => SLOSH_STRING,
+            ValueType::Special => SLOSH_SPECIAL,
+            ValueType::CodePoint => SLOSH_CHAR,
+            ValueType::CharCluster => SLOSH_CHAR,
+            ValueType::CharClusterLong => SLOSH_CHAR,
+            ValueType::Builtin => SLOSH_BUILTIN,
+            ValueType::Byte => SLOSH_BYTE,
+            ValueType::Bytes => SLOSH_BYTES,
+            ValueType::Nil => SLOSH_NIL,
+            ValueType::Undefined => SLOSH_UNDEFINED,
+            ValueType::Lambda => SLOSH_LAMBDA,
+            ValueType::Closure => SLOSH_LAMBDA,
+            ValueType::Continuation => SLOSH_CONTINUATION,
+            ValueType::CallFrame => SLOSH_CALLFRAME,
+            ValueType::Vector => SLOSH_VECTOR,
+            ValueType::Map => SLOSH_MAP,
+            ValueType::Pair => SLOSH_PAIR,
+            ValueType::List => SLOSH_PAIR,
+            ValueType::String => SLOSH_STRING,
+            ValueType::Error => SLOSH_ERROR,
         }
     }
 }

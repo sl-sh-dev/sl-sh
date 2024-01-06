@@ -1,11 +1,8 @@
+use crate::heap::Error;
+use crate::{CallFrame, Chunk, Continuation, Handle, Heap, Interned, MutState, VMResult, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::chunk::*;
-use crate::error::*;
-use crate::heap::*;
-use crate::interner::*;
-use crate::value::*;
 use crate::GVm;
 
 /// Vm code to access storage, heap, stack, globals, etc.

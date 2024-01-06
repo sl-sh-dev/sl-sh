@@ -12,6 +12,7 @@ impl PartialEq for Interned {
         self.id == other.id
     }
 }
+
 impl Eq for Interned {}
 
 impl Hash for Interned {

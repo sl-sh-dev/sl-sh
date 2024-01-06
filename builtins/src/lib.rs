@@ -8,7 +8,7 @@ pub mod conversions;
 pub mod io;
 pub mod print;
 pub mod string;
-mod types;
+pub mod types;
 
 fn get_globals(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if !registers.is_empty() {

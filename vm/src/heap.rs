@@ -2,11 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::bits::FLAG_MUT;
-use crate::chunk::*;
-use crate::error::*;
-use crate::value::*;
-use crate::{get_code, FxHashMap, Interned};
-
+use crate::{get_code, Chunk, FxHashMap, Interned, VMError, VMResult, Value};
 pub mod handle;
 pub use crate::handle::Handle;
 use crate::heap::storage::Storage;
@@ -105,35 +101,35 @@ impl Default for Heap {
 macro_rules! value_op {
     ($heap:expr, $val:expr, $op:ident, $default:expr) => {{
         match $val {
-            Value::CharClusterLong(handle) => $heap.objects.$op(handle.idx()),
-            Value::String(handle) => $heap.objects.$op(handle.idx()),
-            Value::Vector(handle) => $heap.objects.$op(handle.idx()),
-            Value::Map(handle) => $heap.objects.$op(handle.idx()),
-            Value::Bytes(handle) => $heap.objects.$op(handle.idx()),
-            Value::Pair(handle) => $heap.objects.$op(handle.idx()),
-            Value::List(handle, _) => $heap.objects.$op(handle.idx()),
-            Value::Lambda(handle) => $heap.objects.$op(handle.idx()),
-            Value::Closure(handle) => $heap.objects.$op(handle.idx()),
-            Value::Continuation(handle) => $heap.continuations.$op(handle.idx()),
-            Value::CallFrame(handle) => $heap.callframes.$op(handle.idx()),
-            Value::Value(handle) => $heap.objects.$op(handle.idx()),
+            $crate::Value::CharClusterLong(handle) => $heap.objects.$op(handle.idx()),
+            $crate::Value::String(handle) => $heap.objects.$op(handle.idx()),
+            $crate::Value::Vector(handle) => $heap.objects.$op(handle.idx()),
+            $crate::Value::Map(handle) => $heap.objects.$op(handle.idx()),
+            $crate::Value::Bytes(handle) => $heap.objects.$op(handle.idx()),
+            $crate::Value::Pair(handle) => $heap.objects.$op(handle.idx()),
+            $crate::Value::List(handle, _) => $heap.objects.$op(handle.idx()),
+            $crate::Value::Lambda(handle) => $heap.objects.$op(handle.idx()),
+            $crate::Value::Closure(handle) => $heap.objects.$op(handle.idx()),
+            $crate::Value::Continuation(handle) => $heap.continuations.$op(handle.idx()),
+            $crate::Value::CallFrame(handle) => $heap.callframes.$op(handle.idx()),
+            $crate::Value::Value(handle) => $heap.objects.$op(handle.idx()),
 
-            Value::Error(handle) => $heap.errors.$op(handle.idx()),
+            $crate::Value::Error(handle) => $heap.errors.$op(handle.idx()),
 
-            Value::Byte(_)
-            | Value::Int(_)
-            | Value::Float(_)
-            | Value::CodePoint(_)
-            | Value::CharCluster(_, _)
-            | Value::Symbol(_)
-            | Value::Keyword(_)
-            | Value::StringConst(_)
-            | Value::Special(_)
-            | Value::Builtin(_)
-            | Value::True
-            | Value::False
-            | Value::Nil
-            | Value::Undefined => $default,
+            $crate::Value::Byte(_)
+            | $crate::Value::Int(_)
+            | $crate::Value::Float(_)
+            | $crate::Value::CodePoint(_)
+            | $crate::Value::CharCluster(_, _)
+            | $crate::Value::Symbol(_)
+            | $crate::Value::Keyword(_)
+            | $crate::Value::StringConst(_)
+            | $crate::Value::Special(_)
+            | $crate::Value::Builtin(_)
+            | $crate::Value::True
+            | $crate::Value::False
+            | $crate::Value::Nil
+            | $crate::Value::Undefined => $default,
         }
     }};
 }
@@ -702,6 +698,7 @@ impl Heap {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::from_i56;
 
     fn _test_send_sync<T>(_t: T)
     where

@@ -1,8 +1,9 @@
 #[cfg(test)]
 mod tests {
-    use super::super::*;
     use crate::test_utils::{assert_vals, exec, read_test};
     use builtins::print::{dasm, prn};
+    use compile_state::state::new_slosh_vm;
+    use compile_state::state::SloshVmTrait;
 
     #[test]
     fn test_def_set() {

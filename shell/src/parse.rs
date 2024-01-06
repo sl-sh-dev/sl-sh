@@ -1,6 +1,6 @@
 //! Shell reader/parser.
 //! Parses a string into a shell command.
-//! Roughly a subset of https://www.gnu.org/software/bash/manual/html_node/Shell-Expansions.html
+//! Roughly a subset of <https://www.gnu.org/software/bash/manual/html_node/Shell-Expansions.html>
 
 use crate::builtins::expand_tilde;
 use crate::command_data::{Arg, CommandWithArgs, Redirects, Run};

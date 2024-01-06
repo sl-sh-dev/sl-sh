@@ -1,21 +1,19 @@
-use slvm::error::*;
-use slvm::interner::Interned;
-use slvm::value::*;
+use compile_state::state::{CompileState, SloshVm, SloshVmTrait};
+use slvm::{Interned, VMError, VMResult, Value};
 
-use crate::compile::*;
+use crate::compile;
 use crate::pass1::pass1;
-use compile_state::state::*;
 
 macro_rules! is_tag {
     ($vm:expr, $exp:expr, $form:expr) => {{
         match $exp {
-            Value::Pair(_) | Value::List(_, _) => {
+            slvm::Value::Pair(_) | slvm::Value::List(_, _) => {
                 let (car, _) = $exp.get_pair($vm).expect("List/Pair not a List/Pair?");
                 if car.is_symbol($form) {
                     return true;
                 }
             }
-            Value::Vector(handle) => {
+            slvm::Value::Vector(handle) => {
                 let v = $vm.get_vector(handle);
                 if let Some(car) = v.get(0) {
                     if car.is_symbol($form) {
@@ -32,9 +30,9 @@ macro_rules! is_tag {
 macro_rules! get_data {
     ($vm:expr, $exp:expr) => {{
         match $exp {
-            Value::Pair(_) | Value::List(_, _) => {
+            slvm::Value::Pair(_) | slvm::Value::List(_, _) => {
                 let (_, cdr) = $exp.get_pair($vm).expect("List/Pair not a List/Pair?");
-                if let Value::Pair(_handle) | Value::List(_handle, _) = cdr {
+                if let slvm::Value::Pair(_handle) | slvm::Value::List(_handle, _) = cdr {
                     let (ncar, ncdr) = cdr.get_pair($vm).expect("List/Pair not a List/Pair?");
                     if ncdr.is_nil() {
                         return Ok(ncar);
@@ -43,29 +41,37 @@ macro_rules! get_data {
                             $vm.get_heap_property(cdr, "dbg-line"),
                             $vm.get_heap_property(cdr, "dbg-col"),
                         );
-                        if let (Some(Value::Int(line)), Some(Value::Int(col))) = (line, col) {
-                            let line = from_i56(&line);
-                            let col = from_i56(&col);
-                            return Err(VMError::new_compile(format!(
+                        if let (Some(slvm::Value::Int(line)), Some(slvm::Value::Int(col))) =
+                            (line, col)
+                        {
+                            let line = slvm::from_i56(&line);
+                            let col = slvm::from_i56(&col);
+                            return Err(slvm::VMError::new_compile(format!(
                                 "Invalid tag at {}:{}, takes one expression.",
                                 line, col
                             )));
                         } else {
-                            return Err(VMError::new_compile("Invalid tag, takes one expression."));
+                            return Err(slvm::VMError::new_compile(
+                                "Invalid tag, takes one expression.",
+                            ));
                         }
                     }
                 }
             }
-            Value::Vector(handle) => {
+            slvm::Value::Vector(handle) => {
                 let v = $vm.get_vector(handle);
                 if v.len() != 2 {
-                    return Err(VMError::new_compile("Invalid tag, takes one expression."));
+                    return Err(slvm::VMError::new_compile(
+                        "Invalid tag, takes one expression.",
+                    ));
                 }
                 return Ok(v[1]);
             }
             _ => {}
         }
-        Err(VMError::new_compile("Invalid tag, takes one expression."))
+        Err(slvm::VMError::new_compile(
+            "Invalid tag, takes one expression.",
+        ))
     }};
 }
 
@@ -306,7 +312,8 @@ pub fn backquote(
 mod tests {
     use super::*;
     use crate::{ReadError, Reader};
-    use slvm::RET;
+    use compile_state::state::new_slosh_vm;
+    use slvm::{VMError, VMResult, Value, RET};
     use std::sync::Arc;
 
     fn read_test(vm: &mut SloshVm, text: &'static str) -> Result<Value, ReadError> {

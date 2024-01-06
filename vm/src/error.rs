@@ -1,9 +1,7 @@
+use crate::{GVm, Value};
 use std::error::Error;
 use std::fmt;
 use std::io;
-
-use crate::value::*;
-use crate::vm::*;
 
 #[derive(Clone, Debug)]
 pub enum VMErrorObj {
@@ -48,6 +46,10 @@ impl VMError {
             VMErrorObj::Message(msg) => format!("[{}]: {}", self.key, msg),
             VMErrorObj::Object(val) => format!("[{}]: {}", self.key, val.pretty_value(vm)),
         }
+    }
+
+    pub fn new_conversion<S: Into<String>>(reason: S) -> Self {
+        VMError::new("conversion", reason)
     }
 
     pub fn new_vm<S: Into<String>>(reason: S) -> Self {
