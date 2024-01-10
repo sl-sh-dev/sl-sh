@@ -103,7 +103,7 @@ fn load_sloshrc() {
             let script = env.intern(&rcfile);
             let script = env.get_interned(script);
             match load_internal(&mut env, script) {
-                Ok(res) => println!("{}", res.display_value(&env)),
+                Ok(_) => {}
                 Err(err) => println!("ERROR: {err}"),
             }
         });
@@ -361,12 +361,13 @@ fn main() {
             });
             std::process::exit(status);
         } else if let Some(script) = config.script {
+            load_sloshrc();
             ENV.with(|renv| {
                 let mut env = renv.borrow_mut();
                 let script = env.intern(&script);
                 let script = env.get_interned(script);
                 match load_internal(&mut env, script) {
-                    Ok(res) => println!("{}", res.display_value(&env)),
+                    Ok(_) => {}
                     Err(err) => println!("ERROR: {err}"),
                 }
             });

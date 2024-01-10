@@ -34,7 +34,7 @@
         (eq? color-type :bkrd) (make-color 48)
         (make-color 38))))
 
-#!
+#%
 Usage: (fg-color-rgb red-val green-val blue-val)
 
 Set the foreground color to the desired rgb where each arg is an integer between 0 and 255 inclusive.
@@ -48,11 +48,11 @@ Example:
 (test::assert-equal "\\x1b[38;2;0;255;0m" (fg-color-rgb 0 255 0))
 (test::assert-equal "\\x1b[38;2;0;0;255m" (fg-color-rgb 0 0 255))
 (test::assert-equal "\\x1b[38;2;0;0;0m" (fg-color-rgb 0 0 0))
-!#
+%#
 (defn fg-color-rgb (R G B)
   (get-rgb-seq R G B :font))
 
-#!
+#%
 Usage: (bg-color-rgb red-val green-val blue-val)
 
 Set the background color to the desired rgb where each arg is an integer between 0 and 255 inclusive.
@@ -66,13 +66,13 @@ Example:
 (test::assert-equal "\\x1b[48;2;0;255;0m" (bg-color-rgb 0 255 0))
 (test::assert-equal "\\x1b[48;2;0;0;255m" (bg-color-rgb 0 0 255))
 (test::assert-equal "\\x1b[48;2;0;0;0m" (bg-color-rgb 0 0 0))
-!#
+%#
 (defn bg-color-rgb (R G B)
   (get-rgb-seq R G B :bkrd))
 
 
 
-#!
+#%
 True if the supplied command is a system command.
 
 Section: shell
@@ -80,24 +80,24 @@ Section: shell
 Example:
 (assert-true (sys-command? "ls"))
 (assert-false (sys-command? "rst-not-a-comand-strsnt"))
-!#
+%#
 (defn sys-command? (com)
     (if (or (str-empty? com)(eq? com.0 \/)(eq? com.0 \.))
             (fs-exists? com)
         (str-contains com "/")(fs-exists? (str "./" com))
         (str-starts-with com "~/") (fs-exists? (str-replace com "~/" (env "HOME")))
-        ((fn (paths idx) 
+        ((fn (paths idx)
             (if (< idx (len paths))
                 (if (fs-exists? (str (paths idx) "/" com)) #t (recur paths (+ idx 1)))
                 #f))
          (str-split (env "PATH") ":") 0)))
 
 
-#!
+#%
 Turn on syntax highlighting at the repl.
 
 Section: shell
-!#
+%#
 (defn syntax-on ()
   (let (plev 0
         ch nil
@@ -131,7 +131,7 @@ Section: shell
                     command))
 
         command-color
-            (fn (command) 
+            (fn (command)
                 (if tok-command
                     (let (sym (->sym command))
                         (if (and (def? sym)(callable? (ref sym)))
@@ -222,10 +222,10 @@ Section: shell
 
     nil))
 
-#!
+#%
 Turn off syntax highlighting at the repl.
 
 Section: shell
-!#
+%#
 (defn syntax-off () (defn __line_handler (line) line))
 

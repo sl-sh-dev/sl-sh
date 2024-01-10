@@ -26,6 +26,19 @@ pub fn expand_glob(pat: impl Into<PathBuf>) -> GlobOutput {
             } else {
                 GlobOutput::Arg(pat)
             }
+        } else if pat.starts_with("./") {
+            GlobOutput::Args(
+                files
+                    .iter()
+                    .cloned()
+                    .map(|f| {
+                        let mut nf = PathBuf::new();
+                        nf.push("./");
+                        nf.push(f);
+                        nf
+                    })
+                    .collect(),
+            )
         } else {
             GlobOutput::Args(files)
         }

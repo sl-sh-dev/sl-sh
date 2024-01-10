@@ -121,7 +121,7 @@ syn cluster sloshDocStringGroup	contains=sloshParen0,sloshParen1,sloshParen2,slo
 syn match   sloshComment	";.*$"				contains=@sloshCommentGroup
 syn region  sloshCommentRegion	start="#|" end="|#"		contains=sloshCommentRegion,@sloshCommentGroup
 "syn region  sloshCommentDocStr	start="#!" end="!#"	contains=sloshComment,sloshCommentRegion,@sloshDocStringGroup,@sloshCommentGroup
-syn region  sloshCommentDocStr	start="#!" end="!#"	contains=sloshComment,sloshCommentRegion,@sloshCommentGroup
+syn region  sloshCommentDocStr	start="#%" end="%#"	contains=sloshComment,sloshCommentRegion,@sloshCommentGroup
 syn match   sloshTodo		contained	"todo.*$"
 syn match   sloshTodo		contained	"TODO.*$"
 

@@ -407,7 +407,7 @@ impl<'vm> Reader<'vm> {
             } else {
                 ""
             };
-            if ch == "!" && peek == "#" {
+            if ch == "%" && peek == "#" {
                 self.chars().next();
                 return true;
             }
@@ -1031,6 +1031,10 @@ impl<'vm> Reader<'vm> {
                     match &*peek_ch {
                         "|" => self.consume_block_comment(),
                         "!" => {
+                            // This is an alternate line comment for shebang in a script.
+                            self.consume_line_comment();
+                        }
+                        "%" => {
                             let line = self.line() as u32;
                             let column = self.column() as u32;
                             match self.read_doc_string(buffer) {
@@ -1737,23 +1741,23 @@ two""#
     #[test]
     fn test_doc_string() {
         let mut vm = build_def_vm();
-        let input = "#! Doc string! !#";
+        let input = "#% Doc string! %#";
         let tokens = tokenize(&mut vm, input);
         assert!(tokens.len() == 4);
         assert!(tokens[0] == "(");
         assert!(tokens[1] == "Symbol:doc-string");
         assert!(tokens[2] == "String:\" Doc string! \"");
         assert!(tokens[3] == ")");
-        let input = "#!Doc string!!#";
+        let input = "#%Doc string!%#";
         let tokens = tokenize(&mut vm, input);
         assert!(tokens.len() == 4);
         assert!(tokens[0] == "(");
         assert!(tokens[1] == "Symbol:doc-string");
         assert!(tokens[2] == "String:\"Doc string!\"");
         assert!(tokens[3] == ")");
-        let input = "#!\
+        let input = "#%\
          Doc string!\
-         !#\
+         %#\
          (defn fnx () (prn x))";
         let tokens = tokenize(&mut vm, input);
         assert!(tokens.len() == 15);
