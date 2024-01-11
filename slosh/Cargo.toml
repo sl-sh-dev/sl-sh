@@ -1,0 +1,21 @@
+[package]
+name = "slosh"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+unicode_reader = "1"
+sl-compiler = { path = "../compiler" }
+sl-liner = { git = "https://github.com/sl-sh-dev/sl-liner.git" }
+slvm = { path = "../vm" }
+builtins = { path = "../builtins" }
+compile_state = { path = "../compile_state" }
+shell = { path = "../shell" }
+unicode-width = "0.1"
+glob = "0.3"
+
+[build-dependencies]
+chrono = "0.4.7"
+

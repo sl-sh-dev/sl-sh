@@ -1,0 +1,24 @@
+[workspace]
+
+resolver = "2"
+
+members = [
+    "slosh",
+    "compiler",
+    "vm",
+    "builtins",
+    "compile_state",
+    "shell",
+    "bridge_macros",
+    "bridge_types",
+]
+
+[profile.release]
+lto = true
+#codegen-units = 1
+#opt-level = 'z'
+debug = true
+#panic = "abort"
+
+[workspace.dependencies]
+bridge_types = { path = "bridge_types" }
