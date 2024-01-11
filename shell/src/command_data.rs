@@ -434,7 +434,7 @@ impl CommandWithArgs {
 
     /// Command name, None if no command name set (args are empty).
     pub fn command(&self, jobs: &mut Jobs) -> Option<io::Result<OsString>> {
-        self.args.get(0).map(|v| v.resolve_arg(jobs))
+        self.args.first().map(|v| v.resolve_arg(jobs))
     }
 
     /// Args to the command.

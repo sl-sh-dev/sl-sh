@@ -782,7 +782,7 @@ impl<'vm> Reader<'vm> {
             is_splice(self.vm, car)
         } else if let Value::Vector(h) = exp {
             let v = self.vm.get_vector(h);
-            let car = if let Some(car) = v.get(0) {
+            let car = if let Some(car) = v.first() {
                 *car
             } else {
                 return false;

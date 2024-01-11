@@ -203,7 +203,7 @@ impl Completer for ShellCompleter {
                 HookResult::Default => {
                     if self
                         .args
-                        .get(0)
+                        .first()
                         .map(|s| s.trim().starts_with('('))
                         .unwrap_or(false)
                     {

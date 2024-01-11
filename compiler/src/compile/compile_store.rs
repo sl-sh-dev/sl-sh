@@ -8,7 +8,7 @@ pub(crate) fn compile_def(
     cdr: &[Value],
     result: usize,
 ) -> VMResult<()> {
-    match (cdr.len(), cdr.get(0)) {
+    match (cdr.len(), cdr.first()) {
         (_, None) => return Err(VMError::new_compile("def: expected symbol")),
         (1, Some(Value::Symbol(si))) => {
             // 'def symbol' predeclares a symbol to be used later, no bytecode.

@@ -101,7 +101,7 @@ fn load(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
 }
 
 fn eval(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
-    if let (Some(exp), None) = (registers.get(0), registers.get(1)) {
+    if let (Some(exp), None) = (registers.first(), registers.get(1)) {
         let line_num = 1;
         let mut state = CompileState::new_state("none/eval", line_num, None);
         state.chunk.dbg_args = Some(Vec::new());
