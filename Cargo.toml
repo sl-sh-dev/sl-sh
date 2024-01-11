@@ -13,6 +13,8 @@ members = [
     "bridge_types",
 ]
 
+exclude = [ "legacy" ]
+
 [profile.release]
 lto = true
 #codegen-units = 1
