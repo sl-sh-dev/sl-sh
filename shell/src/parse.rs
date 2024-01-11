@@ -895,8 +895,13 @@ fn parse_line_inner(
         }
         let next_char = *chars.peek().unwrap_or(&' ');
         if ch.is_whitespace() {
-            state.proc_token(jobs)?;
-            consume_whitespace(chars);
+            if state.last_ch == '\\' {
+                state.token().push(ch);
+                state.last_ch = ch;
+            } else {
+                state.proc_token(jobs)?;
+                consume_whitespace(chars);
+            }
         } else {
             match ch {
                 '\'' if state.last_ch != '\\' => {
