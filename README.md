@@ -55,14 +55,6 @@ cargo run -p slosh
     cargo build -p slosh --release
     ./target/release/slosh
     ```
-    OR
-- [Install docker](https://docs.docker.com/get-docker/) and build in a container (FIXME- alpine related error in unix.rs...):
-```
-docker run --rm --net host --user "$(id -u):$(id -g)" -v "$PWD:/usr/src/sl-sh" -w /usr/src/sl-sh rust:alpine cargo build -p slosh --release
-```
-
-Either method will leave you with a binary target/release/slosh that will run the shell. The above docker command will produce a completely static binary while compiling with rust will be linked to you system's libc. You can use the musl target with cargo to produce a static binary with an installed rust.
-
 
 ### 3. Use sl-sh as primary shell
 - install binary
