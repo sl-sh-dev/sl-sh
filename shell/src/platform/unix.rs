@@ -25,9 +25,9 @@ use nix::unistd::{self, Uid};
 mod umask;
 
 // macos does not define __rlimit_resource_t...
-#[cfg(target_os = "macos")]
+#[cfg(not(any(target_env = "gnu", target_env = "uclibc")))]
 pub type RlimitResource = nix::libc::c_int;
-#[cfg(not(target_os = "macos"))]
+#[cfg(any(target_env = "gnu", target_env = "uclibc"))]
 pub type RlimitResource = nix::libc::__rlimit_resource_t;
 
 pub struct Sys {}

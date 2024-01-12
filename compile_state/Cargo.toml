@@ -7,4 +7,3 @@ edition = "2021"
 
 [dependencies]
 slvm = { path = "../vm" }
-bridge_types = { workspace = true }

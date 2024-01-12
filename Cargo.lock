@@ -118,7 +118,6 @@ dependencies = [
 name = "compile_state"
 version = "0.1.0"
 dependencies = [
- "bridge_types",
  "slvm",
 ]
 
@@ -443,7 +442,6 @@ dependencies = [
 name = "sl-compiler"
 version = "0.1.0"
 dependencies = [
- "bridge_types",
  "builtins",
  "chrono",
  "compile_state",
@@ -498,7 +496,6 @@ dependencies = [
 name = "slvm"
 version = "0.1.0"
 dependencies = [
- "bridge_types",
  "unicode-segmentation",
 ]
 
