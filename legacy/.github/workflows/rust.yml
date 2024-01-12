@@ -1,0 +1,136 @@
+name: Rust
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: Cargo Tarpaulin
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Run cargo-tarpaulin
+        uses: actions-rs/tarpaulin@v0.1
+        with:
+          version: '0.15.0'
+          args: '--all -- --test-threads 1'
+
+      - name: Upload to codecov.io
+        uses: codecov/codecov-action@v3
+
+      - name: Archive code coverage results
+        uses: actions/upload-artifact@v1
+        with:
+          name: code-coverage-report
+          path: cobertura.xml
+
+  build-linux:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Format
+      run: cargo fmt --verbose -- --check
+    - name: Clippy
+      run: cargo clippy --verbose -- -D warnings
+    - name: Build
+      run: |
+          cargo version
+          rustc --version
+          cargo build --release --verbose
+          cp ./target/release/sl-sh .
+          strip sl-sh
+    - name: Run Rust tests
+      run: cargo test --verbose
+    - name: Run Lisp tests
+      run: ./sl-sh ./run-tests.lisp
+    - name: Deploy Docs
+      env:
+          DOC_DEPLOY_KEY: ${{ secrets.DOC_DEPLOY_KEY }}
+      run: |
+          export PATH="${PATH}:${PWD}/target/release/"
+          function log() {
+            echo -e "\033[33;7m$1\033[0m $2"
+          }
+          function elog() {
+            echo -e "\033[31;7m$1\033[0m $2"
+          }
+          if [ -z "$DOC_DEPLOY_KEY" ]
+          then
+            log "No deploy key is set to update docs on gh-pages branch."
+            log "To fix this generate a ssh keypair (ie 'ssh-keygen -t ed25519')."
+            log "Install the public key as a deploy key in your project with"
+            log "write access and install the private key as a secret in the"
+            log "git repo with name 'DOC_DEPLOY_KEY'."
+            exit 0
+          fi
+          log "> Docs started"
+          eval `ssh-agent -t 60 -s`
+          echo "$DOC_DEPLOY_KEY" | ssh-add -
+          pushd docs
+          log "Build docs"
+          ../sl-sh docify.lisp
+          if [[ $? != "0" ]]; then
+            elog "Error and/or uncategorized forms found, not pushing. Please edit appropriate"
+            elog "docstrings printed as hashmap literals above and or errors. Run"
+            elog "$ cd docs && sl-sh docify.lisp to get started."
+            exit 1
+          fi
+
+          if [[ ! -f pages/mydoc/mydoc_api.md ]]; then
+            elog "pages/mydoc/mydoc_api.md file was not generated, docs failed to build."
+            exit 1
+          fi
+
+          log "Push docs"
+          git config --global user.email "docs@sl-sh.example.com"
+          git config --global user.name "Doc CI"
+          REMOTE="$(git config --get remote.origin.url | sed 's#http.*com/#git@github.com:#g')"
+          rm -rf .git
+          if [ ! -d ".git" ]; then
+             git init
+          fi
+          git checkout -b gh-pages
+          git remote add origin ${REMOTE}
+          git add --all && git commit -m "Build $(date)"
+          git push -u -f origin gh-pages
+          rm -rf .git
+          popd
+          log "< Docs finished"
+    - name: Upload linux binary
+      uses: actions/upload-artifact@v1
+      with:
+        name: linux-sl-sh
+        path: ./sl-sh
+
+
+  build-macos:
+
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Build
+      run: |
+          cargo version
+          rustc --version
+          cargo build --verbose
+    - name: Run Rust tests
+      run: cargo test --verbose
+    - name: Run Lisp tests
+      run: ./target/debug/sl-sh ./run-tests.lisp

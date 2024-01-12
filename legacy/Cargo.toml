@@ -1,0 +1,48 @@
+[package]
+name = "sl-sh"
+version = "0.9.70"
+authors = ["Steven Stanfield <stanfield@scarecrowtech.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cfg-if = "1.0"
+sl-liner = { git = "https://github.com/sl-sh-dev/sl-liner.git" }
+#sl-liner = { path = "../sl-liner" }
+glob = "0.3"
+nix = "0.23.1"
+unicode-segmentation = "1.7.1"
+unicode_reader = "1"
+unicode-width = "0.1"
+rand = "0.8.3"
+walkdir = "2"
+same-file = "1.0.6"
+remove_dir_all = "0.8"
+#jemallocator = "0.3.2"
+regex = "1.5"
+sl-sh-proc-macros = { git = "https://github.com/sl-sh-dev/sl-sh-proc-macros.git" }
+#sl-sh-proc-macros = { path = "../sl-sh-proc-macros" }
+static_assertions = "1"
+
+[build-dependencies]
+chrono = "0.4.7"
+
+[profile.release]
+lto = true
+#codegen-units = 1
+#opt-level = 'z'
+#debug = true
+panic = "abort"
+
+[dev-dependencies]
+criterion = "0.3"
+
+[[bench]]
+name = "start_benchmark"
+harness = false
+
+[[bench]]
+name = "start_script"
+harness = false
+

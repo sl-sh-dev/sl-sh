@@ -1,8 +1,10 @@
 <img src="https://sl-sh-dev.github.io/sl-sh/images/sl-sh-ascii-logo.png" alt="sl-sh logo" style="max-width:100%;">
 
-# Simple Lisp Shell (pronounced slush)
+# Simple Lisp Shell (pronounced slosh)
 
 ![Rust](https://github.com/sl-sh-dev/sl-sh/workflows/Rust/badge.svg?branch=master)
+
+## Note this is a new expermental version, see ./legacy/ for the original version (slush).
 
 Simple Lisp SHell (sl-sh) is a lisp based shell written in Rust. It is not POSIX
 compliant and makes no effort to be. Sl-sh should run on any *nix platform as
@@ -12,20 +14,30 @@ scripting language, and it is a REPL.
 
 Some of the more prominent features:
 
-* The [shell reader](https://sl-sh-dev.github.io/sl-sh/mydoc_shellreader.html) supports endfix notation so familiar bash-isms like
+* The contains both a shell and a lisp reader so familiar bash-isms like
     ```bash
     cat file | tr -s " " | cut -d " " -f 2,4
     ```
     "just work"
-* Support for an rc file, [slshrc](https://sl-sh-dev.github.io/sl-sh/mydoc_slshrc_config.html), to set up environment and fully customize your prompt.
-* Commpon Lisp style macro system with support for quote and backquote (with , and ,@ expansion).
-* Rich set of types and cohesive standard library built around them: vectors, lists, iterators, file forms, hash maps, pairs, strings, integers, chars, and booleans.
-* OO functionality with lisp style [defstruct](https://sl-sh-dev.github.io/sl-sh/mydoc_api.html#struct::defstruct) and [deftrait](https://sl-sh-dev.github.io/sl-sh/mydoc_api.html#struct::deftrait).
+* Support for an rc file, ```~/.config/slosh/init.slosh```, to set up environment and fully customize your prompt.
+* Common Lisp style macro system with support for quote and backquote (with clojure style ~ and ~@ expansion).
 * Dynamically Typed
-* Mutable state (it's a shell!) but support for functional idioms is built into the standard lib, e.g. filter, reduce, apply, map, etc.
-* Import system with [namespaces](https://sl-sh-dev.github.io/sl-sh/mydoc_namespaces.html) to make writing modular scripts and library code easier.
-* Common Lisp style keyword symbols with colon, `:a-keyword`.
-* Clojure style [threading macros](https://clojure.org/guides/threading_macros) and scheme style [pipeline operators](https://srfi.schemers.org/srfi-197/srfi-197.html).
+* Note lacks many features from legacy sl-sh but catching up (std lib is currently tiny).
+
+
+Contains these crates:
+- slosh: a REPL with debugger and extensions that use compiler, includes shell functionality.
+- compiler: the core compiler code
+- compile_state: helper crate with state contained by a VM for use with compiler
+- vm: this is the bytecode VM that is target of the compiler
+- builtins: set of some core builtins
+- shell: contains shell specific code, this includes a shell reader (parser), job control etc
+- bridge_macros: macros for exported Rust functions as slosh functions
+- bridge_types: helper types for code using bridge_macros
+- legacy (excluded): original sl-sh version, more complete but slower and worse core shell support
+
+## Running
+cargo run -p slosh
 
 ## Installation 
 
@@ -40,51 +52,126 @@ Some of the more prominent features:
 - [Install Rust](https://www.rust-lang.org/tools/install) and build from source:
     ```
 
-    cargo build --release
-    ./target/release/sl-sh
+    cargo build -p slosh --release
+    ./target/release/slosh
     ```
-    OR
-- [Install docker](https://docs.docker.com/get-docker/) and build in a container:
-```
-docker run --rm --net host --user "$(id -u):$(id -g)" -v "$PWD:/usr/src/sl-sh" -w /usr/src/sl-sh rust:alpine cargo build --release
-```
-
-Either method will leave you with a binary target/release/sl-sh that will run the shell. The above docker command will produce a completely static binary while compiling with rust will be linked to you system's libc. You can use the musl target with cargo to produce a static binary with an installed rust.
-
-sl-sh will load with the default slshrc file located in `lisp/slshrc`. To override see [the documentation on slshrc](https://sl-sh-dev.github.io/sl-sh/mydoc_slshrc_config.html).
-
 
 ### 3. Use sl-sh as primary shell
 - install binary
 ```
-sudo install -D -m 755 target/release/sl-sh /usr/local/bin/
+sudo install -D -m 755 target/release/slosh /usr/local/bin/
 ```
-- add sl-sh to /etc/shells and change login shell to sl-sh
+- add slosh to /etc/shells and change login shell to slosh
 ```
-echo /usr/local/bin/sl-sh | sudo tee -a /etc/shells
-chsh -s /usr/local/bin/sl-sh
+echo /usr/local/bin/slosh | sudo tee -a /etc/shells
+chsh -s /usr/local/bin/slosh
 ```
-## Documentation
 
-An [API](https://sl-sh-dev.github.io/sl-sh/mydoc_api.html) reference, various guides, and more on the [documentation site](https://sl-sh-dev.github.io/sl-sh/)
-Be warned! Documentation is a first class citizen in sl-sh. Docstrings for functions
-can be viewed directly in the terminal with the [doc](AP://sl-sh-dev.github.io/sl-sh/mydoc_api.html#root::doc)
-form (e.g. `doc reduce`, `doc car` or `doc getopts`) and of the 357 sl-sh forms in existence at the time of this writing, 98.04% of them
-include Example sections with actual test cases that are run as part of CI. It
-is even possible to run a custom documentation site locally for all forms in
-all namespaces loaded at startup in the user's slshrc, see [this](https://sl-sh-dev.github.io/sl-sh/mydoc_documentation.html) FAQ page.
+## Compiler
+These are a subset of sl-sh forms and most work exactly the same.  See the
+sl-sh docs at:
+https://sl-sh-dev.github.io/sl-sh/mydoc_api.html
 
-## Status
+### Primitive types
+- True
+- False
+- Nil
+- String Constant
+- Symbol
+- Keyword
+- Character (chars are grapheme clusters)
+- Float (32 bits- f32)
+- Integer (56 bit signed integer)
+- Byte
 
-Sl-sh is still in a beta stage and an official 1.0 release is targeted for 2023.
-The current tree based interpreter is being rewritten as a register-based
-virtual machine called slosh. The sl_sh_proc_macro library is being written to
-smooth the transition between the current implementation and slosh by allowing
-the standard library to be implemented using native rust functions. The macro
-takes care of converting the lisp types to rust types and back again for the
-return value(s) at runtime. While the project is in beta, the API is not
-stable (although it is fairly stable) and documentation on certain features is
-lacking (but improving!). Finding examples on how to do things can best be
-achieved by searching in the contrib directory and consulting the
-[documentation](https://sl-sh-dev.github.io/sl-sh/).
+### Heap allocated objects (complex types)
+- Pair/ConsCell
+- Vector
+- HashMap
+- String
 
+### Special Forms
+The following special forms are currently in the compiler:
+- def
+- set!
+- do
+- fn
+- macro
+- if
+- quote (')
+- back-quote (` supports ~ ~@)
+- and
+- or
+- err
+- let
+- call/cc
+- defer
+- on-error
+- while
+
+### Compiled Forms
+Normal forms follow normal calling evaluation.
+Note: These are all compiled to bytecode and once compiled are not dynamic anymore.
+- not
+- recur
+- this-fn
+- type
+- \+
+- \-
+- \*
+- /
+- inc!
+- dec!
+- list
+- list-append
+- cons
+- car
+- cdr
+- xar!
+- xdr!
+- vec
+- make-vec
+- vec-push!
+- vec-pop!
+- str
+- =
+- /=
+- <
+- <=
+- \>
+- \>=
+- eq?
+- equal?
+
+### Features
+- Lisp reader (no reader macros yet)
+- Lisp lists (pair/concell based)
+- Vectors
+- Tail call optimization
+- Continuations (call/cc)
+- Lambda/Closures (supports optional and variadic arguments)
+- Garbage collection (basic but should function)
+- Lisp back quotes (including nested back quotes)
+- Macros
+
+## slosh
+Slosh is the shell and scripting language REPL using the compiler, vm and shell crates.
+
+### Built-in Forms
+These forms (written in Rust but callable from Lisp) are supported.
+- pr (print)
+- prn (println)
+- dasm (disassemble a lambda or closure)
+- load (load a lisp file and execute it)
+- vec-slice (new vec that is a slice of old vec)
+- vec->list (turn a vec to a list)
+- get-prop (get a property from an object- either a global variable or a heap object)
+- set-prop (set a property on an object- either a global variable or a heap object)
+- eval (eval an expression)
+
+### Features
+- Line editor with history
+- Debug on error, currently useful for probing VM state only
+
+## Links
+- sl-sh legacy shell: https://github.com/sl-sh-dev/sl-sh/legacy
