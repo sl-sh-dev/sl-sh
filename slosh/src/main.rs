@@ -234,35 +234,39 @@ fn get_color_closure() -> Option<ColorClosure> {
     })
 }
 
+fn set_builtins(env: &mut SloshVm) {
+    add_shell_builtins(env);
+    setup_collection_builtins(env);
+    add_print_builtins(env);
+    add_load_builtins(env);
+    add_str_builtins(env);
+    add_misc_builtins(env);
+    add_io_builtins(env);
+    add_conv_builtins(env);
+    env.set_global_builtin("dump-regs", builtin_dump_regs);
+    let uid = Sys::current_uid();
+    let euid = Sys::effective_uid();
+    env::set_var("UID", format!("{uid}"));
+    env::set_var("EUID", format!("{euid}"));
+    env.set_named_global("*uid*", uid.into());
+    env.set_named_global("*euid*", euid.into());
+    env.set_named_global("*last-status*", 0.into());
+    env.set_named_global("*int-bits*", (INT_BITS as i64).into());
+    env.set_named_global("*int-max*", INT_MAX.into());
+    env.set_named_global("*int-min*", INT_MIN.into());
+    // Initialize the HOST variable
+    let host: OsString = Sys::gethostname().unwrap_or_else(|| "Operating system hostname is not a string capable of being parsed by native platform???".into());
+    env::set_var("HOST", host);
+    if let Ok(dir) = env::current_dir() {
+        env::set_var("PWD", dir);
+    }
+}
+
 fn main() {
     if let Some(config) = get_config() {
         ENV.with(|renv| {
             let mut env = renv.borrow_mut();
-            add_shell_builtins(&mut env);
-            setup_collection_builtins(&mut env);
-            add_print_builtins(&mut env);
-            add_load_builtins(&mut env);
-            add_str_builtins(&mut env);
-            add_misc_builtins(&mut env);
-            add_io_builtins(&mut env);
-            add_conv_builtins(&mut env);
-            env.set_global_builtin("dump-regs", builtin_dump_regs);
-            let uid = Sys::current_uid();
-            let euid = Sys::effective_uid();
-            env::set_var("UID", format!("{uid}"));
-            env::set_var("EUID", format!("{euid}"));
-            env.set_named_global("*uid*", uid.into());
-            env.set_named_global("*euid*", euid.into());
-            env.set_named_global("*last-status*", 0.into());
-            env.set_named_global("*int-bits*", (INT_BITS as i64).into());
-            env.set_named_global("*int-max*", INT_MAX.into());
-            env.set_named_global("*int-min*", INT_MIN.into());
-            // Initialize the HOST variable
-            let host: OsString = Sys::gethostname().unwrap_or_else(|| "???".into());
-            env::set_var("HOST", host);
-            if let Ok(dir) = env::current_dir() {
-                env::set_var("PWD", dir);
-            }
+            set_builtins(&mut env);
         });
         if config.command.is_none() && config.script.is_none() {
             load_sloshrc();
@@ -471,5 +475,182 @@ fn exec_expression(res: String, env: &mut SloshVm) {
             }
         }
         Err(err) => println!("Reader error: {err}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use compile_state::state::{new_slosh_vm, SloshVmTrait};
+    use slvm::Interned;
+    use std::collections::HashMap;
+    use std::error::Error;
+    use std::fmt::{Debug, Display, Formatter};
+
+    //use sl_compiler::test_utils::exec;
+
+    #[derive(Debug, Clone, Eq, Hash, PartialEq)]
+    enum DocStringSection {
+        Usage,
+        Section,
+        Example,
+    }
+
+    impl DocStringSection {
+        fn section_idx(&self) -> u8 {
+            match self {
+                DocStringSection::Usage => 0,
+                DocStringSection::Section => 1,
+                DocStringSection::Example => 2,
+            }
+        }
+
+        fn required(&self) -> bool {
+            true
+        }
+    }
+
+    impl Display for DocStringSection {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let str = match self {
+                DocStringSection::Usage => "Usage:",
+                DocStringSection::Section => "Section:",
+                DocStringSection::Example => "Example:",
+            }
+            .to_string();
+            write!(f, "{}", str)
+        }
+    }
+
+    enum DocError {
+        DocStringMissingSection(DocStringSection),
+        DocStringMustStartWithUsage,
+    }
+
+    impl Debug for DocError {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            Display::fmt(self, f)
+        }
+    }
+
+    impl Display for DocError {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            let str = match self {
+                DocError::DocStringMissingSection(section) => {
+                    format!("Invalid documentation string, missing required section {section:?}")
+                }
+                DocError::DocStringMustStartWithUsage => {
+                    format!(
+                        "{}",
+                        "Invalid documentation string, first line must start with \"Usage:\""
+                    )
+                }
+            }
+            .to_string();
+            write!(f, "{}", str)
+        }
+    }
+
+    impl Error for DocError {}
+
+    type DocResult<T> = Result<T, DocError>;
+
+    #[derive(Debug, Clone)]
+    enum DocString {
+        None,
+        RawString(String),
+    }
+
+    impl DocString {
+        fn get_docstring_key(env: &mut SloshVm) -> Interned {
+            env.intern("doc-string")
+        }
+
+        fn validate(&self) -> DocResult<()> {
+            match self {
+                DocString::None => Ok(()),
+                DocString::RawString(s) => {
+                    //let mut sections = HashMap::new();
+                    //let mut section_idx = 0u8;
+                    let mut first_section = DocStringSection::Usage;
+                    let pat = first_section.to_string();
+                    let strs = s.split(&pat);
+                    for (idx, line) in strs.enumerate() {
+                        println!("      line: {idx} {line}");
+                    }
+                    Ok(())
+                }
+            }
+        }
+    }
+
+    #[derive(Debug, Clone, Eq, Hash, PartialEq)]
+    enum Namespace {
+        Global,
+        Other(String),
+    }
+
+    impl Namespace {
+        fn add_docs(
+            &self,
+            docs: &mut HashMap<Namespace, HashMap<String, DocString>>,
+            vm: &mut SloshVm,
+        ) {
+            let docstring_key = DocString::get_docstring_key(vm);
+            match self {
+                Namespace::Global => {
+                    let mut global_docs = HashMap::new();
+                    for g in vm.globals().keys() {
+                        let sym = Value::Symbol(*g);
+                        let slot = vm.global_intern_slot(*g).unwrap();
+                        let prop = vm.get_global_property(slot, docstring_key).map(|x| {
+                            if let Value::String(h) = x {
+                                vm.get_string(h).to_string()
+                            } else {
+                                "".to_string()
+                            }
+                        });
+                        let doc = prop.map_or(DocString::None, |x| {
+                            if x.is_empty() {
+                                DocString::None
+                            } else {
+                                DocString::RawString(x)
+                            }
+                        });
+                        global_docs.insert(sym.display_value(&vm), doc);
+                    }
+                    docs.insert(self.clone(), global_docs);
+                }
+                Namespace::Other(_) => {
+                    unimplemented!("No other docs yet exist besides global!");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_docs() {
+        let mut env = new_slosh_vm();
+        set_builtins(&mut env);
+
+        let mut docs: HashMap<Namespace, HashMap<String, DocString>> = HashMap::new();
+        let global_ns = Namespace::Global;
+        global_ns.add_docs(&mut docs, &mut env);
+
+        for ns in docs.keys() {
+            println!("ns: {:?}", ns);
+            let docs = docs.get(ns).unwrap();
+            for (sym, doc) in docs.into_iter() {
+                println!("  sym: {}", sym);
+                println!("      doc: {:?}", doc);
+                match doc {
+                    DocString::None => {}
+                    doc @ DocString::RawString(_) => {
+                        doc.validate()
+                            .expect("All non-empty docstrings should be valid");
+                    }
+                }
+            }
+        }
     }
 }

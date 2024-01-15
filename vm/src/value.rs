@@ -1,5 +1,4 @@
 use crate::{Handle, Heap, Interned, VMError, VMResult};
-use std::borrow::Cow;
 use std::collections::hash_map::RandomState;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -729,11 +728,5 @@ impl<const N: usize> From<ValueTypes<N>> for String {
             res.push_str(v);
         }
         res
-    }
-}
-
-impl<'a, const N: usize> From<ValueTypes<N>> for Cow<'a, str> {
-    fn from(value: ValueTypes<N>) -> Self {
-        Cow::Owned(String::from(value))
     }
 }
