@@ -3,9 +3,23 @@ use shell::builtins::expand_tilde;
 use sl_compiler::pass1::pass1;
 use sl_compiler::{compile, Reader};
 use slvm::{Chunk, VMError, VMResult, Value, RET};
+use std::borrow::Cow;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
+
+const fn from_utf8(bytes: &[u8]) -> &str {
+    if let Ok(s) = std::str::from_utf8(bytes) {
+        s
+    } else {
+        panic!("not valid utf8!")
+    }
+}
+
+//const CORE_LISP: &[u8] = include_bytes!("../lisp/core.slosh");
+const CORE_LISP: &str = from_utf8(include_bytes!("../../lisp/core.slosh"));
+const COLORS_LISP: &str = from_utf8(include_bytes!("../../lisp/sh-color.slosh"));
+pub const SLSHRC: &str = from_utf8(include_bytes!("../../init.slosh"));
 
 fn load_one_expression(
     vm: &mut SloshVm,
@@ -45,10 +59,82 @@ fn load_one_expression(
 }
 
 pub(crate) fn load_internal(vm: &mut SloshVm, name: &'static str) -> VMResult<Value> {
-    let file = std::fs::File::open(name).map_err(|e| VMError::new("io", format!("{name}: {e}")))?;
+    let fname = if name.starts_with('/') || name.starts_with('.') {
+        Ok(Cow::Borrowed(name))
+    } else {
+        let i_g = vm.intern("*load-path*");
+        if let Some(g) = vm.global_intern_slot(i_g) {
+            if let Value::Vector(h) = vm.get_global(g) {
+                let paths = vm.get_vector(h);
+                let mut found = None;
+                for path in paths {
+                    match path {
+                        Value::StringConst(i) => {
+                            let mut p = PathBuf::new();
+                            p.push(vm.get_interned(*i));
+                            p.push(name);
+                            if p.exists() {
+                                if let Ok(p) = p.into_os_string().into_string() {
+                                    found = Some(p.into());
+                                    break;
+                                }
+                            }
+                        }
+                        Value::String(h) => {
+                            let mut p = PathBuf::new();
+                            p.push(vm.get_string(*h));
+                            p.push(name);
+                            if p.exists() {
+                                if let Ok(p) = p.into_os_string().into_string() {
+                                    found = Some(p.into());
+                                    break;
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                if let Some(p) = found {
+                    Ok(p)
+                } else {
+                    Err(VMError::new(
+                        "io",
+                        format!("{name}: not found on *load-path*!"),
+                    ))
+                }
+            } else {
+                Err(VMError::new(
+                    "io",
+                    format!("{name}: *load-path* not a vector!"),
+                ))
+            }
+        } else {
+            Err(VMError::new("io", format!("{name}: *load-path* not set!")))
+        }
+    };
+    let mut reader = match fname {
+        Ok(fname) => match std::fs::File::open(&*fname) {
+            Ok(file) => Reader::from_file(file, vm, name, 1, 0),
+            Err(e) => match name {
+                "core.slosh" => Reader::from_static_string(CORE_LISP, vm, name, 1, 0),
+                "sh-color.slosh" => Reader::from_static_string(COLORS_LISP, vm, name, 1, 0),
+                "init.slosh" => Reader::from_static_string(SLSHRC, vm, name, 1, 0),
+                _ => {
+                    return Err(VMError::new("io", format!("{name}: {e}")));
+                }
+            },
+        },
+        Err(e) => match name {
+            "core.slosh" => Reader::from_static_string(CORE_LISP, vm, name, 1, 0),
+            "sh-color.slosh" => Reader::from_static_string(COLORS_LISP, vm, name, 1, 0),
+            "init.slosh" => Reader::from_static_string(SLSHRC, vm, name, 1, 0),
+            _ => {
+                return Err(VMError::new("io", format!("{name}: {e}")));
+            }
+        },
+    };
 
     let mut last = Value::Nil;
-    let mut reader = Reader::from_file(file, vm, name, 1, 0);
     let mut doc_string = None;
     while let Some(exp) = reader.next() {
         let reader_vm = reader.vm();

@@ -364,10 +364,10 @@ Example:
         str_trim_bang,
         r#"Usage: (str-trim! string [:right | :left]) -> string
 
-Trim right and/or left whitespace from string iiin place.  With no optional keywork trims both,
+Trim right and/or left whitespace from string in place.  With no optional keywork trims both,
 otherwise :right or :left specify right or left trimming.
 
-This is a destructive operation (unlike str-trim) and requires a actual non-const string as it's first
+This is a destructive operation (unlike str-trim) and requires an actual non-const string as it's first
 argument.  It returns this string on success.
 
 Section: string

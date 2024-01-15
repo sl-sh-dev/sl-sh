@@ -1,0 +1,139 @@
+(def nil? (fn (v) (eq? (type v) :Nil)))
+(def pair? (fn (v) (eq? (type v) :Pair)))
+(def string? (fn (v) (eq? (type v) :String)))
+(def symbol? (fn (v) (eq? (type v) :Symbol)))
+(def vec? (fn (v) (eq? (type v) :Vector)))
+(def list? (fn (v) (if (or (nil? v)(pair? v))(if (nil? (cdr v)) #t (recur (cdr v))) #f)))
+(def callable? (fn (v) (let (t (type v))(or (eq? t :Lambda)
+                                             (eq? t :Continuation)
+                                             (eq? t :Special)
+                                             (eq? t :Builtin)
+                                             (eq? t :Map)
+                                             (eq? t :Vactor)
+                                             (eq? t :Pair)))))
+
+#%
+Usage: (defmacro name doc_string? argument_list body)
+
+Create a macro and bind it to a symbol in the current scope.
+
+Section: core
+
+Example:
+(defmacro test-mac (x) (let (y (+ (ref (ref x)) 1)) `(set! ,x ,y)))
+(def test-mac-x 2)
+(test-mac test-mac-x)
+(test::assert-equal 3 test-mac-x)
+(defmacro test-mac (x) `(set! ,x 15))
+(test-mac test-mac-x)
+(test::assert-equal 15 test-mac-x)
+%#
+(def defmacro
+  (macro (name args & body)
+      `(def ~name (macro ~args ~@body))))
+
+(defmacro get-error (& body)
+    `(let (old-error (on-error nil))
+        (defer (on-error old-error))
+        (call/cc (fn (k)
+                     (on-error (fn (key val) (k (cons key val))))
+                     (cons :ok (do ~@body))))))
+
+
+(defmacro block (& body)
+    `(call/cc (fn (return-from) ~@body)))
+
+#%
+Define a named function in the current namespace.
+
+Section: core
+
+Example:
+(defn defn-test (x y) (+ x y))
+(test::assert-equal 5 (defn-test 2 3))
+(defn defn-test (x y) (set! x (* x 2))(+ x y))
+(test::assert-equal 7 (defn-test 2 3))
+(defn defn-test (x y))
+(test::assert-false (defn-test 2 3))
+(defn defn-test (x y) #t)
+(test::assert-true (defn-test 2 3))
+%#
+(defmacro defn
+    (name args & body)
+        `(def ~name (fn ~args ~@body)))
+
+#%
+Binds bindings to parameters in body. Use recur with desired bindings for
+subsequent iteration.
+Within the loop the lambda 'break' will end the loop, break can take an option
+argument that is what the loop produces (nil if no argument).
+
+Section: core
+
+Example:
+(def tot 0)
+(loop (idx) (3) (do
+    (set! tot (+ tot 1))
+    (if (> idx 1) (recur (- idx 1)))))
+(assert-equal 3 tot)
+(def tot 0)
+(loop (idx) (0)
+    (set! tot (+ tot 1))
+    (if (= idx 2) (break))
+    (recur (+ idx 1)))
+(assert-equal 3 tot)
+(assert-equal 11 (loop (idx) (0)
+    (if (= idx 2) (break 11))
+    (recur (+ idx 1))))
+(assert-false (loop (idx) (0)
+    (if (= idx 2) (break))
+    (recur (+ idx 1))))
+(assert-error (loop (idx) (0)
+    (if (= idx 2) (break 1 3))
+    (recur (+ idx 1))))
+%#
+(defmacro loop
+  (params bindings & body)
+    `(call/cc (fn (break) ((fn ~params ~@body) ~@bindings))))
+
+(defmacro doc (sym) `(prn (eval (get-prop '~sym :doc-string))))
+
+#%
+Evaluate body a number of times equal to times' numerical value.
+
+Section: core
+
+Example:
+(def i 0)
+(dotimes 11 (set! i (+ 1 i)))
+(assert-equal 11 i)
+%#
+(defmacro dotimes
+    (times body)
+    ((fn (idx-name)
+    `(if (> ~times 0)
+        (loop (~idx-name) (~times) (do
+            (~@body)
+            (if (> ~idx-name 1) (recur (- ~idx-name 1)))))))(gensym)))
+
+#%
+Evaluate body a number of times equal to times' numnrical value. Includes an
+incrementing reference binding, idx-bind, accesible in body.
+
+Section: core
+
+Example:
+(def i 0)
+(def i-tot 0)
+(dotimes-i idx 11 (do (set! i-tot (+ idx i-tot))(set! i (+ 1 i))))
+(assert-equal 11 i)
+(assert-equal 55 i-tot)
+%#
+(defmacro dotimes-i
+    (idx-bind times & body)
+    `(let (~idx-bind 0)
+        (while (< ~idx-bind ~times)
+            ~@body
+            (inc! ~idx-bind))))
+
+

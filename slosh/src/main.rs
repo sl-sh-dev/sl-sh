@@ -13,12 +13,12 @@ use compile_state::state::*;
 use sl_compiler::compile::*;
 use sl_compiler::reader::*;
 
-use builtins::add_misc_builtins;
 use builtins::collections::setup_collection_builtins;
 use builtins::conversions::add_conv_builtins;
 use builtins::io::add_io_builtins;
 use builtins::print::{add_print_builtins, display_value};
 use builtins::string::add_str_builtins;
+use builtins::{add_global_value, add_misc_builtins};
 use sl_liner::vi::AlphanumericAndVariableKeywordRule;
 use sl_liner::{keymap, ColorClosure, Context, Prompt};
 
@@ -94,12 +94,33 @@ fn get_prompt(env: &mut SloshVm) -> String {
 fn load_sloshrc() {
     if let Ok(mut rcfile) = env::var("HOME") {
         if rcfile.ends_with('/') {
-            rcfile.push_str(".config/slosh/init.slosh");
+            rcfile.push_str(".config/slosh");
         } else {
-            rcfile.push_str("/.config/slosh/init.slosh");
+            rcfile.push_str("/.config/slosh");
         }
+
         ENV.with(|renv| {
             let mut env = renv.borrow_mut();
+            let i_path = env.intern(&rcfile);
+            let v = vec![Value::StringConst(i_path)];
+            let path = env.alloc_vector(v);
+            add_global_value(
+                &mut env,
+                "*load-path*",
+                path,
+                "Usage: (set '*load-path* '(\"/path/one\" \"/path/two\"))
+
+Set the a list of paths to search for loading scripts with the load form.
+
+Section: scripting
+
+Example:
+;(set '*load-path '(\"/path\"))
+;(load \"script-in-path\")
+t
+",
+            );
+            rcfile.push_str("/init.slosh");
             let script = env.intern(&rcfile);
             let script = env.get_interned(script);
             match load_internal(&mut env, script) {

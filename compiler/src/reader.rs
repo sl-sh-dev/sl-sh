@@ -170,6 +170,36 @@ impl<'vm> Reader<'vm> {
         }
     }
 
+    pub fn from_static_string(
+        src: &'static str,
+        vm: &'vm mut SloshVm,
+        file_name: &'static str,
+        line: usize,
+        column: usize,
+    ) -> Self {
+        let char_iter: CharIter = Box::new(
+            Graphemes::from(BufReader::new(Cursor::new(src.as_bytes())))
+                .map(|s| {
+                    if let Ok(s) = s {
+                        Cow::Owned(s)
+                    } else {
+                        Cow::Borrowed("")
+                    }
+                })
+                .peekable(),
+        );
+        let char_iter = Box::new(ReaderCharIter {
+            inner: char_iter,
+            line,
+            column,
+        });
+        Self {
+            vm,
+            char_iter: Some(char_iter),
+            file_name,
+        }
+    }
+
     pub fn from_string(
         src: String,
         vm: &'vm mut SloshVm,
