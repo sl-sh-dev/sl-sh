@@ -37,10 +37,11 @@ impl SlFrom<&Value> for i32 {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
+    use crate::types::SlFrom;
     use crate::types::SlInto;
     use compile_state::state::new_slosh_vm;
-    use slvm::Value;
+    use slvm::{to_i56, Value};
 
     #[test]
     fn test_i32_conversions_rust_to_value() {
@@ -51,5 +52,13 @@ mod test {
             let val: Value = val.sl_into(vm).expect("i32 can be converted to Value");
             assert!(matches!(val, Value::Int(_)));
         }
+    }
+
+    #[test]
+    fn test_i32_conversions_value_to_rust() {
+        let mut vm = new_slosh_vm();
+        let vm = &mut vm;
+        let val = to_i56(7_i32 as i64);
+        let _val: i32 = i32::sl_from(&val, vm).expect("Value can be converted to i32");
     }
 }

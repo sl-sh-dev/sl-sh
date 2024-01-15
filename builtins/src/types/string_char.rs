@@ -176,7 +176,7 @@ impl SlFrom<&Value> for String {
 
 //TODO PC finish testing negative cases e.g. asserting that errrors are thrown.
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use crate::gensym;
     use crate::types::{SlAsMut, SlAsRef, SlFromRef, SlInto, SlIntoRef};
