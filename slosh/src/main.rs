@@ -482,49 +482,135 @@ fn exec_expression(res: String, env: &mut SloshVm) {
 mod tests {
     use super::*;
     use compile_state::state::{new_slosh_vm, SloshVmTrait};
-    use slvm::Interned;
-    use std::collections::HashMap;
+    use lazy_static::lazy_static;
+    use regex::Regex;
     use std::error::Error;
     use std::fmt::{Debug, Display, Formatter};
-
     //use sl_compiler::test_utils::exec;
 
-    #[derive(Debug, Clone, Eq, Hash, PartialEq)]
-    enum DocStringSection {
-        Usage,
-        Section,
-        Example,
+    lazy_static! {
+        static ref DOC_REGEX: Regex =
+            Regex::new(r"^Usage:(.*)\n\n.*^Section:(.*)\n\n^Example:(.*)").unwrap();
     }
 
-    impl DocStringSection {
-        fn section_idx(&self) -> u8 {
-            match self {
-                DocStringSection::Usage => 0,
-                DocStringSection::Section => 1,
-                DocStringSection::Example => 2,
-            }
-        }
+    #[derive(Debug, Clone, Eq, Hash, PartialEq)]
+    enum Namespace {
+        Global,
+        Other(String),
+    }
 
-        fn required(&self) -> bool {
-            true
+    impl Namespace {
+        fn add_docs(&self, docs: &mut Vec<SloshDoc>, vm: &mut SloshVm) -> DocResult<()> {
+            let docstring_key = vm.intern_static("doc-string");
+            match self {
+                Namespace::Global => {
+                    for g in vm.globals().keys() {
+                        let sym = Value::Symbol(*g);
+                        let sym_str = sym.display_value(&vm);
+                        let slot = vm.global_intern_slot(*g).unwrap();
+                        let prop = vm
+                            .get_global_property(slot, docstring_key)
+                            .map_or(None, |x| {
+                                if let Value::String(h) = x {
+                                    Some(vm.get_string(h).to_string())
+                                } else {
+                                    None
+                                }
+                            });
+                        match prop {
+                            None => {
+                                //TODO PC put this back because it SHOULD have a doc string
+                                //return Err(DocError::NoDocString { symbol: sym_str });
+                            }
+                            Some(raw_doc_string) => {
+                                docs.push(SloshDoc::new(
+                                    sym_str,
+                                    sym.display_type(&vm).to_string(),
+                                    self.clone(),
+                                    raw_doc_string,
+                                )?);
+                            }
+                        }
+                    }
+                }
+                Namespace::Other(_) => {
+                    unimplemented!("No other docs yet exist besides global!");
+                }
+            }
+            Ok(())
         }
+    }
+
+    #[derive(Debug, Clone, Eq, Hash, PartialEq)]
+    struct DocStringSection {
+        usage: String,
+        description: String,
+        section: String,
+        example: Option<String>,
     }
 
     impl Display for DocStringSection {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            let str = match self {
-                DocStringSection::Usage => "Usage:",
-                DocStringSection::Section => "Section:",
-                DocStringSection::Example => "Example:",
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            let example = self.example.clone().unwrap_or_default();
+            write!(
+                f,
+                "Usage: {usage}\n\n{description}\n\nSection: {section}\n\nExample: {example}",
+                usage = self.usage,
+                description = self.description,
+                section = self.section,
+                example = example,
+            )
+        }
+    }
+
+    struct SloshDoc {
+        symbol: String,
+        symbol_type: String,
+        namespace: Namespace,
+        doc_string: DocStringSection,
+    }
+
+    impl SloshDoc {
+        fn new(
+            name: String,
+            symbol_type: String,
+            namespace: Namespace,
+            raw_doc_string: String,
+        ) -> DocResult<SloshDoc> {
+            let doc_string = SloshDoc::parse_doc_string(raw_doc_string)?;
+            Ok(SloshDoc {
+                symbol: name,
+                symbol_type,
+                namespace,
+                doc_string,
+            })
+        }
+
+        fn parse_doc_string(raw_doc_string: String) -> DocResult<DocStringSection> {
+            let strs = DOC_REGEX.captures(raw_doc_string.as_str());
+            let usage: String = "fixme".to_string();
+            let description: String = "fixme".to_string();
+            let section: String = "fixme".to_string();
+            let example: Option<String> = None;
+            match strs {
+                None => {}
+                Some(s) => {
+                    println!("      line: {s:?}");
+                }
             }
-            .to_string();
-            write!(f, "{}", str)
+            Ok(DocStringSection {
+                usage,
+                description,
+                section,
+                example,
+            })
         }
     }
 
     enum DocError {
-        DocStringMissingSection(DocStringSection),
-        DocStringMustStartWithUsage,
+        NoDocString { symbol: String },
+        DocStringMissingSection { symbol: String, section: String },
+        DocStringMustStartWithUsage { symbol: String },
     }
 
     impl Debug for DocError {
@@ -536,13 +622,17 @@ mod tests {
     impl Display for DocError {
         fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
             let str = match self {
-                DocError::DocStringMissingSection(section) => {
-                    format!("Invalid documentation string, missing required section {section:?}")
-                }
-                DocError::DocStringMustStartWithUsage => {
+                DocError::NoDocString{ symbol} => {
                     format!(
-                        "{}",
-                        "Invalid documentation string, first line must start with \"Usage:\""
+                        "No documentation string provided for symbol {symbol}, all slosh functions written in Rust must have a valid documentation string."
+                    )
+                }
+                DocError::DocStringMissingSection{ symbol, section} => {
+                    format!("Invalid documentation string for symbol {symbol}, missing required section {section:?}")
+                }
+                DocError::DocStringMustStartWithUsage{ symbol } => {
+                    format!(
+                        "Invalid documentation string for symbol {symbol}, first line must start with \"Usage:\""
                     )
                 }
             }
@@ -555,102 +645,19 @@ mod tests {
 
     type DocResult<T> = Result<T, DocError>;
 
-    #[derive(Debug, Clone)]
-    enum DocString {
-        None,
-        RawString(String),
-    }
-
-    impl DocString {
-        fn get_docstring_key(env: &mut SloshVm) -> Interned {
-            env.intern("doc-string")
-        }
-
-        fn validate(&self) -> DocResult<()> {
-            match self {
-                DocString::None => Ok(()),
-                DocString::RawString(s) => {
-                    //let mut sections = HashMap::new();
-                    //let mut section_idx = 0u8;
-                    let mut first_section = DocStringSection::Usage;
-                    let pat = first_section.to_string();
-                    let strs = s.split(&pat);
-                    for (idx, line) in strs.enumerate() {
-                        println!("      line: {idx} {line}");
-                    }
-                    Ok(())
-                }
-            }
-        }
-    }
-
-    #[derive(Debug, Clone, Eq, Hash, PartialEq)]
-    enum Namespace {
-        Global,
-        Other(String),
-    }
-
-    impl Namespace {
-        fn add_docs(
-            &self,
-            docs: &mut HashMap<Namespace, HashMap<String, DocString>>,
-            vm: &mut SloshVm,
-        ) {
-            let docstring_key = DocString::get_docstring_key(vm);
-            match self {
-                Namespace::Global => {
-                    let mut global_docs = HashMap::new();
-                    for g in vm.globals().keys() {
-                        let sym = Value::Symbol(*g);
-                        let slot = vm.global_intern_slot(*g).unwrap();
-                        let prop = vm.get_global_property(slot, docstring_key).map(|x| {
-                            if let Value::String(h) = x {
-                                vm.get_string(h).to_string()
-                            } else {
-                                "".to_string()
-                            }
-                        });
-                        let doc = prop.map_or(DocString::None, |x| {
-                            if x.is_empty() {
-                                DocString::None
-                            } else {
-                                DocString::RawString(x)
-                            }
-                        });
-                        global_docs.insert(sym.display_value(&vm), doc);
-                    }
-                    docs.insert(self.clone(), global_docs);
-                }
-                Namespace::Other(_) => {
-                    unimplemented!("No other docs yet exist besides global!");
-                }
-            }
-        }
-    }
-
     #[test]
     fn test_docs() {
         let mut env = new_slosh_vm();
         set_builtins(&mut env);
 
-        let mut docs: HashMap<Namespace, HashMap<String, DocString>> = HashMap::new();
-        let global_ns = Namespace::Global;
-        global_ns.add_docs(&mut docs, &mut env);
+        let mut docs: Vec<SloshDoc> = vec![];
+        Namespace::Global.add_docs(&mut docs, &mut env).unwrap();
 
-        for ns in docs.keys() {
-            println!("ns: {:?}", ns);
-            let docs = docs.get(ns).unwrap();
-            for (sym, doc) in docs.into_iter() {
-                println!("  sym: {}", sym);
-                println!("      doc: {:?}", doc);
-                match doc {
-                    DocString::None => {}
-                    doc @ DocString::RawString(_) => {
-                        doc.validate()
-                            .expect("All non-empty docstrings should be valid");
-                    }
-                }
-            }
+        for doc in docs {
+            eprintln!("ns: {:?}", doc.namespace);
+            eprintln!("  sym: {}", doc.symbol);
+            eprintln!("  type: {}", doc.symbol_type);
+            eprintln!("      doc_string: {:?}", doc.doc_string);
         }
     }
 }
