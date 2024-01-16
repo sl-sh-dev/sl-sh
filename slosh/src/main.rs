@@ -483,14 +483,26 @@ mod tests {
     use super::*;
     use compile_state::state::{new_slosh_vm, SloshVmTrait};
     use lazy_static::lazy_static;
-    use regex::Regex;
+    use regex::{Regex, RegexBuilder};
+    use std::borrow::Cow;
+    use std::collections::HashSet;
     use std::error::Error;
     use std::fmt::{Debug, Display, Formatter};
     //use sl_compiler::test_utils::exec;
 
     lazy_static! {
         static ref DOC_REGEX: Regex =
-            Regex::new(r"^Usage:(.*)\n\n.*^Section:(.*)\n\n^Example:(.*)").unwrap();
+            RegexBuilder::new(r"^Usage:(.*)\n\n.*^Section:(.*)(\n\n^Example:(.*))?")
+                .multi_line(true)
+                .dot_matches_new_line(true)
+                .crlf(true)
+                .build()
+                .unwrap();
+        static ref EXEMPTIONS: HashSet<&'static str> = {
+            let mut m = HashSet::new();
+            m.insert("back-quote");
+            m
+        };
     }
 
     #[derive(Debug, Clone, Eq, Hash, PartialEq)]
@@ -519,16 +531,29 @@ mod tests {
                             });
                         match prop {
                             None => {
-                                //TODO PC put this back because it SHOULD have a doc string
+                                eprintln!("Why does this have NO doc string?: {sym_str}");
                                 //return Err(DocError::NoDocString { symbol: sym_str });
                             }
                             Some(raw_doc_string) => {
-                                docs.push(SloshDoc::new(
+                                let slosh_doc = SloshDoc::new(
                                     sym_str,
                                     sym.display_type(&vm).to_string(),
                                     self.clone(),
                                     raw_doc_string,
-                                )?);
+                                );
+                                match slosh_doc {
+                                    Ok(slosh_doc) => {
+                                        docs.push(slosh_doc);
+                                    }
+                                    Err(e) => match e {
+                                        DocError::ExemptFromProperDocString { symbol } => {
+                                            eprintln!("Exempt from proper doc string: {symbol}");
+                                        }
+                                        _ => {
+                                            return Err(e);
+                                        }
+                                    },
+                                }
                             }
                         }
                     }
@@ -577,7 +602,7 @@ mod tests {
             namespace: Namespace,
             raw_doc_string: String,
         ) -> DocResult<SloshDoc> {
-            let doc_string = SloshDoc::parse_doc_string(raw_doc_string)?;
+            let doc_string = SloshDoc::parse_doc_string(Cow::Borrowed(&name), raw_doc_string)?;
             Ok(SloshDoc {
                 symbol: name,
                 symbol_type,
@@ -586,22 +611,49 @@ mod tests {
             })
         }
 
-        fn parse_doc_string(raw_doc_string: String) -> DocResult<DocStringSection> {
-            let strs = DOC_REGEX.captures(raw_doc_string.as_str());
-            let usage: String = "fixme".to_string();
-            let description: String = "fixme".to_string();
-            let section: String = "fixme".to_string();
+        fn parse_doc_string(
+            symbol: Cow<'_, String>,
+            raw_doc_string: String,
+        ) -> DocResult<DocStringSection> {
+            let usage: Option<String> = None;
+            let description: Option<String> = None;
+            let section: Option<String> = None;
             let example: Option<String> = None;
-            match strs {
-                None => {}
-                Some(s) => {
-                    println!("      line: {s:?}");
+            let cap = DOC_REGEX.captures(raw_doc_string.as_str()).ok_or_else(|| {
+                if EXEMPTIONS.contains(symbol.as_str()) {
+                    DocError::ExemptFromProperDocString {
+                        symbol: symbol.to_owned().to_string(),
+                    }
+                } else {
+                    DocError::DocStringMustStartWithUsage {
+                        symbol: symbol.to_owned().to_string(),
+                    }
                 }
-            }
+            })?;
+            println!("=================================");
+            let m = cap.get(1);
+            let usage: Option<String> = m
+                .ok_or_else(|| DocError::DocStringMissingSection {
+                    symbol: symbol.to_owned().to_string(),
+                    section: "Usage".to_string(),
+                })
+                .map(|x| x.as_str().to_string())?;
+            println!("sym: {} Usage: {}", symbol, m.unwrap().as_str());
+            let m = cap.get(2);
+            let m = cap.get(3);
+            let m = cap.get(4);
+            println!("=================================");
+
             Ok(DocStringSection {
-                usage,
-                description,
-                section,
+                usage: usage.ok_or_else()?,
+                description: description.ok_or_else(|| DocError::DocStringMissingSection {
+                    symbol: symbol.to_owned().to_string(),
+                    section: "Description".to_string(),
+                })?,
+                section: section.ok_or_else(|| DocError::DocStringMissingSection {
+                    symbol: symbol.to_owned().to_string(),
+                    section: "Section".to_string(),
+                })?,
                 example,
             })
         }
@@ -611,6 +663,7 @@ mod tests {
         NoDocString { symbol: String },
         DocStringMissingSection { symbol: String, section: String },
         DocStringMustStartWithUsage { symbol: String },
+        ExemptFromProperDocString { symbol: String },
     }
 
     impl Debug for DocError {
@@ -625,6 +678,11 @@ mod tests {
                 DocError::NoDocString{ symbol} => {
                     format!(
                         "No documentation string provided for symbol {symbol}, all slosh functions written in Rust must have a valid documentation string."
+                    )
+                }
+                DocError::ExemptFromProperDocString{ symbol} => {
+                    format!(
+                        "No documentation needed for provided symbol {symbol}."
                     )
                 }
                 DocError::DocStringMissingSection{ symbol, section} => {
@@ -654,10 +712,10 @@ mod tests {
         Namespace::Global.add_docs(&mut docs, &mut env).unwrap();
 
         for doc in docs {
-            eprintln!("ns: {:?}", doc.namespace);
-            eprintln!("  sym: {}", doc.symbol);
-            eprintln!("  type: {}", doc.symbol_type);
-            eprintln!("      doc_string: {:?}", doc.doc_string);
+            //println!("ns: {:?}", doc.namespace);
+            //println!("  sym: {}", doc.symbol);
+            //println!("  type: {}", doc.symbol_type);
+            //println!("      doc_string: {:?}", doc.doc_string);
         }
     }
 }
