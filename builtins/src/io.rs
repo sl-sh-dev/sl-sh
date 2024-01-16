@@ -80,8 +80,7 @@ Section: io
         env,
         "fs-exists?",
         fs_exists,
-        r#"
- Usage: (fs-exists? path-to-test)
+        r#"Usage: (fs-exists? path-to-test)
 
 Does the given path exist?
 

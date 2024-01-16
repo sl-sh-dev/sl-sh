@@ -492,16 +492,55 @@ mod tests {
 
     lazy_static! {
         static ref DOC_REGEX: Regex =
-            RegexBuilder::new(r"^Usage:(.*)\n\n.*^Section:(.*)(\n\n^Example:(.*))?")
+            RegexBuilder::new(r#"Usage:(.*)\n\n(.*)^Section:(.+?)$(\n\n^Example:\n(.*)|\s*)"#)
                 .multi_line(true)
                 .dot_matches_new_line(true)
                 .crlf(true)
                 .build()
                 .unwrap();
         static ref EXEMPTIONS: HashSet<&'static str> = {
-            let mut m = HashSet::new();
-            m.insert("back-quote");
-            m
+            let mut exemption_set = HashSet::new();
+            exemption_set.insert("version");
+            exemption_set.insert("env");
+            exemption_set.insert("sh");
+            exemption_set.insert("$sh");
+            exemption_set.insert("this-fn");
+            exemption_set.insert("cons");
+            exemption_set.insert("list-append");
+            exemption_set.insert("/=");
+            exemption_set.insert("eq?");
+            exemption_set.insert("equal?");
+            exemption_set.insert("type");
+            exemption_set.insert("err");
+            exemption_set.insert("call/cc");
+            exemption_set.insert("defer");
+            exemption_set.insert("on-error");
+            exemption_set.insert("while");
+            exemption_set.insert("doc-string");
+            exemption_set.insert("get");
+            exemption_set.insert("mk-err");
+            exemption_set.insert("err?");
+            exemption_set.insert("ok?");
+            exemption_set.insert("return");
+            exemption_set.insert("*euid*");
+            exemption_set.insert("*last-status*");
+            exemption_set.insert("set-prop");
+            exemption_set.insert("sizeof-heap-object");
+            exemption_set.insert("*int-min*");
+            exemption_set.insert("gensym");
+            exemption_set.insert("*uid*");
+            exemption_set.insert("*int-max*");
+            exemption_set.insert("prn");
+            exemption_set.insert("pr");
+            exemption_set.insert("sizeof-value");
+            exemption_set.insert("dump-regs");
+            exemption_set.insert("dasm");
+            exemption_set.insert("load");
+            exemption_set.insert("eval");
+            exemption_set.insert("*int-bits*");
+            exemption_set.insert("get-prop");
+            exemption_set.insert("expand-macro");
+            exemption_set
         };
     }
 
@@ -520,7 +559,7 @@ mod tests {
                         let sym = Value::Symbol(*g);
                         let sym_str = sym.display_value(&vm);
                         let slot = vm.global_intern_slot(*g).unwrap();
-                        let prop = vm
+                        let raw_doc_string = vm
                             .get_global_property(slot, docstring_key)
                             .map_or(None, |x| {
                                 if let Value::String(h) = x {
@@ -528,33 +567,26 @@ mod tests {
                                 } else {
                                     None
                                 }
-                            });
-                        match prop {
-                            None => {
-                                eprintln!("Why does this have NO doc string?: {sym_str}");
-                                //return Err(DocError::NoDocString { symbol: sym_str });
+                            })
+                            .unwrap_or_default();
+                        let slosh_doc = SloshDoc::new(
+                            sym_str,
+                            sym.display_type(&vm).to_string(),
+                            self.clone(),
+                            raw_doc_string,
+                        );
+                        match slosh_doc {
+                            Ok(slosh_doc) => {
+                                docs.push(slosh_doc);
                             }
-                            Some(raw_doc_string) => {
-                                let slosh_doc = SloshDoc::new(
-                                    sym_str,
-                                    sym.display_type(&vm).to_string(),
-                                    self.clone(),
-                                    raw_doc_string,
-                                );
-                                match slosh_doc {
-                                    Ok(slosh_doc) => {
-                                        docs.push(slosh_doc);
-                                    }
-                                    Err(e) => match e {
-                                        DocError::ExemptFromProperDocString { symbol } => {
-                                            eprintln!("Exempt from proper doc string: {symbol}");
-                                        }
-                                        _ => {
-                                            return Err(e);
-                                        }
-                                    },
+                            Err(e) => match e {
+                                DocError::ExemptFromProperDocString { symbol } => {
+                                    eprintln!("Exempt from proper doc string: {symbol}");
                                 }
-                            }
+                                _ => {
+                                    return Err(e);
+                                }
+                            },
                         }
                     }
                 }
@@ -615,10 +647,6 @@ mod tests {
             symbol: Cow<'_, String>,
             raw_doc_string: String,
         ) -> DocResult<DocStringSection> {
-            let usage: Option<String> = None;
-            let description: Option<String> = None;
-            let section: Option<String> = None;
-            let example: Option<String> = None;
             let cap = DOC_REGEX.captures(raw_doc_string.as_str()).ok_or_else(|| {
                 if EXEMPTIONS.contains(symbol.as_str()) {
                     DocError::ExemptFromProperDocString {
@@ -630,30 +658,32 @@ mod tests {
                     }
                 }
             })?;
-            println!("=================================");
-            let m = cap.get(1);
-            let usage: Option<String> = m
-                .ok_or_else(|| DocError::DocStringMissingSection {
+            let usage = cap
+                .get(1)
+                .ok_or_else(|| DocError::DocStringMustStartWithUsage {
                     symbol: symbol.to_owned().to_string(),
-                    section: "Usage".to_string(),
                 })
                 .map(|x| x.as_str().to_string())?;
-            println!("sym: {} Usage: {}", symbol, m.unwrap().as_str());
-            let m = cap.get(2);
-            let m = cap.get(3);
-            let m = cap.get(4);
-            println!("=================================");
-
-            Ok(DocStringSection {
-                usage: usage.ok_or_else()?,
-                description: description.ok_or_else(|| DocError::DocStringMissingSection {
+            let description = cap
+                .get(2)
+                .ok_or_else(|| DocError::DocStringMissingSection {
                     symbol: symbol.to_owned().to_string(),
                     section: "Description".to_string(),
-                })?,
-                section: section.ok_or_else(|| DocError::DocStringMissingSection {
+                })
+                .map(|x| x.as_str().to_string())?;
+            let section = cap
+                .get(3)
+                .ok_or_else(|| DocError::DocStringMissingSection {
                     symbol: symbol.to_owned().to_string(),
                     section: "Section".to_string(),
-                })?,
+                })
+                .map(|x| x.as_str().to_string())?;
+            let example = cap.get(5).map(|x| x.as_str().to_string());
+
+            Ok(DocStringSection {
+                usage,
+                description,
+                section,
                 example,
             })
         }
@@ -704,7 +734,7 @@ mod tests {
     type DocResult<T> = Result<T, DocError>;
 
     #[test]
-    fn test_docs() {
+    fn test_global_slosh_docs() {
         let mut env = new_slosh_vm();
         set_builtins(&mut env);
 
@@ -712,10 +742,10 @@ mod tests {
         Namespace::Global.add_docs(&mut docs, &mut env).unwrap();
 
         for doc in docs {
-            //println!("ns: {:?}", doc.namespace);
-            //println!("  sym: {}", doc.symbol);
-            //println!("  type: {}", doc.symbol_type);
-            //println!("      doc_string: {:?}", doc.doc_string);
+            println!("ns: {:?}", doc.namespace);
+            println!("  sym: {}", doc.symbol);
+            println!("  type: {}", doc.symbol_type);
+            println!("      doc_string: {:?}", doc.doc_string);
         }
     }
 }
