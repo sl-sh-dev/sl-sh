@@ -1,3 +1,8 @@
+(prn (version))
+
+(prn "Using default slshrc written to \"~/.config/slosh/init.slosh\".")
+(prn "Edit this file to remove this message and customize your shell")
+
 ; load the core lib
 (load "core.slosh")
 

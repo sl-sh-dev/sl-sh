@@ -4,7 +4,8 @@ use std::cell::RefCell;
 use std::env;
 use std::ffi::OsString;
 use std::fs::create_dir_all;
-use std::io::{BufRead, ErrorKind};
+use std::io::{BufRead, ErrorKind, Write};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use slvm::opcodes::*;
@@ -31,7 +32,7 @@ mod shell_builtins;
 
 use crate::completions::ShellCompleter;
 use crate::liner_rules::make_editor_rules;
-use crate::load_eval::{add_load_builtins, load_internal};
+use crate::load_eval::{add_load_builtins, load_internal, SLSHRC};
 use crate::shell_builtins::add_shell_builtins;
 use config::*;
 use debug::*;
@@ -120,7 +121,33 @@ Example:
 t
 ",
             );
+            let rcpath: PathBuf = rcfile.clone().into();
+            if !rcpath.exists() {
+                match create_dir_all(&rcpath) {
+                    Ok(_) => {}
+                    Err(e) => eprintln!(
+                        "error creating default config directory {}: {e}",
+                        rcpath.to_string_lossy()
+                    ),
+                }
+            }
             rcfile.push_str("/init.slosh");
+            let rcpath: PathBuf = rcfile.clone().into();
+            if !rcpath.exists() {
+                match std::fs::File::create(&rcpath) {
+                    Ok(mut f) => match f.write_all(SLSHRC.as_bytes()) {
+                        Ok(_) => {}
+                        Err(e) => eprintln!(
+                            "error writing default config {}: {e}",
+                            rcpath.to_string_lossy()
+                        ),
+                    },
+                    Err(e) => eprintln!(
+                        "error creating default config {}: {e}",
+                        rcpath.to_string_lossy()
+                    ),
+                }
+            }
             let script = env.intern(&rcfile);
             let script = env.get_interned(script);
             match load_internal(&mut env, script) {
