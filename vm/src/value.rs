@@ -1,6 +1,5 @@
 use crate::{Handle, Heap, Interned, VMError, VMResult};
-use std::collections::hash_map::RandomState;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
@@ -715,7 +714,7 @@ impl<const N: usize> Deref for ValueTypes<N> {
 impl<const N: usize> From<ValueTypes<N>> for String {
     fn from(value: ValueTypes<N>) -> Self {
         let mut res = String::new();
-        let set: HashSet<&str, RandomState> = HashSet::from_iter(
+        let set: BTreeSet<&str> = BTreeSet::from_iter(
             value
                 .deref()
                 .iter()
