@@ -488,7 +488,6 @@ mod tests {
     use std::collections::HashSet;
     use std::error::Error;
     use std::fmt::{Debug, Display, Formatter};
-    //use sl_compiler::test_utils::exec;
 
     lazy_static! {
         static ref DOC_REGEX: Regex =
