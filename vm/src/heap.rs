@@ -51,8 +51,6 @@ enum Object {
     Vector(Arc<Vec<Value>>),
     Map(Arc<HashMap<Value, Value>>),
     Bytes(Arc<Vec<u8>>),
-    Pair(Arc<(Value, Value)>),
-    Value(Value),
 
     // Everything below here is always read only.
     Lambda(Arc<Chunk>),
@@ -87,6 +85,8 @@ pub struct Heap {
     callframes: Storage<CallFrame>,
     continuations: Storage<Continuation>,
     errors: Storage<Error>,
+    pairs: Storage<(Value, Value)>,
+    values: Storage<Value>,
     props: Option<FxHashMap<Value, Arc<FxHashMap<Interned, Value>>>>,
     greys: Vec<Value>,
     paused: u32,
@@ -106,13 +106,13 @@ macro_rules! value_op {
             $crate::Value::Vector(handle) => $heap.objects.$op(handle.idx()),
             $crate::Value::Map(handle) => $heap.objects.$op(handle.idx()),
             $crate::Value::Bytes(handle) => $heap.objects.$op(handle.idx()),
-            $crate::Value::Pair(handle) => $heap.objects.$op(handle.idx()),
+            $crate::Value::Pair(handle) => $heap.pairs.$op(handle.idx()),
             $crate::Value::List(handle, _) => $heap.objects.$op(handle.idx()),
             $crate::Value::Lambda(handle) => $heap.objects.$op(handle.idx()),
             $crate::Value::Closure(handle) => $heap.objects.$op(handle.idx()),
             $crate::Value::Continuation(handle) => $heap.continuations.$op(handle.idx()),
             $crate::Value::CallFrame(handle) => $heap.callframes.$op(handle.idx()),
-            $crate::Value::Value(handle) => $heap.objects.$op(handle.idx()),
+            $crate::Value::Value(handle) => $heap.values.$op(handle.idx()),
 
             $crate::Value::Error(handle) => $heap.errors.$op(handle.idx()),
 
@@ -147,6 +147,8 @@ impl Heap {
             callframes: Storage::default(),
             continuations: Storage::default(),
             errors: Storage::default(),
+            pairs: Storage::default(),
+            values: Storage::default(),
             props: Some(FxHashMap::default()),
             greys: vec![],
             paused: 0,
@@ -201,11 +203,10 @@ impl Heap {
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        Value::Pair(self.alloc(
-            Object::Pair(Arc::new((car, cdr))),
-            mutable.flag(),
-            mark_roots,
-        ))
+        if self.pairs.live_objects() >= self.pairs.capacity() && self.paused == 0 {
+            self.collect(mark_roots);
+        }
+        Value::Pair(self.pairs.alloc((car, cdr), mutable.flag()).into())
     }
 
     pub fn alloc_string<MarkFunc>(
@@ -305,7 +306,10 @@ impl Heap {
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        Value::Value(self.alloc(Object::Value(val), mutable.flag(), mark_roots))
+        if self.values.live_objects() >= self.values.capacity() && self.paused == 0 {
+            self.collect(mark_roots);
+        }
+        Value::Value(self.values.alloc(val, mutable.flag()).into())
     }
 
     pub fn alloc_error<MarkFunc>(
@@ -389,29 +393,27 @@ impl Heap {
     }
 
     pub fn get_pair(&self, handle: Handle) -> (Value, Value) {
-        if let Some(Object::Pair(ptr)) = self.objects.get(handle.idx()) {
-            (ptr.0, ptr.1)
+        if let Some(pair) = self.pairs.get(handle.idx()) {
+            (pair.0, pair.1)
         } else {
             panic!("Handle {} is not a pair!", handle.idx());
         }
     }
 
     pub fn get_pair_mut(&mut self, handle: Handle) -> VMResult<(&mut Value, &mut Value)> {
-        if !self.objects.is_mutable(handle.idx()) {
+        if !self.pairs.is_mutable(handle.idx()) {
             return Err(VMError::new_heap("Pair is not mutable!"));
         }
-        if let Some(Object::Pair(ptr)) = self.objects.get_mut(handle.idx()) {
-            let data = Arc::make_mut(ptr);
-            Ok((&mut data.0, &mut data.1))
+        if let Some(pair) = self.pairs.get_mut(handle.idx()) {
+            Ok((&mut pair.0, &mut pair.1))
         } else {
             panic!("Handle {} is not a pair!", handle.idx());
         }
     }
 
     pub fn get_pair_mut_override(&mut self, handle: Handle) -> (&mut Value, &mut Value) {
-        if let Some(Object::Pair(ptr)) = self.objects.get_mut(handle.idx()) {
-            let data = Arc::make_mut(ptr);
-            (&mut data.0, &mut data.1)
+        if let Some(pair) = self.pairs.get_mut(handle.idx()) {
+            (&mut pair.0, &mut pair.1)
         } else {
             panic!("Handle {} is not a pair!", handle.idx());
         }
@@ -458,8 +460,7 @@ impl Heap {
     }
 
     pub fn get_value(&self, handle: Handle) -> Value {
-        if let Some(Object::Value(value)) = self.objects.get(handle.idx()) {
-            //if let Object::Value(value) = self.objects[handle.idx()] {
+        if let Some(value) = self.values.get(handle.idx()) {
             *value
         } else {
             panic!("Handle {} is not a value!", handle.idx());
@@ -467,7 +468,7 @@ impl Heap {
     }
 
     pub fn get_value_mut(&mut self, handle: Handle) -> &mut Value {
-        if let Some(Object::Value(value)) = self.objects.get_mut(handle.idx()) {
+        if let Some(value) = self.values.get_mut(handle.idx()) {
             value
         } else {
             panic!("Handle {} is not a value!", handle.idx());
@@ -548,19 +549,12 @@ impl Heap {
                 }
             }
             Object::Bytes(_) => {}
-            Object::Pair(data) => {
-                self.mark_trace(data.0);
-                self.mark_trace(data.1);
-            }
             Object::Lambda(chunk) => self.mark_chunk(chunk),
             Object::Closure(clos) => {
                 self.mark_chunk(&clos.0);
                 for close in clos.1.iter() {
                     self.mark_trace(Value::Value(*close));
                 }
-            }
-            Object::Value(val) => {
-                self.mark_trace(*val);
             }
             Object::Empty => panic!("An empty object can not be live!"),
         }
@@ -582,11 +576,9 @@ impl Heap {
             | Value::Vector(handle)
             | Value::Map(handle)
             | Value::Bytes(handle)
-            | Value::Pair(handle)
             | Value::List(handle, _)
             | Value::Lambda(handle)
-            | Value::Closure(handle)
-            | Value::Value(handle) => {
+            | Value::Closure(handle) => {
                 let obj = self
                     .objects
                     .get(handle.idx())
@@ -595,6 +587,18 @@ impl Heap {
                 self.trace_object(&obj);
             }
 
+            Value::Pair(handle) => {
+                let pair = *self.pairs.get(handle.idx()).expect("Invalid error handle!");
+                self.mark_trace(pair.0);
+                self.mark_trace(pair.1);
+            }
+            Value::Value(handle) => {
+                let val = self
+                    .values
+                    .get(handle.idx())
+                    .expect("Invalid error handle!");
+                self.mark_trace(*val);
+            }
             Value::Error(handle) => {
                 let err = self
                     .errors
@@ -639,13 +643,53 @@ impl Heap {
         }
     }
 
+    fn initial_mark_call_frame(frame: &CallFrame, greys: &mut Vec<Value>) {
+        for constant in &frame.chunk.constants {
+            greys.push(*constant);
+        }
+        if let Some(this_fn) = frame.this_fn {
+            greys.push(this_fn);
+        }
+        for defer in &frame.defers {
+            greys.push(*defer);
+        }
+        if let Some(on_error) = frame.on_error {
+            greys.push(on_error);
+        }
+        greys.push(frame.called);
+    }
+
     fn collect<MarkFunc>(&mut self, mut mark_roots: MarkFunc)
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
         self.objects.clear_marks();
+        self.callframes.clear_marks();
+        self.continuations.clear_marks();
         self.errors.clear_marks();
+        self.pairs.clear_marks();
+        self.values.clear_marks();
         mark_roots(self).expect("Failed to mark the roots!");
+        let mut greys = vec![];
+        self.callframes.trace_all_live(|frame| {
+            Self::initial_mark_call_frame(frame, &mut greys);
+        });
+        self.continuations.trace_all_live(|k| {
+            Self::initial_mark_call_frame(&k.frame, &mut greys);
+            for obj in &k.stack {
+                greys.push(*obj);
+            }
+        });
+        self.errors.trace_all_live(|err| {
+            greys.push(err.data);
+        });
+        self.pairs.trace_all_live(|pair| {
+            greys.push(pair.0);
+            greys.push(pair.1);
+        });
+        self.values.trace_all_live(|val| {
+            greys.push(*val);
+        });
         let mut objs = Vec::new();
         self.objects.trace_all_live(|obj| {
             // this cloning is not great...
@@ -653,6 +697,9 @@ impl Heap {
         });
         for obj in &objs {
             self.trace_object(obj);
+        }
+        for v in greys.drain(..) {
+            self.mark_trace(v);
         }
         while let Some(val) = self.greys.pop() {
             if !self.is_traced_and_set(val) {
@@ -666,12 +713,13 @@ impl Heap {
         self.objects.set_all_dead(Object::Empty);
     }
 
-    pub fn capacity(&self) -> usize {
-        self.objects.capacity()
-    }
-
     pub fn live_objects(&self) -> usize {
         self.objects.live_objects()
+            + self.continuations.live_objects()
+            + self.callframes.live_objects()
+            + self.pairs.live_objects()
+            + self.values.live_objects()
+            + self.errors.live_objects()
     }
 
     pub fn get_property(&self, value: Value, prop: Interned) -> Option<Value> {
@@ -715,12 +763,12 @@ mod tests {
     fn test_basic() -> VMResult<()> {
         let mut heap = Heap::default();
         let mark_roots = |_heap: &mut Heap| -> VMResult<()> { Ok(()) };
-        assert!(heap.capacity() == 512);
+        assert!(heap.pairs.capacity() == 512);
         assert!(heap.live_objects() == 0);
         for x in 0..512 {
             heap.alloc_pair(x.into(), Value::Nil, MutState::Mutable, mark_roots);
         }
-        assert!(heap.capacity() == 512);
+        assert!(heap.pairs.capacity() == 512);
         assert!(heap.live_objects() == 512);
         for x in 0..512 {
             if let (Value::Int(v), Value::Nil) = heap.get_pair(Handle::new(x)) {
@@ -730,7 +778,7 @@ mod tests {
             }
         }
         heap.alloc_pair(512.into(), Value::Nil, MutState::Mutable, mark_roots);
-        assert!(heap.capacity() == 512);
+        assert!(heap.pairs.capacity() == 512);
         assert!(heap.live_objects() == 1);
         if let (Value::Int(v), Value::Nil) = heap.get_pair(Handle::new(0)) {
             assert!(512 == from_i56(&v));
@@ -746,7 +794,7 @@ mod tests {
         for x in 0..512 {
             heap.alloc_pair(x.into(), Value::Nil, MutState::Mutable, mark_roots);
         }
-        assert!(heap.capacity() == 1024);
+        assert!(heap.pairs.capacity() == 1024);
         assert!(heap.live_objects() == 513);
         for x in 0..513 {
             if let (Value::Int(v), Value::Nil) = heap.get_pair(Handle::new(x)) {
@@ -768,18 +816,18 @@ mod tests {
             Ok(())
         };
         heap.collect(mark_roots);
-        assert!(heap.capacity() == 1024);
+        assert!(heap.pairs.capacity() == 1024);
         assert!(heap.live_objects() == 257);
         let mark_roots = |_heap: &mut Heap| -> VMResult<()> { Ok(()) };
         heap.collect(mark_roots);
-        assert!(heap.capacity() == 1024);
+        assert!(heap.pairs.capacity() == 1024);
         assert!(heap.live_objects() == 0);
         for x in 0..512 {
             let h = heap.alloc_pair(x.into(), Value::Nil, MutState::Mutable, mark_roots);
             heap.sticky(h);
         }
         heap.collect(mark_roots);
-        assert!(heap.capacity() == 1024);
+        assert!(heap.pairs.capacity() == 1024);
         assert!(heap.live_objects() == 512);
         for x in 512..1024 {
             let _h = heap.alloc_pair(x.into(), Value::Nil, MutState::Mutable, mark_roots);
@@ -791,10 +839,10 @@ mod tests {
             Ok(())
         };
         heap.collect(mark_roots);
-        assert!(heap.capacity() == 1024);
+        assert!(heap.pairs.capacity() == 1024);
         assert!(heap.live_objects() == 1024);
         heap.alloc_string("steve".into(), MutState::Mutable, mark_roots);
-        assert!(heap.capacity() == 2048);
+        assert!(heap.pairs.capacity() == 1024);
         assert!(heap.live_objects() == 1025);
         Ok(())
     }
@@ -803,7 +851,7 @@ mod tests {
     fn test_trace_val() -> VMResult<()> {
         let mut heap = Heap::default();
 
-        assert!(heap.capacity() == 512);
+        assert!(heap.pairs.capacity() == 512);
         assert!(heap.live_objects() == 0);
         let outers = std::rc::Rc::new(std::cell::RefCell::new(vec![]));
         let outers_mark = outers.clone();
@@ -822,7 +870,7 @@ mod tests {
                 mark_roots,
             ));
         }
-        assert!(heap.capacity() == 512);
+        assert!(heap.pairs.capacity() == 512);
         assert!(heap.live_objects() == 512);
         for (i, h) in outers.borrow().iter().enumerate() {
             if let (Value::Pair(inner), Value::Nil) = heap.get_pair(h.get_handle().unwrap()) {
@@ -836,7 +884,7 @@ mod tests {
             }
         }
         heap.collect(mark_roots);
-        assert_eq!(heap.capacity(), 512);
+        assert_eq!(heap.pairs.capacity(), 512);
         assert_eq!(heap.live_objects(), 512);
         /* XXXSLS
         for h in outers.borrow().iter() {
@@ -860,7 +908,7 @@ mod tests {
     fn test_trace_vec() -> VMResult<()> {
         let mut heap = Heap::default();
 
-        assert!(heap.capacity() == 512);
+        assert!(heap.pairs.capacity() == 512);
         assert!(heap.live_objects() == 0);
         let outers = std::rc::Rc::new(std::cell::RefCell::new(vec![]));
         let outers_mark = outers.clone();
@@ -880,7 +928,7 @@ mod tests {
             MutState::Mutable.flag(),
             mark_roots,
         )));
-        assert!(heap.capacity() == 512);
+        assert!(heap.pairs.capacity() == 512);
         assert!(heap.live_objects() == 257);
         for h in outers.borrow().iter() {
             let v = heap.get_vector(h.get_handle().unwrap());
@@ -897,7 +945,7 @@ mod tests {
             }
         }
         heap.collect(mark_roots);
-        assert_eq!(heap.capacity(), 512);
+        assert_eq!(heap.pairs.capacity(), 512);
         assert_eq!(heap.live_objects(), 257);
         for h in outers.borrow().iter() {
             let v = heap.get_vector(h.get_handle().unwrap());
@@ -934,7 +982,7 @@ mod tests {
     #[test]
     fn test_trace_pair() -> VMResult<()> {
         let mut heap = Heap::default();
-        assert!(heap.capacity() == 512);
+        assert!(heap.pairs.capacity() == 512);
         assert!(heap.live_objects() == 0);
         let outers = std::rc::Rc::new(std::cell::RefCell::new(vec![]));
         let outers_mark = outers.clone();
@@ -961,10 +1009,10 @@ mod tests {
         outers
             .borrow_mut()
             .push(heap.alloc_pair(car_h, cdr_h, MutState::Mutable, mark_roots));
-        assert_eq!(heap.capacity(), 512);
+        assert_eq!(heap.pairs.capacity(), 512);
         assert_eq!(heap.live_objects(), 6);
         heap.collect(mark_roots);
-        assert_eq!(heap.capacity(), 512);
+        assert_eq!(heap.pairs.capacity(), 512);
         assert_eq!(heap.live_objects(), 6);
         for (i, h) in outers.borrow().iter().enumerate() {
             let (car, cdr) = heap.get_pair(h.get_handle().unwrap());
