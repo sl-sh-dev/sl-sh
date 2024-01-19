@@ -1,9 +1,10 @@
 use crate::{Handle, Heap, Interned, VMError, VMResult};
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::iter;
+use std::ops::Deref;
 use std::sync::Arc;
 
 use crate::vm::GVm;
@@ -623,7 +624,7 @@ pub const SLOSH_PAIR: &str = "Pair";
 pub const SLOSH_ERROR: &str = "Error";
 
 /// Enum representing the various types of values in Slosh.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub enum ValueType {
     Byte,
     Int,
@@ -689,5 +690,42 @@ impl From<ValueType> for &'static str {
             ValueType::String => SLOSH_STRING,
             ValueType::Error => SLOSH_ERROR,
         }
+    }
+}
+
+pub struct ValueTypes<const N: usize> {
+    values: [ValueType; N],
+}
+
+impl<const N: usize> From<[ValueType; N]> for ValueTypes<N> {
+    fn from(values: [ValueType; N]) -> Self {
+        Self { values }
+    }
+}
+
+impl<const N: usize> Deref for ValueTypes<N> {
+    type Target = [ValueType];
+
+    fn deref(&self) -> &Self::Target {
+        &self.values
+    }
+}
+
+impl<const N: usize> From<ValueTypes<N>> for String {
+    fn from(value: ValueTypes<N>) -> Self {
+        let mut res = String::new();
+        let set: BTreeSet<&str> = BTreeSet::from_iter(
+            value
+                .deref()
+                .iter()
+                .map(|v| <ValueType as Into<&'static str>>::into(*v)),
+        );
+        for (i, v) in set.iter().enumerate() {
+            if i > 0 {
+                res.push_str(", ");
+            }
+            res.push_str(v);
+        }
+        res
     }
 }

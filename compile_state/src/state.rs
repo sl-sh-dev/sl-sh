@@ -209,25 +209,357 @@ pub struct Specials {
 impl Specials {
     pub fn new(vm: &mut SloshVm) -> Self {
         Self {
-            def: add_special(vm, "def", ""),
-            set: add_special(vm, "set!", ""),
-            do_: add_special(vm, "do", ""),
-            fn_: add_special(vm, "fn", ""),
-            mac_: add_special(vm, "macro", ""),
-            if_: add_special(vm, "if", ""),
-            add: add_special(vm, "+", ""),
-            sub: add_special(vm, "-", ""),
-            mul: add_special(vm, "*", ""),
-            div: add_special(vm, "/", ""),
-            inc: add_special(vm, "inc!", ""),
-            dec: add_special(vm, "dec!", ""),
-            list: add_special(vm, "list", ""),
+            def: add_special(vm, "def", r#"Usage: (def symbol doc_string? expression) -> expression
+
+Adds an expression to the current namespace.  Return the expression that was defined.
+Symbol is not evaluted.  Can take an option doc string (docstrings can only be
+set on namespaced (global) symbols).
+
+Section: core
+
+Example:
+(def test-do-one nil)
+(def test-do-two nil)
+(def test-do-three (do (set! test-do-one "One")(set! test-do-two "Two")"Three"))
+(test::assert-equal "One" test-do-one)
+(test::assert-equal "Two" test-do-two)
+(test::assert-equal "Three" test-do-three)
+(let ((test-do-one nil))
+    ; Add this to tthe let's scope (shadow the outer test-do-two).
+    (test::assert-equal "Default" (def ns::test-do-four "Default"))
+    ; set the currently scoped value.
+    (set! test-do-one "1111")
+    (set! test-do-two "2222")
+    (test::assert-equal "1111" test-do-one)
+    (test::assert-equal "2222" test-do-two)
+    (test::assert-equal "Default" test-do-four))
+; Original outer scope not changed.
+(test::assert-equal "One" test-do-one)
+(test::assert-equal "Default" test-do-four)
+;(def (sym "test-do-one") "do one")
+(test::assert-error (def (sym "test-do-one") "do one"))
+;(test::assert-equal "do one" test-do-one)
+(test::assert-error (def (sym->str test-do-one) "do one 2"))"#),
+            set: add_special(vm, "set!", r#"Usage: (set! symbol expression) -> expression
+
+Sets an existing expression in the current scope(s).  Return the expression that was set.
+Symbol is not evalauted.
+
+Set will set the first binding it finds starting in the current scope and then
+trying enclosing scopes until exhausted.
+
+Section: core
+
+Example:
+(def test-do-one nil)
+(def test-do-two nil)
+(def test-do-three (do (set! test-do-one "One")(set! test-do-two "Two")"Three"))
+(test::assert-equal "One" test-do-one)
+(test::assert-equal "Two" test-do-two)
+(test::assert-equal "Three" test-do-three)
+(let ((test-do-one nil))
+    ; set the currently scoped value.
+    (test::assert-equal "1111" (set! test-do-one "1111"))
+    (test::assert-equal "1111" test-do-one))
+; Original outer scope not changed.
+(test::assert-equal "One" test-do-one)
+;(set! (sym "test-do-one") "do one")
+;(test::assert-equal "do one" test-do-one)
+(test::assert-error (set! (sym->str test-do-one) "do one 2"))"#),
+            do_: add_special(vm, "do", r#"Usage: (do exp0 ... expN) -> expN
+
+Evaluatate each form and return the last.
+
+Section: core
+
+Example:
+(def test-do-one nil)
+(def test-do-two nil)
+(def test-do-three (do (set! test-do-one "One")(set! test-do-two "Two")"Three"))
+(test::assert-equal "One" test-do-one)
+(test::assert-equal "Two" test-do-two)
+(test::assert-equal "Three" test-do-three"#),
+            fn_: add_special(vm, "fn", "Usage: (fn (param*) expr*) -> exprN
+
+Create a function (lambda).
+
+Section: core
+
+Example:
+(def test-fn1 nil)
+(def test-fn2 nil)
+(def test-fn3 nil)
+(def test-fn-empty ((fn ())))
+(test::assert-false test-fn-empty)
+((fn () (set! test-fn1 1)))
+(test::assert-equal 1 test-fn1)
+((fn () (set! test-fn1 10)(set! test-fn2 2)))
+(test::assert-equal 10 test-fn1)
+(test::assert-equal 2 test-fn2)
+((fn () (set! test-fn1 11)(set! test-fn2 20)(set! test-fn3 3)))
+(test::assert-equal 11 test-fn1)
+(test::assert-equal 20 test-fn2)
+(test::assert-equal 3 test-fn3)
+((fn (x y z) (set! test-fn1 x)(set! test-fn2 y)(set! test-fn3 z)) 12 21 30)
+(test::assert-equal 12 test-fn1)
+(test::assert-equal 21 test-fn2)
+(test::assert-equal 30 test-fn3)
+(test::assert-equal 63 ((fn (x y z) (set! test-fn1 x)(set! test-fn2 y)(set! test-fn3 z)(+ x y z)) 12 21 30))"),
+            mac_: add_special(vm, "macro", "Usage: (macro (args) `(apply + ,@args))
+
+Define an anonymous macro.
+
+Section: core
+
+Example:
+(def test-macro1 nil)
+(def test-macro2 nil)
+(def test-macro-empty (macro ()))
+(test::assert-false (test-macro-empty))
+(def test-mac nil)
+(def mac-var 2)
+(let ((mac-var 3))
+  (set! test-mac (macro (x) (set! test-macro2 100)(test::assert-equal 3 mac-var)`(* ,mac-var ,x))))
+(set! test-macro1 (test-mac 10))
+(test::assert-equal 30 test-macro1)
+(test::assert-equal 100 test-macro2)"),
+            if_: add_special(vm, "if", r#"Usage: (if p1 a1 p2 a2 ... pn an?) -> [evaled form result]
+
+If conditional.  Will evaluate p1 and if true (i.e. not nil or false) then
+return the evaluation of a1, if falsey(i.e. nil or false) evaluate p2 and so on.
+On an odd number of arguments (an is missing) then evaluate and return pn.
+Return false(#f) if no predicate is true.  This degenerates into the traditional
+(if predicate then-form else-form).
+NOTE: Both nil and false(#f) are 'falsey' for the purposes of if.
+
+Section: conditional
+
+Example:
+(def test-if-one
+    (if #t "ONE TRUE" "ONE FALSE"))
+(def test-if-two
+    (if nil "TWO TRUE" "TWO FALSE"))
+(def test-if-three
+    (if #f "THREE TRUE" "THREE FALSE"))
+(test::assert-equal "ONE TRUE" test-if-one)
+(test::assert-equal "TWO FALSE" test-if-two)
+(test::assert-equal "THREE FALSE" test-if-three)
+
+(def test-if-one2
+    (if #t "ONE2 TRUE"))
+(def test-if-two2
+    (if nil "TWO2 TRUE"))
+(def test-if-three2
+    (if #f "THREE2 TRUE"))
+(test::assert-equal "ONE2 TRUE" test-if-one2)
+(test::assert-equal #f test-if-two2)
+(test::assert-equal #f test-if-three2)
+
+(def test-if-one2
+    (if nil "ONE FALSE" #t "ONE TRUE" #t "ONE TRUE2"))
+(def test-if-two2
+    (if nil "TWO TRUE" #f "TWO FALSE" #t "TWO TRUE2"))
+(def test-if-three2
+    (if #f "THREE TRUE" nil "THREE FALSE" "THREE DEFAULT"))
+(test::assert-equal "ONE TRUE" test-if-one2)
+(test::assert-equal "TWO TRUE2" test-if-two2)
+(test::assert-equal "THREE DEFAULT" test-if-three2)
+(test::assert-equal nil (if nil))
+(test::assert-equal #f (if nil #t nil #t nil t))"#),
+            add: add_special(vm, "+", r#"Usage: (+ number*)
+
+Add a sequence of numbers.  (+) will return 0.
+
+Section: math
+
+Example:
+(ns-import 'math)
+(test::assert-equal 0 (+))
+(test::assert-equal 5 (+ 5))
+(test::assert-equal 5 (+ (values 5)))
+(test::assert-equal 5 (+ (values 5 6)))
+(test::assert-equal 10 (+ 5 (values 5 6)))
+(test::assert-equal 5 (+ 5.0))
+(test::assert-equal 6 (+ 1 5))
+(test::assert-equal 6.5 (+ 1 5.5))
+(test::assert-equal 7 (+ 1 2 4))
+(test::assert-error (+ 1 2 4 5))"#),
+            sub: add_special(vm, "-", r#"Usage: (- number+)
+
+Subtract a sequence of numbers.  Requires at least one number (negate if only one number).
+
+Section: math
+
+Example:
+(ns-import 'math)
+(test::assert-error (-))
+(test::assert-error (- 5 "2"))
+(test::assert-equal -5 (- 5))
+(test::assert-equal -5.0 (- 5.0))
+(test::assert-equal -4 (- 1 5))
+(test::assert-equal -4.5 (- 1 5.5))
+(test::assert-equal 4 (- 10 2 4))
+(test::assert-equal 4.9 (- 10.9 2 4))"#),
+            mul: add_special(vm, "*", r#"Usage: (* number*)
+
+Multiply a sequence of numbers.  (*) will return 1.
+
+Section: math
+
+Example:
+(ns-import 'math)
+(test::assert-equal 1 (*))
+(test::assert-equal 5 (* 5))
+(test::assert-equal 5 (* 1 5))
+(test::assert-equal 5.0 (* 1.0 5))
+(test::assert-equal 7.5 (* 1.5 5))
+(test::assert-equal 7.5 (* 1.5 5.0))
+(test::assert-equal 15 (* 3 5))
+(test::assert-equal 8 (* 1 2 4))
+(test::assert-equal 16 (* 2 2 4))
+(test::assert-equal 16.0 (* 2 2.0 4))
+(test::assert-equal 16.0 (* 2.0 2.0 4.0))
+(test::assert-equal 55.0000000001 (* 100 0.55))
+(test::assert-error (* 1 2 4 "5"))"#),
+            div: add_special(vm, "/", r#"Usage: (/ number+)
+
+Divide a sequence of numbers.  Requires at least two numbers.
+
+Section: math
+Example:
+(ns-import 'math)
+(test::assert-equal 5 (/ 50 10))
+(test::assert-equal 5 (/ 50.0 10.0))
+(test::assert-equal 0 (/ 1 5))
+(test::assert-equal .2 (/ 1.0 5))
+(test::assert-equal .2 (/ 1.0 5.0))
+(test::assert-equal 5.5 (/ 5.5 1))
+(test::assert-equal 2 (/ 16 2 4))
+(test::assert-equal 5 (/ 100 2 5 2))
+(test::assert-error (/))
+(test::assert-error (/ 1))
+(test::assert-error (/ 1 0))
+(test::assert-error (/ 10 5 0))
+(test::assert-error (/ 10 "5" 2))"#),
+            inc: add_special(vm, "inc!", r#"Usage: (inc! symbol [number]) -> new value
+
+Increment the value in symbol by one or the optional number
+
+Section: core
+
+Example:
+(def *inc-test* 1)
+(test::assert-equal 2 (inc! *inc-test*))
+(test::assert-equal 2 *inc-test*)
+(test::assert-equal 5 (inc! *inc-test* 3))
+(test::assert-error (inc! *inc-test* "xxx"))
+(test::assert-equal 5 *inc-test*)
+(def *inc-test* "xxx")
+(test::assert-error (inc! *inc-test*))
+(let ((inc-test 1))
+  (test::assert-equal 2 (inc! inc-test))
+  (test::assert-equal 2 inc-test)
+  (test::assert-equal 5 (inc! inc-test 3))
+  (test::assert-equal 5 inc-test))"#),
+            dec: add_special(vm, "dec!", r#"Usage: (dec! symbol [number]) -> new value
+
+Decrement the value in symbol by one or the optional number
+
+Section: core
+
+Example:
+(def *dec-test* 5)
+(test::assert-equal 4 (dec! *dec-test*))
+(test::assert-equal 4 *dec-test*)
+(test::assert-error (dec! *dec-test* "xxx"))
+(test::assert-equal 1 (dec! *dec-test* 3))
+(test::assert-equal 1 *dec-test*)
+(def *dec-test* "xxx")
+(test::assert-error (dec! *dec-test*))
+(let ((dec-test 5))
+  (test::assert-equal 4 (dec! dec-test))
+  (test::assert-equal 4 dec-test)
+  (test::assert-equal 1 (dec! dec-test 3))
+  (test::assert-equal 1 dec-test))"#),
+            list: add_special(vm, "list", "
+Usage: (list item0 item1 .. itemN)
+
+Create a proper list from pairs with items 0 - N.
+
+Section: pair
+
+Example:
+(test::assert-equal '(1 2 3) (list 1 2 3))"),
             list_append: add_special(vm, "list-append", ""),
             cons: add_special(vm, "cons", ""),
-            car: add_special(vm, "car", ""),
-            cdr: add_special(vm, "cdr", ""),
-            xar: add_special(vm, "xar!", ""),
-            xdr: add_special(vm, "xdr!", ""),
+            car: add_special(vm, "car", "Usage: (car pair)
+
+Return the car (first item) from a pair.  If used on a proper list this will be the first element.
+
+Section: pair
+
+Example:
+(def tst-pairs-two (list 'x 'y 'z))
+(test::assert-equal 'x (car tst-pairs-two))
+(test::assert-equal 10 (car '(10)))
+(test::assert-equal 9 (car '(9 11 13)))"),
+            cdr: add_special(vm, "cdr", "Usage: (cdr pair)
+
+Return the cdr (second item) from a pair.  If used on a proper list this will be the list minus the first element.
+
+Section: pair
+
+Example:
+(def tst-pairs-three (list 'x 'y 'z))
+(test::assert-equal '(y z) (cdr tst-pairs-three))
+(test::assert-equal nil (cdr '(10)))
+(test::assert-equal '(13) (cdr '(9 13)))
+(test::assert-equal '(11 13) (cdr '(9 11 13)))"),
+            xar: add_special(
+                vm,
+                "xar!",
+                "
+Usage: (xar! pair expression)
+
+Destructive form that replaces the car (first item) in a pair with a new expression.
+
+If used on a proper list will replace the first item.  Can be used on nil to
+create a pair (expression . nil).
+
+Section: pair
+
+Example:
+(def tst-pairs-three (list 'x 'y 'z))
+(test::assert-equal '(x y z) tst-pairs-three)
+(test::assert-equal '(s y z) (xar! tst-pairs-three 's))
+(test::assert-equal '(s y z) tst-pairs-three)
+(def tst-pairs-four nil)
+(test::assert-equal '() tst-pairs-four)
+(test::assert-equal '(t) (xar! tst-pairs-four 't))
+(test::assert-equal '(t) tst-pairs-four)",
+            ),
+            xdr: add_special(
+                vm,
+                "xdr!",
+                "Usage: (xdr! pair expression)
+
+Destructive form that replaces the cdr (second item) in a pair with a new expression.
+
+If used on a proper list will replace everthing after the first item.
+Can be used on nil to create a pair (nil . expression).
+
+Section: pair
+
+Example:
+(def tst-pairs-five (list 'a 'b 'c))
+(test::assert-equal '(a b c) tst-pairs-five)
+(test::assert-equal '(a y z) (xdr! tst-pairs-five '(y z)))
+(test::assert-equal '(a y z) tst-pairs-five)
+(def tst-pairs-six nil)
+(test::assert-equal '() tst-pairs-six)
+(test::assert-equal '(nil . v) (xdr! tst-pairs-six 'v))
+(test::assert-equal '(nil . v) tst-pairs-six)",
+            ),
             make_hash: add_special(
                 vm,
                 "make-hash",
@@ -311,22 +643,245 @@ Example:
 (test::assert-equal '() test-pop-vec)
 ",
             ),
-            quote: add_special(vm, "quote", ""),
-            backquote: add_special(vm, "back-quote", ""),
-            recur: add_special(vm, "recur", ""),
+            quote: add_special(
+                vm,
+                "quote",
+                "Usage: 'expression -> expression
+
+Return expression without evaluation.
+The reader macro 'expression will expand to (quote expression).
+
+Section: core
+
+Example:
+(test::assert-equal (list 1 2 3) (quote (1 2 3)))
+(test::assert-equal (list 1 2 3) '(1 2 3))
+(test::assert-equal '(1 2 3) (quote (1 2 3)))",
+            ),
+            backquote: add_special(
+                vm,
+                "back-quote",
+                "Usage: `expression -> expression
+
+Return expression without evaluation.
+Always use the ` reader macro or expansion will not work
+(i.e. (back-quote expression) will not do , expansion).
+
+Backquote (unlike quote) allows for symbol/form evaluation using , or ,@.
+
+Section: core
+
+Example:
+(test::assert-equal (list 1 2 3) `(1 2 3))
+(test::assert-equal `(1 2 3) '(1 2 3))
+(def test-bquote-one 1)
+(def test-bquote-list '(1 2 3))
+(test::assert-equal (list 1 2 3) `(,test-bquote-one 2 3))
+(test::assert-equal (list 1 2 3) `(,@test-bquote-list))
+            ",
+            ),
+            recur: add_special(
+                vm,
+                "recur",
+                "Usage: (recur &rest)
+
+Recursively call the enclosing function with the given parameters.  Recur uses
+tail call optimization and must be in the tail position or it is an error.  For
+a named function it would be equivalent to a normal recursive call in a tail
+position but it requires a tail position and does not need a name (a normal
+recursive call would work in a non-tail position but could blow the stack if
+it is to deep- unlike a recur or tail position recursive call).
+NOTE: potential footgun, the let macro expands to a lambda (fn) and a recur used
+inside the let would bind with the let not the enclosing lambda (this would
+apply to any macro that also expands to a lamda- this is by design with the
+loop macro but would be unexpected with let).
+
+Section: core
+
+Example:
+(def tot 0)
+(loop (idx) (3) (do
+    (set! tot (+ tot 1))
+    (if (> idx 1) (recur (- idx 1)))))
+(assert-equal 3 tot)
+(set! tot 0)
+((fn (idx) (do
+    (set! tot (+ tot 1))
+    (if (> idx 1) (recur (- idx 1)))))5)
+(assert-equal 5 tot)",
+            ),
             this_fn: add_special(vm, "this-fn", ""),
-            numeq: add_special(vm, "=", ""),
+            numeq: add_special(vm, "=", r#"Usage: (= val0 ... valN)
+
+Equals.  Works for int, float or string.
+
+Section: conditional
+
+Example:
+(test::assert-false (= 1 2))
+(test::assert-true (= 2 2))
+(test::assert-true (= 2 2 2))
+(test::assert-false (= 3 2 2))
+(test::assert-false (= 3.0 2.0))
+(test::assert-true (= 2.0 2.0))
+(test::assert-true (= 2.0 2.0 2.0))
+(test::assert-false (= 3.0 2.0 2.0))
+(test::assert-false (= 2.1 2.0 3.0))
+(test::assert-false (= 2 1))
+(test::assert-false (= 3 2 1))
+(test::assert-false (= 1.1 1.0))
+(test::assert-true (= 1.1 1.1))
+(test::assert-false (= 3 2 3))
+(test::assert-false (= "aab" "aaa"))
+(test::assert-true (= "aaa" "aaa"))
+(test::assert-true (= "aaa" "aaa" "aaa"))
+(test::assert-false (= "aaa" "aaaa" "aaa"))
+(test::assert-false (= "ccc" "aab" "aaa"))
+(test::assert-false (= "aaa" "aab")) "#),
             numneq: add_special(vm, "/=", ""),
-            numlt: add_special(vm, "<", ""),
-            numlte: add_special(vm, "<=", ""),
-            numgt: add_special(vm, ">", ""),
-            numgte: add_special(vm, ">=", ""),
+            numlt: add_special(vm, "<", r#"Usage: (< val0 ... valN)
+
+Less than.  Works for int, float or string.
+
+Section: conditional
+
+Example:
+(test::assert-true (< 1 2))
+(test::assert-true (< 1 2 3 4))
+(test::assert-false (< 2 2))
+(test::assert-false (< 2 2 2))
+(test::assert-false (< 2 2 3))
+(test::assert-true (< 1.0 2.0))
+(test::assert-false (< 2.0 2.0))
+(test::assert-false (< 2.0 2.0 2.0))
+(test::assert-false (< 2.0 2.0 3.0))
+(test::assert-false (< 2.1 2.0 3.0))
+(test::assert-false (< 2 1))
+(test::assert-false (< 3 2 3))
+(test::assert-true (< "aaa" "aab"))
+(test::assert-false (< "aaa" "aaa"))
+(test::assert-true (< "aaa" "aab" "ccc"))
+(test::assert-false (< "baa" "aab"))"#),
+            numlte: add_special(vm, "<=", r#"Usage: (<= val0 ... valN)
+
+Less than or equal.  Works for int, float or string.
+
+Section: conditional
+
+Example:
+(test::assert-true (<= 1 2))
+(test::assert-true (<= 2 2))
+(test::assert-true (<= 2 2 2))
+(test::assert-true (<= 2 2 3))
+(test::assert-true (<= 1.0 2.0))
+(test::assert-true (<= 2.0 2.0))
+(test::assert-true (<= 2.0 2.0 2.0))
+(test::assert-true (<= 2.0 2.0 3.0))
+(test::assert-false (<= 2.1 2.0 3.0))
+(test::assert-false (<= 2 1))
+(test::assert-false (<= 3 2 3))
+(test::assert-true (<= "aaa" "aab"))
+(test::assert-true (<= "aaa" "aaa"))
+(test::assert-true (<= "aaa" "aab" "ccc"))
+(test::assert-false (<= "baa" "aab"))"#),
+            numgt: add_special(vm, ">", r#"Usage: (> val0 ... valN)
+
+Greater than.  Works for int, float or string.
+
+Section: conditional
+
+Example:
+(test::assert-false (> 1 2))
+(test::assert-false (> 2 2))
+(test::assert-false (> 2 2 2))
+(test::assert-false (> 3 2 2))
+(test::assert-true (> 3.0 2.0))
+(test::assert-false (> 2.0 2.0))
+(test::assert-false (> 2.0 2.0 2.0))
+(test::assert-false (> 3.0 2.0 2.0))
+(test::assert-false (> 2.1 2.0 3.0))
+(test::assert-true (> 2 1))
+(test::assert-true (> 3 2 1))
+(test::assert-true (> 1.1 1.0))
+(test::assert-false (> 3 2 3))
+(test::assert-true (> "aab" "aaa"))
+(test::assert-false (> "aaa" "aaa"))
+(test::assert-true (> "ccc" "aab" "aaa"))
+(test::assert-false (> "aaa" "aab"))"#),
+            numgte: add_special(vm, ">=", r#"Usage: (>= val0 ... valN)
+
+Greater than or equal.  Works for int, float or string.
+
+Section: conditional
+
+Example:
+(test::assert-false (>= 1 2))
+(test::assert-true (>= 2 2))
+(test::assert-true (>= 2 2 2))
+(test::assert-true (>= 3 2 2))
+(test::assert-true (>= 3.0 2.0))
+(test::assert-true (>= 2.0 2.0))
+(test::assert-true (>= 2.0 2.0 2.0))
+(test::assert-true (>= 3.0 2.0 2.0))
+(test::assert-false (>= 2.1 2.0 3.0))
+(test::assert-true (>= 2 1))
+(test::assert-true (>= 1.1 1.0))
+(test::assert-false (>= 3 2 3))
+(test::assert-true (>= "aab" "aaa"))
+(test::assert-true (>= "aaa" "aaa"))
+(test::assert-true (>= "ccc" "aab" "aaa"))
+(test::assert-false (>= "aaa" "aab"))"#),
             eq: add_special(vm, "eq?", ""),
             equal: add_special(vm, "equal?", ""),
             type_: add_special(vm, "type", ""),
-            not: add_special(vm, "not", ""),
-            and: add_special(vm, "and", ""),
-            or: add_special(vm, "or", ""),
+            not: add_special(vm, "not", "Usage: (not expression)
+
+Return true(#t) if expression is nil, false(#f) otherwise.
+
+Section: conditional
+
+Example:
+(test::assert-true (not nil))
+(test::assert-false (not 10))
+(test::assert-false (not #t))
+(test::assert-false (not (+ 1 2 3)))"),
+            and: add_special(vm, "and", r#"Usage: (and exp0 ... expN) -> [false(#f) or expN result]
+
+Evaluates each form until one produces nil or false(#f), produces false(#f) if
+any form is nil/#f or the result of the last expression.
+
+The and form will stop evaluating when the first expression produces nil/#f.
+
+Section: conditional
+
+Example:
+(test::assert-equal #f (and nil (err "and- can not happen")))
+(test::assert-equal #f (and #f (err "and- can not happen")))
+(test::assert-equal "and- done" (and #t "and- done"))
+(test::assert-equal "and- done" (and #t #t "and- done"))
+(test::assert-equal 6 (and #t #t (+ 1 2 3)))
+(test::assert-equal 6 (and (/ 10 5) (* 5 2) (+ 1 2 3)))"#),
+            or: add_special(vm, "or", r#"Usage: (or exp0 ... expN) -> [false(#f) or first non nil expression]
+
+Evaluates each form until one produces a non-nil/non-false result, produces #f
+if all expressions are 'falsey'.
+
+The or form will stop evaluating when the first expression produces non-nil/false.
+
+Section: conditional
+
+Example:
+(test::assert-true (or nil nil #t (err "and- can not happen")))
+(test::assert-true (or #f nil #t (err "and- can not happen")))
+(test::assert-true (or #f #f #t (err "and- can not happen")))
+(test::assert-equal #f (or nil nil nil))
+(test::assert-equal #f (or #f nil nil))
+(test::assert-equal #f (or #f nil #f))
+(test::assert-equal #f (or #f #f #f))
+(test::assert-equal "or- done" (or nil "or- done"))
+(test::assert-equal "or- done" (or nil nil "or- done"))
+(test::assert-equal 6 (or nil nil (+ 1 2 3)))
+(test::assert-equal 2 (or (/ 10 5) (* 5 2) (+ 1 2 3)))"#),
             err: add_special(vm, "err", ""),
             len: add_special(
                 vm,
@@ -339,17 +894,16 @@ Section: core
 
 Example:
 (test::assert-equal 0 (len nil))
-(test::assert-equal 5 (len \"12345\"))
+(test::assert-equal 5 (len "12345"))
 ; Note the unicode symbol is only one char even though it is more then one byte.
-(test::assert-equal 6 (len \"12345Σ\"))
+(test::assert-equal 6 (len "12345Σ"))
 (test::assert-equal 3 (len '(1 2 3)))
 (test::assert-equal 3 (len '#(1 2 3)))
 (test::assert-equal 3 (len (list 1 2 3)))
 (test::assert-equal 3 (len (vec 1 2 3)))
 (test::assert-error (len 100))
 (test::assert-error (len 100.0))
-(test::assert-error (len #\\x))
-"#,
+(test::assert-error (len #\\x))"#,
             ),
             clear: add_special(
                 vm,
@@ -367,8 +921,44 @@ Example:
 (test::assert-true (vec-empty? test-clear-vec))
 ",
             ),
-            str_: add_special(vm, "str", ""),
-            let_: add_special(vm, "let", ""),
+            str_: add_special(vm, "str", r#"Usage: (str arg0 ... argN) -> string
+
+Make a new string with its arguments.
+
+Arguments will be turned into strings.  If an argument is a process then the
+output of the process will be captured and put into the string.
+
+Section: string
+
+Example:
+(test::assert-equal "stringsome" (str "string" "some"))
+(test::assert-equal "string" (str "string" ""))
+(test::assert-equal "string 50" (str "string" " " 50))
+(test::assert-equal "string 50 test
+                              " (str "string" " " 50 " " (syscall 'echo "test")))"#),
+            let_: add_special(vm, "let", r#"Usage: (let vals &rest let-body)
+
+Takes list, vals, of form ((binding0 sexp0) (binding1 sexp1) ...) and evaluates
+let-body with all values of binding bound to the result of the evaluation of
+sexp.
+
+Section: core
+
+Example:
+(def test-do-one "One1")
+(def test-do-two "Two1")
+(def test-do-three (let ((test-do-one "One")) (set! test-do-two "Two")(test::assert-equal "One" test-do-one)"Three"))
+(test::assert-equal "One1" test-do-one)
+(test::assert-equal "Two" test-do-two)
+(test::assert-equal "Three" test-do-three)
+((fn (idx) (let ((v2 (+ idx 2))(v3 (+ idx 3)))
+    (test::assert-equal (+ idx 2) v2)
+    (test::assert-equal (+ idx 3) v3)
+    (if (< idx 5) (recur (+ idx 1)))))0)
+((fn (idx) (let ((v2 (+ idx 2))(v3 (+ idx 3)))
+    (test::assert-equal (+ idx 2) v2)
+    (test::assert-equal (+ idx 3) v3)
+    (if (< idx 5) (this-fn (+ idx 1)))))0)"#),
             call_cc: add_special(vm, "call/cc", ""),
             defer: add_special(vm, "defer", ""),
             on_error: add_special(vm, "on-error", ""),
