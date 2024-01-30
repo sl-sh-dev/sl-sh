@@ -10,8 +10,11 @@
 use super::*;
 
 /// Read text for a test.  Will convert multiple forms into a vector of Values.
-pub fn read_test(vm: &mut SloshVm, text: &'static str) -> Value {
-    let reader = Reader::from_string(text.to_string(), vm, "", 1, 0);
+pub fn read_test<T>(vm: &mut SloshVm, text: T) -> Value
+where
+    T: AsRef<str> + 'static,
+{
+    let reader = Reader::from_string(text.as_ref().to_string(), vm, "", 1, 0);
     let exps: Vec<Value> = reader.collect::<Result<Vec<Value>, ReadError>>().unwrap();
     // Don't exit early without unpausing....
     vm.pause_gc();
@@ -27,7 +30,10 @@ pub fn read_test(vm: &mut SloshVm, text: &'static str) -> Value {
 }
 
 /// Read input, compile and execute the result and return the Value this produces.
-pub fn exec(env: &mut SloshVm, input: &'static str) -> Value {
+pub fn exec<T>(env: &mut SloshVm, input: T) -> Value
+where
+    T: AsRef<str> + 'static,
+{
     let exp = read_test(env, input);
     let mut state = CompileState::new();
     if let Value::Vector(_) = exp {
@@ -60,7 +66,10 @@ pub fn exec(env: &mut SloshVm, input: &'static str) -> Value {
 
 /// Same as exec() but dump the registers and disassembled bytecode after executing.
 /// Only use this when debugging a test, otherwise use exec().
-pub fn exec_with_dump(env: &mut SloshVm, input: &'static str) -> Value {
+pub fn exec_with_dump<T>(env: &mut SloshVm, input: T) -> Value
+where
+    T: AsRef<str> + 'static,
+{
     let exp = read_test(env, input);
     let mut state = CompileState::new();
     if let Value::Vector(_) = exp {
@@ -117,7 +126,10 @@ pub fn exec_with_dump(env: &mut SloshVm, input: &'static str) -> Value {
 }
 
 /// Read and compile input and fail if compiling does not result in an error.
-pub fn exec_compile_error(env: &mut SloshVm, input: &'static str) {
+pub fn exec_compile_error<T>(env: &mut SloshVm, input: T)
+where
+    T: AsRef<str> + 'static,
+{
     let exp = read_test(env, input);
     let mut state = CompileState::new();
     assert!(
@@ -128,7 +140,10 @@ pub fn exec_compile_error(env: &mut SloshVm, input: &'static str) {
 }
 
 /// Read, compile and execute input and fail if execution does not result in an error.
-pub fn exec_runtime_error(env: &mut SloshVm, input: &'static str) {
+pub fn exec_runtime_error<T>(env: &mut SloshVm, input: T)
+where
+    T: AsRef<str> + 'static,
+{
     let exp = read_test(env, input);
     let mut state = CompileState::new();
     compile(env, &mut state, exp, 0).unwrap();
