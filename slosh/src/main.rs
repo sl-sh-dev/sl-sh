@@ -427,9 +427,13 @@ fn main() {
     }
 }
 
-fn exec_expression(res: String, env: &mut SloshVm) {
+fn read_expression_to_list(res: String, env: &mut SloshVm) -> Result<Vec<Value>, ReadError> {
     let reader = Reader::from_string(res, env, "", 1, 0);
-    let exps: Result<Vec<Value>, ReadError> = reader.collect();
+    reader.collect()
+}
+
+fn exec_expression(res: String, env: &mut SloshVm) {
+    let exps = read_expression_to_list(res, env);
     match exps {
         Ok(exps) => {
             for exp in exps {
@@ -481,13 +485,23 @@ fn exec_expression(res: String, env: &mut SloshVm) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use compile_state::state::{new_slosh_vm, SloshVmTrait};
+    use compile_state::state::{CompileState, SloshVm, new_slosh_vm, SloshVmTrait};
     use lazy_static::lazy_static;
     use regex::{Regex, RegexBuilder};
     use std::borrow::Cow;
     use std::collections::HashSet;
     use std::error::Error;
     use std::fmt::{Debug, Display, Formatter};
+    use slvm::{RET, Value};
+    use std::sync::Arc;
+    use sl_compiler::{compile, Reader, ReadError};
+    use sl_compiler::pass1::pass1;
+
+    // I didn't really know this was possible but for test utilities just use
+    // the path attribute!
+    #[path = "../../../compiler/src/test_utils/utils.rs"]
+    mod utils;
+
 
     lazy_static! {
         static ref DOC_REGEX: Regex =
@@ -546,7 +560,8 @@ mod tests {
     #[derive(Debug, Clone, Eq, Hash, PartialEq)]
     enum Namespace {
         Global,
-        Other(String),
+        // Can be adapted when namespaces are added.
+        // Other(String),
     }
 
     impl Namespace {
@@ -588,9 +603,6 @@ mod tests {
                             },
                         }
                     }
-                }
-                Namespace::Other(_) => {
-                    unimplemented!("No other docs yet exist besides global!");
                 }
             }
             Ok(())
@@ -652,7 +664,7 @@ mod tests {
                         symbol: symbol.to_owned().to_string(),
                     }
                 } else {
-                    DocError::DocStringMustStartWithUsage {
+                    DocError::NoDocString {
                         symbol: symbol.to_owned().to_string(),
                     }
                 }
@@ -706,7 +718,7 @@ mod tests {
             let str = match self {
                 DocError::NoDocString{ symbol} => {
                     format!(
-                        "No documentation string provided for symbol {symbol}, all slosh functions written in Rust must have a valid documentation string."
+                        "Either documentation provided does not conform to conventional layout or no documentation string provided for symbol {symbol} all slosh functions written in Rust must have a valid documentation string."
                     )
                 }
                 DocError::ExemptFromProperDocString{ symbol} => {

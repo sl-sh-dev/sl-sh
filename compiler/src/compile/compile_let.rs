@@ -169,7 +169,7 @@ pub(crate) fn compile_let(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::{assert_vals, exec, exec_compile_error, exec_runtime_error, read_test};
+    use crate::test_utils::utils::{assert_vals, exec, exec_compile_error, exec_runtime_error, read_test};
     use builtins::print::{dasm, prn};
     use compile_state::state::new_slosh_vm;
 
