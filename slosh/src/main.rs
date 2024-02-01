@@ -507,17 +507,19 @@ fn exec_expression(res: String, env: &mut SloshVm) {
 mod tests {
     use super::*;
     use crate::tests::utils::exec;
+    use builtins::print::{pr, pretty_value};
     use compile_state::state::{new_slosh_vm, CompileState, SloshVm, SloshVmTrait};
     use lazy_static::lazy_static;
     use regex::{Regex, RegexBuilder};
     use sl_compiler::pass1::pass1;
     use sl_compiler::{compile, ReadError, Reader};
-    use slvm::{Value, RET};
+    use slvm::{VMResult, Value, RET};
     use std::borrow::Cow;
     use std::cmp::Ordering;
     use std::collections::HashSet;
     use std::error::Error;
     use std::fmt::{Debug, Display, Formatter};
+    use std::io::stdout;
     use std::sync::Arc;
 
     // I didn't really know this was possible but for test utilities just use
@@ -575,6 +577,10 @@ mod tests {
             exemption_set.insert("*int-bits*");
             exemption_set.insert("get-prop");
             exemption_set.insert("expand-macro");
+
+            exemption_set.insert("ns-import");
+            exemption_set.insert("test::assert-equal");
+            exemption_set.insert("test::assert-error");
             exemption_set
         };
     }
@@ -804,27 +810,46 @@ mod tests {
 
     type DocResult<T> = Result<T, DocError>;
 
+    pub fn no_op(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+        Ok(Value::Nil)
+    }
+
+    pub fn assert_equal(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+        Ok(Value::True)
+    }
+
+    pub fn assert_error(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+        Ok(Value::True)
+    }
+
     #[test]
     fn test_global_slosh_docs() {
         let mut env = new_slosh_vm();
         set_builtins(&mut env);
 
+        env.set_global_builtin("ns-import", no_op);
+        env.set_global_builtin("test::assert-equal", assert_equal);
+        env.set_global_builtin("test::assert-error", assert_error);
+
         let mut docs: Vec<SloshDoc> = vec![];
         Namespace::Global.add_docs(&mut docs, &mut env).unwrap();
 
         let _val = exec(&mut env, "(prn \"hello slosh\")");
+        println!("Now go through and run tests!");
 
         for doc in docs {
             println!("ns: {:?}", doc.namespace);
             println!("  sym: {}", doc.symbol);
             println!("  type: {}", doc.symbol_type);
-            println!("      doc_string: {:?}", doc.doc_string);
             if let Some(example) = doc.doc_string.example {
                 println!("      example: {:?}", example);
+                let val = exec(&mut env, example);
                 //TODO PC ISSUE #118.
-                // 1. exec_expression doesn't work, and might not w/o editing because it does
-                // not (by design) show errors, so might need to refactor that.
-                // 2. there is no assert-equal!?
+                // 1. trying to add the assert commands but commands in core.slosh
+                // do not appear to be "in" the environment yet.
+                // SO... load_internal is called *somehow* in main() but I need to know
+                // how to load it so I have access to core.slosh and test.slosh
+                // OR maybe i just load it directly?
             }
         }
     }
