@@ -4,7 +4,8 @@ use sl_compiler::pass1::pass1;
 use sl_compiler::{compile, Reader};
 use slvm::{Chunk, VMError, VMResult, Value, RET};
 use std::borrow::Cow;
-use std::path::PathBuf;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -59,7 +60,7 @@ fn load_one_expression(
 }
 
 pub(crate) fn load_internal(vm: &mut SloshVm, name: &'static str) -> VMResult<Value> {
-    let fname = if name.starts_with('/') || name.starts_with('.') {
+    let fname = if fs::metadata::<&Path>(name.as_ref()).is_ok() {
         Ok(Cow::Borrowed(name))
     } else {
         let i_g = vm.intern("*load-path*");
