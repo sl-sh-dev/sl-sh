@@ -504,7 +504,7 @@ fn exec_expression(res: String, env: &mut SloshVm) {
 }
 
 #[cfg(test)]
-mod doc_tests {
+mod tests {
     use super::*;
     use crate::tests::utils::exec;
     use compile_state::state::{new_slosh_vm, CompileState, SloshVm, SloshVmTrait};
