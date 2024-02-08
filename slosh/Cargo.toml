@@ -19,6 +19,8 @@ glob = "0.3"
 [dev-dependencies]
 regex = "1.10.2"
 lazy_static = "1.4.0"
+tempdir = "0.3.7"
+temp-env = "0.3.6"
 
 [build-dependencies]
 chrono = "0.4.7"
