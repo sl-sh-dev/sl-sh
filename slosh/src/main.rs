@@ -1,12 +1,13 @@
 extern crate sl_liner;
 
 use std::cell::RefCell;
-use std::env;
 use std::ffi::OsString;
-use std::fs::create_dir_all;
+use std::fs::{create_dir_all, File};
 use std::io::{BufRead, ErrorKind, Write};
-use std::path::PathBuf;
+use std::ops::DerefMut;
+use std::path::Path;
 use std::sync::Arc;
+use std::{env, fs};
 
 use slvm::opcodes::*;
 
@@ -92,26 +93,27 @@ fn get_prompt(env: &mut SloshVm) -> String {
     }
 }
 
-fn load_sloshrc() {
-    if let Ok(mut rcfile) = env::var("HOME") {
-        if rcfile.ends_with('/') {
-            rcfile.push_str(".config/slosh");
-        } else {
-            rcfile.push_str("/.config/slosh");
-        }
-
-        ENV.with(|renv| {
-            let mut env = renv.borrow_mut();
-            let i_path = env.intern(&rcfile);
-            let v = vec![Value::StringConst(i_path)];
-            let path = env.alloc_vector(v);
-            add_global_value(
-                &mut env,
-                "*load-path*",
-                path,
-                "Usage: (set '*load-path* '(\"/path/one\" \"/path/two\"))
+/// Given a [`SloshVm`] and a String, usually the rc file for slosh, set
+/// the *load-path* global variable to facilitate proper loading of scripts.
+///
+/// It is assumed users will put slosh scripts at the location(s) dictated by
+/// *load-path*.
+fn set_initial_load_path(env: &mut SloshVm, load_paths: Vec<String>) {
+    let mut v = vec![];
+    for path in load_paths {
+        let i_path = env.intern(&path);
+        v.push(Value::StringConst(i_path));
+    }
+    let path = env.alloc_vector(v);
+    add_global_value(
+        env,
+        "*load-path*",
+        path,
+        "Usage: (set '*load-path* '(\"/path/one\" \"/path/two\"))
 
 Set the a list of paths to search for loading scripts with the load form.
+Paths are a vector and are searched in index order for the file name of
+the path to be loaded.
 
 Section: scripting
 
@@ -120,32 +122,51 @@ Example:
 ;(load \"script-in-path\")
 t
 ",
-            );
-            let rcpath: PathBuf = rcfile.clone().into();
-            if !rcpath.exists() {
-                match create_dir_all(&rcpath) {
-                    Ok(_) => {}
-                    Err(e) => eprintln!(
-                        "error creating default config directory {}: {e}",
-                        rcpath.to_string_lossy()
-                    ),
-                }
+    );
+}
+
+/// Expected that the default rcfile will be in the user's home directory
+/// at `$HOME/.config/slosh/` otherwise the directory structure will be created.
+fn load_sloshrc() {
+    if let Ok(mut rcfile) = env::var("HOME") {
+        let path_suffix = if let Ok(x) = fs::metadata::<&Path>(rcfile.as_ref()) {
+            if x.is_dir() {
+                ".config/slosh"
+            } else {
+                "/.config/slosh"
             }
+        } else {
+            // This means provided $HOME dir doesn't exist
+            // (PathBuf::exists(...) just verifies if fs::metadata::<&Path>(...).is_ok()).
+            // If there is no HOME dir try to create it to guarantee that there is a $HOME and
+            // that it is a directory.
+            match create_dir_all::<&Path>(rcfile.as_ref()) {
+                Ok(_) => {}
+                Err(e) => eprintln!(
+                    "environment variable HOME did not point to valid directory nor could that directory be created.{}: {e}",
+                    rcfile
+                ),
+            }
+            ".config/slosh"
+        };
+        rcfile.push_str(path_suffix);
+        if fs::metadata::<&Path>(rcfile.as_ref()).is_ok() {
+            match create_dir_all::<&Path>(rcfile.as_ref()) {
+                Ok(_) => {}
+                Err(e) => eprintln!("error creating default config directory {}: {e}", rcfile),
+            }
+        }
+        ENV.with(|renv| {
+            let mut env = renv.borrow_mut();
+            set_initial_load_path(env.deref_mut(), vec![rcfile.clone()]);
             rcfile.push_str("/init.slosh");
-            let rcpath: PathBuf = rcfile.clone().into();
-            if !rcpath.exists() {
-                match std::fs::File::create(&rcpath) {
+            if fs::metadata::<&Path>(rcfile.as_ref()).is_err() {
+                match File::create::<&Path>(rcfile.as_ref()) {
                     Ok(mut f) => match f.write_all(SLSHRC.as_bytes()) {
                         Ok(_) => {}
-                        Err(e) => eprintln!(
-                            "error writing default config {}: {e}",
-                            rcpath.to_string_lossy()
-                        ),
+                        Err(e) => eprintln!("error writing default config {}: {e}", rcfile),
                     },
-                    Err(e) => eprintln!(
-                        "error creating default config {}: {e}",
-                        rcpath.to_string_lossy()
-                    ),
+                    Err(e) => eprintln!("error creating default config {}: {e}", rcfile),
                 }
             }
             let script = env.intern(&rcfile);
@@ -483,7 +504,7 @@ fn exec_expression(res: String, env: &mut SloshVm) {
 }
 
 #[cfg(test)]
-mod tests {
+mod doc_tests {
     use super::*;
     use crate::tests::utils::exec;
     use compile_state::state::{new_slosh_vm, CompileState, SloshVm, SloshVmTrait};
@@ -755,20 +776,20 @@ mod tests {
     impl Display for DocError {
         fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
             let str = match self {
-                DocError::NoDocString{ symbol} => {
+                DocError::NoDocString { symbol } => {
                     format!(
                         "Either documentation provided does not conform to conventional layout or no documentation string provided for symbol {symbol} all slosh functions written in Rust must have a valid documentation string."
                     )
                 }
-                DocError::ExemptFromProperDocString{ symbol} => {
+                DocError::ExemptFromProperDocString { symbol } => {
                     format!(
                         "No documentation needed for provided symbol {symbol}."
                     )
                 }
-                DocError::DocStringMissingSection{ symbol, section} => {
+                DocError::DocStringMissingSection { symbol, section } => {
                     format!("Invalid documentation string for symbol {symbol}, missing required section {section:?}")
                 }
-                DocError::DocStringMustStartWithUsage{ symbol } => {
+                DocError::DocStringMustStartWithUsage { symbol } => {
                     format!(
                         "Invalid documentation string for symbol {symbol}, first line must start with \"Usage:\""
                     )
@@ -806,5 +827,55 @@ mod tests {
                 // 2. there is no assert-equal!?
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod path_tests {
+    extern crate tempdir;
+
+    use crate::{load_sloshrc, set_initial_load_path, ENV};
+    use std::fs::{create_dir_all, File};
+    use std::io::Write;
+    use std::ops::DerefMut;
+    use temp_env;
+    use tempdir::TempDir;
+
+    #[test]
+    fn test_load_path() {
+        // create home dir
+        let tmp_dir = TempDir::new("test_load_path").unwrap();
+        let home_dir = tmp_dir.path().to_str();
+        let home_path = home_dir.unwrap().to_string();
+
+        // create a dir with an add fcn that adds 1 in  add.slosh
+        let tmp_0 = tmp_dir.path().join("tmp_0");
+        create_dir_all(tmp_0.clone()).unwrap();
+        let file_0 = tmp_0.as_path().join("add.slosh");
+        let mut file_0 = File::create(file_0).unwrap();
+        writeln!(file_0, "(def add (fn (x) (+ 1 x)").unwrap();
+
+        // create a dir with an add fcn that adds 2 in add.slosh
+        let tmp_1 = tmp_dir.path().join("tmp_1");
+        create_dir_all(tmp_1.clone()).unwrap();
+        let file_1 = tmp_1.as_path().join("add.slosh");
+        let mut file_1 = File::create(file_1).unwrap();
+        writeln!(file_1, "(def add (fn (x) (+ 2 x)").unwrap();
+
+        temp_env::with_var("HOME", home_dir, || {
+            // Run some code where `MY_ENV_VAR` set to `"production"`.
+            load_sloshrc();
+            ENV.with(|env| {
+                let mut vm = env.borrow_mut();
+                set_initial_load_path(
+                    vm.deref_mut(),
+                    vec![
+                        home_path,
+                        tmp_0.to_str().unwrap().to_string(),
+                        tmp_1.to_str().unwrap().to_string(),
+                    ],
+                );
+            });
+        });
     }
 }
