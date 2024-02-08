@@ -798,7 +798,7 @@ mod tests {
             println!("      doc_string: {:?}", doc.doc_string);
             if let Some(example) = doc.doc_string.example {
                 let val = exec(&mut env, example);
-                //TODO PC 2 problems.
+                //TODO PC ISSUE #118.
                 // 1. exec_expression doesn't work, and might not w/o editing because it does
                 // not (by design) show errors, so might need to refactor that.
                 // 2. there is no assert-equal!?
