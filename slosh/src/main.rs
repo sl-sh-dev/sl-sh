@@ -791,13 +791,15 @@ mod tests {
         let mut docs: Vec<SloshDoc> = vec![];
         Namespace::Global.add_docs(&mut docs, &mut env).unwrap();
 
+        let _val = exec(&mut env, "(prn \"hello slosh\")");
+
         for doc in docs {
             println!("ns: {:?}", doc.namespace);
             println!("  sym: {}", doc.symbol);
             println!("  type: {}", doc.symbol_type);
             println!("      doc_string: {:?}", doc.doc_string);
             if let Some(example) = doc.doc_string.example {
-                let val = exec(&mut env, example);
+                println!("      example: {:?}", example);
                 //TODO PC ISSUE #118.
                 // 1. exec_expression doesn't work, and might not w/o editing because it does
                 // not (by design) show errors, so might need to refactor that.
