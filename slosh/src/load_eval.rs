@@ -63,55 +63,7 @@ pub(crate) fn load_internal(vm: &mut SloshVm, name: &'static str) -> VMResult<Va
     let fname = if fs::metadata::<&Path>(name.as_ref()).is_ok() {
         Ok(Cow::Borrowed(name))
     } else {
-        let i_g = vm.intern("*load-path*");
-        if let Some(g) = vm.global_intern_slot(i_g) {
-            if let Value::Vector(h) = vm.get_global(g) {
-                let paths = vm.get_vector(h);
-                let mut found = None;
-                for path in paths {
-                    match path {
-                        Value::StringConst(i) => {
-                            let mut p = PathBuf::new();
-                            p.push(vm.get_interned(*i));
-                            p.push(name);
-                            if p.exists() {
-                                if let Ok(p) = p.into_os_string().into_string() {
-                                    found = Some(p.into());
-                                    break;
-                                }
-                            }
-                        }
-                        Value::String(h) => {
-                            let mut p = PathBuf::new();
-                            p.push(vm.get_string(*h));
-                            p.push(name);
-                            if p.exists() {
-                                if let Ok(p) = p.into_os_string().into_string() {
-                                    found = Some(p.into());
-                                    break;
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-                if let Some(p) = found {
-                    Ok(p)
-                } else {
-                    Err(VMError::new(
-                        "io",
-                        format!("{name}: not found on *load-path*!"),
-                    ))
-                }
-            } else {
-                Err(VMError::new(
-                    "io",
-                    format!("{name}: *load-path* not a vector!"),
-                ))
-            }
-        } else {
-            Err(VMError::new("io", format!("{name}: *load-path* not set!")))
-        }
+        find_file_in_load_path(vm, name)
     };
     let mut reader = match fname {
         Ok(fname) => match std::fs::File::open(&*fname) {
@@ -150,6 +102,62 @@ pub(crate) fn load_internal(vm: &mut SloshVm, name: &'static str) -> VMResult<Va
         last = reader_vm.execute(chunk)?;
     }
     Ok(last)
+}
+
+/// Find file name in global variable *load-path*.
+///
+/// *load-path* is a vector of paths and the paths are searched in index order
+/// for the file name of the path to be loaded.
+fn find_file_in_load_path<'a, 'b>(vm: &'a mut SloshVm, name: &'b str) -> VMResult<Cow<'a, str>> {
+    let i_g = vm.intern("*load-path*");
+    if let Some(g) = vm.global_intern_slot(i_g) {
+        if let Value::Vector(h) = vm.get_global(g) {
+            let paths = vm.get_vector(h);
+            let mut found = None;
+            for path in paths {
+                match path {
+                    Value::StringConst(i) => {
+                        let mut p = PathBuf::new();
+                        p.push(vm.get_interned(*i));
+                        p.push(name);
+                        if p.exists() && !p.is_dir() {
+                            if let Ok(p) = p.into_os_string().into_string() {
+                                found = Some(p.into());
+                                break;
+                            }
+                        }
+                    }
+                    Value::String(h) => {
+                        let mut p = PathBuf::new();
+                        p.push(vm.get_string(*h));
+                        p.push(name);
+                        if p.exists() && !p.is_dir() {
+                            if let Ok(p) = p.into_os_string().into_string() {
+                                found = Some(p.into());
+                                break;
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            if let Some(p) = found {
+                Ok(p)
+            } else {
+                Err(VMError::new(
+                    "io",
+                    format!("{name}: not found on *load-path*!"),
+                ))
+            }
+        } else {
+            Err(VMError::new(
+                "io",
+                format!("{name}: *load-path* not a vector!"),
+            ))
+        }
+    } else {
+        Err(VMError::new("io", format!("{name}: *load-path* not set!")))
+    }
 }
 
 fn load(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
