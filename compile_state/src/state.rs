@@ -190,6 +190,7 @@ pub struct Specials {
     pub clear: Interned,
     pub str_: Interned,
     pub let_: Interned,
+    pub let_while: Interned,
     pub call_cc: Interned,
     pub defer: Interned,
     pub on_error: Interned,
@@ -959,6 +960,29 @@ Example:
     (test::assert-equal (+ idx 2) v2)
     (test::assert-equal (+ idx 3) v3)
     (if (< idx 5) (this-fn (+ idx 1)))))0)"#),
+            let_while: add_special(vm, "let-while", r#"Usage: (let-while vals condition &rest let-body)
+
+Takes list, vals, of form (binding0 sexp0, binding1 sexp1, ...) and evaluates
+let-body with all values of binding bound to the result of the evaluation of
+sexp while condition is true.
+
+Section: core
+
+Example:
+(def test-do-one "One1")
+(def test-do-two "Two1")
+(def test-do-three (let ((test-do-one "One")) (set! test-do-two "Two")(test::assert-equal "One" test-do-one)"Three"))
+(test::assert-equal "One1" test-do-one)
+(test::assert-equal "Two" test-do-two)
+(test::assert-equal "Three" test-do-three)
+((fn (idx) (let ((v2 (+ idx 2))(v3 (+ idx 3)))
+    (test::assert-equal (+ idx 2) v2)
+    (test::assert-equal (+ idx 3) v3)
+    (if (< idx 5) (recur (+ idx 1)))))0)
+((fn (idx) (let ((v2 (+ idx 2))(v3 (+ idx 3)))
+    (test::assert-equal (+ idx 2) v2)
+    (test::assert-equal (+ idx 3) v3)
+    (if (< idx 5) (this-fn (+ idx 1)))))0)"#),
             call_cc: add_special(vm, "call/cc", ""),
             defer: add_special(vm, "defer", ""),
             on_error: add_special(vm, "on-error", ""),
@@ -990,6 +1014,7 @@ fn add_special(env: &mut SloshVm, name: &'static str, doc_string: &str) -> Inter
 pub struct CompileState {
     pub symbols: Rc<RefCell<Symbols>>,
     pub constants: HashMap<Value, usize>,
+    pub lets: Option<HashMap<Interned, usize>>,
     pub chunk: Chunk,
     pub max_regs: usize,
     pub tail: bool,
@@ -1008,6 +1033,7 @@ impl CompileState {
         CompileState {
             symbols: Rc::new(RefCell::new(Symbols::with_outer(None))),
             constants: HashMap::new(),
+            lets: None,
             chunk: Chunk::new("no_file", 1),
             max_regs: 0,
             tail: false,
@@ -1025,6 +1051,7 @@ impl CompileState {
         CompileState {
             symbols,
             constants: HashMap::new(),
+            lets: None,
             chunk: Chunk::new(file_name, first_line),
             max_regs: 0,
             tail: false,
