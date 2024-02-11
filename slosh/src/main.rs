@@ -2,10 +2,11 @@ extern crate sl_liner;
 
 use std::cell::RefCell;
 use std::ffi::OsString;
+use std::fmt::Debug;
 use std::fs::{create_dir_all, File};
 use std::io::{BufRead, ErrorKind, Write};
 use std::ops::DerefMut;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::{env, fs};
 
@@ -98,10 +99,10 @@ fn get_prompt(env: &mut SloshVm) -> String {
 ///
 /// It is assumed users will put slosh scripts at the location(s) dictated by
 /// *load-path*.
-fn set_initial_load_path(env: &mut SloshVm, load_paths: Vec<String>) {
+fn set_initial_load_path(env: &mut SloshVm, load_paths: Vec<&str>) {
     let mut v = vec![];
     for path in load_paths {
-        let i_path = env.intern(&path);
+        let i_path = env.intern(path);
         v.push(Value::StringConst(i_path));
     }
     let path = env.alloc_vector(v);
@@ -125,57 +126,73 @@ t
     );
 }
 
-/// Expected that the default rcfile will be in the user's home directory
-/// at `$HOME/.config/slosh/` otherwise the directory structure will be created.
-fn load_sloshrc() {
-    if let Ok(mut rcfile) = env::var("HOME") {
-        let path_suffix = if let Ok(x) = fs::metadata::<&Path>(rcfile.as_ref()) {
-            if x.is_dir() {
-                ".config/slosh"
-            } else {
-                "/.config/slosh"
-            }
+fn make_path_dir_if_possible(path: impl AsRef<Path> + Debug) -> Option<PathBuf> {
+    if let Ok(f_data) = fs::metadata(path.as_ref()) {
+        if f_data.is_dir() {
+            Some(path.as_ref().into())
         } else {
-            // This means provided $HOME dir doesn't exist
-            // (PathBuf::exists(...) just verifies if fs::metadata::<&Path>(...).is_ok()).
-            // If there is no HOME dir try to create it to guarantee that there is a $HOME and
-            // that it is a directory.
-            match create_dir_all::<&Path>(rcfile.as_ref()) {
-                Ok(_) => {}
-                Err(e) => eprintln!(
-                    "environment variable HOME did not point to valid directory nor could that directory be created.{}: {e}",
-                    rcfile
-                ),
-            }
-            ".config/slosh"
-        };
-        rcfile.push_str(path_suffix);
-        if fs::metadata::<&Path>(rcfile.as_ref()).is_ok() {
-            match create_dir_all::<&Path>(rcfile.as_ref()) {
-                Ok(_) => {}
-                Err(e) => eprintln!("error creating default config directory {}: {e}", rcfile),
+            None
+        }
+    } else {
+        // This means provided path doesn't exist (PathBuf::exists(...) just verifies
+        // if fs::metadata::<&Path>(...).is_ok()). If there is no HOME dir try to create it
+        // to guarantee that there is a $HOME and that it is a directory.
+        match create_dir_all(path.as_ref()) {
+            Ok(_) => Some(path.as_ref().into()),
+            Err(e) => {
+                eprintln!(
+                    "Path [{:?}] did not point to valid directory nor could that directory be created.: {e}",
+                    path
+                );
+                None
             }
         }
-        ENV.with(|renv| {
-            let mut env = renv.borrow_mut();
-            set_initial_load_path(env.deref_mut(), vec![rcfile.clone()]);
-            rcfile.push_str("/init.slosh");
-            if fs::metadata::<&Path>(rcfile.as_ref()).is_err() {
-                match File::create::<&Path>(rcfile.as_ref()) {
-                    Ok(mut f) => match f.write_all(SLSHRC.as_bytes()) {
-                        Ok(_) => {}
-                        Err(e) => eprintln!("error writing default config {}: {e}", rcfile),
-                    },
-                    Err(e) => eprintln!("error creating default config {}: {e}", rcfile),
+    }
+}
+
+fn get_home_dir() -> Option<PathBuf> {
+    if let Ok(home_dir) = env::var("HOME") {
+        make_path_dir_if_possible(home_dir)
+    } else {
+        None
+    }
+}
+
+/// Expected that the user's init.slosh will be in the user's home directory
+/// at `$HOME/.config/slosh/` otherwise the directory structure will be created.
+fn load_sloshrc() {
+    if let Some(home_dir) = get_home_dir() {
+        let slosh_path = home_dir.join(".config").join("slosh");
+        if let Some(slosh_dir) = make_path_dir_if_possible(slosh_path.as_path()) {
+            ENV.with(|renv| {
+                let mut env = renv.borrow_mut();
+                set_initial_load_path(
+                    env.deref_mut(),
+                    vec![slosh_dir.as_os_str().to_string_lossy().as_ref()],
+                );
+                let init = slosh_dir.join("init.slosh");
+                if fs::metadata::<&Path>(init.as_ref()).is_err() {
+                    match File::create::<&Path>(slosh_dir.as_ref()) {
+                        Ok(mut f) => match f.write_all(SLSHRC.as_bytes()) {
+                            Ok(_) => {}
+                            Err(e) => {
+                                eprintln!("error writing default config {:?}: {e}", init.as_path())
+                            }
+                        },
+                        Err(e) => {
+                            eprintln!("error creating default config {:?}: {e}", init.as_path())
+                        }
+                    }
                 }
-            }
-            let script = env.intern(&rcfile);
-            let script = env.get_interned(script);
-            match load_internal(&mut env, script) {
-                Ok(_) => {}
-                Err(err) => println!("ERROR: {err}"),
-            }
-        });
+                let init = init.as_os_str().to_string_lossy();
+                let script = env.intern(init.as_ref());
+                let script = env.get_interned(script);
+                match load_internal(&mut env, script) {
+                    Ok(_) => {}
+                    Err(err) => println!("ERROR: {err}"),
+                }
+            });
+        }
     }
 }
 
@@ -359,13 +376,11 @@ fn main() {
                         });
                     } else {
                         let status = SHELL_ENV.with(|jobs| {
-                            match shell::run::run_one_command(&res, &mut jobs.borrow_mut()) {
-                                Ok(status) => status,
-                                Err(err) => {
+                            shell::run::run_one_command(&res, &mut jobs.borrow_mut())
+                                .unwrap_or_else(|err| {
                                     eprintln!("ERROR executing {res}: {err}");
                                     1
-                                }
-                            }
+                                })
                         });
                         ENV.with(|env| {
                             env.borrow_mut()
@@ -393,13 +408,11 @@ fn main() {
                         });
                     } else {
                         let status = SHELL_ENV.with(|jobs| {
-                            match shell::run::run_one_command(&res, &mut jobs.borrow_mut()) {
-                                Ok(status) => status,
-                                Err(err) => {
+                            shell::run::run_one_command(&res, &mut jobs.borrow_mut())
+                                .unwrap_or_else(|err| {
                                     eprintln!("ERROR executing {res}: {err}");
                                     1
-                                }
-                            }
+                                })
                         });
                         ENV.with(|env| {
                             env.borrow_mut()
@@ -421,13 +434,12 @@ fn main() {
                 shell::run::setup_shell_tty(STDIN_FILENO);
             }
             let status = SHELL_ENV.with(|jobs| {
-                match shell::run::run_one_command(&command, &mut jobs.borrow_mut()) {
-                    Ok(status) => status,
-                    Err(err) => {
+                shell::run::run_one_command(&command, &mut jobs.borrow_mut()).unwrap_or_else(
+                    |err| {
                         eprintln!("ERROR executing {command}: {err}");
                         1
-                    }
-                }
+                    },
+                )
             });
             SHELL_ENV.with(|jobs| {
                 jobs.borrow_mut().reap_procs();
@@ -673,6 +685,7 @@ mod tests {
     }
 
     #[derive(Eq)]
+    #[allow(unused)]
     struct SloshDoc {
         symbol: String,
         symbol_type: String,
@@ -815,32 +828,16 @@ mod tests {
     type DocResult<T> = Result<T, DocError>;
 
     #[test]
-    fn test_global_slosh_docs() {
+    fn test_global_slosh_docs_formatted_properly() {
         let mut env = new_slosh_vm();
         set_builtins(&mut env);
 
         let mut docs: Vec<SloshDoc> = vec![];
         Namespace::Global.add_docs(&mut docs, &mut env).unwrap();
-
-        let _val = exec(&mut env, "(prn \"hello slosh\")");
-
-        for doc in docs {
-            println!("ns: {:?}", doc.namespace);
-            println!("  sym: {}", doc.symbol);
-            println!("  type: {}", doc.symbol_type);
-            println!("      doc_string: {:?}", doc.doc_string);
-            if let Some(example) = doc.doc_string.example {
-                println!("      example: {:?}", example);
-                //TODO PC ISSUE #118.
-                // 1. exec_expression doesn't work, and might not w/o editing because it does
-                // not (by design) show errors, so might need to refactor that.
-                // 2. there is no assert-equal!?
-            }
-        }
     }
 
     #[test]
-    fn test_load_path() {
+    fn test_load_path_no_home() {
         // create home dir
         let tmp_dir = TempDir::new("test_load_path").unwrap();
         let home_dir = tmp_dir.path().to_str();
@@ -871,9 +868,9 @@ mod tests {
                 set_initial_load_path(
                     vm.deref_mut(),
                     vec![
-                        home_path,
-                        tmp_0.to_str().unwrap().to_string(),
-                        tmp_1.to_str().unwrap().to_string(),
+                        &home_path,
+                        tmp_0.to_str().unwrap().as_ref(),
+                        tmp_1.to_str().unwrap().as_ref(),
                     ],
                 );
                 _ = exec(vm.deref_mut(), "(load \"add.slosh\")");
