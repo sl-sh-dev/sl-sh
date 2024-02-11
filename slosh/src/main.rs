@@ -127,7 +127,7 @@ t
 
 /// Expected that the default rcfile will be in the user's home directory
 /// at `$HOME/.config/slosh/` otherwise the directory structure will be created.
-fn load_sloshrc() {
+fn load_sloshrc(renv: Option<&RefCell<SloshVm>>) {
     if let Ok(mut rcfile) = env::var("HOME") {
         let path_suffix = if let Ok(x) = fs::metadata::<&Path>(rcfile.as_ref()) {
             if x.is_dir() {
@@ -156,7 +156,7 @@ fn load_sloshrc() {
                 Err(e) => eprintln!("error creating default config directory {}: {e}", rcfile),
             }
         }
-        ENV.with(|renv| {
+        if let Some(renv) = renv {
             let mut env = renv.borrow_mut();
             set_initial_load_path(env.deref_mut(), vec![rcfile.clone()]);
             rcfile.push_str("/init.slosh");
@@ -175,7 +175,7 @@ fn load_sloshrc() {
                 Ok(_) => {}
                 Err(err) => println!("ERROR: {err}"),
             }
-        });
+        }
     }
 }
 
@@ -290,7 +290,7 @@ fn main() {
             set_builtins(&mut env);
         });
         if config.command.is_none() && config.script.is_none() {
-            load_sloshrc();
+            load_sloshrc(None);
             if Sys::is_tty(STDIN_FILENO) {
                 let mut con = Context::new();
                 //con.set_completer(Box::new(FilenameCompleter::new(Some("."))));
@@ -359,13 +359,11 @@ fn main() {
                         });
                     } else {
                         let status = SHELL_ENV.with(|jobs| {
-                            match shell::run::run_one_command(&res, &mut jobs.borrow_mut()) {
-                                Ok(status) => status,
-                                Err(err) => {
+                            shell::run::run_one_command(&res, &mut jobs.borrow_mut())
+                                .unwrap_or_else(|err| {
                                     eprintln!("ERROR executing {res}: {err}");
                                     1
-                                }
-                            }
+                                })
                         });
                         ENV.with(|env| {
                             env.borrow_mut()
@@ -393,13 +391,11 @@ fn main() {
                         });
                     } else {
                         let status = SHELL_ENV.with(|jobs| {
-                            match shell::run::run_one_command(&res, &mut jobs.borrow_mut()) {
-                                Ok(status) => status,
-                                Err(err) => {
+                            shell::run::run_one_command(&res, &mut jobs.borrow_mut())
+                                .unwrap_or_else(|err| {
                                     eprintln!("ERROR executing {res}: {err}");
                                     1
-                                }
-                            }
+                                })
                         });
                         ENV.with(|env| {
                             env.borrow_mut()
@@ -421,21 +417,20 @@ fn main() {
                 shell::run::setup_shell_tty(STDIN_FILENO);
             }
             let status = SHELL_ENV.with(|jobs| {
-                match shell::run::run_one_command(&command, &mut jobs.borrow_mut()) {
-                    Ok(status) => status,
-                    Err(err) => {
+                shell::run::run_one_command(&command, &mut jobs.borrow_mut()).unwrap_or_else(
+                    |err| {
                         eprintln!("ERROR executing {command}: {err}");
                         1
-                    }
-                }
+                    },
+                )
             });
             SHELL_ENV.with(|jobs| {
                 jobs.borrow_mut().reap_procs();
             });
             std::process::exit(status);
         } else if let Some(script) = config.script {
-            load_sloshrc();
             ENV.with(|renv| {
+                load_sloshrc(Some(renv));
                 let mut env = renv.borrow_mut();
                 let script = env.intern(&script);
                 let script = env.get_interned(script);
@@ -517,7 +512,6 @@ mod tests {
     use tempdir::TempDir;
 
     use crate::tests::utils::exec;
-    use builtins::print::{pr, pretty_value};
     use compile_state::state::{new_slosh_vm, CompileState, SloshVm, SloshVmTrait};
     use lazy_static::lazy_static;
     use regex::{Regex, RegexBuilder};
@@ -529,7 +523,6 @@ mod tests {
     use std::collections::HashSet;
     use std::error::Error;
     use std::fmt::{Debug, Display, Formatter};
-    use std::io::stdout;
     use std::sync::Arc;
 
     // I didn't really know this was possible but for test utilities just use
