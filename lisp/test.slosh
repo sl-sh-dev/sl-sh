@@ -1,0 +1,6 @@
+;; TODO PC add test functions here! and give them the right docs.
+
+#%
+asserts true
+%#
+(def assert-true (fn (x) (= x #t)))

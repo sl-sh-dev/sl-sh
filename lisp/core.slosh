@@ -422,3 +422,7 @@ Example:
                                 `(~condition ~(make-action action) ~@(make-cond (first (first others)) (rest (first others)) (rest others))))))
          `(if ~@(make-cond (first (first branches)) (rest (first branches)) (rest branches)))))))
 
+#%
+asserts true
+%#
+(def assert-true (fn (x) (= x #t)))

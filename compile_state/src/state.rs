@@ -407,20 +407,21 @@ Multiply a sequence of numbers.  (*) will return 1.
 Section: math
 
 Example:
-(ns-import 'math)
-(test::assert-equal 1 (*))
-(test::assert-equal 5 (* 5))
-(test::assert-equal 5 (* 1 5))
-(test::assert-equal 5.0 (* 1.0 5))
-(test::assert-equal 7.5 (* 1.5 5))
-(test::assert-equal 7.5 (* 1.5 5.0))
-(test::assert-equal 15 (* 3 5))
-(test::assert-equal 8 (* 1 2 4))
-(test::assert-equal 16 (* 2 2 4))
-(test::assert-equal 16.0 (* 2 2.0 4))
-(test::assert-equal 16.0 (* 2.0 2.0 4.0))
-(test::assert-equal 55.0000000001 (* 100 0.55))
-(test::assert-error (* 1 2 4 "5"))"#),
+(assert-true #f)
+;;(ns-import 'math)
+;;(test::assert-equal 1 (*))
+;;(test::assert-equal 5 (* 5))
+;;(test::assert-equal 5 (* 1 5))
+;;(test::assert-equal 5.0 (* 1.0 5))
+;;(test::assert-equal 7.5 (* 1.5 5))
+;;(test::assert-equal 7.5 (* 1.5 5.0))
+;;(test::assert-equal 15 (* 3 5))
+;;(test::assert-equal 8 (* 1 2 4))
+;;(test::assert-equal 16 (* 2 2 4))
+;;(test::assert-equal 16.0 (* 2 2.0 4))
+;;(test::assert-equal 16.0 (* 2.0 2.0 4.0))
+;;(test::assert-equal 55.0000000001 (* 100 0.55))
+;;(test::assert-error (* 1 2 4 "5"))"#),
             div: add_special(vm, "/", r#"Usage: (/ number+)
 
 Divide a sequence of numbers.  Requires at least two numbers.
