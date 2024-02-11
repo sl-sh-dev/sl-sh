@@ -407,7 +407,7 @@ Multiply a sequence of numbers.  (*) will return 1.
 Section: math
 
 Example:
-(assert-true #f)
+(assert-true #t)
 ;;(ns-import 'math)
 ;;(test::assert-equal 1 (*))
 ;;(test::assert-equal 5 (* 5))
@@ -421,7 +421,8 @@ Example:
 ;;(test::assert-equal 16.0 (* 2 2.0 4))
 ;;(test::assert-equal 16.0 (* 2.0 2.0 4.0))
 ;;(test::assert-equal 55.0000000001 (* 100 0.55))
-;;(test::assert-error (* 1 2 4 "5"))"#),
+;;(test::assert-error (* 1 2 4 "5"))
+"#),
             div: add_special(vm, "/", r#"Usage: (/ number+)
 
 Divide a sequence of numbers.  Requires at least two numbers.

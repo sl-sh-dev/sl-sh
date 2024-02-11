@@ -512,6 +512,7 @@ mod tests {
     use tempdir::TempDir;
 
     use crate::tests::utils::exec;
+    use crate::tests::utils::exec_with_dump;
     use compile_state::state::{new_slosh_vm, CompileState, SloshVm, SloshVmTrait};
     use lazy_static::lazy_static;
     use regex::{Regex, RegexBuilder};
@@ -837,7 +838,7 @@ mod tests {
         let mut docs: Vec<SloshDoc> = vec![];
         Namespace::Global.add_docs(&mut docs, &mut env).unwrap();
 
-        let _val = exec(&mut env, "(prn \"hello slosh\")");
+        _ = exec(&mut env, "(load \"init.slosh\")");
         println!("Now go through and run tests!");
 
         for doc in docs {
@@ -846,7 +847,7 @@ mod tests {
             println!("  type: {}", doc.symbol_type);
             if let Some(example) = doc.doc_string.example {
                 println!("      example: {:?}", example);
-                let val = exec(&mut env, example);
+                let val = exec_with_dump(&mut env, example);
                 //TODO PC ISSUE #118.
                 // 1. trying to add the assert commands but commands in core.slosh
                 // do not appear to be "in" the environment yet.
