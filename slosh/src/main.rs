@@ -505,14 +505,24 @@ fn exec_expression(res: String, env: &mut SloshVm) {
 
 #[cfg(test)]
 mod tests {
+    extern crate tempdir;
+
     use super::*;
+
+    use crate::{set_initial_load_path, ENV};
+    use std::fs::{create_dir_all, File};
+    use std::io::Write;
+    use std::ops::DerefMut;
+    use temp_env;
+    use tempdir::TempDir;
+
     use crate::tests::utils::exec;
     use compile_state::state::{new_slosh_vm, CompileState, SloshVm, SloshVmTrait};
     use lazy_static::lazy_static;
     use regex::{Regex, RegexBuilder};
     use sl_compiler::pass1::pass1;
     use sl_compiler::{compile, ReadError, Reader};
-    use slvm::{Value, RET};
+    use slvm::{from_i56, Value, RET};
     use std::borrow::Cow;
     use std::cmp::Ordering;
     use std::collections::HashSet;
@@ -828,18 +838,6 @@ mod tests {
             }
         }
     }
-}
-
-#[cfg(test)]
-mod path_tests {
-    extern crate tempdir;
-
-    use crate::{load_sloshrc, set_initial_load_path, ENV};
-    use std::fs::{create_dir_all, File};
-    use std::io::Write;
-    use std::ops::DerefMut;
-    use temp_env;
-    use tempdir::TempDir;
 
     #[test]
     fn test_load_path() {
@@ -848,25 +846,28 @@ mod path_tests {
         let home_dir = tmp_dir.path().to_str();
         let home_path = home_dir.unwrap().to_string();
 
-        // create a dir with an add fcn that adds 1 in  add.slosh
         let tmp_0 = tmp_dir.path().join("tmp_0");
-        create_dir_all(tmp_0.clone()).unwrap();
-        let file_0 = tmp_0.as_path().join("add.slosh");
-        let mut file_0 = File::create(file_0).unwrap();
-        writeln!(file_0, "(def add (fn (x) (+ 1 x)").unwrap();
-
-        // create a dir with an add fcn that adds 2 in add.slosh
         let tmp_1 = tmp_dir.path().join("tmp_1");
-        create_dir_all(tmp_1.clone()).unwrap();
-        let file_1 = tmp_1.as_path().join("add.slosh");
-        let mut file_1 = File::create(file_1).unwrap();
-        writeln!(file_1, "(def add (fn (x) (+ 2 x)").unwrap();
+        {
+            // create a dir with an add fcn that adds 1 in  add.slosh
+            create_dir_all(tmp_0.clone()).unwrap();
+            let file_0 = tmp_0.as_path().join("add.slosh");
+            let mut file_0 = File::create(file_0).unwrap();
+            writeln!(file_0, "(def add (fn (x) (+ 1 x)))").unwrap();
+            File::flush(&mut file_0).unwrap();
 
-        temp_env::with_var("HOME", home_dir, || {
-            // Run some code where `MY_ENV_VAR` set to `"production"`.
-            load_sloshrc();
+            // create a dir with an add fcn that adds 2 in add.slosh
+            create_dir_all(tmp_1.clone()).unwrap();
+            let file_1 = tmp_1.as_path().join("add.slosh");
+            let mut file_1 = File::create(file_1).unwrap();
+            writeln!(file_1, "(def add (fn (x) (+ 2 x)))").unwrap();
+            File::flush(&mut file_1).unwrap();
+        }
+
+        let v = temp_env::with_var("HOME", home_dir, || {
             ENV.with(|env| {
                 let mut vm = env.borrow_mut();
+                set_builtins(vm.deref_mut());
                 set_initial_load_path(
                     vm.deref_mut(),
                     vec![
@@ -875,7 +876,16 @@ mod path_tests {
                         tmp_1.to_str().unwrap().to_string(),
                     ],
                 );
-            });
+                _ = exec(vm.deref_mut(), "(load \"add.slosh\")");
+                let v = exec(vm.deref_mut(), "(add 1)");
+                match v {
+                    Value::Int(i) => from_i56(&i),
+                    _ => {
+                        panic!("Value should be an integer");
+                    }
+                }
+            })
         });
+        assert_eq!(v, 2i64);
     }
 }

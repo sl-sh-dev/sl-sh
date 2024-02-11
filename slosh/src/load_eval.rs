@@ -108,7 +108,7 @@ pub(crate) fn load_internal(vm: &mut SloshVm, name: &'static str) -> VMResult<Va
 ///
 /// *load-path* is a vector of paths and the paths are searched in index order
 /// for the file name of the path to be loaded.
-fn find_file_in_load_path<'a, 'b>(vm: &'a mut SloshVm, name: &'b str) -> VMResult<Cow<'a, str>> {
+fn find_file_in_load_path<'a>(vm: &'a mut SloshVm, name: &str) -> VMResult<Cow<'a, str>> {
     let i_g = vm.intern("*load-path*");
     if let Some(g) = vm.global_intern_slot(i_g) {
         if let Value::Vector(h) = vm.get_global(g) {
