@@ -238,7 +238,6 @@ Example:
         (list? obj) (last-list obj)
         (err "Not a vector or list"))))
 
-(def butlast nil) ; predeclare and assign butlast to avoid a warning when used in butlast declaration.
 #%
 Produces the provided list minus the last element.  Nil if the list is empty or one element.
 
@@ -253,6 +252,7 @@ Example:
 (assert-equal nil (butlast nil))
 (assert-equal nil (butlast '#()))
 %#
+(def butlast nil) ; predeclare and assign butlast to avoid a warning when used in butlast declaration.
 (defn butlast
   (obj)
   (if (vec? obj) (if (> (len obj) 0) (vec-slice obj 0 (- (len obj) 1)) nil)
