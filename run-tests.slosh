@@ -2,11 +2,14 @@
 
 ; get this running in a rust integration test? that way it runs when cargo test runs?
 
+(doc-map '*)
+
 (let (globals (get-globals)
       globals-len (len globals)
       i 0)
     (while (< i globals-len)
         (prn "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
         (prn globals.~i)
-        (prn (get-prop globals.~i :doc-string))
+        ;;(prn (get-prop globals.~i :doc-string))
+        (prn (doc-map globals.~i))
         (inc! i)))

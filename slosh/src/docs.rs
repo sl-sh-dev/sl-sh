@@ -19,7 +19,10 @@ const EXAMPLE: &str = "example";
 
 lazy_static! {
     static ref DOC_REGEX: Regex =
-        RegexBuilder::new(r#"Usage:(.+?)$\n\n(.*)\n\n^Section:(.+?)$(\n\n^Example:\n(.*)|\s*)"#)
+    //TODO PC optional Usage section OR must be auto generated?
+    // legacy/builtins.rs L#937
+        RegexBuilder::new(r#"(Usage:(.+?)$\n\n|\s*)(.*)\n\n^Section:(.+?)$(\n\n^Example:\n(.*)|\s*)"#)
+        //RegexBuilder::new(r#"Usage:(.+?)$\n\n(.*)\n\n^Section:(.+?)$(\n\n^Example:\n(.*)|\s*)"#)
             .multi_line(true)
             .dot_matches_new_line(true)
             .crlf(true)
@@ -67,6 +70,36 @@ lazy_static! {
         exemption_set.insert("*int-bits*");
         exemption_set.insert("get-prop");
         exemption_set.insert("expand-macro");
+
+        // slosh specific colors
+        exemption_set.insert("tok-slsh-form-color");
+        exemption_set.insert("tok-slsh-fcn-color");
+        exemption_set.insert("tok-default-color");
+        exemption_set.insert("tok-sys-command-color");
+        exemption_set.insert("tok-sys-alias-color");
+        exemption_set.insert("tok-string-color");
+        exemption_set.insert("tok-invalid-color");
+
+        exemption_set.insert("*fg-default*");
+        exemption_set.insert("*fg-black*");
+        exemption_set.insert("*fg-red*");
+        exemption_set.insert("*fg-green*");
+        exemption_set.insert("*fg-yellow*");
+        exemption_set.insert("*fg-blue*");
+        exemption_set.insert("*fg-magenta*");
+        exemption_set.insert("*fg-cyan*");
+        exemption_set.insert("*fg-white*");
+
+        exemption_set.insert("*bg-default*");
+        exemption_set.insert("*bg-black*");
+        exemption_set.insert("*bg-red*");
+        exemption_set.insert("*bg-green*");
+        exemption_set.insert("*bg-yellow*");
+        exemption_set.insert("*bg-blue*");
+        exemption_set.insert("*bg-magenta*");
+        exemption_set.insert("*bg-cyan*");
+        exemption_set.insert("*bg-white*");
+
         exemption_set
     };
 }
@@ -363,8 +396,13 @@ fn doc_map(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         (Some(Value::Symbol(g)), None) => {
             let slot = vm.global_intern_slot(*g);
             if let Some(slot) = slot {
-                let slosh_doc = SloshDoc::new(*g, slot, vm, Namespace::Global)?;
-                Value::sl_from(slosh_doc, vm)
+                match SloshDoc::new(*g, slot, vm, Namespace::Global) {
+                    Ok(slosh_doc) => Value::sl_from(slosh_doc, vm),
+                    Err(DocError::ExemptFromProperDocString { symbol: _ }) => {
+                        Ok(vm.alloc_map(HashMap::new()))
+                    }
+                    Err(e) => Err(VMError::from(e)),
+                }
             } else {
                 Err(VMError::new_vm(
                     "first form must evaluate to a symbol".to_string(),
@@ -398,6 +436,18 @@ mod test {
     use super::*;
     use crate::set_builtins;
     use compile_state::state::new_slosh_vm;
+
+    #[test]
+    fn list_slosh_functions() {
+        let mut vm = new_slosh_vm();
+        set_builtins(&mut vm);
+        for (g, _) in vm.globals() {
+            let sym = Value::Symbol(*g);
+            let symbol = sym.display_value(&vm);
+            let symbol_type = sym.display_type(&vm).to_string();
+            println!("{}: {}", symbol, symbol_type);
+        }
+    }
 
     #[test]
     fn test_global_slosh_docs_formatted_properly() {
