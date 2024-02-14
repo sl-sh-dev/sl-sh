@@ -19,7 +19,7 @@ const EXAMPLE: &str = "example";
 
 lazy_static! {
     static ref DOC_REGEX: Regex =
-        RegexBuilder::new(r#"Usage:(.+?)$\n\n(.*)^Section:(.+?)$(\n\n^Example:\n(.*)|\s*)"#)
+        RegexBuilder::new(r#"Usage:(.+?)$\n\n(.*)\n\n^Section:(.+?)$(\n\n^Example:\n(.*)|\s*)"#)
             .multi_line(true)
             .dot_matches_new_line(true)
             .crlf(true)
@@ -190,7 +190,7 @@ impl DocStringSection {
                 symbol: symbol.to_owned().to_string(),
                 section: "Description".to_string(),
             })
-            .map(|x| x.as_str().trim().to_string())?;
+            .map(|x| x.as_str().to_string())?;
         let section = cap
             .get(3)
             .ok_or_else(|| DocError::DocStringMissingSection {
