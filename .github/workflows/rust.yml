@@ -30,7 +30,7 @@ jobs:
           cargo version
           rustc --version
           cargo build --workspace --verbose
-    - name: Run Rust tests
+    - name: Run rust tests
       run: cargo test --verbose
 
   build-macos:
@@ -44,5 +44,12 @@ jobs:
           cargo version
           rustc --version
           cargo build --workspace --verbose
-    - name: Run Rust tests
+    - name: Run rust tests
       run: cargo test --verbose
+
+# if this gets too slow consider
+# https://github.com/Swatinem/rust-cache
+# along with
+#    - name: Compile rust tests
+#      run: cargo test --no-run
+#      in linux AND macos tests
