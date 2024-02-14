@@ -16,14 +16,22 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Format
-      run: cargo fmt --verbose -- --check
+      run: |
+          cargo version
+          rustc --version
+          cargo fmt --verbose -- --check
     - name: Clippy
-      run: cargo clippy --verbose -- -D warnings
+      run: |
+          cargo version
+          rustc --version
+          cargo clippy --verbose -- -D warnings
     - name: Build
       run: |
           cargo version
           rustc --version
           cargo build --workspace --verbose
+    - name: Run Rust tests
+      run: cargo test --verbose
 
   build-macos:
 
@@ -36,3 +44,5 @@ jobs:
           cargo version
           rustc --version
           cargo build --workspace --verbose
+    - name: Run Rust tests
+      run: cargo test --verbose
