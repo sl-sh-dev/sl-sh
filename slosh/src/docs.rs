@@ -21,7 +21,7 @@ lazy_static! {
     static ref DOC_REGEX: Regex =
     //TODO PC optional Usage section OR must be auto generated?
     // legacy/builtins.rs L#937
-        RegexBuilder::new(r#"(\s*?Usage:(.+?)$\n\n|\s*?)(.*)\n\n\s*Section:(.+?)$(\n\n\s*Example:\n(.*)|\s*)"#)
+        RegexBuilder::new(r#"(\s*?Usage:(.+?)$\n\n|\s*?)(\S{1}.*)\n\n\s*Section:(.+?)$(\n\n\s*Example:\n(.*)|\s*)"#)
             .multi_line(true)
             .dot_matches_new_line(true)
             .crlf(true)
@@ -211,9 +211,7 @@ impl DocStringSection {
         symbol: Cow<'_, String>,
         raw_doc_string: String,
     ) -> DocResult<DocStringSection> {
-        println!("Try string: {}", raw_doc_string);
         let cap = DOC_REGEX.captures(raw_doc_string.as_str()).ok_or_else(|| {
-            println!("Not captured!?");
             if EXEMPTIONS.contains(symbol.as_str()) {
                 DocError::ExemptFromProperDocString {
                     symbol: symbol.to_owned().to_string(),
@@ -489,6 +487,7 @@ Section: core
 Example:
 (def test-mac-x 2)",
             );
+
             set.insert(
                 (true, "newlines at beginning and end"),
                 "
@@ -502,6 +501,7 @@ Example:
 (def test-mac-x 2)
 ",
             );
+
             set.insert(
                 (true, "mixed whitespace at beginning and end"),
                 "
@@ -567,6 +567,7 @@ Example:
     Example:
     (def test-mac-x 2)",
             );
+
             set.insert(
                 (true, "newlines at beginning and end"),
                 "
@@ -581,6 +582,7 @@ Example:
 (def test-mac-x 2)
 ",
             );
+
             set.insert(
                 (true, "mixed whitespace at beginning and end"),
                 "
@@ -600,7 +602,7 @@ Section: core
             );
 
             set.insert(
-                (true, "no usage, no whitespace around content"),
+                (true, "no usage, extra whitespace around content"),
                 "Create a macro and bind it to a symbol in the current scope.
 
     Section: core
@@ -610,20 +612,30 @@ Section: core
             );
 
             set.insert(
-                (true, "no usage, newlines at beginning and end"),
+                (
+                    false,
+                    "no description, no usage, no example, newlines at beginning and end",
+                ),
+                "
+
+Section:
+core
+",
+            );
+
+            set.insert(
+                (true, "no usage, no example, newlines at beginning and end, extra whitespace around content."),
                 "
     Create a macro and bind it to a symbol in the current scope.
 
     Section:
     core
 
-    Example:
-    (def test-mac-x 2)
 ",
             );
 
             set.insert(
-                (true, "no usage, mixed whitespace at beginning and end"),
+                (true, "no usage, mixed whitespace at beginning and end, extra whitespace around content."),
                 "
 
    Create a macro and bind it to a symbol in the current scope.
@@ -637,12 +649,30 @@ Section: core
     ",
             );
 
+            set.insert(
+                (
+                    false,
+                    "no usage, no section, mixed whitespace at beginning and end, extra whitespace around content.",
+                ),
+                "
+
+   Create a macro and bind it to a symbol in the current scope.
+
+core
+
+    Example:
+(def test-mac-x 2)
+
+
+    ",
+            );
+
             set
         };
     }
 
     #[test]
-    fn test_allowable_doc_strings() {
+    fn test_doc_string_regex() {
         for ((result, label), test_case) in REGEX_TEST_CASES.iter() {
             let fake_symbol = Cow::Owned("fake-symbol".to_string());
             match DocStringSection::parse_doc_string(fake_symbol, test_case.to_string()) {
