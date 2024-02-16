@@ -21,7 +21,7 @@ lazy_static! {
     static ref DOC_REGEX: Regex =
     //TODO PC optional Usage section OR must be auto generated?
     // legacy/builtins.rs L#937
-        RegexBuilder::new(r#"(\s*?Usage:(.+?)$\n\n|\s*?)(.*)\n\n^Section:(.+?)$(\n\n^Example:\n(.*)|\s*)"#)
+        RegexBuilder::new(r#"(\s*?Usage:(.+?)$\n\n|\s*?)(.*)\n\n\s*Section:(.+?)$(\n\n\s*Example:\n(.*)|\s*)"#)
             .multi_line(true)
             .dot_matches_new_line(true)
             .crlf(true)
@@ -550,6 +550,87 @@ Example:
 Section: core
 
 Example:
+(def test-mac-x 2)
+
+
+    ",
+            );
+
+            set.insert(
+                (true, "no whitespace around content"),
+                "Usage: (defmacro name doc_string? argument_list body)
+
+    Create a macro and bind it to a symbol in the current scope.
+
+    Section: core
+
+    Example:
+    (def test-mac-x 2)",
+            );
+            set.insert(
+                (true, "newlines at beginning and end"),
+                "
+ Usage: (defmacro name doc_string? argument_list body)
+
+Create a macro and bind it to a symbol in the current scope.
+
+Section:
+core
+
+Example:
+(def test-mac-x 2)
+",
+            );
+            set.insert(
+                (true, "mixed whitespace at beginning and end"),
+                "
+
+  Usage: (defmacro name doc_string? argument_list body)
+
+Create a macro and bind it to a symbol in the current scope.
+
+Section: core
+
+
+    Example:
+(def test-mac-x 2)
+
+
+    ",
+            );
+
+            set.insert(
+                (true, "no usage, no whitespace around content"),
+                "Create a macro and bind it to a symbol in the current scope.
+
+    Section: core
+
+    Example:
+    (def test-mac-x 2)",
+            );
+
+            set.insert(
+                (true, "no usage, newlines at beginning and end"),
+                "
+    Create a macro and bind it to a symbol in the current scope.
+
+    Section:
+    core
+
+    Example:
+    (def test-mac-x 2)
+",
+            );
+
+            set.insert(
+                (true, "no usage, mixed whitespace at beginning and end"),
+                "
+
+   Create a macro and bind it to a symbol in the current scope.
+
+Section: core
+
+    Example:
 (def test-mac-x 2)
 
 
