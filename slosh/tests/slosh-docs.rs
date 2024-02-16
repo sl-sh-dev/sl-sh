@@ -1,8 +1,12 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-// To run all tests
+// To run all tests in this executable
+//
 // cargo test --features regex --package slosh --test slosh-docs
+//
+// This integration test exists to test all of the functions that slosh has by default.
+// This differs from the unit tests that test the docs in the docs module
 
 // TODO PC slosh -c broken?
 #[test]
