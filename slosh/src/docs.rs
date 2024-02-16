@@ -10,8 +10,6 @@ use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
-use std::path::PathBuf;
-use std::process::Command;
 use std::string::ToString;
 
 const USAGE: &str = "usage";
@@ -23,8 +21,7 @@ lazy_static! {
     static ref DOC_REGEX: Regex =
     //TODO PC optional Usage section OR must be auto generated?
     // legacy/builtins.rs L#937
-        RegexBuilder::new(r#"(Usage:(.+?)$\n\n|\s*?)(.*)\n\n^Section:(.+?)$(\n\n^Example:\n(.*)|\s*)"#)
-        //RegexBuilder::new(r#"Usage:(.+?)$\n\n(.*)\n\n^Section:(.+?)$(\n\n^Example:\n(.*)|\s*)"#)
+        RegexBuilder::new(r#"(\s*?Usage:(.+?)$\n\n|\s*?)(.*)\n\n^Section:(.+?)$(\n\n^Example:\n(.*)|\s*)"#)
             .multi_line(true)
             .dot_matches_new_line(true)
             .crlf(true)
@@ -102,6 +99,13 @@ lazy_static! {
         exemption_set.insert("*bg-cyan*");
         exemption_set.insert("*bg-white*");
 
+        // default init.slosh
+        exemption_set.insert("*ns*");
+        exemption_set.insert("__prompt");
+        exemption_set.insert("get-pwd");
+        exemption_set.insert("set-prompt-tail");
+        exemption_set.insert("parse-git-branch");
+
         exemption_set
     };
 }
@@ -155,7 +159,7 @@ impl Namespace {
 
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
 struct DocStringSection {
-    usage: String,
+    usage: Option<String>,
     description: String,
     section: String,
     example: Option<String>,
@@ -163,6 +167,11 @@ struct DocStringSection {
 
 impl Display for DocStringSection {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let usage = self
+            .usage
+            .clone()
+            .map(|usage| format!("Usage:{}\n\n", usage))
+            .unwrap_or_default();
         let example = self
             .example
             .clone()
@@ -170,8 +179,8 @@ impl Display for DocStringSection {
             .unwrap_or_default();
         write!(
             f,
-            "Usage: {usage}\n\n{description}Section: {section}\n\n{example}",
-            usage = self.usage,
+            "{usage}{description}Section: {section}\n\n{example}",
+            usage = usage,
             description = self.description,
             section = self.section,
             example = example,
@@ -202,7 +211,9 @@ impl DocStringSection {
         symbol: Cow<'_, String>,
         raw_doc_string: String,
     ) -> DocResult<DocStringSection> {
+        println!("Try string: {}", raw_doc_string);
         let cap = DOC_REGEX.captures(raw_doc_string.as_str()).ok_or_else(|| {
+            println!("Not captured!?");
             if EXEMPTIONS.contains(symbol.as_str()) {
                 DocError::ExemptFromProperDocString {
                     symbol: symbol.to_owned().to_string(),
@@ -213,12 +224,7 @@ impl DocStringSection {
                 }
             }
         })?;
-        let usage = cap
-            .get(1)
-            .ok_or_else(|| DocError::DocStringMustStartWithUsage {
-                symbol: symbol.to_owned().to_string(),
-            })
-            .map(|x| x.as_str().trim().to_string())?;
+        let usage = cap.get(2).map(|x| x.as_str().trim().to_string());
         let description = cap
             .get(3)
             .ok_or_else(|| DocError::DocStringMissingSection {
@@ -309,7 +315,6 @@ impl SloshDoc {
 enum DocError {
     NoDocString { symbol: String },
     DocStringMissingSection { symbol: String, section: String },
-    DocStringMustStartWithUsage { symbol: String },
     ExemptFromProperDocString { symbol: String },
 }
 
@@ -329,16 +334,11 @@ impl Display for DocError {
             }
             DocError::ExemptFromProperDocString { symbol } => {
                 format!(
-                    "No documentation needed for provided symbol {symbol}."
+                    "No documentation exists for provided symbol {symbol}, this should be rectified."
                 )
             }
             DocError::DocStringMissingSection { symbol, section } => {
                 format!("Invalid documentation string for symbol {symbol}, missing required section {section:?}")
-            }
-            DocError::DocStringMustStartWithUsage { symbol } => {
-                format!(
-                    "Invalid documentation string for symbol {symbol}, first line must start with \"Usage:\""
-                )
             }
         }
             .to_string();
@@ -359,28 +359,38 @@ impl From<DocError> for VMError {
 
 type DocResult<T> = Result<T, DocError>;
 
+fn insert_section(
+    map: &mut HashMap<Value, Value>,
+    key: &'static str,
+    value: String,
+    vm: &mut SloshVm,
+) {
+    let key_const = Value::StringConst(vm.intern_static(key));
+    let value_text = vm.alloc_string(value);
+    map.insert(key_const, value_text);
+}
+
 impl SlFrom<SloshDoc> for HashMap<Value, Value> {
     fn sl_from(value: SloshDoc, vm: &mut SloshVm) -> VMResult<Self> {
         let mut map;
-        if let Some(example) = value.doc_string.example {
-            map = Self::with_capacity(4);
-            let example_const = Value::StringConst(vm.intern_static(EXAMPLE));
-            let example_text = vm.alloc_string(example);
-            map.insert(example_const, example_text);
-        } else {
-            map = Self::with_capacity(3)
+        match (value.doc_string.usage, value.doc_string.example) {
+            (Some(usage), Some(example)) => {
+                map = Self::with_capacity(4);
+                insert_section(&mut map, USAGE, usage, vm);
+                insert_section(&mut map, EXAMPLE, example, vm);
+            }
+            (Some(usage), None) => {
+                map = Self::with_capacity(3);
+                insert_section(&mut map, USAGE, usage, vm);
+            }
+            (None, Some(example)) => {
+                map = Self::with_capacity(3);
+                insert_section(&mut map, EXAMPLE, example, vm);
+            }
+            (None, None) => map = Self::with_capacity(2),
         }
-        let usage_const = Value::StringConst(vm.intern_static(USAGE));
-        let usage_text = vm.alloc_string(value.doc_string.usage);
-        map.insert(usage_const, usage_text);
-
-        let section_const = Value::StringConst(vm.intern_static(SECTION));
-        let section_text = vm.alloc_string(value.doc_string.section);
-        map.insert(section_const, section_text);
-
-        let desc_const = Value::StringConst(vm.intern_static(DESCRIPTION));
-        let desc_text = vm.alloc_string(value.doc_string.description);
-        map.insert(desc_const, desc_text);
+        insert_section(&mut map, SECTION, value.doc_string.section, vm);
+        insert_section(&mut map, DESCRIPTION, value.doc_string.description, vm);
         Ok(map)
     }
 }
@@ -438,6 +448,7 @@ mod test {
     use super::*;
     use crate::set_builtins;
     use compile_state::state::new_slosh_vm;
+    use std::collections::BTreeMap;
 
     #[test]
     fn list_slosh_functions() {
@@ -459,7 +470,121 @@ mod test {
         let mut docs: Vec<SloshDoc> = vec![];
         Namespace::Global.add_docs(&mut docs, &mut env).unwrap();
         for d in docs {
-            println!("{}", d);
+            assert!(d.doc_string.usage.is_some(), "All global builtins must have a usage section, because it can NOT be inferred from the environment.");
+        }
+    }
+
+    lazy_static! {
+        static ref REGEX_TEST_CASES: BTreeMap<(bool, &'static str), &'static str> = {
+            let mut set = BTreeMap::new();
+
+            set.insert(
+                (true, "no whitespace around content"),
+                "Usage: (defmacro name doc_string? argument_list body)
+
+Create a macro and bind it to a symbol in the current scope.
+
+Section: core
+
+Example:
+(def test-mac-x 2)",
+            );
+            set.insert(
+                (true, "newlines at beginning and end"),
+                "
+Usage: (defmacro name doc_string? argument_list body)
+
+Create a macro and bind it to a symbol in the current scope.
+
+Section: core
+
+Example:
+(def test-mac-x 2)
+",
+            );
+            set.insert(
+                (true, "mixed whitespace at beginning and end"),
+                "
+
+  Usage: (defmacro name doc_string? argument_list body)
+
+Create a macro and bind it to a symbol in the current scope.
+
+Section: core
+
+Example:
+(def test-mac-x 2)
+
+
+    ",
+            );
+
+            set.insert(
+                (true, "no usage, no whitespace around content"),
+                "Create a macro and bind it to a symbol in the current scope.
+
+Section: core
+
+Example:
+(def test-mac-x 2)",
+            );
+
+            set.insert(
+                (true, "no usage, newlines at beginning and end"),
+                "
+Create a macro and bind it to a symbol in the current scope.
+
+Section: core
+
+Example:
+(def test-mac-x 2)
+",
+            );
+
+            set.insert(
+                (true, "no usage, mixed whitespace at beginning and end"),
+                "
+
+   Create a macro and bind it to a symbol in the current scope.
+
+Section: core
+
+Example:
+(def test-mac-x 2)
+
+
+    ",
+            );
+
+            set
+        };
+    }
+
+    #[test]
+    fn test_allowable_doc_strings() {
+        for ((result, label), test_case) in REGEX_TEST_CASES.iter() {
+            let fake_symbol = Cow::Owned("fake-symbol".to_string());
+            match DocStringSection::parse_doc_string(fake_symbol, test_case.to_string()) {
+                ok @ Ok(_) => {
+                    assert_eq!(
+                        ok.is_ok(),
+                        *result,
+                        "Case: {},  Regex succeeded but should not have with test case: {}!",
+                        label,
+                        test_case
+                    );
+                }
+                ref err @ Err(_) => {
+                    assert_ne!(
+                        err.is_err(),
+                        *result,
+                        "Case: {}, Regex failed but should not have, got err ({:?}) with tests case: {}!",
+                        label,
+                        err,
+                        test_case
+                    );
+                }
+            }
         }
     }
 }
