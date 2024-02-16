@@ -10,6 +10,8 @@ use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
+use std::path::PathBuf;
+use std::process::Command;
 use std::string::ToString;
 
 const USAGE: &str = "usage";
@@ -21,7 +23,7 @@ lazy_static! {
     static ref DOC_REGEX: Regex =
     //TODO PC optional Usage section OR must be auto generated?
     // legacy/builtins.rs L#937
-        RegexBuilder::new(r#"(Usage:(.+?)$\n\n|\s*)(.*)\n\n^Section:(.+?)$(\n\n^Example:\n(.*)|\s*)"#)
+        RegexBuilder::new(r#"(Usage:(.+?)$\n\n|\s*?)(.*)\n\n^Section:(.+?)$(\n\n^Example:\n(.*)|\s*)"#)
         //RegexBuilder::new(r#"Usage:(.+?)$\n\n(.*)\n\n^Section:(.+?)$(\n\n^Example:\n(.*)|\s*)"#)
             .multi_line(true)
             .dot_matches_new_line(true)
@@ -218,20 +220,20 @@ impl DocStringSection {
             })
             .map(|x| x.as_str().trim().to_string())?;
         let description = cap
-            .get(2)
+            .get(3)
             .ok_or_else(|| DocError::DocStringMissingSection {
                 symbol: symbol.to_owned().to_string(),
                 section: "Description".to_string(),
             })
             .map(|x| x.as_str().to_string())?;
         let section = cap
-            .get(3)
+            .get(4)
             .ok_or_else(|| DocError::DocStringMissingSection {
                 symbol: symbol.to_owned().to_string(),
                 section: "Section".to_string(),
             })
             .map(|x| x.as_str().trim().to_string())?;
-        let example = cap.get(5).map(|x| x.as_str().trim().to_string());
+        let example = cap.get(6).map(|x| x.as_str().trim().to_string());
 
         Ok(DocStringSection {
             usage,
