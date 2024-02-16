@@ -1,9 +1,5 @@
 #!/usr/bin/env slosh
 
-; get this running in a rust integration test? that way it runs when cargo test runs?
-
-(doc-map '*)
-
 (let (globals (get-globals)
       globals-len (len globals)
       i 0)
@@ -13,3 +9,5 @@
         ;;(prn (get-prop globals.~i :doc-string))
         (prn (doc-map globals.~i))
         (inc! i)))
+
+(prn "well: " myerr)
