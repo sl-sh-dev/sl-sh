@@ -1,13 +1,11 @@
 #!/usr/bin/env slosh
 
-(let (globals (get-globals)
+(let (globals (get-globals-sorted)
       globals-len (len globals)
       i 0)
     (while (< i globals-len)
         (prn "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
         (prn globals.~i)
-        ;;(prn (get-prop globals.~i :doc-string))
+        (prn (get-prop globals.~i :doc-string))
         (prn (doc-map globals.~i))
         (inc! i)))
-
-(prn "well: " myerr)
