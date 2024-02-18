@@ -71,6 +71,7 @@ lazy_static! {
         exemption_set.insert("expand-macro");
 
         // slosh specific colors
+        exemption_set.insert("bg-color-rgb");
         exemption_set.insert("tok-slsh-form-color");
         exemption_set.insert("tok-slsh-fcn-color");
         exemption_set.insert("tok-default-color");
@@ -102,9 +103,11 @@ lazy_static! {
         // default init.slosh
         exemption_set.insert("*ns*");
         exemption_set.insert("__prompt");
+        exemption_set.insert("__line_handler");
         exemption_set.insert("get-pwd");
         exemption_set.insert("set-prompt-tail");
         exemption_set.insert("parse-git-branch");
+        exemption_set.insert("block");
 
         exemption_set
     };

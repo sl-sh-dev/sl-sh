@@ -5,10 +5,11 @@ use std::process::Command;
 //
 // cargo test --features regex --package slosh --test slosh-docs
 //
-// This integration test exists to test all of the functions that slosh has by default.
+// This integration test exists to test all the functions that slosh has by default.
 // This differs from the unit tests that test the docs in the docs module
 
 // TODO PC slosh -c broken?
+
 #[test]
 /// [toggle appropriately](https://stackoverflow.com/questions/48583049/run-additional-tests-by-using-a-feature-flag-to-cargo-test)
 #[cfg_attr(not(feature = "regex"), ignore)]

@@ -2,6 +2,7 @@ extern crate core;
 
 use compile_state::state::{CompileEnvironment, SloshVm, SloshVmTrait};
 use slvm::{CallFuncSig, VMError, VMResult, Value};
+use std::collections::BTreeMap;
 
 pub mod collections;
 pub mod conversions;
@@ -21,6 +22,22 @@ fn get_globals(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         result.push(Value::Symbol(*g));
     }
     Ok(vm.alloc_vector(result))
+}
+
+fn get_globals_sorted(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    if !registers.is_empty() {
+        return Err(VMError::new_vm(
+            "sizeof-value: takes no arguments".to_string(),
+        ));
+    }
+    let mut result = BTreeMap::new();
+    for g in vm.globals().keys() {
+        let sym = Value::Symbol(*g);
+        let val: String = sym.display_value(vm);
+        result.insert(val, sym);
+    }
+    let v = result.values().cloned().collect();
+    Ok(vm.alloc_vector(v))
 }
 
 fn get_prop(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
@@ -216,7 +233,18 @@ Example:
         get_globals,
         "Usage: (get-globals)
 
-Return a vector containing all the symbols currently defined in the globally.
+Return a vector containing all the symbols currently defined globally.
+
+Section: core
+",
+    );
+    add_builtin(
+        env,
+        "get-globals-sorted",
+        get_globals_sorted,
+        "Usage: (get-globals-sorted)
+
+Return a vector containing all the symbols currently defined globally in sorted order (alphanumerically).
 
 Section: core
 ",
