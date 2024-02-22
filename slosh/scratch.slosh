@@ -1,15 +1,4 @@
 #!/usr/bin/env slosh
 
-#%
-this is a comment
-%#
-(defn meow (x) (+ 1 x))
-
-(prn "my meow" (meow 3))
-
-;;(on-error (/ 1 0) (fn (e) (prn "this happened: " e)))
-(prn "before")
-(def my-err (on-error (/ 1 0)))
-(prn "after")
-(prn "myerr: " my-err)
+(/ 1 0)
 
