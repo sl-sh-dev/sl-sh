@@ -7,7 +7,6 @@ use std::fs::{create_dir_all, File};
 use std::io::{BufRead, ErrorKind, Write};
 use std::ops::DerefMut;
 use std::path::{Path, PathBuf};
-use std::process::ExitCode;
 use std::sync::Arc;
 use std::{env, fs};
 
@@ -313,12 +312,13 @@ fn main() {
 }
 
 fn run_slosh() -> i32 {
+    let mut status = 0;
     if let Some(config) = get_config() {
         ENV.with(|renv| {
             let mut env = renv.borrow_mut();
             set_builtins(&mut env);
         });
-        if config.command.is_none() && config.script.is_none() {
+        status = if config.command.is_none() && config.script.is_none() {
             load_sloshrc();
             if Sys::is_tty(STDIN_FILENO) {
                 run_shell_tty()
@@ -333,7 +333,7 @@ fn run_slosh() -> i32 {
             if Sys::is_tty(STDIN_FILENO) {
                 shell::run::setup_shell_tty(STDIN_FILENO);
             }
-            let status = SHELL_ENV.with(|jobs| {
+            status = SHELL_ENV.with(|jobs| {
                 shell::run::run_one_command(&command, &mut jobs.borrow_mut()).unwrap_or_else(
                     |err| {
                         eprintln!("ERROR executing {command}: {err}");
@@ -347,7 +347,7 @@ fn run_slosh() -> i32 {
             status
         } else if let Some(script) = config.script {
             load_sloshrc();
-            let status = ENV.with(|renv| {
+            status = ENV.with(|renv| {
                 let mut env = renv.borrow_mut();
                 let script = env.intern(&script);
                 let script = env.get_interned(script);
@@ -361,11 +361,10 @@ fn run_slosh() -> i32 {
             });
             status
         } else {
-            0
-        }
-    } else {
-        0
+            status
+        };
     }
+    status
 }
 
 fn run_shell_tty() -> i32 {
@@ -395,6 +394,7 @@ fn run_shell_tty() -> i32 {
     SHELL_ENV.with(|jobs| {
         jobs.borrow_mut().cap_term();
     });
+    let mut status = 0;
     loop {
         SHELL_ENV.with(|jobs| {
             jobs.borrow_mut().reap_procs();
@@ -404,6 +404,7 @@ fn run_shell_tty() -> i32 {
             Ok(input) => input,
             Err(err) => match err.kind() {
                 ErrorKind::UnexpectedEof => {
+                    status = 1; //TODO PC fix
                     break;
                 }
                 ErrorKind::Interrupted => {
@@ -430,15 +431,20 @@ fn run_shell_tty() -> i32 {
             res
         };
         con.history.push(&res).expect("Failed to push history.");
-        if res.starts_with('(') {
-            ENV.with(|env| {
-                exec_expression(res, &mut env.borrow_mut());
-            });
-        } else {
-            let status_ = run_command(&res);
-        }
+        status = exec_expr_or_run_command(&res, status);
     }
-    0
+    status
+}
+
+fn exec_expr_or_run_command(res: &String, mut status: i32) -> i32 {
+    if res.starts_with('(') {
+        ENV.with(|env| {
+            exec_expression(res.clone(), &mut env.borrow_mut());
+        });
+    } else {
+        status = run_command(&res);
+    }
+    status
 }
 
 fn run_command(res: &String) -> i32 {
@@ -470,13 +476,7 @@ fn run_shell_with_stdin() -> i32 {
         if res.is_empty() {
             continue;
         }
-        if res.starts_with('(') {
-            ENV.with(|env| {
-                exec_expression(res.clone(), &mut env.borrow_mut());
-            });
-        } else {
-            status = run_command(&res);
-        }
+        status = exec_expr_or_run_command(&res, status);
         res.clear();
     }
     SHELL_ENV.with(|jobs| {

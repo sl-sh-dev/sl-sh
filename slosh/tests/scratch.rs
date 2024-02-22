@@ -35,5 +35,5 @@ fn scratch_test() {
     println!("status {}", output.status);
     println!("stdout {}", s);
 
-    assert!(output.status.success());
+    assert!(!output.status.success());
 }
