@@ -17,8 +17,10 @@ use std::process::Command;
 /// To Execute:
 ///     cargo test --features regex --package slosh --test slosh-docs test_slosh_doc_string_parsing_in_slosh -- --exact
 ///
-fn scratch_test() {
-    let test_script = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scratch.slosh");
+fn slosh_scripts_with_uncaught_lisp_errors_return_with_failure_code() {
+    let test_script = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("lisp-script.slosh");
     println!("test_script: {test_script:?}");
 
     let slosh_path = PathBuf::from(env!("CARGO_BIN_EXE_slosh")).into_os_string();
