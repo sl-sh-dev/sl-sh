@@ -8,6 +8,12 @@ use std::process::Command;
 // This integration test exists to test all the functions that slosh has by default.
 // This differs from the unit tests that test the docs in the docs module
 
+// TODO PC ISSUE #111 I believe... an integration test could just run through every
+//  slosh file it finds in a directory, run it, and report if any errors occurred?
+//  issue is making sure any error in the slosh file actually reports a non zero exit
+//  code. Would be a good way to easily add slosh level tests with slosh scripts BUT
+//  have theam easily caught in CI as per issue.
+
 // TODO PC slosh -c broken?
 
 #[test]
@@ -36,5 +42,10 @@ fn test_slosh_doc_string_parsing_in_slosh() {
     println!("status {}", output.status);
     println!("stdout {}", s);
 
-    assert!(output.status.success());
+    assert!(
+        output.status.success(),
+        "Integration test script failed!: \nstdout:\n{}\n\nstderr:\n{}",
+        String::from_utf8_lossy(output.stdout.as_slice()),
+        String::from_utf8_lossy(output.stderr.as_slice())
+    );
 }

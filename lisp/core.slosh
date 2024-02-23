@@ -109,6 +109,8 @@ Example:
 #%
 Usage (empty? s)
 
+Section: collection
+
 Return false if length of s is 0, true otherwise.
 
 Example:
@@ -121,6 +123,8 @@ Example:
 #%
 Usage (not-empty? s)
 
+Section: collection
+
 Return true if length of s is not 0, false otherwise.
 
 Example:
@@ -132,6 +136,8 @@ Example:
 
 #%
 Usage: (callable? to-test)
+
+Section: type
 
 True if the to-test can be called as the first argument in an expression.
 %#
@@ -247,6 +253,11 @@ Example:
   (params bindings & body)
     `(call/cc (fn (break) ((fn ~params ~@body) ~@bindings))))
 
+#%
+Print the documentation for provided symbol.
+
+Section: core
+%#
 (defmacro doc (sym) `(prn (eval (get-prop '~sym :doc-string))))
 
 #%
