@@ -137,8 +137,8 @@ impl Namespace {
     fn add_docs(&self, docs: &mut Vec<SloshDoc>, vm: &mut SloshVm) -> DocResult<()> {
         match self {
             Namespace::Global => {
-                for (g, slot) in vm.globals().clone() {
-                    let slosh_doc = SloshDoc::new(g, slot as u32, vm, self.clone());
+                for g in vm.globals().clone().keys() {
+                    let slosh_doc = SloshDoc::new(*g, vm, self.clone());
                     match slosh_doc {
                         Ok(slosh_doc) => {
                             docs.push(slosh_doc);
@@ -197,13 +197,12 @@ impl DocStringSection {
         let sym_str = sym.display_value(&vm);
         let raw_doc_string = vm
             .get_global_property(slot, docstring_key)
-            .map_or(None, |x| {
-                if let Value::String(h) = x {
-                    Some(vm.get_string(h).to_string())
-                } else {
-                    None
-                }
+            .map_or(None, |x| match x {
+                Value::String(h) => Some(vm.get_string(h).to_string()),
+                Value::StringConst(i) => Some(vm.get_interned(i).to_string()),
+                _ => None,
             })
+            // return default empty string and have parse_doc_string handle error if no doc provided.
             .unwrap_or_default();
         Self::parse_doc_string(Cow::Owned(sym_str), raw_doc_string)
     }
@@ -294,17 +293,24 @@ impl Ord for SloshDoc {
 }
 
 impl SloshDoc {
-    fn new(g: Interned, slot: u32, vm: &mut SloshVm, namespace: Namespace) -> DocResult<SloshDoc> {
+    fn new(g: Interned, vm: &mut SloshVm, namespace: Namespace) -> DocResult<SloshDoc> {
         let sym = Value::Symbol(g);
-        let doc_string = DocStringSection::from_symbol(slot, sym, vm)?;
-        let symbol = sym.display_value(&vm);
-        let symbol_type = sym.display_type(&vm).to_string();
-        Ok(SloshDoc {
-            symbol,
-            symbol_type,
-            namespace,
-            doc_string,
-        })
+        let slot = vm.global_intern_slot(g);
+        if let Some(slot) = slot {
+            let doc_string = DocStringSection::from_symbol(slot, sym, vm)?;
+            let symbol = sym.display_value(&vm);
+            let symbol_type = sym.display_type(&vm).to_string();
+            Ok(SloshDoc {
+                symbol,
+                symbol_type,
+                namespace,
+                doc_string,
+            })
+        } else {
+            Err(DocError::NoSymbol {
+                symbol: sym.display_value(vm).to_string(),
+            })
+        }
     }
 
     /// Provide the fully
@@ -314,6 +320,7 @@ impl SloshDoc {
 }
 
 enum DocError {
+    NoSymbol { symbol: String },
     NoDocString { symbol: String },
     DocStringMissingSection { symbol: String, section: String },
     ExemptFromProperDocString { symbol: String },
@@ -328,9 +335,14 @@ impl Debug for DocError {
 impl Display for DocError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let str = match self {
+            DocError::NoSymbol { symbol } => {
+                format!(
+                    "No documentation string provided for symbol {symbol}."
+                )
+            }
             DocError::NoDocString { symbol } => {
                 format!(
-                    "Either documentation provided does not conform to conventional layout or no documentation string provided for symbol {symbol} all slosh functions written in Rust must have a valid documentation string."
+                    "Either documentation provided does not conform to conventional layout or no documentation string provided for symbol {symbol} all slosh functions with documentation must have a string that conforms to the conventional layout."
                 )
             }
             DocError::ExemptFromProperDocString { symbol } => {
@@ -406,22 +418,13 @@ impl SlFrom<SloshDoc> for Value {
 fn doc_map(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();
     match (i.next(), i.next()) {
-        (Some(Value::Symbol(g)), None) => {
-            let slot = vm.global_intern_slot(*g);
-            if let Some(slot) = slot {
-                match SloshDoc::new(*g, slot, vm, Namespace::Global) {
-                    Ok(slosh_doc) => Value::sl_from(slosh_doc, vm),
-                    Err(DocError::ExemptFromProperDocString { symbol: _ }) => {
-                        Ok(vm.alloc_map(HashMap::new()))
-                    }
-                    Err(e) => Err(VMError::from(e)),
-                }
-            } else {
-                Err(VMError::new_vm(
-                    "first form must evaluate to a symbol".to_string(),
-                ))
+        (Some(Value::Symbol(g)), None) => match SloshDoc::new(*g, vm, Namespace::Global) {
+            Ok(slosh_doc) => Value::sl_from(slosh_doc, vm),
+            Err(DocError::ExemptFromProperDocString { symbol: _ }) => {
+                Ok(vm.alloc_map(HashMap::new()))
             }
-        }
+            Err(e) => Err(VMError::from(e)),
+        },
         _ => Err(VMError::new_vm("takes one argument (symbol)".to_string())),
     }
 }
