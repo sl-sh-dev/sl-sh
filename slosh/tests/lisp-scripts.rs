@@ -3,12 +3,6 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use std::process::Command;
 
-// To run all tests in this executable with printouts
-//
-// cargo test --package slosh --test lisp-scripts -- --nocapture
-//
-// This integration test exists to test all the functions that slosh has by default.
-// This differs from the unit tests that test the docs in the docs module
 fn glob_to_vec(pat: impl Into<PathBuf>) -> Vec<PathBuf> {
     match expand_glob(pat) {
         GlobOutput::Arg(p) => {
@@ -19,16 +13,15 @@ fn glob_to_vec(pat: impl Into<PathBuf>) -> Vec<PathBuf> {
 }
 
 #[test]
-/// ALL slosh scripts in the ./slosh/tests/ directory will be run by this integreation test. If
+/// To run all tests in this executable with printouts.
+///
+/// ```
+/// cargo test --package slosh --test lisp-scripts -- --nocapture
+///```
+///
+/// All slosh scripts in the ./slosh/tests/ directory will be run by this integration test. If
 /// the suffix of the file is _fail.slosh, then the test script is expected to fail. All other
 /// slosh scripts should return a 0 exit code or the integration test will fail.
-///
-/// [toggle appropriately](https://stackoverflow.com/questions/48583049/run-additional-tests-by-using-a-feature-flag-to-cargo-test)
-/// look at all these amazing [environment variables](https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates)!
-/// EXE only works [with integration tests](https://doc.rust-lang.org/rust-by-example/testing/integration_testing.html)
-/// To Execute:
-///     cargo test --features regex --package slosh --test slosh-docs test_slosh_doc_string_parsing_in_slosh -- --exact
-///
 fn lisp_scripts() {
     let tests = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests");
     let test_glob = tests.join("*.slosh");
