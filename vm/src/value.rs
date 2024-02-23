@@ -84,23 +84,225 @@ impl<'vm, ENV> Iterator for PairIter<'vm, ENV> {
     }
 }
 
-// Do this wrap nonsense so that Value is hashable...
-#[derive(Copy, Clone, Debug)]
-pub struct F32Wrap(pub f32);
-
-impl PartialEq for F32Wrap {
+/**
+ * F56 struct
+ * This struct uses 7 bytes to represent a floating point number.
+ * Most operations are done by converting to f64, performing the operation, and then converting back to F56
+ *
+ * F32 uses 1 bit for the sign,  8 bits for the exponent, and 23 bits for the mantissa.
+ * F56 uses 1 bit for the sign, 10 bits for the exponent, and 45 bits for the mantissa.
+ * F64 uses 1 bit for the sign, 11 bits for the exponent, and 52 bits for the mantissa.
+ *
+ *   Byte 0    Byte 1    Byte 2    Byte 3    Byte 4    Byte 5    Byte 6
+ * [sEEEEEEE][EEEmmmmm][mmmmmmmm][mmmmmmmm][mmmmmmmm][mmmmmmmm][mmmmmmmm]
+ *
+ * Exponent bits range from 0 to 1023
+ * they represent -511 to +512 but are stored biased by +511
+ * the exponent of -511 is reserved for the number 0 and subnormal numbers
+ * the exponent of +512 is reserved for infinity and NaN
+ * so normal exponents range from -510 to +511
+ *
+ * smallest positive subnormal value is 8.48e-168 (2^-555)
+ * smallest positive normal value is 2.98e-154 (2^-510)
+ * maximum finite value is 1.34e154
+*/
+#[derive(Copy, Clone)]
+pub struct F56(pub [u8; 7]);
+impl Eq for F56 {}
+impl PartialEq for F56 {
     fn eq(&self, other: &Self) -> bool {
-        (self.0 - other.0).abs() < f32::EPSILON
-        //self.0.to_bits() == other.0.to_bits()
+        f64::from(*self) == f64::from(*other)
     }
 }
-
-impl Eq for F32Wrap {}
-
-impl Hash for F32Wrap {
+impl Hash for F56 {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write_u32(self.0.to_bits());
+        state.write_u64(f64::from(*self).to_bits())
     }
+}
+impl std::fmt::Debug for F56 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "F56({:?})", f64::from(*self))
+    }
+}
+impl Display for F56 {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        /* Converting the F56 to f64 to print it almost works
+        But the f64 is slightly more precise and the internal implementation of f64->string
+        knows that the f64 has 15 decimal digits that are guaranteed accurate.
+        F56 only has 12, meaning that .0023 appears as .0022999999999999687
+        if F56 knew to only print 12 digits then it would be fine,
+        but when going through f64, it thinks it has 15 perfect digits.
+
+        We can set the precision to 12 but that increases numbers like 1.0 to 1.0000000000000
+        So let's do that, and remove the trailing zeros and decimal points added on
+         */
+        let first_pass = format!("{:.*}", F56::DIGITS, f64::from(*self));
+        // remove trailing zeros after a decimal point
+        let second_pass = if first_pass.contains('.') {
+            first_pass.trim_end_matches('0').trim_end_matches('.')
+        } else {
+            &first_pass
+        };
+        write!(f, "{}", second_pass)
+    }
+}
+impl From<f64> for F56 {
+    fn from(f: f64) -> F56 {
+        let f64_bytes = f.to_be_bytes();
+        let f64_word = u64::from_be_bytes(f64_bytes);
+        let f64_sign: u8 = (f64_word >> 63) as u8; // first bit
+        let f64_biased_exponent: u16 = ((f64_word >> 52) & 0b111_1111_1111) as u16; // first 11 bits after the sign bit
+        let true_exponent: i16 = f64_biased_exponent as i16 - 1023i16; // remove the bias of 2^10-1
+        let f64_mantissa = f64_word & 0x000f_ffff_ffff_ffff; // everything after first 12 bits
+        let mut f56_mantissa = f64_mantissa >> 7; // we lose 7 bits in mantissa
+        if F56::ROUNDUP_ENABLED {
+            let round_up_bit = f64_mantissa & 0b0100_0000u64 > 0; // the highest bit we lost (7th bit from the end)
+            f56_mantissa += if round_up_bit { 1 } else { 0 }; // round up if the 7th bit is 1
+        }
+
+        let f56_biased_exponent = match f64_biased_exponent {
+            0b111_1111_1111 => {
+                // Special case meaning the f64 is NaN or Infinity
+                // NaN's mantissa has at least one [1]
+                // Infinity's mantissa is all [0]s
+                // We need to make sure that the lost bits from the f64 mantissa don't change it from NaN to Infinity
+                if f64_mantissa == 0u64 {
+                    f56_mantissa = 0u64; // mantissa must be all [0]s to represent Infinity
+                } else {
+                    f56_mantissa = 0b11_1111_1111u64; // mantissa must be all [1]s to represent NaN
+                }
+                0b11_1111_1111u64 // 10 bits of all 1s
+            }
+            0b000_0000_0000 => {
+                // Special case meaning the f64 is 0 or subnormal
+                // in both cases the f56 will be 0
+                // F56 cannot represent any numbers that are subnormal in F64
+                // The smallest positive F56 number is 8e-168 and F64 subnormals start at 1e-308
+                f56_mantissa = 0u64;
+                0b00_0000_0000u64
+            }
+            _ if true_exponent > 511 => {
+                // TOO LARGE TO PROPERLY REPRESENT
+                // standard behavior converting from f64 to f32 is to represent this as Infinity rather than panicking
+                f56_mantissa = 0u64; // mantissa must be all [0]s to represent Infinity
+                0b11_1111_1111u64 // exponent for Infinity
+            }
+            _ if true_exponent < -510 => {
+                /*
+                    This will be either a subnormal or 0
+                    Requires a subnormal f56 which will lose precision as we near 8.48e-168
+
+                    to calculate a 45 bit subnormal mantissa as 0.fraction,
+                    take the 45 bits and treat them like an unsigned int and then divide by 2^45
+
+                    value of subnormal f56 = value of f64
+                    value of subnormal f56 = 2^-510 * 0.fraction
+                    value of f64 = 2^-510 * (u45 / 2^45)
+                    value of f64 * 2^555 = u45
+
+                    multiplying the f64 by 2^555 can be done by adding 555 to the exponent
+                    we can do this safely because the max biased exponent is 2047
+                    and we know that the current biased exponent is < 513 (corresponding to true exponent of -510)
+                */
+                let new_f64_exponent = (f64_biased_exponent + 555) as u64;
+                let new_f64_word = (f64_sign as u64) << 63 | new_f64_exponent << 52 | f64_mantissa;
+                let new_f64 = f64::from_bits(new_f64_word);
+                let u45 = new_f64 as u64; // we only care about the integer part
+                f56_mantissa = u45; // mantissa is set to u45
+
+                0b00_0000_0000u64 // exponent is set to 0
+            }
+            _ => {
+                // Generic case
+                (true_exponent + 511) as u64 // add in the bias for F56
+            }
+        };
+
+        let f56_sign: u64 = f64_sign as u64;
+        let word = f56_sign << 55 | f56_biased_exponent << 45 | f56_mantissa;
+        let f56_bytes = word.to_be_bytes();
+        F56([
+            f56_bytes[1],
+            f56_bytes[2],
+            f56_bytes[3],
+            f56_bytes[4],
+            f56_bytes[5],
+            f56_bytes[6],
+            f56_bytes[7],
+        ])
+    }
+}
+impl From<f32> for F56 {
+    fn from(f: f32) -> F56 {
+        f64::from(f).into()
+    }
+}
+impl From<F56> for f64 {
+    fn from(f: F56) -> f64 {
+        // f64 has 1 sign bit, 11 exponent bits, and 52 mantissa bits
+        // f56 has 1 sign bit, 10 exponent bits, and 45 mantissa bits
+        let bytes7 = f.0;
+        let f56_word = u64::from_be_bytes([
+            0, bytes7[0], bytes7[1], bytes7[2], bytes7[3], bytes7[4], bytes7[5], bytes7[6],
+        ]);
+        let f56_sign: u8 = (f56_word >> 55) as u8; // first bit
+        let f56_biased_exponent: u16 = (f56_word >> 45) as u16 & 0x3FF; // first 10 bits after the sign bit
+        let f56_mantissa: u64 = f56_word & 0x1FFF_FFFF_FFFF; // the rightmost 45 bits
+        let true_exponent = f56_biased_exponent as i16 - 511; // remove the bias of 2^9-1
+
+        let f64_biased_exponent: u64 = match { f56_biased_exponent } {
+            0b11_1111_1111 => {
+                // Special case of all [1]s meaning NaN or Infinity
+                0b111_1111_1111 as u64
+            }
+            0b00_0000_0000 => {
+                // Special case of all [0]s meaning 0 or subnormal
+                if f56_mantissa == 0u64 {
+                    // the f56 was 0 so the f64 should be 0
+                    0b000_0000_0000 as u64
+                } else {
+                    // the f56 was subnormal so the f64 should interpret the exponent as -512
+                    // note the slightly different addition of 1022 instead of 1023
+                    // when the exponents field falls from 0x1 to 0x0 it conceptually stays at 2^-510
+                    // so even though the biased exponent looks 1 lower it is actually not
+                    // so we don't need to add quite as much to get it where it needs to be
+                    (true_exponent + 1022) as u64
+                }
+            }
+            _ => {
+                // Generic case
+                (true_exponent + 1023) as u64 // add in the bias for F64
+            }
+        };
+
+        let f64_sign = f56_sign as u64;
+        let f64_mantissa = f56_mantissa << 7 as u64; // we add 7 bits in mantissa, but they're all zeros
+        let word: u64 = f64_sign << 63 | f64_biased_exponent << 52 | f64_mantissa;
+        f64::from_be_bytes(word.to_be_bytes())
+    }
+}
+impl From<F56> for f32 {
+    fn from(f: F56) -> f32 {
+        f64::from(f) as f32
+    }
+}
+impl F56 {
+    /** Largest finite F56, roughly 1.34e154 */
+    pub const MAX: F56 = F56([0x7F, 0xDF, 0xff, 0xff, 0xff, 0xff, 0xff]);
+    /** Smallest positive normal F56, roughly 2.98e-154 */
+    pub const MIN_POSITIVE: F56 = F56([0x00, 0b0010_0000, 0x00, 0x00, 0x00, 0x00, 0x00]);
+    /** Smallest positive subnormal F56, roughly 8.48e-168 */
+    pub const MIN_POSITIVE_SUBNORMAL: F56 = F56([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+    /** Minimum numer of decimal digits of precision (experimentally derived) */
+    pub const DIGITS: usize = 12;
+    /** Cutoff for relative difference between an f64 and the F56's approximation */
+    pub const EPSILON: f64 = 1e-13;
+    /**
+     * When converting from f64 to F56 we truncate 7 bits of the mantissa
+     * We could round up if the 7th bit is 1, but this is might cause issues.
+     * Mantissas like 0xFFFF_FFFF_... can catastrophically round to 0x0000_0000_...
+     */
+    pub const ROUNDUP_ENABLED: bool = false;
 }
 
 pub const INT_BITS: u8 = 56;
@@ -129,7 +331,7 @@ pub fn to_i56(i: i64) -> Value {
 pub enum Value {
     Byte(u8),
     Int([u8; 7]), // Store a 7 byte int (i56...).
-    Float(F32Wrap),
+    Float(F56),
     CodePoint(char),
     CharCluster(u8, [u8; 6]),
     CharClusterLong(Handle), // Handle points to a String on the heap.
@@ -165,13 +367,13 @@ impl Default for Value {
 
 impl From<f32> for Value {
     fn from(value: f32) -> Self {
-        Self::Float(F32Wrap(value))
+        Self::Float(F56::from(value))
     }
 }
 
 impl From<f64> for Value {
     fn from(value: f64) -> Self {
-        Self::Float(F32Wrap(value as f32))
+        Self::Float(F56::from(value))
     }
 }
 
@@ -270,7 +472,7 @@ impl Value {
         match &self {
             Value::Byte(b) => Ok(*b as f32),
             Value::Int(i) => Ok(from_i56(i) as f32),
-            Value::Float(f) => Ok(f.0),
+            Value::Float(f) => Ok(f32::from(*f)),
             _ => Err(VMError::new_value(format!("Not a float: {self:?}"))),
         }
     }
@@ -399,7 +601,7 @@ impl Value {
             Value::True => "true".to_string(),
             Value::False => "false".to_string(),
             Value::Int(i) => format!("{}", from_i56(i)),
-            Value::Float(f) => format!("{}", f.0),
+            Value::Float(f) => format!("{}", f),
             Value::Byte(b) => format!("{b}"),
             Value::Symbol(i) => vm.get_interned(*i).to_string(),
             Value::Keyword(i) => format!(":{}", vm.get_interned(*i)),
