@@ -6,8 +6,6 @@
     (while (< i globals-len)
         (prn "Symbol: " globals.~i)
         (prn "===")
-        (prn "Global prop rawstring: " (get-prop globals.~i :doc-string))
         (def doc (doc-map globals.~i))
-        (prn "Usage: " (doc :usage))
         (prn "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
         (inc! i)))
