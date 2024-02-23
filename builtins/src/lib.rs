@@ -2,7 +2,6 @@ extern crate core;
 
 use compile_state::state::{CompileEnvironment, SloshVm, SloshVmTrait};
 use slvm::{CallFuncSig, VMError, VMResult, Value};
-use std::collections::BTreeMap;
 
 pub mod collections;
 pub mod conversions;

@@ -28,7 +28,7 @@ use sl_liner::{keymap, ColorClosure, Context, Prompt};
 mod completions;
 mod config;
 pub mod debug;
-#[cfg(any(test, feature = "regex"))]
+#[cfg(any(test, feature = "lisp-test"))]
 pub mod docs;
 mod liner_rules;
 mod load_eval;
@@ -301,7 +301,7 @@ pub fn set_builtins(env: &mut SloshVm) {
     if let Ok(dir) = env::current_dir() {
         env::set_var("PWD", dir);
     }
-    #[cfg(any(test, feature = "regex"))]
+    #[cfg(any(test, feature = "lisp-test"))]
     {
         docs::add_builtins(env);
     }

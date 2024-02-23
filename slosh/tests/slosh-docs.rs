@@ -12,11 +12,11 @@ use std::process::Command;
 
 #[test]
 /// [toggle appropriately](https://stackoverflow.com/questions/48583049/run-additional-tests-by-using-a-feature-flag-to-cargo-test)
-#[cfg_attr(not(feature = "regex"), ignore)]
+#[cfg_attr(not(feature = "lisp-test"), ignore)]
 /// look at all these amazing [environment variables](https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates)!
 /// EXE only works [with integration tests](https://doc.rust-lang.org/rust-by-example/testing/integration_testing.html)
 /// To Execute:
-///     cargo test --features regex --package slosh --test slosh-docs test_slosh_doc_string_parsing_in_slosh -- --exact
+///     cargo test --features lisp-test --package slosh --test slosh-docs test_slosh_doc_string_parsing_in_slosh -- --exact
 ///
 fn test_slosh_doc_string_parsing_in_slosh() {
     let test_script = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("run-tests.slosh");

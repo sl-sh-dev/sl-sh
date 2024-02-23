@@ -5,7 +5,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-regex = ["dep:regex", "dep:lazy_static"]
+lisp-test = ["dep:regex", "dep:lazy_static"]
 
 [dependencies]
 unicode_reader = "1"
@@ -18,7 +18,7 @@ shell = { path = "../shell" }
 unicode-width = "0.1"
 glob = "0.3"
 
-# regex dependencies
+# lisp-test dependencies
 regex = { workspace = true, optional = true }
 lazy_static = { workspace = true, optional = true }
 
