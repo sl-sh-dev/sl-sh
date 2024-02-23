@@ -7,7 +7,7 @@ use slvm::VMErrorObj::Message;
 use slvm::{Interned, VMError, VMResult, Value};
 use std::borrow::Cow;
 use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 use std::string::ToString;
@@ -429,6 +429,22 @@ fn doc_map(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
+fn get_globals_sorted(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    if !registers.is_empty() {
+        return Err(VMError::new_vm(
+            "sizeof-value: takes no arguments".to_string(),
+        ));
+    }
+    let mut result = BTreeMap::new();
+    for g in vm.globals().keys() {
+        let sym = Value::Symbol(*g);
+        let val: String = sym.display_value(vm);
+        result.insert(val, sym);
+    }
+    let v = result.values().cloned().collect();
+    Ok(vm.alloc_vector(v))
+}
+
 pub fn add_builtins(env: &mut SloshVm) {
     add_builtin(
         env,
@@ -443,6 +459,18 @@ Section: global
 
 Example:
 #t
+",
+    );
+
+    add_builtin(
+        env,
+        "get-globals-sorted",
+        get_globals_sorted,
+        "Usage: (get-globals-sorted)
+
+Return a vector containing all the symbols currently defined globally in sorted order (alphanumerically).
+
+Section: core
 ",
     );
 }
