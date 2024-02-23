@@ -174,7 +174,7 @@ fn load_sloshrc() {
                 );
                 let init = slosh_dir.join("init.slosh");
                 if fs::metadata::<&Path>(init.as_ref()).is_err() {
-                    match File::create::<&Path>(slosh_dir.as_ref()) {
+                    match File::create::<&Path>(init.as_ref()) {
                         Ok(mut f) => match f.write_all(SLSHRC.as_bytes()) {
                             Ok(_) => {}
                             Err(e) => {
