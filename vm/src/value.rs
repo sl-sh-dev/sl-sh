@@ -250,7 +250,7 @@ impl From<F56> for f64 {
         let f56_mantissa: u64 = f56_word & 0x1FFF_FFFF_FFFF; // the rightmost 45 bits
         let true_exponent = f56_biased_exponent as i16 - 511; // remove the bias of 2^9-1
 
-        let f64_biased_exponent: u64 = match { f56_biased_exponent } {
+        let f64_biased_exponent: u64 = match f56_biased_exponent {
             0b11_1111_1111 => {
                 // Special case of all [1]s meaning NaN or Infinity
                 0b111_1111_1111_u64
