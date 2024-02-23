@@ -208,7 +208,6 @@ impl RedirType {
                     .append(true)
                     .create(true)
                     .read(true)
-                    .write(true)
                     .open(path)?;
                 // Use as_raw_fd ot nto_raw_fd so f will close when dropped.
                 Sys::dup2_fd(f.into(), *fd)?;
