@@ -253,13 +253,13 @@ impl From<F56> for f64 {
         let f64_biased_exponent: u64 = match { f56_biased_exponent } {
             0b11_1111_1111 => {
                 // Special case of all [1]s meaning NaN or Infinity
-                0b111_1111_1111 as u64
+                0b111_1111_1111_u64
             }
             0b00_0000_0000 => {
                 // Special case of all [0]s meaning 0 or subnormal
                 if f56_mantissa == 0u64 {
                     // the f56 was 0 so the f64 should be 0
-                    0b000_0000_0000 as u64
+                    0b000_0000_0000_u64
                 } else {
                     // the f56 was subnormal so the f64 should interpret the exponent as -512
                     // note the slightly different addition of 1022 instead of 1023
@@ -276,7 +276,7 @@ impl From<F56> for f64 {
         };
 
         let f64_sign = f56_sign as u64;
-        let f64_mantissa = f56_mantissa << 7 as u64; // we add 7 bits in mantissa, but they're all zeros
+        let f64_mantissa = f56_mantissa << 7_u64; // we add 7 bits in mantissa, but they're all zeros
         let word: u64 = f64_sign << 63 | f64_biased_exponent << 52 | f64_mantissa;
         f64::from_be_bytes(word.to_be_bytes())
     }
