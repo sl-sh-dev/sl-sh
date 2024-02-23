@@ -318,12 +318,12 @@ fn run_slosh() -> i32 {
             let mut env = renv.borrow_mut();
             set_builtins(&mut env);
         });
-        status = if config.command.is_none() && config.script.is_none() {
+        if config.command.is_none() && config.script.is_none() {
             load_sloshrc();
             if Sys::is_tty(STDIN_FILENO) {
-                run_shell_tty()
+                status = run_shell_tty();
             } else {
-                run_shell_with_stdin()
+                status = run_shell_with_stdin();
             }
         } else if let Some(mut command) = config.command {
             for a in &config.args {
@@ -344,7 +344,6 @@ fn run_slosh() -> i32 {
             SHELL_ENV.with(|jobs| {
                 jobs.borrow_mut().reap_procs();
             });
-            status
         } else if let Some(script) = config.script {
             load_sloshrc();
             status = ENV.with(|renv| {
@@ -359,10 +358,7 @@ fn run_slosh() -> i32 {
                     }
                 }
             });
-            status
-        } else {
-            status
-        };
+        }
     }
     status
 }
