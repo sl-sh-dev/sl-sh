@@ -71,6 +71,7 @@ lazy_static! {
         exemption_set.insert("expand-macro");
 
         // slosh specific colors
+        exemption_set.insert("get-rgb-seq");
         exemption_set.insert("bg-color-rgb");
         exemption_set.insert("tok-slsh-form-color");
         exemption_set.insert("tok-slsh-fcn-color");
@@ -378,7 +379,7 @@ fn insert_section(
     value: String,
     vm: &mut SloshVm,
 ) {
-    let key_const = Value::StringConst(vm.intern_static(key));
+    let key_const = Value::Keyword(vm.intern_static(key));
     let value_text = vm.alloc_string(value);
     map.insert(key_const, value_text);
 }
