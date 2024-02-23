@@ -438,7 +438,7 @@ fn exec_expr_or_run_command(res: &String, mut status: i32) -> i32 {
             exec_expression(res.clone(), &mut env.borrow_mut());
         });
     } else {
-        status = run_command(&res);
+        status = run_command(res);
     }
     status
 }
