@@ -244,26 +244,24 @@ impl From<F56> for f64 {
         let true_exponent = f56_biased_exponent as i16 - 511; // remove the bias of 2^9-1
 
         let f64_biased_exponent: u64 = match f56_biased_exponent {
-            0b11_1111_1111 => {
-                // Special case of all [1]s meaning NaN or Infinity
-                0b111_1111_1111_u64
+            // NaN or Infinity
+            // Either way the f64 will also have an exponent of all [1]s
+            0b11_1111_1111 => 0b111_1111_1111_u64,
+
+            // Zero
+            _ if f56_biased_exponent == 0b00_0000_0000 && f56_mantissa == 0u64 => {
+                0b000_0000_0000_u64
             }
-            0b00_0000_0000 => {
-                // Special case of all [0]s meaning 0 or subnormal
-                if f56_mantissa == 0u64 {
-                    // the f56 was 0 so the f64 should be 0
-                    0b000_0000_0000_u64
-                } else {
-                    // the f56 was subnormal so the f64 should interpret the exponent as -512
-                    // note the slightly different addition of 1022 instead of 1023
-                    // when the exponents field falls from 0x1 to 0x0 it conceptually stays at 2^-510
-                    // so even though the biased exponent looks 1 lower it is actually not
-                    // so we don't need to add quite as much to get it where it needs to be
-                    (true_exponent + 1022) as u64
-                }
+            // Subnormal
+            _ if f56_biased_exponent == 0b00_0000_0000 && f56_mantissa > 0u64 => {
+                // the f56's exponent is actually representing -510 instead of 0
+                // note that -510 exponent would also represented by 0x1
+                // which is why we only need to add 1022 instead of 1023 to bias this for f64
+                (true_exponent + 1022) as u64
             }
+
+            // Generic case
             _ => {
-                // Generic case
                 (true_exponent + 1023) as u64 // add in the bias for F64
             }
         };
