@@ -116,9 +116,13 @@ mod tests {
     }
 
     #[test]
+    /// Declares a bunch of f64s meant to represent a wide range of values of various edge cases
+    /// Converts each f64 to f56 and back to f64 to see how it changes
+    /// If they are equal, then that conversion was successful
+    /// If they are unequal, then it may still be successful if the f64 was outside of the range that the F56 could represent
+    /// A debug function is provided to visually inspect the bytes of the f64, F56, and corresponding f32
+
     fn test_f56() {
-        /* For each of these test numbers, convert them from f64 to f56 and back and
-        verify that the number hasn't changed much */
         let numbers_to_test = [
             f64::from_bits(0x0000_0000_0000_0000u64),
             f64::from_bits(0x0000_0000_0000_0001u64),
@@ -247,32 +251,32 @@ mod tests {
 
         for index in 0..numbers_to_test.len() {
             let orig_f64 = numbers_to_test[index];
-            /* Calculate the values  */
+            // Calculate the values
             let f32 = orig_f64 as f32;
             let f56 = F56::from(orig_f64);
             let back_to_f64: f64 = f56.into();
             let f32_diff = ((f32 as f64) - orig_f64).abs();
             let f56_diff = (back_to_f64 - orig_f64).abs();
 
-            /* If the converted value equals the original, we passed the test */
+            // If the converted value equals the original, we passed the test
             if back_to_f64 == orig_f64 {
                 continue;
             }
 
-            /* Signs must match */
+            // Signs must match
             if orig_f64.is_sign_positive() != back_to_f64.is_sign_positive() {
                 debug(orig_f64, index);
                 panic!("Signs don't match");
             }
 
-            /* NaNs must match */
+            // NaNs must match
             if orig_f64.is_nan() != back_to_f64.is_nan() {
                 debug(orig_f64, index);
                 panic!("original f64 and f56 should either both be NaN or neither be NaN");
             }
 
-            /* Both must be finite or infinite
-            Unless the f64 is very large and the F56 is infinite */
+            // Both must be finite or infinite
+            // Unless the f64 is very large and the F56 is infinite
             if orig_f64.is_infinite() != back_to_f64.is_infinite() {
                 if orig_f64.is_infinite() {
                     debug(orig_f64, index);
@@ -286,9 +290,8 @@ mod tests {
                 }
                 continue; // Don't check magnitude of difference if one is infinite
             }
-            /* Both must be zero or nonzero
-            Unless the f64 is very small and the F56 is zero
-             */
+            // Both must be zero or nonzero
+            // Unless the f64 is very small and the F56 is zero
             if (orig_f64 == 0.0) != (back_to_f64 == 0.0) {
                 if orig_f64 == 0.0 {
                     debug(orig_f64, index);
@@ -303,14 +306,14 @@ mod tests {
                 continue;
             }
 
-            /* The absolute difference must be small
-            smaller than the difference between an f32 and the f64 */
+            // The absolute difference must be small
+            // smaller than the difference between an f32 and the f64
             if f56_diff > f32_diff {
                 debug(orig_f64, index);
                 panic!("f56 is less accurate than the f32 conversion");
             }
 
-            /* The relative difference must be less than F56's EPSILON */
+            // The relative difference must be less than F56's EPSILON
             let relative_difference = f56_diff / orig_f64.abs();
             if relative_difference > F56::EPSILON {
                 debug(orig_f64, index);

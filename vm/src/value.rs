@@ -84,28 +84,24 @@ impl<'vm, ENV> Iterator for PairIter<'vm, ENV> {
     }
 }
 
-/**
- * F56 struct
- * This struct uses 7 bytes to represent a floating point number.
- * Most operations are done by converting to f64, performing the operation, and then converting back to F56
- *
- * F32 uses 1 bit for the sign,  8 bits for the exponent, and 23 bits for the mantissa.
- * F56 uses 1 bit for the sign, 10 bits for the exponent, and 45 bits for the mantissa.
- * F64 uses 1 bit for the sign, 11 bits for the exponent, and 52 bits for the mantissa.
- *
- *   Byte 0    Byte 1    Byte 2    Byte 3    Byte 4    Byte 5    Byte 6
- * [sEEEEEEE][EEEmmmmm][mmmmmmmm][mmmmmmmm][mmmmmmmm][mmmmmmmm][mmmmmmmm]
- *
- * Exponent bits range from 0 to 1023
- * they represent -511 to +512 but are stored biased by +511
- * the exponent of -511 is reserved for the number 0 and subnormal numbers
- * the exponent of +512 is reserved for infinity and NaN
- * so normal exponents range from -510 to +511
- *
- * smallest positive subnormal value is 8.48e-168 (2^-555)
- * smallest positive normal value is 2.98e-154 (2^-510)
- * maximum finite value is 1.34e154
-*/
+/// This struct uses 7 bytes to represent a floating point number.
+/// Most operations are done by converting to f64, performing the operation, and then converting back to F56
+///
+/// F56 uses 1 bit for the sign, 10 bits for the exponent, and 45 bits for the mantissa.
+/// Compared to f32, it has +2 exponent bits and +22 mantissa bits.
+/// Compared to f64, it has -1 exponent bit and -7 mantissa bits.
+///   Byte 0    Byte 1    Byte 2    Byte 3    Byte 4    Byte 5    Byte 6
+/// [sEEEEEEE][EEEmmmmm][mmmmmmmm][mmmmmmmm][mmmmmmmm][mmmmmmmm][mmmmmmmm]
+///
+/// Exponent bits range from 0 to 1023
+/// they represent -511 to +512 but are stored biased by +511
+/// the exponent of -511 is reserved for the number 0 and subnormal numbers
+/// the exponent of +512 is reserved for infinity and NaN
+/// so normal exponents range from -510 to +511
+///
+/// smallest positive subnormal value is 8.48e-168 (2^-555)
+/// smallest positive normal value is 2.98e-154 (2^-510)
+/// maximum finite value is 1.34e154
 #[derive(Copy, Clone)]
 pub struct F56(pub [u8; 7]);
 impl Eq for F56 {}
@@ -126,18 +122,17 @@ impl std::fmt::Debug for F56 {
 }
 impl Display for F56 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        /* Converting the F56 to f64 to print it almost works
-        But the f64 is slightly more precise and the internal implementation of f64->string
-        knows that the f64 has 15 decimal digits that are guaranteed accurate.
-        F56 only has 12, meaning that .0023 appears as .0022999999999999687
-        if F56 knew to only print 12 digits then it would be fine,
-        but when going through f64, it thinks it has 15 perfect digits.
+        // Converting the F56 to f64 to print it almost works
+        // But the f64 is slightly more precise and the internal implementation of f64->string
+        // knows that the f64 has 15 decimal digits that are guaranteed accurate.
+        // F56 only has 12, meaning that .0023 appears as .0022999999999999687
+        // if F56 knew to only print 12 digits then it would be fine,
+        // but when going through f64, it thinks it has 15 perfect digits.
 
-        We can set the precision to 12 but that increases numbers like 1.0 to 1.0000000000000
-        So let's do that, and remove the trailing zeros and decimal points added on
-         */
+        // We can set the precision to 12 but that increases numbers like 1.0 to 1.0000000000000
+        // So let's do that, and remove the trailing zeros and decimal points added on
         let first_pass = format!("{:.*}", F56::DIGITS, f64::from(*self));
-        // remove trailing zeros after a decimal point
+        // remove trailing zeros and trailing decimal point
         let second_pass = if first_pass.contains('.') {
             first_pass.trim_end_matches('0').trim_end_matches('.')
         } else {
@@ -188,22 +183,20 @@ impl From<f64> for F56 {
                 0b11_1111_1111u64 // exponent for Infinity
             }
             _ if true_exponent < -510 => {
-                /*
-                    This will be either a subnormal or 0
-                    Requires a subnormal f56 which will lose precision as we near 8.48e-168
+                // This will be either a subnormal or 0
+                // Requires a subnormal f56 which will lose precision as we near 8.48e-168
 
-                    to calculate a 45 bit subnormal mantissa as 0.fraction,
-                    take the 45 bits and treat them like an unsigned int and then divide by 2^45
+                // to calculate a 45 bit subnormal mantissa as 0.fraction,
+                // take the 45 bits and treat them like an unsigned int and then divide by 2^45
 
-                    value of subnormal f56 = value of f64
-                    value of subnormal f56 = 2^-510 * 0.fraction
-                    value of f64 = 2^-510 * (u45 / 2^45)
-                    value of f64 * 2^555 = u45
+                // value of subnormal f56 = value of f64
+                // value of subnormal f56 = 2^-510 * 0.fraction
+                // value of f64 = 2^-510 * (u45 / 2^45)
+                // value of f64 * 2^555 = u45
 
-                    multiplying the f64 by 2^555 can be done by adding 555 to the exponent
-                    we can do this safely because the max biased exponent is 2047
-                    and we know that the current biased exponent is < 513 (corresponding to true exponent of -510)
-                */
+                // multiplying the f64 by 2^555 can be done by adding 555 to the exponent
+                // we can do this safely because the max biased exponent is 2047
+                // and we know that the current biased exponent is < 513 (corresponding to true exponent of -510)
                 let new_f64_exponent = (f64_biased_exponent + 555) as u64;
                 let new_f64_word = (f64_sign as u64) << 63 | new_f64_exponent << 52 | f64_mantissa;
                 let new_f64 = f64::from_bits(new_f64_word);
@@ -287,21 +280,19 @@ impl From<F56> for f32 {
     }
 }
 impl F56 {
-    /** Largest finite F56, roughly 1.34e154 */
+    // Largest finite F56, roughly 1.34e154
     pub const MAX: F56 = F56([0x7F, 0xDF, 0xff, 0xff, 0xff, 0xff, 0xff]);
-    /** Smallest positive normal F56, roughly 2.98e-154 */
+    // Smallest positive normal F56, roughly 2.98e-154
     pub const MIN_POSITIVE: F56 = F56([0x00, 0b0010_0000, 0x00, 0x00, 0x00, 0x00, 0x00]);
-    /** Smallest positive subnormal F56, roughly 8.48e-168 */
+    // Smallest positive subnormal F56, roughly 8.48e-168
     pub const MIN_POSITIVE_SUBNORMAL: F56 = F56([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
-    /** Minimum numer of decimal digits of precision (experimentally derived) */
+    // Minimum numer of decimal digits of precision (experimentally derived)
     pub const DIGITS: usize = 12;
-    /** Cutoff for relative difference between an f64 and the F56's approximation */
+    // Cutoff for relative difference between an f64 and the F56's approximation
     pub const EPSILON: f64 = 1e-13;
-    /**
-     * When converting from f64 to F56 we truncate 7 bits of the mantissa
-     * We could round up if the 7th bit is 1, but this is might cause issues.
-     * Mantissas like 0xFFFF_FFFF_... can catastrophically round to 0x0000_0000_...
-     */
+    // When converting from f64 to F56 we truncate 7 bits of the mantissa
+    // We could round up if the 7th bit is 1, but this is might cause issues.
+    // Mantissas like 0xFFFF_FFFF_... can catastrophically round to 0x0000_0000_...
     pub const ROUNDUP_ENABLED: bool = false;
 }
 
