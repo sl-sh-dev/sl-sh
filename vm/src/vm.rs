@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use crate::{
     from_i56, CallFrame, CallFunc, CallFuncSig, Chunk, Globals, Handle, Heap, Interner, VMError,
-    VMErrorObj, VMResult, Value, HALT,
+    VMErrorObj, VMResult, Value, F56, HALT,
 };
 
 mod cons;
@@ -220,7 +220,7 @@ impl<ENV> GVm<ENV> {
                 val = Value::True;
             }
         } else if val1.is_number() && val2.is_number() {
-            if (val1.get_float(self)? - val2.get_float(self)?).abs() < f32::EPSILON {
+            if (val1.get_float(self)? - val2.get_float(self)?).abs() < F56::EPSILON {
                 val = Value::True;
             }
         } else {
@@ -911,7 +911,9 @@ mod tests {
         let chunk = Arc::new(chunk);
         vm.execute(chunk)?;
         let result = vm.stack(5).get_float(&vm)?;
-        assert!(result == 12500.0);
+
+        // NOTE: converting the result to f32 because the f64 expects more precision than our F56 can provide.
+        assert_eq!(result as f32, 12500.0);
 
         Ok(())
     }
