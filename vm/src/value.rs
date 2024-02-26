@@ -107,12 +107,34 @@ pub struct F56(pub [u8; 7]);
 impl Eq for F56 {}
 impl PartialEq for F56 {
     fn eq(&self, other: &Self) -> bool {
-        f64::from(*self) == f64::from(*other)
+        // Allow NaN == NaN so equality is reflexive and we can impl Eq to use F56 as a hash key
+        if f64::from(*self).is_nan() && f64::from(*other).is_nan() {
+            return true;
+        };
+        // Round to nearest multiple of F56::EPSILON for equality test
+        // Note how this is different from testing that the difference between the two is less than F56::EPSILON
+        // But this is necessary to guarantee that a == b => hash(a) == hash(b)
+        let precision = 1.0 / F56::EPSILON;
+        let value = f64::from(*self);
+        let rounded = (value * precision).round() / precision;
+        let other_value = f64::from(*other);
+        let other_rounded = (other_value * precision).round() / precision;
+        rounded == other_rounded
     }
 }
 impl Hash for F56 {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write_u64(f64::from(*self).to_bits())
+        // Make sure NaN hashes to the same value
+        if f64::from(*self).is_nan() {
+            state.write_u64(0x7FF8000000000000u64);
+            return;
+        }
+        // round to the nearest multiple of F56::EPSILON
+        // this way, two equal F56s will always hash to the same value
+        let precision = 1.0 / F56::EPSILON;
+        let value = f64::from(*self);
+        let rounded = (value * precision).round() / precision;
+        state.write_u64(rounded.to_bits())
     }
 }
 impl std::fmt::Debug for F56 {
@@ -285,6 +307,7 @@ impl F56 {
     // Smallest positive subnormal F56, roughly 8.48e-168
     pub const MIN_POSITIVE_SUBNORMAL: F56 = F56([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
     // Minimum numer of decimal digits of precision (experimentally derived)
+    // for comparison, f32 has 6-9 decimal digits of precision and f64 has 15-17. I believe F56 has 12-14
     pub const DIGITS: usize = 12;
     // Cutoff for relative difference between an f64 and the F56's approximation
     pub const EPSILON: f64 = 1e-13;
