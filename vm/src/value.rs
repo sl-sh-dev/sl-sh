@@ -107,19 +107,21 @@ pub struct F56(pub [u8; 7]);
 impl Eq for F56 {}
 impl PartialEq for F56 {
     fn eq(&self, other: &Self) -> bool {
+        let self_as_f64 = f64::from(*self);
+        let other_as_f64 = f64::from(*other);
         // Allow NaN == NaN so equality is reflexive and we can impl Eq to use F56 as a hash key
-        if f64::from(*self).is_nan() && f64::from(*other).is_nan() {
+        if self_as_f64.is_nan() && other_as_f64.is_nan() {
             return true;
         };
         // Round to nearest multiple of F56::EPSILON for equality test
         // Note how this is different from testing that the difference between the two is less than F56::EPSILON
         // But this is necessary to guarantee that a == b => hash(a) == hash(b)
         let precision = 1.0 / F56::EPSILON;
-        let value = f64::from(*self);
-        let rounded = (value * precision).round() / precision;
-        let other_value = f64::from(*other);
-        let other_rounded = (other_value * precision).round() / precision;
-        rounded == other_rounded
+        // since we are just comparing the values, we don't actually need to calculate the rounded value
+        // so we can omit the last step to divide by precision from both sides
+        let self_scaled = (self_as_f64 * precision).round();
+        let other_scaled = (other_as_f64 * precision).round();
+        self_scaled == other_scaled
     }
 }
 impl Hash for F56 {
