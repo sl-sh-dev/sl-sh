@@ -7,7 +7,7 @@ use slvm::VMErrorObj::Message;
 use slvm::{Interned, VMError, VMResult, Value};
 use std::borrow::Cow;
 use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 use std::string::ToString;
@@ -19,7 +19,9 @@ const EXAMPLE: &str = "example";
 
 lazy_static! {
     static ref DOC_REGEX: Regex =
-        RegexBuilder::new(r#"Usage:(.+?)$\n\n(.*)\n\n^Section:(.+?)$(\n\n^Example:\n(.*)|\s*)"#)
+    //TODO PC optional Usage section OR must be auto generated?
+    // legacy/builtins.rs L#937
+        RegexBuilder::new(r#"(\s*?Usage:(.+?)$\n\n|\s*?)(\S{1}.*)\n\n\s*Section:(.+?)$(\n\n\s*Example:\n(.*)|\s*)"#)
             .multi_line(true)
             .dot_matches_new_line(true)
             .crlf(true)
@@ -67,6 +69,47 @@ lazy_static! {
         exemption_set.insert("*int-bits*");
         exemption_set.insert("get-prop");
         exemption_set.insert("expand-macro");
+
+        // slosh specific colors
+        exemption_set.insert("get-rgb-seq");
+        exemption_set.insert("bg-color-rgb");
+        exemption_set.insert("tok-slsh-form-color");
+        exemption_set.insert("tok-slsh-fcn-color");
+        exemption_set.insert("tok-default-color");
+        exemption_set.insert("tok-sys-command-color");
+        exemption_set.insert("tok-sys-alias-color");
+        exemption_set.insert("tok-string-color");
+        exemption_set.insert("tok-invalid-color");
+
+        exemption_set.insert("*fg-default*");
+        exemption_set.insert("*fg-black*");
+        exemption_set.insert("*fg-red*");
+        exemption_set.insert("*fg-green*");
+        exemption_set.insert("*fg-yellow*");
+        exemption_set.insert("*fg-blue*");
+        exemption_set.insert("*fg-magenta*");
+        exemption_set.insert("*fg-cyan*");
+        exemption_set.insert("*fg-white*");
+
+        exemption_set.insert("*bg-default*");
+        exemption_set.insert("*bg-black*");
+        exemption_set.insert("*bg-red*");
+        exemption_set.insert("*bg-green*");
+        exemption_set.insert("*bg-yellow*");
+        exemption_set.insert("*bg-blue*");
+        exemption_set.insert("*bg-magenta*");
+        exemption_set.insert("*bg-cyan*");
+        exemption_set.insert("*bg-white*");
+
+        // default init.slosh
+        exemption_set.insert("*ns*");
+        exemption_set.insert("__prompt");
+        exemption_set.insert("__line_handler");
+        exemption_set.insert("get-pwd");
+        exemption_set.insert("set-prompt-tail");
+        exemption_set.insert("parse-git-branch");
+        exemption_set.insert("block");
+
         exemption_set
     };
 }
@@ -95,8 +138,8 @@ impl Namespace {
     fn add_docs(&self, docs: &mut Vec<SloshDoc>, vm: &mut SloshVm) -> DocResult<()> {
         match self {
             Namespace::Global => {
-                for (g, slot) in vm.globals().clone() {
-                    let slosh_doc = SloshDoc::new(g, slot as u32, vm, self.clone());
+                for g in vm.globals().clone().keys() {
+                    let slosh_doc = SloshDoc::new(*g, vm, self.clone());
                     match slosh_doc {
                         Ok(slosh_doc) => {
                             docs.push(slosh_doc);
@@ -120,7 +163,7 @@ impl Namespace {
 
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
 struct DocStringSection {
-    usage: String,
+    usage: Option<String>,
     description: String,
     section: String,
     example: Option<String>,
@@ -128,6 +171,11 @@ struct DocStringSection {
 
 impl Display for DocStringSection {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let usage = self
+            .usage
+            .clone()
+            .map(|usage| format!("Usage:{}\n\n", usage))
+            .unwrap_or_default();
         let example = self
             .example
             .clone()
@@ -135,8 +183,8 @@ impl Display for DocStringSection {
             .unwrap_or_default();
         write!(
             f,
-            "Usage: {usage}\n\n{description}Section: {section}\n\n{example}",
-            usage = self.usage,
+            "{usage}{description}Section: {section}\n\n{example}",
+            usage = usage,
             description = self.description,
             section = self.section,
             example = example,
@@ -150,13 +198,12 @@ impl DocStringSection {
         let sym_str = sym.display_value(&vm);
         let raw_doc_string = vm
             .get_global_property(slot, docstring_key)
-            .map_or(None, |x| {
-                if let Value::String(h) = x {
-                    Some(vm.get_string(h).to_string())
-                } else {
-                    None
-                }
+            .map_or(None, |x| match x {
+                Value::String(h) => Some(vm.get_string(h).to_string()),
+                Value::StringConst(i) => Some(vm.get_interned(i).to_string()),
+                _ => None,
             })
+            // return default empty string and have parse_doc_string handle error if no doc provided.
             .unwrap_or_default();
         Self::parse_doc_string(Cow::Owned(sym_str), raw_doc_string)
     }
@@ -178,27 +225,22 @@ impl DocStringSection {
                 }
             }
         })?;
-        let usage = cap
-            .get(1)
-            .ok_or_else(|| DocError::DocStringMustStartWithUsage {
-                symbol: symbol.to_owned().to_string(),
-            })
-            .map(|x| x.as_str().trim().to_string())?;
+        let usage = cap.get(2).map(|x| x.as_str().trim().to_string());
         let description = cap
-            .get(2)
+            .get(3)
             .ok_or_else(|| DocError::DocStringMissingSection {
                 symbol: symbol.to_owned().to_string(),
                 section: "Description".to_string(),
             })
             .map(|x| x.as_str().to_string())?;
         let section = cap
-            .get(3)
+            .get(4)
             .ok_or_else(|| DocError::DocStringMissingSection {
                 symbol: symbol.to_owned().to_string(),
                 section: "Section".to_string(),
             })
             .map(|x| x.as_str().trim().to_string())?;
-        let example = cap.get(5).map(|x| x.as_str().trim().to_string());
+        let example = cap.get(6).map(|x| x.as_str().trim().to_string());
 
         Ok(DocStringSection {
             usage,
@@ -252,17 +294,24 @@ impl Ord for SloshDoc {
 }
 
 impl SloshDoc {
-    fn new(g: Interned, slot: u32, vm: &mut SloshVm, namespace: Namespace) -> DocResult<SloshDoc> {
+    fn new(g: Interned, vm: &mut SloshVm, namespace: Namespace) -> DocResult<SloshDoc> {
         let sym = Value::Symbol(g);
-        let doc_string = DocStringSection::from_symbol(slot, sym, vm)?;
-        let symbol = sym.display_value(&vm);
-        let symbol_type = sym.display_type(&vm).to_string();
-        Ok(SloshDoc {
-            symbol,
-            symbol_type,
-            namespace,
-            doc_string,
-        })
+        let slot = vm.global_intern_slot(g);
+        if let Some(slot) = slot {
+            let doc_string = DocStringSection::from_symbol(slot, sym, vm)?;
+            let symbol = sym.display_value(&vm);
+            let symbol_type = sym.display_type(&vm).to_string();
+            Ok(SloshDoc {
+                symbol,
+                symbol_type,
+                namespace,
+                doc_string,
+            })
+        } else {
+            Err(DocError::NoSymbol {
+                symbol: sym.display_value(vm).to_string(),
+            })
+        }
     }
 
     /// Provide the fully
@@ -272,9 +321,9 @@ impl SloshDoc {
 }
 
 enum DocError {
+    NoSymbol { symbol: String },
     NoDocString { symbol: String },
     DocStringMissingSection { symbol: String, section: String },
-    DocStringMustStartWithUsage { symbol: String },
     ExemptFromProperDocString { symbol: String },
 }
 
@@ -287,23 +336,23 @@ impl Debug for DocError {
 impl Display for DocError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let str = match self {
+            DocError::NoSymbol { symbol } => {
+                format!(
+                    "No documentation string provided for symbol {symbol}."
+                )
+            }
             DocError::NoDocString { symbol } => {
                 format!(
-                    "Either documentation provided does not conform to conventional layout or no documentation string provided for symbol {symbol} all slosh functions written in Rust must have a valid documentation string."
+                    "Either documentation provided does not conform to conventional layout or no documentation string provided for symbol {symbol} all slosh functions with documentation must have a string that conforms to the conventional layout."
                 )
             }
             DocError::ExemptFromProperDocString { symbol } => {
                 format!(
-                    "No documentation needed for provided symbol {symbol}."
+                    "No documentation exists for provided symbol {symbol}, this should be rectified."
                 )
             }
             DocError::DocStringMissingSection { symbol, section } => {
                 format!("Invalid documentation string for symbol {symbol}, missing required section {section:?}")
-            }
-            DocError::DocStringMustStartWithUsage { symbol } => {
-                format!(
-                    "Invalid documentation string for symbol {symbol}, first line must start with \"Usage:\""
-                )
             }
         }
             .to_string();
@@ -324,28 +373,38 @@ impl From<DocError> for VMError {
 
 type DocResult<T> = Result<T, DocError>;
 
+fn insert_section(
+    map: &mut HashMap<Value, Value>,
+    key: &'static str,
+    value: String,
+    vm: &mut SloshVm,
+) {
+    let key_const = Value::Keyword(vm.intern_static(key));
+    let value_text = vm.alloc_string(value);
+    map.insert(key_const, value_text);
+}
+
 impl SlFrom<SloshDoc> for HashMap<Value, Value> {
     fn sl_from(value: SloshDoc, vm: &mut SloshVm) -> VMResult<Self> {
         let mut map;
-        if let Some(example) = value.doc_string.example {
-            map = Self::with_capacity(4);
-            let example_const = Value::StringConst(vm.intern_static(EXAMPLE));
-            let example_text = vm.alloc_string(example);
-            map.insert(example_const, example_text);
-        } else {
-            map = Self::with_capacity(3)
+        match (value.doc_string.usage, value.doc_string.example) {
+            (Some(usage), Some(example)) => {
+                map = Self::with_capacity(4);
+                insert_section(&mut map, USAGE, usage, vm);
+                insert_section(&mut map, EXAMPLE, example, vm);
+            }
+            (Some(usage), None) => {
+                map = Self::with_capacity(3);
+                insert_section(&mut map, USAGE, usage, vm);
+            }
+            (None, Some(example)) => {
+                map = Self::with_capacity(3);
+                insert_section(&mut map, EXAMPLE, example, vm);
+            }
+            (None, None) => map = Self::with_capacity(2),
         }
-        let usage_const = Value::StringConst(vm.intern_static(USAGE));
-        let usage_text = vm.alloc_string(value.doc_string.usage);
-        map.insert(usage_const, usage_text);
-
-        let section_const = Value::StringConst(vm.intern_static(SECTION));
-        let section_text = vm.alloc_string(value.doc_string.section);
-        map.insert(section_const, section_text);
-
-        let desc_const = Value::StringConst(vm.intern_static(DESCRIPTION));
-        let desc_text = vm.alloc_string(value.doc_string.description);
-        map.insert(desc_const, desc_text);
+        insert_section(&mut map, SECTION, value.doc_string.section, vm);
+        insert_section(&mut map, DESCRIPTION, value.doc_string.description, vm);
         Ok(map)
     }
 }
@@ -360,19 +419,31 @@ impl SlFrom<SloshDoc> for Value {
 fn doc_map(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();
     match (i.next(), i.next()) {
-        (Some(Value::Symbol(g)), None) => {
-            let slot = vm.global_intern_slot(*g);
-            if let Some(slot) = slot {
-                let slosh_doc = SloshDoc::new(*g, slot, vm, Namespace::Global)?;
-                Value::sl_from(slosh_doc, vm)
-            } else {
-                Err(VMError::new_vm(
-                    "first form must evaluate to a symbol".to_string(),
-                ))
+        (Some(Value::Symbol(g)), None) => match SloshDoc::new(*g, vm, Namespace::Global) {
+            Ok(slosh_doc) => Value::sl_from(slosh_doc, vm),
+            Err(DocError::ExemptFromProperDocString { symbol: _ }) => {
+                Ok(vm.alloc_map(HashMap::new()))
             }
-        }
+            Err(e) => Err(VMError::from(e)),
+        },
         _ => Err(VMError::new_vm("takes one argument (symbol)".to_string())),
     }
+}
+
+fn get_globals_sorted(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    if !registers.is_empty() {
+        return Err(VMError::new_vm(
+            "sizeof-value: takes no arguments".to_string(),
+        ));
+    }
+    let mut result = BTreeMap::new();
+    for g in vm.globals().keys() {
+        let sym = Value::Symbol(*g);
+        let val: String = sym.display_value(vm);
+        result.insert(val, sym);
+    }
+    let v = result.values().cloned().collect();
+    Ok(vm.alloc_vector(v))
 }
 
 pub fn add_builtins(env: &mut SloshVm) {
@@ -391,6 +462,18 @@ Example:
 #t
 ",
     );
+
+    add_builtin(
+        env,
+        "get-globals-sorted",
+        get_globals_sorted,
+        "Usage: (get-globals-sorted)
+
+Return a vector containing all the symbols currently defined globally in sorted order (alphanumerically).
+
+Section: core
+",
+    );
 }
 
 #[cfg(test)]
@@ -398,6 +481,19 @@ mod test {
     use super::*;
     use crate::set_builtins;
     use compile_state::state::new_slosh_vm;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn list_slosh_functions() {
+        let mut vm = new_slosh_vm();
+        set_builtins(&mut vm);
+        for (g, _) in vm.globals() {
+            let sym = Value::Symbol(*g);
+            let symbol = sym.display_value(&vm);
+            let symbol_type = sym.display_type(&vm).to_string();
+            println!("{}: {}", symbol, symbol_type);
+        }
+    }
 
     #[test]
     fn test_global_slosh_docs_formatted_properly() {
@@ -407,7 +503,234 @@ mod test {
         let mut docs: Vec<SloshDoc> = vec![];
         Namespace::Global.add_docs(&mut docs, &mut env).unwrap();
         for d in docs {
-            println!("{}", d);
+            assert!(d.doc_string.usage.is_some(), "All global builtins must have a usage section, because it can NOT be inferred from the environment.");
+        }
+    }
+
+    lazy_static! {
+        static ref REGEX_TEST_CASES: BTreeMap<(bool, &'static str), &'static str> = {
+            let mut set = BTreeMap::new();
+
+            set.insert(
+                (true, "no whitespace around content"),
+                "Usage: (defmacro name doc_string? argument_list body)
+
+Create a macro and bind it to a symbol in the current scope.
+
+Section: core
+
+Example:
+(def test-mac-x 2)",
+            );
+
+            set.insert(
+                (true, "newlines at beginning and end"),
+                "
+Usage: (defmacro name doc_string? argument_list body)
+
+Create a macro and bind it to a symbol in the current scope.
+
+Section: core
+
+Example:
+(def test-mac-x 2)
+",
+            );
+
+            set.insert(
+                (true, "mixed whitespace at beginning and end"),
+                "
+
+  Usage: (defmacro name doc_string? argument_list body)
+
+Create a macro and bind it to a symbol in the current scope.
+
+Section: core
+
+Example:
+(def test-mac-x 2)
+
+
+    ",
+            );
+
+            set.insert(
+                (true, "no usage, no whitespace around content"),
+                "Create a macro and bind it to a symbol in the current scope.
+
+Section: core
+
+Example:
+(def test-mac-x 2)",
+            );
+
+            set.insert(
+                (true, "no usage, newlines at beginning and end"),
+                "
+Create a macro and bind it to a symbol in the current scope.
+
+Section: core
+
+Example:
+(def test-mac-x 2)
+",
+            );
+
+            set.insert(
+                (true, "no usage, mixed whitespace at beginning and end"),
+                "
+
+   Create a macro and bind it to a symbol in the current scope.
+
+Section: core
+
+Example:
+(def test-mac-x 2)
+
+
+    ",
+            );
+
+            set.insert(
+                (true, "no whitespace around content"),
+                "Usage: (defmacro name doc_string? argument_list body)
+
+    Create a macro and bind it to a symbol in the current scope.
+
+    Section: core
+
+    Example:
+    (def test-mac-x 2)",
+            );
+
+            set.insert(
+                (true, "newlines at beginning and end"),
+                "
+ Usage: (defmacro name doc_string? argument_list body)
+
+Create a macro and bind it to a symbol in the current scope.
+
+Section:
+core
+
+Example:
+(def test-mac-x 2)
+",
+            );
+
+            set.insert(
+                (true, "mixed whitespace at beginning and end"),
+                "
+
+  Usage: (defmacro name doc_string? argument_list body)
+
+Create a macro and bind it to a symbol in the current scope.
+
+Section: core
+
+
+    Example:
+(def test-mac-x 2)
+
+
+    ",
+            );
+
+            set.insert(
+                (true, "no usage, extra whitespace around content"),
+                "Create a macro and bind it to a symbol in the current scope.
+
+    Section: core
+
+    Example:
+    (def test-mac-x 2)",
+            );
+
+            set.insert(
+                (
+                    false,
+                    "no description, no usage, no example, newlines at beginning and end",
+                ),
+                "
+
+Section:
+core
+",
+            );
+
+            set.insert(
+                (true, "no usage, no example, newlines at beginning and end, extra whitespace around content."),
+                "
+    Create a macro and bind it to a symbol in the current scope.
+
+    Section:
+    core
+
+",
+            );
+
+            set.insert(
+                (true, "no usage, mixed whitespace at beginning and end, extra whitespace around content."),
+                "
+
+   Create a macro and bind it to a symbol in the current scope.
+
+Section: core
+
+    Example:
+(def test-mac-x 2)
+
+
+    ",
+            );
+
+            set.insert(
+                (
+                    false,
+                    "no usage, no section, mixed whitespace at beginning and end, extra whitespace around content.",
+                ),
+                "
+
+   Create a macro and bind it to a symbol in the current scope.
+
+core
+
+    Example:
+(def test-mac-x 2)
+
+
+    ",
+            );
+
+            set
+        };
+    }
+
+    #[test]
+    fn test_doc_string_regex() {
+        for ((result, label), test_case) in REGEX_TEST_CASES.iter() {
+            let fake_symbol = Cow::Owned("fake-symbol".to_string());
+            match DocStringSection::parse_doc_string(fake_symbol, test_case.to_string()) {
+                ok @ Ok(_) => {
+                    assert_eq!(
+                        ok.is_ok(),
+                        *result,
+                        "Case: {},  Regex succeeded but should not have with test case: {}!",
+                        label,
+                        test_case
+                    );
+                }
+                ref err @ Err(_) => {
+                    assert_ne!(
+                        err.is_err(),
+                        *result,
+                        "Case: {}, Regex failed but should not have, got err ({:?}) with tests case: {}!",
+                        label,
+                        err,
+                        test_case
+                    );
+                }
+            }
         }
     }
 }

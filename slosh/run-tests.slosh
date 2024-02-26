@@ -1,0 +1,15 @@
+#!/usr/bin/env slosh
+
+(let (globals (get-globals-sorted)
+      globals-len (len globals)
+      i 0)
+    (while (< i globals-len)
+        (prn "Symbol: " globals.~i)
+        (prn "===")
+        (def doc (doc-map globals.~i))
+        (prn "Usage: " (str doc.:usage))
+        (prn "Description: " (str  doc.:description))
+        (prn "Section: " (str doc.:section))
+        (prn "Example: " (str doc.:example))
+        (prn "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
+        (inc! i)))
