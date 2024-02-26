@@ -224,74 +224,150 @@ impl<ENV> GVm<ENV> {
                 val = Value::True;
             }
         } else {
-            match val1 {
-                Value::StringConst(s1) => {
-                    if let Value::String(v2) = val2 {
-                        let s2 = self.heap().get_string(v2);
-                        if self.get_interned(s1) == s2 {
-                            val = Value::True;
-                        }
+            match (val1, val2) {
+                (Value::StringConst(s1), Value::CharCluster(l, c)) => {
+                    let s2 = format!("{}", String::from_utf8_lossy(&c[0..l as usize]));
+                    let s1 = self.get_interned(s1);
+                    if s1 == &s2 {
+                        val = Value::True;
                     }
                 }
-                Value::String(h1) => {
-                    let s1 = self.heap().get_string(h1);
-                    if let Value::StringConst(s2) = val2 {
-                        if s1 == self.get_interned(s2) {
-                            val = Value::True;
-                        }
+                (Value::StringConst(s1), Value::CodePoint(c)) => {
+                    let s2 = format!("{c}");
+                    let s1 = self.get_interned(s1);
+                    if s1 == &s2 {
+                        val = Value::True;
                     }
                 }
-                Value::Vector(h1) => {
-                    if let Value::Vector(h2) = val2 {
-                        let v1 = self.heap().get_vector(h1);
-                        let v2 = self.heap().get_vector(h2);
-                        if v1.len() == v2.len() {
-                            if v1.is_empty() {
-                                val = Value::True;
-                            } else {
-                                for i in 0..v1.len() {
-                                    val = self.is_equal_pair(v1[i], v2[i])?;
-                                    if val == Value::False {
-                                        break;
-                                    }
+                (Value::StringConst(s1), Value::StringConst(s2)) => {
+                    let s1 = self.get_interned(s1);
+                    if s1 == self.get_interned(s2) {
+                        val = Value::True;
+                    }
+                }
+                (Value::StringConst(s1), Value::String(h2) | Value::CharClusterLong(h2)) => {
+                    let s1 = self.get_interned(s1);
+                    if s1 == self.get_string(h2) {
+                        val = Value::True;
+                    }
+                }
+                (Value::String(h1) | Value::CharClusterLong(h1), Value::StringConst(s2)) => {
+                    let s1 = self.get_string(h1);
+                    if s1 == self.get_interned(s2) {
+                        val = Value::True;
+                    }
+                }
+                (Value::String(h1) | Value::CharClusterLong(h1), Value::CodePoint(c)) => {
+                    let s1 = self.get_string(h1);
+                    let s2 = format!("{c}");
+                    if s1 == &s2 {
+                        val = Value::True;
+                    }
+                }
+                (Value::String(h1) | Value::CharClusterLong(h1), Value::CharCluster(l, c)) => {
+                    let s1 = self.get_string(h1);
+                    let s2 = format!("{}", String::from_utf8_lossy(&c[0..l as usize]));
+                    if s1 == &s2 {
+                        val = Value::True;
+                    }
+                }
+                (
+                    Value::String(h1) | Value::CharClusterLong(h1),
+                    Value::CharClusterLong(h2) | Value::String(h2),
+                ) => {
+                    let s1 = self.get_string(h1);
+                    if s1 == self.get_string(h2) {
+                        val = Value::True;
+                    }
+                }
+                (Value::Vector(h1), Value::Vector(h2)) => {
+                    let v1 = self.heap().get_vector(h1);
+                    let v2 = self.heap().get_vector(h2);
+                    if v1.len() == v2.len() {
+                        if v1.is_empty() {
+                            val = Value::True;
+                        } else {
+                            for i in 0..v1.len() {
+                                val = self.is_equal_pair(v1[i], v2[i])?;
+                                if val == Value::False {
+                                    break;
                                 }
                             }
                         }
                     }
                 }
-                Value::Bytes(h1) => {
-                    if let Value::Bytes(h2) = val2 {
-                        let b1 = self.heap().get_bytes(h1);
-                        let b2 = self.heap().get_bytes(h2);
-                        if b1.len() == b2.len() {
-                            if b1.is_empty() {
-                                val = Value::True;
-                            } else {
-                                for i in 0..b1.len() {
-                                    if b1[i] == b2[i] {
-                                        val = Value::True;
-                                    } else {
-                                        val = Value::False;
-                                        break;
-                                    }
+                (Value::Bytes(h1), Value::Bytes(h2)) => {
+                    let b1 = self.heap().get_bytes(h1);
+                    let b2 = self.heap().get_bytes(h2);
+                    if b1.len() == b2.len() {
+                        if b1.is_empty() {
+                            val = Value::True;
+                        } else {
+                            for i in 0..b1.len() {
+                                if b1[i] == b2[i] {
+                                    val = Value::True;
+                                } else {
+                                    val = Value::False;
+                                    break;
                                 }
                             }
                         }
                     }
                 }
-                Value::Pair(_) | Value::List(_, _) => {
+                (Value::Pair(_) | Value::List(_, _), Value::Pair(_) | Value::List(_, _)) => {
                     // XXX use iterators to reduce recursion?
                     // Make sure pair iter will work for non-lists...
-                    if matches!(val2, Value::Pair(_) | Value::List(_, _)) {
-                        let (car1, cdr1) = val1.get_pair(self).expect("Must be a pair or list!");
-                        let (car2, cdr2) = val2.get_pair(self).expect("Must be a pair or list!");
-                        val = self.is_equal_pair(car1, car2)?;
-                        if val == Value::True {
-                            val = self.is_equal_pair(cdr1, cdr2)?;
+                    let (car1, cdr1) = val1.get_pair(self).expect("Must be a pair or list!");
+                    let (car2, cdr2) = val2.get_pair(self).expect("Must be a pair or list!");
+                    val = self.is_equal_pair(car1, car2)?;
+                    if val == Value::True {
+                        val = self.is_equal_pair(cdr1, cdr2)?;
+                    }
+                }
+                (Value::Map(m1), Value::Map(m2)) => {
+                    let m1 = self.heap().get_map(m1);
+                    let m2 = self.heap().get_map(m2);
+                    if m1.len() == m2.len() {
+                        if m1.is_empty() {
+                            val = Value::True;
+                        } else {
+                            // must set val to false in two instances because
+                            // its possible a previous iteration set val to true.
+                            for (k, v) in m1.iter() {
+                                if let Some(v2) = m2.get(k) {
+                                    if self.is_equal_pair(*v, *v2)? == Value::False {
+                                        val = Value::False;
+                                        break;
+                                    } else {
+                                        val = Value::True;
+                                    }
+                                } else {
+                                    val = Value::False;
+                                    break;
+                                }
+                            }
                         }
                     }
                 }
-                _ => {}
+                (Value::Value(h1), Value::Value(h2)) => {
+                    let v1 = self.get_value(h1);
+                    let v2 = self.get_value(h2);
+                    val = self.is_equal_pair(v1, v2)?;
+                }
+                (val1, Value::Value(h2)) => {
+                    let v2 = self.get_value(h2);
+                    val = self.is_equal_pair(val1, v2)?;
+                }
+                (Value::Value(v1), val2) => {
+                    let v1 = self.get_value(v1);
+                    val = self.is_equal_pair(v1, val2)?;
+                }
+                (_, _) => {} // TODO XXX: are these cases meaningful?
+                             // (Value::Error(e1), Value::Error(e2)) => {}
+                             // (Value::Lambda(_), Value::Lambda(_)) => {}
+                             // (Value::Closure(_), Value::Closure(_) )=> {}
+                             // (Value::Continuation(_), Value::Continuation(_)) => {}
+                             // (Value::CallFrame(_), Value::CallFrame(_))) => {}
             }
         }
         Ok(val)

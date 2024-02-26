@@ -566,7 +566,7 @@ mod tests {
     // I didn't really know this was possible but for test utilities just use
     // the path attribute!
     #[path = "../../../compiler/src/test_utils/utils.rs"]
-    mod utils;
+    pub mod utils;
 
     #[test]
     fn test_load_path_no_home() {

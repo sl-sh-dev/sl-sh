@@ -110,6 +110,13 @@ lazy_static! {
         exemption_set.insert("parse-git-branch");
         exemption_set.insert("block");
 
+        //TODO PC remove mf
+    exemption_set.insert("ns-import");
+    exemption_set.insert("test::assert-equal");
+    exemption_set.insert("test::assert-error");
+    exemption_set.insert("assert-equal");
+    exemption_set.insert("assert-error");
+
         exemption_set
     };
 }
@@ -480,8 +487,32 @@ Section: core
 mod test {
     use super::*;
     use crate::set_builtins;
+    use crate::tests::utils::exec;
     use compile_state::state::new_slosh_vm;
     use std::collections::BTreeMap;
+
+    #[path = "../../tests/utils.rs"]
+    mod utils;
+
+    #[test]
+    #[cfg_attr(not(feature = "lisp-test"), ignore)]
+    fn exec_all_rust_examples() {
+        let mut vm = new_slosh_vm();
+        set_builtins(&mut vm);
+        let mut docs: Vec<SloshDoc> = vec![];
+        Namespace::Global.add_docs(&mut docs, &mut vm).unwrap();
+        docs.sort();
+        for d in docs {
+            if let Some(example) = d.doc_string.example {
+                let symbol = d.symbol;
+                println!("{} ===============================", symbol);
+                println!("Run test for: {}", symbol);
+                let val = exec(&mut vm, example);
+                println!("{}:\n{:?}", symbol, val);
+                println!("{} ===============================", symbol);
+            }
+        }
+    }
 
     #[test]
     fn list_slosh_functions() {

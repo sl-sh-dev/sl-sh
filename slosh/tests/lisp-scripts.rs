@@ -1,16 +1,8 @@
-use shell::glob::{expand_glob, GlobOutput};
+mod common;
+
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::process::Command;
-
-fn glob_to_vec(pat: impl Into<PathBuf>) -> Vec<PathBuf> {
-    match expand_glob(pat) {
-        GlobOutput::Arg(p) => {
-            vec![p]
-        }
-        GlobOutput::Args(ps) => ps,
-    }
-}
 
 #[test]
 /// To run all tests in this executable with printouts.
@@ -23,13 +15,11 @@ fn glob_to_vec(pat: impl Into<PathBuf>) -> Vec<PathBuf> {
 /// the suffix of the file is _fail.slosh, then the test script is expected to fail. All other
 /// slosh scripts should return a 0 exit code or the integration test will fail.
 fn lisp_scripts() {
-    let tests = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests");
-    let test_glob = tests.join("*.slosh");
-    let fail_tests = tests.join("*_fail.slosh");
-    let scripts = glob_to_vec(test_glob);
-    let binding = glob_to_vec(fail_tests);
-    let fails = binding.into_iter().collect::<HashSet<PathBuf>>();
-    let slosh_path = PathBuf::from(env!("CARGO_BIN_EXE_slosh")).into_os_string();
+    let scripts = common::get_globs_from_test_directory("*.slosh");
+    let fails = common::get_globs_from_test_directory("*_fail.slosh")
+        .into_iter()
+        .collect::<HashSet<PathBuf>>();
+    let slosh_path = common::get_slosh_exe().into_os_string();
     let slosh_path = slosh_path
         .to_str()
         .expect("path to CARGO_BIN_EXE_slosh should be a valid utf-8 string");
