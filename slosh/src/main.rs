@@ -399,15 +399,22 @@ fn main() {
             if Sys::is_tty(STDIN_FILENO) {
                 shell::run::setup_shell_tty(STDIN_FILENO);
             }
-            let status = SHELL_ENV.with(|jobs| {
-                match shell::run::run_one_command(&command, &mut jobs.borrow_mut()) {
-                    Ok(status) => status,
-                    Err(err) => {
-                        eprintln!("ERROR executing {command}: {err}");
-                        1
+            let status = if command.trim_start().starts_with('(') {
+                ENV.with(|env| {
+                    exec_expression(command, &mut env.borrow_mut());
+                });
+                0
+            } else {
+                SHELL_ENV.with(|jobs| {
+                    match shell::run::run_one_command(&command, &mut jobs.borrow_mut()) {
+                        Ok(status) => status,
+                        Err(err) => {
+                            eprintln!("ERROR executing {command}: {err}");
+                            1
+                        }
                     }
-                }
-            });
+                })
+            };
             SHELL_ENV.with(|jobs| {
                 jobs.borrow_mut().reap_procs();
             });
@@ -427,9 +434,13 @@ fn main() {
     }
 }
 
-fn exec_expression(res: String, env: &mut SloshVm) {
+fn read_expression_to_list(res: String, env: &mut SloshVm) -> Result<Vec<Value>, ReadError> {
     let reader = Reader::from_string(res, env, "", 1, 0);
-    let exps: Result<Vec<Value>, ReadError> = reader.collect();
+    reader.collect()
+}
+
+fn exec_expression(res: String, env: &mut SloshVm) {
+    let exps = read_expression_to_list(res, env);
     match exps {
         Ok(exps) => {
             for exp in exps {
@@ -481,13 +492,24 @@ fn exec_expression(res: String, env: &mut SloshVm) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use compile_state::state::{new_slosh_vm, SloshVmTrait};
+    use crate::tests::utils::exec;
+    use compile_state::state::{new_slosh_vm, CompileState, SloshVm, SloshVmTrait};
     use lazy_static::lazy_static;
     use regex::{Regex, RegexBuilder};
+    use sl_compiler::pass1::pass1;
+    use sl_compiler::{compile, ReadError, Reader};
+    use slvm::{Value, RET};
     use std::borrow::Cow;
+    use std::cmp::Ordering;
     use std::collections::HashSet;
     use std::error::Error;
     use std::fmt::{Debug, Display, Formatter};
+    use std::sync::Arc;
+
+    // I didn't really know this was possible but for test utilities just use
+    // the path attribute!
+    #[path = "../../../compiler/src/test_utils/utils.rs"]
+    mod utils;
 
     lazy_static! {
         static ref DOC_REGEX: Regex =
@@ -546,7 +568,16 @@ mod tests {
     #[derive(Debug, Clone, Eq, Hash, PartialEq)]
     enum Namespace {
         Global,
-        Other(String),
+        // Can be adapted when namespaces are added.
+        // Other(String),
+    }
+
+    impl ToString for Namespace {
+        fn to_string(&self) -> String {
+            match self {
+                Namespace::Global => "global".to_string(),
+            }
+        }
     }
 
     impl Namespace {
@@ -589,10 +620,8 @@ mod tests {
                         }
                     }
                 }
-                Namespace::Other(_) => {
-                    unimplemented!("No other docs yet exist besides global!");
-                }
             }
+            docs.sort();
             Ok(())
         }
     }
@@ -619,11 +648,33 @@ mod tests {
         }
     }
 
+    #[derive(Eq)]
     struct SloshDoc {
         symbol: String,
         symbol_type: String,
         namespace: Namespace,
         doc_string: DocStringSection,
+    }
+
+    impl PartialEq for SloshDoc {
+        fn eq(&self, other: &Self) -> bool {
+            self.fully_qualified_name()
+                .eq_ignore_ascii_case(&other.fully_qualified_name())
+        }
+    }
+
+    impl PartialOrd for SloshDoc {
+        fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+            self.fully_qualified_name()
+                .partial_cmp(&other.fully_qualified_name())
+        }
+    }
+
+    impl Ord for SloshDoc {
+        fn cmp(&self, other: &Self) -> Ordering {
+            self.fully_qualified_name()
+                .cmp(&other.fully_qualified_name())
+        }
     }
 
     impl SloshDoc {
@@ -642,7 +693,14 @@ mod tests {
             })
         }
 
-        fn parse_doc_string(
+        /// Provide the fully
+        pub fn fully_qualified_name(&self) -> String {
+            self.namespace.to_string() + "::" + self.symbol.as_ref()
+        }
+
+        /// Given the rules for parsing slosh docstrings, parse one! See [`DOC_REGEX`]
+        /// for the specification.
+        pub fn parse_doc_string(
             symbol: Cow<'_, String>,
             raw_doc_string: String,
         ) -> DocResult<DocStringSection> {
@@ -652,7 +710,7 @@ mod tests {
                         symbol: symbol.to_owned().to_string(),
                     }
                 } else {
-                    DocError::DocStringMustStartWithUsage {
+                    DocError::NoDocString {
                         symbol: symbol.to_owned().to_string(),
                     }
                 }
@@ -706,7 +764,7 @@ mod tests {
             let str = match self {
                 DocError::NoDocString{ symbol} => {
                     format!(
-                        "No documentation string provided for symbol {symbol}, all slosh functions written in Rust must have a valid documentation string."
+                        "Either documentation provided does not conform to conventional layout or no documentation string provided for symbol {symbol} all slosh functions written in Rust must have a valid documentation string."
                     )
                 }
                 DocError::ExemptFromProperDocString{ symbol} => {
@@ -740,11 +798,20 @@ mod tests {
         let mut docs: Vec<SloshDoc> = vec![];
         Namespace::Global.add_docs(&mut docs, &mut env).unwrap();
 
+        let _val = exec(&mut env, "(prn \"hello slosh\")");
+
         for doc in docs {
             println!("ns: {:?}", doc.namespace);
             println!("  sym: {}", doc.symbol);
             println!("  type: {}", doc.symbol_type);
             println!("      doc_string: {:?}", doc.doc_string);
+            if let Some(example) = doc.doc_string.example {
+                println!("      example: {:?}", example);
+                //TODO PC ISSUE #118.
+                // 1. exec_expression doesn't work, and might not w/o editing because it does
+                // not (by design) show errors, so might need to refactor that.
+                // 2. there is no assert-equal!?
+            }
         }
     }
 }
