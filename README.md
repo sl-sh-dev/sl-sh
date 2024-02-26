@@ -80,7 +80,7 @@ https://sl-sh-dev.github.io/sl-sh/mydoc_api.html
 - Symbol
 - Keyword
 - Character (chars are grapheme clusters)
-- Float (32 bits- f32)
+- Float (56 bit float)
 - Integer (56 bit signed integer)
 - Byte
 
