@@ -307,6 +307,12 @@ fn set_builtins(env: &mut SloshVm) {
 }
 
 fn main() {
+    let exit_code = run_slosh();
+    std::process::exit(exit_code);
+}
+
+fn run_slosh() -> i32 {
+    let mut status = 0;
     if let Some(config) = get_config() {
         ENV.with(|renv| {
             let mut env = renv.borrow_mut();
@@ -315,121 +321,9 @@ fn main() {
         if config.command.is_none() && config.script.is_none() {
             load_sloshrc();
             if Sys::is_tty(STDIN_FILENO) {
-                let mut con = Context::new();
-                //con.set_completer(Box::new(FilenameCompleter::new(Some("."))));
-                con.set_completer(Box::new(ShellCompleter::new()));
-                con.set_editor_rules(make_editor_rules());
-                let mut vi = keymap::Vi::new();
-                let vi_keywords = vec!["_", "-"];
-                vi.set_keyword_rule(Box::new(AlphanumericAndVariableKeywordRule::new(
-                    vi_keywords,
-                )));
-                /*if let Some((ch1, ch2, timeout)) = repl_settings.vi_esc_sequence {
-                    vi.set_esc_sequence(ch1, ch2, timeout);
-                }
-                vi.set_normal_prompt_prefix(repl_settings.vi_normal_prompt_prefix.clone());
-                vi.set_normal_prompt_suffix(repl_settings.vi_normal_prompt_suffix.clone());
-                vi.set_insert_prompt_prefix(repl_settings.vi_insert_prompt_prefix.clone());
-                vi.set_insert_prompt_suffix(repl_settings.vi_insert_prompt_suffix.clone());*/
-                //Box::new(keymap::Emacs::new())
-                con.set_keymap(Box::new(vi));
-
-                if let Err(e) = con.history.set_file_name_and_load_history(&history_file()) {
-                    println!("Error loading history: {e}");
-                }
-                shell::run::setup_shell_tty(STDIN_FILENO);
-                SHELL_ENV.with(|jobs| {
-                    jobs.borrow_mut().cap_term();
-                });
-                loop {
-                    SHELL_ENV.with(|jobs| {
-                        jobs.borrow_mut().reap_procs();
-                    });
-                    let prompt = ENV.with(|env| get_prompt(&mut env.borrow_mut()));
-                    let res = match con.read_line(Prompt::from(prompt), get_color_closure()) {
-                        Ok(input) => input,
-                        Err(err) => match err.kind() {
-                            ErrorKind::UnexpectedEof => {
-                                break;
-                            }
-                            ErrorKind::Interrupted => {
-                                continue;
-                            }
-                            _ => {
-                                // Usually can just restore the tty and be back in action.
-                                SHELL_ENV.with(|jobs| {
-                                    jobs.borrow_mut().restore_terminal();
-                                });
-                                eprintln!("Error on input: {err}");
-                                continue;
-                            }
-                        },
-                    };
-
-                    if res.is_empty() {
-                        continue;
-                    }
-
-                    let res = if res.contains("\\\n") {
-                        res.replace("\\\n", "")
-                    } else {
-                        res
-                    };
-                    con.history.push(&res).expect("Failed to push history.");
-                    if res.starts_with('(') {
-                        ENV.with(|env| {
-                            exec_expression(res, &mut env.borrow_mut());
-                        });
-                    } else {
-                        let status = SHELL_ENV.with(|jobs| {
-                            shell::run::run_one_command(&res, &mut jobs.borrow_mut())
-                                .unwrap_or_else(|err| {
-                                    eprintln!("ERROR executing {res}: {err}");
-                                    1
-                                })
-                        });
-                        ENV.with(|env| {
-                            env.borrow_mut()
-                                .set_named_global("*last-status*", status.into());
-                        })
-                    }
-                }
+                status = run_shell_tty();
             } else {
-                // No tty so just grab lines from stdin and try to use them....
-                let mut res = String::new();
-                let stdin = std::io::stdin();
-                while let Ok(bytes) = stdin.lock().read_line(&mut res) {
-                    SHELL_ENV.with(|jobs| {
-                        jobs.borrow_mut().reap_procs();
-                    });
-                    if bytes == 0 {
-                        break;
-                    }
-                    if res.is_empty() {
-                        continue;
-                    }
-                    if res.starts_with('(') {
-                        ENV.with(|env| {
-                            exec_expression(res.clone(), &mut env.borrow_mut());
-                        });
-                    } else {
-                        let status = SHELL_ENV.with(|jobs| {
-                            shell::run::run_one_command(&res, &mut jobs.borrow_mut())
-                                .unwrap_or_else(|err| {
-                                    eprintln!("ERROR executing {res}: {err}");
-                                    1
-                                })
-                        });
-                        ENV.with(|env| {
-                            env.borrow_mut()
-                                .set_named_global("*last-status*", status.into());
-                        })
-                    }
-                    res.clear();
-                }
-                SHELL_ENV.with(|jobs| {
-                    jobs.borrow_mut().reap_procs();
-                });
+                status = run_shell_with_stdin();
             }
         } else if let Some(mut command) = config.command {
             for a in &config.args {
@@ -439,7 +333,7 @@ fn main() {
             if Sys::is_tty(STDIN_FILENO) {
                 shell::run::setup_shell_tty(STDIN_FILENO);
             }
-            let status = SHELL_ENV.with(|jobs| {
+            status = SHELL_ENV.with(|jobs| {
                 shell::run::run_one_command(&command, &mut jobs.borrow_mut()).unwrap_or_else(
                     |err| {
                         eprintln!("ERROR executing {command}: {err}");
@@ -450,20 +344,141 @@ fn main() {
             SHELL_ENV.with(|jobs| {
                 jobs.borrow_mut().reap_procs();
             });
-            std::process::exit(status);
         } else if let Some(script) = config.script {
             load_sloshrc();
-            ENV.with(|renv| {
+            status = ENV.with(|renv| {
                 let mut env = renv.borrow_mut();
                 let script = env.intern(&script);
                 let script = env.get_interned(script);
                 match load_internal(&mut env, script) {
-                    Ok(_) => {}
-                    Err(err) => println!("ERROR: {err}"),
+                    Ok(_) => 0,
+                    Err(err) => {
+                        eprintln!("ERROR: {err}");
+                        1
+                    }
                 }
             });
         }
     }
+    status
+}
+
+fn run_shell_tty() -> i32 {
+    let mut con = Context::new();
+    //con.set_completer(Box::new(FilenameCompleter::new(Some("."))));
+    con.set_completer(Box::new(ShellCompleter::new()));
+    con.set_editor_rules(make_editor_rules());
+    let mut vi = keymap::Vi::new();
+    let vi_keywords = vec!["_", "-"];
+    vi.set_keyword_rule(Box::new(AlphanumericAndVariableKeywordRule::new(
+        vi_keywords,
+    )));
+    /*if let Some((ch1, ch2, timeout)) = repl_settings.vi_esc_sequence {
+        vi.set_esc_sequence(ch1, ch2, timeout);
+    }
+    vi.set_normal_prompt_prefix(repl_settings.vi_normal_prompt_prefix.clone());
+    vi.set_normal_prompt_suffix(repl_settings.vi_normal_prompt_suffix.clone());
+    vi.set_insert_prompt_prefix(repl_settings.vi_insert_prompt_prefix.clone());
+    vi.set_insert_prompt_suffix(repl_settings.vi_insert_prompt_suffix.clone());*/
+    //Box::new(keymap::Emacs::new())
+    con.set_keymap(Box::new(vi));
+
+    if let Err(e) = con.history.set_file_name_and_load_history(&history_file()) {
+        println!("Error loading history: {e}");
+    }
+    shell::run::setup_shell_tty(STDIN_FILENO);
+    SHELL_ENV.with(|jobs| {
+        jobs.borrow_mut().cap_term();
+    });
+    let mut status = 0;
+    loop {
+        SHELL_ENV.with(|jobs| {
+            jobs.borrow_mut().reap_procs();
+        });
+        let prompt = ENV.with(|env| get_prompt(&mut env.borrow_mut()));
+        let res = match con.read_line(Prompt::from(prompt), get_color_closure()) {
+            Ok(input) => input,
+            Err(err) => match err.kind() {
+                ErrorKind::UnexpectedEof => {
+                    status = 1; //TODO PC fix
+                    break;
+                }
+                ErrorKind::Interrupted => {
+                    continue;
+                }
+                _ => {
+                    // Usually can just restore the tty and be back in action.
+                    SHELL_ENV.with(|jobs| {
+                        jobs.borrow_mut().restore_terminal();
+                    });
+                    eprintln!("Error on input: {err}");
+                    continue;
+                }
+            },
+        };
+
+        if res.is_empty() {
+            continue;
+        }
+
+        let res = if res.contains("\\\n") {
+            res.replace("\\\n", "")
+        } else {
+            res
+        };
+        con.history.push(&res).expect("Failed to push history.");
+        status = exec_expr_or_run_command(&res, status);
+    }
+    status
+}
+
+fn exec_expr_or_run_command(res: &String, mut status: i32) -> i32 {
+    if res.starts_with('(') {
+        ENV.with(|env| {
+            exec_expression(res.clone(), &mut env.borrow_mut());
+        });
+    } else {
+        status = run_command(res);
+    }
+    status
+}
+
+fn run_command(res: &String) -> i32 {
+    let status = SHELL_ENV.with(|jobs| {
+        shell::run::run_one_command(res, &mut jobs.borrow_mut()).unwrap_or_else(|err| {
+            eprintln!("ERROR executing {res}: {err}");
+            1
+        })
+    });
+    ENV.with(|env| {
+        env.borrow_mut()
+            .set_named_global("*last-status*", status.into());
+    });
+    status
+}
+
+fn run_shell_with_stdin() -> i32 {
+    // No tty so just grab lines from stdin and try to use them....
+    let mut res = String::new();
+    let stdin = std::io::stdin();
+    let mut status = 0;
+    while let Ok(bytes) = stdin.lock().read_line(&mut res) {
+        SHELL_ENV.with(|jobs| {
+            jobs.borrow_mut().reap_procs();
+        });
+        if bytes == 0 {
+            break;
+        }
+        if res.is_empty() {
+            continue;
+        }
+        status = exec_expr_or_run_command(&res, status);
+        res.clear();
+    }
+    SHELL_ENV.with(|jobs| {
+        jobs.borrow_mut().reap_procs();
+    });
+    status
 }
 
 fn read_expression_to_list(res: String, env: &mut SloshVm) -> Result<Vec<Value>, ReadError> {
