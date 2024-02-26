@@ -175,3 +175,7 @@ These forms (written in Rust but callable from Lisp) are supported.
 
 ## Links
 - sl-sh legacy shell: https://github.com/sl-sh-dev/sl-sh/legacy
+
+### Benchmarking
+ - Install [bencher](https://bencher.dev/docs/tutorial/quick-start/)
+ - `cargo bench`

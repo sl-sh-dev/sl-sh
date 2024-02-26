@@ -28,6 +28,7 @@ mod config;
 pub mod debug;
 mod liner_rules;
 mod load_eval;
+pub use crate::load_eval::load_one_expression;
 mod shell_builtins;
 
 use crate::completions::ShellCompleter;
