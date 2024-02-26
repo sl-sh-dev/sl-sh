@@ -399,15 +399,22 @@ fn main() {
             if Sys::is_tty(STDIN_FILENO) {
                 shell::run::setup_shell_tty(STDIN_FILENO);
             }
-            let status = SHELL_ENV.with(|jobs| {
-                match shell::run::run_one_command(&command, &mut jobs.borrow_mut()) {
-                    Ok(status) => status,
-                    Err(err) => {
-                        eprintln!("ERROR executing {command}: {err}");
-                        1
+            let status = if command.trim_start().starts_with('(') {
+                ENV.with(|env| {
+                    exec_expression(command, &mut env.borrow_mut());
+                });
+                0
+            } else {
+                SHELL_ENV.with(|jobs| {
+                    match shell::run::run_one_command(&command, &mut jobs.borrow_mut()) {
+                        Ok(status) => status,
+                        Err(err) => {
+                            eprintln!("ERROR executing {command}: {err}");
+                            1
+                        }
                     }
-                }
-            });
+                })
+            };
             SHELL_ENV.with(|jobs| {
                 jobs.borrow_mut().reap_procs();
             });
