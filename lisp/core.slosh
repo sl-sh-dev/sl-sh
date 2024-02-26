@@ -1,14 +1,8 @@
 #%
-Usage: (nil? expression)
 
-True if the expression is nil, false otherwise.
+True if the expression is nil, false otherwise
 
 Section: type
-
-Example:
-(test::assert-true (nil? nil))
-(test::assert-false (nil? #t))
-#%
 %#
 (def nil? (fn (v) (eq? (type v) :Nil)))
 
@@ -561,3 +555,70 @@ Example:
                                 `(~condition ~(make-action action) ~@(make-cond (first (first others)) (rest (first others)) (rest others))))))
          `(if ~@(make-cond (first (first branches)) (rest (first branches)) (rest branches)))))))
 
+#%
+Does nothing for now, namespaces aren't yet implemented.
+
+Section: core
+%#
+(defmacro ns-import (val) nil)
+
+#%
+Asserts the two values are identical.
+
+Section: core
+%#
+(defmacro assert-equal (expected-val right-val & body)
+    (if (equal? expected-val right-val)
+        #t
+        (let (ev (type expected-val)
+              rv (type right-val))
+        (mk-err :assert `(apply str "Expected: " ~expected-val " (" ~ev "), Got: " ~right-val " (" (type ~rv) ")." ~@body)))))
+
+#%
+Asserts the two values are identical.
+
+Section: core
+%#
+(defmacro test::assert-equal (& body) `(assert-equal ~@body))
+
+#%
+Asserts the value is true.
+
+Section: core
+%#
+(defmacro assert-true (val & body) `(assert-equal #t val ~@body))
+
+#%
+Asserts the value is true.
+
+Section: core
+%#
+(defmacro test::assert-true (& body) `(assert-true ~@body))
+
+#%
+Asserts the value is false
+
+Section: core
+%#
+(defmacro assert-false (val & body) `(assert-equal #f val ~@body))
+
+#%
+Asserts the value is false
+
+Section: core
+%#
+(defmacro test::assert-false (& body) `(assert-false ~@body))
+
+#%
+Asserts the value is an error
+
+Section: core
+%#
+(defmacro assert-error (val & body) `(assert-true #t (err? ~val) ~@body))
+
+#%
+Asserts the value is false
+
+Section: core
+%#
+(defmacro test::assert-error (& body) `(assert-error ~@body))
