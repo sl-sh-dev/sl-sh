@@ -14,8 +14,10 @@ jobs:
     env:
       BENCHER_PROJECT: sl-sh
       BENCHER_TESTBED: ubuntu-latest
-      BENCHER_ADAPTER: rust_criterion
+      BENCHER_ADAPTER: rust_iai
     steps:
+      - run: sudo apt-get update
+      - run: sudo apt install -y valgrind
       - uses: actions/checkout@v4
       - uses: bencherdev/bencher@main
       - name: Track Benchmarks with Bencher
