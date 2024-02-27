@@ -1,7 +1,5 @@
-#[macro_use]
-extern crate bencher;
+use criterion::{criterion_group, criterion_main, Criterion};
 
-use bencher::{black_box, Bencher};
 use compile_state::state::{new_slosh_vm, CompileState, SloshVm, SloshVmTrait};
 use sl_compiler::pass1::pass1;
 use sl_compiler::{compile, Reader};
@@ -110,27 +108,23 @@ fn run_float_script(n: usize, m: f32, expected: f32) {
     }
 }
 
-fn float_ten(bench: &mut Bencher) {
-    bench.iter(|| black_box(run_float_script(10, 0.0001, 20.002)));
+fn float_ten(c: &mut Criterion) {
+    c.bench_function("float_ten", |bench| {
+        bench.iter(|| std::hint::black_box(run_float_script(10, 0.0001, 20.002)));
+    });
 }
 
-fn float_one_hundred(bench: &mut Bencher) {
-    bench.iter(|| black_box(run_float_script(100, 0.5, 400.0)));
+fn float_one_hundred(c: &mut Criterion) {
+    c.bench_function("float_one_hundred", |bench| {
+        bench.iter(|| std::hint::black_box(run_float_script(100, 0.5, 400.0)));
+    });
 }
 
-fn float_one_thousand(bench: &mut Bencher) {
-    bench.iter(|| black_box(run_float_script(1000, 0.05, 2105.2483)));
+fn float_one_thousand(c: &mut Criterion) {
+    c.bench_function("float_one_thousand", |bench| {
+        bench.iter(|| std::hint::black_box(run_float_script(1000, 0.05, 2105.2483)));
+    });
 }
 
-fn float_ten_thousand(bench: &mut Bencher) {
-    bench.iter(|| black_box(run_float_script(10_000, 0.005, 20099.174)));
-}
-
-benchmark_group!(
-    benches,
-    float_ten,
-    float_one_hundred,
-    float_one_thousand,
-    float_ten_thousand
-);
-benchmark_main!(benches);
+criterion_group!(benches, float_ten, float_one_hundred, float_one_thousand);
+criterion_main!(benches);
