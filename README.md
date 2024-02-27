@@ -178,4 +178,5 @@ These forms (written in Rust but callable from Lisp) are supported.
 
 ### Benchmarking
  - Install [bencher](https://bencher.dev/docs/tutorial/quick-start/)
- - `cargo bench`
+ - To run benchmarks locally: `cargo bench`
+ - To upload benchmarks to bencher.dev: `bencher run "cargo bench"`
