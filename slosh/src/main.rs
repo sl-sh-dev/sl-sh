@@ -1,12 +1,14 @@
 extern crate sl_liner;
 
 use std::cell::RefCell;
-use std::env;
 use std::ffi::OsString;
-use std::fs::create_dir_all;
+use std::fmt::Debug;
+use std::fs::{create_dir_all, File};
 use std::io::{BufRead, ErrorKind, Write};
-use std::path::PathBuf;
+use std::ops::DerefMut;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::{env, fs};
 
 use slvm::opcodes::*;
 
@@ -26,6 +28,8 @@ use sl_liner::{keymap, ColorClosure, Context, Prompt};
 mod completions;
 mod config;
 pub mod debug;
+#[cfg(any(test, feature = "regex"))]
+pub mod docs;
 mod liner_rules;
 mod load_eval;
 pub use crate::load_eval::load_one_expression;
@@ -93,26 +97,27 @@ fn get_prompt(env: &mut SloshVm) -> String {
     }
 }
 
-fn load_sloshrc() {
-    if let Ok(mut rcfile) = env::var("HOME") {
-        if rcfile.ends_with('/') {
-            rcfile.push_str(".config/slosh");
-        } else {
-            rcfile.push_str("/.config/slosh");
-        }
-
-        ENV.with(|renv| {
-            let mut env = renv.borrow_mut();
-            let i_path = env.intern(&rcfile);
-            let v = vec![Value::StringConst(i_path)];
-            let path = env.alloc_vector(v);
-            add_global_value(
-                &mut env,
-                "*load-path*",
-                path,
-                "Usage: (set '*load-path* '(\"/path/one\" \"/path/two\"))
+/// Given a [`SloshVm`] and a String, usually the rc file for slosh, set
+/// the *load-path* global variable to facilitate proper loading of scripts.
+///
+/// It is assumed users will put slosh scripts at the location(s) dictated by
+/// *load-path*.
+fn set_initial_load_path(env: &mut SloshVm, load_paths: Vec<&str>) {
+    let mut v = vec![];
+    for path in load_paths {
+        let i_path = env.intern(path);
+        v.push(Value::StringConst(i_path));
+    }
+    let path = env.alloc_vector(v);
+    add_global_value(
+        env,
+        "*load-path*",
+        path,
+        "Usage: (set '*load-path* '(\"/path/one\" \"/path/two\"))
 
 Set the a list of paths to search for loading scripts with the load form.
+Paths are a vector and are searched in index order for the file name of
+the path to be loaded.
 
 Section: scripting
 
@@ -121,41 +126,76 @@ Example:
 ;(load \"script-in-path\")
 t
 ",
-            );
-            let rcpath: PathBuf = rcfile.clone().into();
-            if !rcpath.exists() {
-                match create_dir_all(&rcpath) {
+    );
+}
+
+fn make_path_dir_if_possible(path: impl AsRef<Path> + Debug) -> Option<PathBuf> {
+    if let Ok(f_data) = fs::metadata(path.as_ref()) {
+        if f_data.is_dir() {
+            Some(path.as_ref().into())
+        } else {
+            None
+        }
+    } else {
+        // This means provided path doesn't exist (PathBuf::exists(...) just verifies
+        // if fs::metadata::<&Path>(...).is_ok()). If there is no HOME dir try to create it
+        // to guarantee that there is a $HOME and that it is a directory.
+        match create_dir_all(path.as_ref()) {
+            Ok(_) => Some(path.as_ref().into()),
+            Err(e) => {
+                eprintln!(
+                    "Path [{:?}] did not point to valid directory nor could that directory be created.: {e}",
+                    path
+                );
+                None
+            }
+        }
+    }
+}
+
+fn get_home_dir() -> Option<PathBuf> {
+    if let Ok(home_dir) = env::var("HOME") {
+        make_path_dir_if_possible(home_dir)
+    } else {
+        None
+    }
+}
+
+/// Expected that the user's init.slosh will be in the user's home directory
+/// at `$HOME/.config/slosh/` otherwise the directory structure will be created.
+fn load_sloshrc() {
+    if let Some(home_dir) = get_home_dir() {
+        let slosh_path = home_dir.join(".config").join("slosh");
+        if let Some(slosh_dir) = make_path_dir_if_possible(slosh_path.as_path()) {
+            ENV.with(|renv| {
+                let mut env = renv.borrow_mut();
+                set_initial_load_path(
+                    env.deref_mut(),
+                    vec![slosh_dir.as_os_str().to_string_lossy().as_ref()],
+                );
+                let init = slosh_dir.join("init.slosh");
+                if fs::metadata::<&Path>(init.as_ref()).is_err() {
+                    match File::create::<&Path>(init.as_ref()) {
+                        Ok(mut f) => match f.write_all(SLSHRC.as_bytes()) {
+                            Ok(_) => {}
+                            Err(e) => {
+                                eprintln!("error writing default config {:?}: {e}", init.as_path())
+                            }
+                        },
+                        Err(e) => {
+                            eprintln!("error creating default config {:?}: {e}", init.as_path())
+                        }
+                    }
+                }
+                let init = init.as_os_str().to_string_lossy();
+                let script = env.intern(init.as_ref());
+                let script = env.get_interned(script);
+                match load_internal(&mut env, script) {
                     Ok(_) => {}
-                    Err(e) => eprintln!(
-                        "error creating default config directory {}: {e}",
-                        rcpath.to_string_lossy()
-                    ),
+                    Err(err) => println!("ERROR: {err}"),
                 }
-            }
-            rcfile.push_str("/init.slosh");
-            let rcpath: PathBuf = rcfile.clone().into();
-            if !rcpath.exists() {
-                match std::fs::File::create(&rcpath) {
-                    Ok(mut f) => match f.write_all(SLSHRC.as_bytes()) {
-                        Ok(_) => {}
-                        Err(e) => eprintln!(
-                            "error writing default config {}: {e}",
-                            rcpath.to_string_lossy()
-                        ),
-                    },
-                    Err(e) => eprintln!(
-                        "error creating default config {}: {e}",
-                        rcpath.to_string_lossy()
-                    ),
-                }
-            }
-            let script = env.intern(&rcfile);
-            let script = env.get_interned(script);
-            match load_internal(&mut env, script) {
-                Ok(_) => {}
-                Err(err) => println!("ERROR: {err}"),
-            }
-        });
+            });
+        }
     }
 }
 
@@ -261,9 +301,19 @@ pub fn set_builtins(env: &mut SloshVm) {
     if let Ok(dir) = env::current_dir() {
         env::set_var("PWD", dir);
     }
+    #[cfg(any(test, feature = "regex"))]
+    {
+        docs::add_builtins(env);
+    }
 }
 
 fn main() {
+    let exit_code = run_slosh();
+    std::process::exit(exit_code);
+}
+
+fn run_slosh() -> i32 {
+    let mut status = 0;
     if let Some(config) = get_config() {
         ENV.with(|renv| {
             let mut env = renv.borrow_mut();
@@ -272,125 +322,9 @@ fn main() {
         if config.command.is_none() && config.script.is_none() {
             load_sloshrc();
             if Sys::is_tty(STDIN_FILENO) {
-                let mut con = Context::new();
-                //con.set_completer(Box::new(FilenameCompleter::new(Some("."))));
-                con.set_completer(Box::new(ShellCompleter::new()));
-                con.set_editor_rules(make_editor_rules());
-                let mut vi = keymap::Vi::new();
-                let vi_keywords = vec!["_", "-"];
-                vi.set_keyword_rule(Box::new(AlphanumericAndVariableKeywordRule::new(
-                    vi_keywords,
-                )));
-                /*if let Some((ch1, ch2, timeout)) = repl_settings.vi_esc_sequence {
-                    vi.set_esc_sequence(ch1, ch2, timeout);
-                }
-                vi.set_normal_prompt_prefix(repl_settings.vi_normal_prompt_prefix.clone());
-                vi.set_normal_prompt_suffix(repl_settings.vi_normal_prompt_suffix.clone());
-                vi.set_insert_prompt_prefix(repl_settings.vi_insert_prompt_prefix.clone());
-                vi.set_insert_prompt_suffix(repl_settings.vi_insert_prompt_suffix.clone());*/
-                //Box::new(keymap::Emacs::new())
-                con.set_keymap(Box::new(vi));
-
-                if let Err(e) = con.history.set_file_name_and_load_history(&history_file()) {
-                    println!("Error loading history: {e}");
-                }
-                shell::run::setup_shell_tty(STDIN_FILENO);
-                SHELL_ENV.with(|jobs| {
-                    jobs.borrow_mut().cap_term();
-                });
-                loop {
-                    SHELL_ENV.with(|jobs| {
-                        jobs.borrow_mut().reap_procs();
-                    });
-                    let prompt = ENV.with(|env| get_prompt(&mut env.borrow_mut()));
-                    let res = match con.read_line(Prompt::from(prompt), get_color_closure()) {
-                        Ok(input) => input,
-                        Err(err) => match err.kind() {
-                            ErrorKind::UnexpectedEof => {
-                                break;
-                            }
-                            ErrorKind::Interrupted => {
-                                continue;
-                            }
-                            _ => {
-                                // Usually can just restore the tty and be back in action.
-                                SHELL_ENV.with(|jobs| {
-                                    jobs.borrow_mut().restore_terminal();
-                                });
-                                eprintln!("Error on input: {err}");
-                                continue;
-                            }
-                        },
-                    };
-
-                    if res.is_empty() {
-                        continue;
-                    }
-
-                    let res = if res.contains("\\\n") {
-                        res.replace("\\\n", "")
-                    } else {
-                        res
-                    };
-                    con.history.push(&res).expect("Failed to push history.");
-                    if res.starts_with('(') {
-                        ENV.with(|env| {
-                            exec_expression(res, &mut env.borrow_mut());
-                        });
-                    } else {
-                        let status = SHELL_ENV.with(|jobs| {
-                            match shell::run::run_one_command(&res, &mut jobs.borrow_mut()) {
-                                Ok(status) => status,
-                                Err(err) => {
-                                    eprintln!("ERROR executing {res}: {err}");
-                                    1
-                                }
-                            }
-                        });
-                        ENV.with(|env| {
-                            env.borrow_mut()
-                                .set_named_global("*last-status*", status.into());
-                        })
-                    }
-                }
+                status = run_shell_tty();
             } else {
-                // No tty so just grab lines from stdin and try to use them....
-                let mut res = String::new();
-                let stdin = std::io::stdin();
-                while let Ok(bytes) = stdin.lock().read_line(&mut res) {
-                    SHELL_ENV.with(|jobs| {
-                        jobs.borrow_mut().reap_procs();
-                    });
-                    if bytes == 0 {
-                        break;
-                    }
-                    if res.is_empty() {
-                        continue;
-                    }
-                    if res.starts_with('(') {
-                        ENV.with(|env| {
-                            exec_expression(res.clone(), &mut env.borrow_mut());
-                        });
-                    } else {
-                        let status = SHELL_ENV.with(|jobs| {
-                            match shell::run::run_one_command(&res, &mut jobs.borrow_mut()) {
-                                Ok(status) => status,
-                                Err(err) => {
-                                    eprintln!("ERROR executing {res}: {err}");
-                                    1
-                                }
-                            }
-                        });
-                        ENV.with(|env| {
-                            env.borrow_mut()
-                                .set_named_global("*last-status*", status.into());
-                        })
-                    }
-                    res.clear();
-                }
-                SHELL_ENV.with(|jobs| {
-                    jobs.borrow_mut().reap_procs();
-                });
+                status = run_shell_with_stdin();
             }
         } else if let Some(mut command) = config.command {
             for a in &config.args {
@@ -400,32 +334,159 @@ fn main() {
             if Sys::is_tty(STDIN_FILENO) {
                 shell::run::setup_shell_tty(STDIN_FILENO);
             }
-            let status = SHELL_ENV.with(|jobs| {
-                match shell::run::run_one_command(&command, &mut jobs.borrow_mut()) {
-                    Ok(status) => status,
-                    Err(err) => {
-                        eprintln!("ERROR executing {command}: {err}");
-                        1
-                    }
-                }
-            });
+            status = if command.trim_start().starts_with('(') {
+                ENV.with(|env| {
+                    exec_expression(command, &mut env.borrow_mut());
+                });
+                0
+            } else {
+                SHELL_ENV.with(|jobs| {
+                    shell::run::run_one_command(&command, &mut jobs.borrow_mut()).unwrap_or_else(
+                        |err| {
+                            eprintln!("ERROR executing {command}: {err}");
+                            1
+                        },
+                    )
+                })
+            };
             SHELL_ENV.with(|jobs| {
                 jobs.borrow_mut().reap_procs();
             });
-            std::process::exit(status);
         } else if let Some(script) = config.script {
             load_sloshrc();
-            ENV.with(|renv| {
+            status = ENV.with(|renv| {
                 let mut env = renv.borrow_mut();
                 let script = env.intern(&script);
                 let script = env.get_interned(script);
                 match load_internal(&mut env, script) {
-                    Ok(_) => {}
-                    Err(err) => println!("ERROR: {err}"),
+                    Ok(_) => 0,
+                    Err(err) => {
+                        eprintln!("ERROR: {err}");
+                        1
+                    }
                 }
             });
         }
     }
+    status
+}
+
+fn run_shell_tty() -> i32 {
+    let mut con = Context::new();
+    //con.set_completer(Box::new(FilenameCompleter::new(Some("."))));
+    con.set_completer(Box::new(ShellCompleter::new()));
+    con.set_editor_rules(make_editor_rules());
+    let mut vi = keymap::Vi::new();
+    let vi_keywords = vec!["_", "-"];
+    vi.set_keyword_rule(Box::new(AlphanumericAndVariableKeywordRule::new(
+        vi_keywords,
+    )));
+    /*if let Some((ch1, ch2, timeout)) = repl_settings.vi_esc_sequence {
+        vi.set_esc_sequence(ch1, ch2, timeout);
+    }
+    vi.set_normal_prompt_prefix(repl_settings.vi_normal_prompt_prefix.clone());
+    vi.set_normal_prompt_suffix(repl_settings.vi_normal_prompt_suffix.clone());
+    vi.set_insert_prompt_prefix(repl_settings.vi_insert_prompt_prefix.clone());
+    vi.set_insert_prompt_suffix(repl_settings.vi_insert_prompt_suffix.clone());*/
+    //Box::new(keymap::Emacs::new())
+    con.set_keymap(Box::new(vi));
+
+    if let Err(e) = con.history.set_file_name_and_load_history(&history_file()) {
+        println!("Error loading history: {e}");
+    }
+    shell::run::setup_shell_tty(STDIN_FILENO);
+    SHELL_ENV.with(|jobs| {
+        jobs.borrow_mut().cap_term();
+    });
+    let mut status = 0;
+    loop {
+        SHELL_ENV.with(|jobs| {
+            jobs.borrow_mut().reap_procs();
+        });
+        let prompt = ENV.with(|env| get_prompt(&mut env.borrow_mut()));
+        let res = match con.read_line(Prompt::from(prompt), get_color_closure()) {
+            Ok(input) => input,
+            Err(err) => match err.kind() {
+                ErrorKind::UnexpectedEof => {
+                    status = 1; //TODO PC fix
+                    break;
+                }
+                ErrorKind::Interrupted => {
+                    continue;
+                }
+                _ => {
+                    // Usually can just restore the tty and be back in action.
+                    SHELL_ENV.with(|jobs| {
+                        jobs.borrow_mut().restore_terminal();
+                    });
+                    eprintln!("Error on input: {err}");
+                    continue;
+                }
+            },
+        };
+
+        if res.is_empty() {
+            continue;
+        }
+
+        let res = if res.contains("\\\n") {
+            res.replace("\\\n", "")
+        } else {
+            res
+        };
+        con.history.push(&res).expect("Failed to push history.");
+        status = exec_expr_or_run_command(&res, status);
+    }
+    status
+}
+
+fn exec_expr_or_run_command(res: &String, mut status: i32) -> i32 {
+    if res.starts_with('(') {
+        ENV.with(|env| {
+            exec_expression(res.clone(), &mut env.borrow_mut());
+        });
+    } else {
+        status = run_command(res);
+    }
+    status
+}
+
+fn run_command(res: &String) -> i32 {
+    let status = SHELL_ENV.with(|jobs| {
+        shell::run::run_one_command(res, &mut jobs.borrow_mut()).unwrap_or_else(|err| {
+            eprintln!("ERROR executing {res}: {err}");
+            1
+        })
+    });
+    ENV.with(|env| {
+        env.borrow_mut()
+            .set_named_global("*last-status*", status.into());
+    });
+    status
+}
+
+fn run_shell_with_stdin() -> i32 {
+    // No tty so just grab lines from stdin and try to use them....
+    let mut res = String::new();
+    let stdin = std::io::stdin();
+    let mut status = 0;
+    while let Ok(bytes) = stdin.lock().read_line(&mut res) {
+        SHELL_ENV.with(|jobs| {
+            jobs.borrow_mut().reap_procs();
+        });
+        if bytes == 0 {
+            break;
+        }
+        if res.is_empty() {
+            continue;
+        }
+        status = exec_expr_or_run_command(&res, status);
+        res.clear();
+    }
+    SHELL_ENV.with(|jobs| {
+        jobs.borrow_mut().reap_procs();
+    });
+    status
 }
 
 fn read_expression_to_list(res: String, env: &mut SloshVm) -> Result<Vec<Value>, ReadError> {
@@ -485,327 +546,75 @@ fn exec_expression(res: String, env: &mut SloshVm) {
 
 #[cfg(test)]
 mod tests {
+    extern crate tempdir;
+
     use super::*;
+
+    use crate::{set_initial_load_path, ENV};
+    use std::fs::{create_dir_all, File};
+    use std::io::Write;
+    use std::ops::DerefMut;
+    use temp_env;
+    use tempdir::TempDir;
+
     use crate::tests::utils::exec;
-    use compile_state::state::{new_slosh_vm, CompileState, SloshVm, SloshVmTrait};
-    use lazy_static::lazy_static;
-    use regex::{Regex, RegexBuilder};
+    use compile_state::state::{CompileState, SloshVm, SloshVmTrait};
     use sl_compiler::pass1::pass1;
     use sl_compiler::{compile, ReadError, Reader};
-    use slvm::{Value, RET};
-    use std::borrow::Cow;
-    use std::cmp::Ordering;
-    use std::collections::HashSet;
-    use std::error::Error;
-    use std::fmt::{Debug, Display, Formatter};
-    use std::sync::Arc;
+    use slvm::{from_i56, Value, RET};
 
     // I didn't really know this was possible but for test utilities just use
     // the path attribute!
     #[path = "../../../compiler/src/test_utils/utils.rs"]
     mod utils;
 
-    lazy_static! {
-        static ref DOC_REGEX: Regex =
-            RegexBuilder::new(r#"Usage:(.*)\n\n(.*)^Section:(.+?)$(\n\n^Example:\n(.*)|\s*)"#)
-                .multi_line(true)
-                .dot_matches_new_line(true)
-                .crlf(true)
-                .build()
-                .unwrap();
-        static ref EXEMPTIONS: HashSet<&'static str> = {
-            let mut exemption_set = HashSet::new();
-            exemption_set.insert("version");
-            exemption_set.insert("env");
-            exemption_set.insert("sh");
-            exemption_set.insert("$sh");
-            exemption_set.insert("this-fn");
-            exemption_set.insert("cons");
-            exemption_set.insert("list-append");
-            exemption_set.insert("/=");
-            exemption_set.insert("eq?");
-            exemption_set.insert("equal?");
-            exemption_set.insert("type");
-            exemption_set.insert("err");
-            exemption_set.insert("call/cc");
-            exemption_set.insert("defer");
-            exemption_set.insert("on-error");
-            exemption_set.insert("while");
-            exemption_set.insert("doc-string");
-            exemption_set.insert("get");
-            exemption_set.insert("mk-err");
-            exemption_set.insert("err?");
-            exemption_set.insert("ok?");
-            exemption_set.insert("return");
-            exemption_set.insert("*euid*");
-            exemption_set.insert("*last-status*");
-            exemption_set.insert("set-prop");
-            exemption_set.insert("sizeof-heap-object");
-            exemption_set.insert("*int-min*");
-            exemption_set.insert("gensym");
-            exemption_set.insert("*uid*");
-            exemption_set.insert("*int-max*");
-            exemption_set.insert("prn");
-            exemption_set.insert("pr");
-            exemption_set.insert("sizeof-value");
-            exemption_set.insert("dump-regs");
-            exemption_set.insert("dasm");
-            exemption_set.insert("load");
-            exemption_set.insert("eval");
-            exemption_set.insert("*int-bits*");
-            exemption_set.insert("get-prop");
-            exemption_set.insert("expand-macro");
-            exemption_set
-        };
-    }
-
-    #[derive(Debug, Clone, Eq, Hash, PartialEq)]
-    enum Namespace {
-        Global,
-        // Can be adapted when namespaces are added.
-        // Other(String),
-    }
-
-    impl ToString for Namespace {
-        fn to_string(&self) -> String {
-            match self {
-                Namespace::Global => "global".to_string(),
-            }
-        }
-    }
-
-    impl Namespace {
-        fn add_docs(&self, docs: &mut Vec<SloshDoc>, vm: &mut SloshVm) -> DocResult<()> {
-            let docstring_key = vm.intern_static("doc-string");
-            match self {
-                Namespace::Global => {
-                    for g in vm.globals().keys() {
-                        let sym = Value::Symbol(*g);
-                        let sym_str = sym.display_value(&vm);
-                        let slot = vm.global_intern_slot(*g).unwrap();
-                        let raw_doc_string = vm
-                            .get_global_property(slot, docstring_key)
-                            .map_or(None, |x| {
-                                if let Value::String(h) = x {
-                                    Some(vm.get_string(h).to_string())
-                                } else {
-                                    None
-                                }
-                            })
-                            .unwrap_or_default();
-                        let slosh_doc = SloshDoc::new(
-                            sym_str,
-                            sym.display_type(&vm).to_string(),
-                            self.clone(),
-                            raw_doc_string,
-                        );
-                        match slosh_doc {
-                            Ok(slosh_doc) => {
-                                docs.push(slosh_doc);
-                            }
-                            Err(e) => match e {
-                                DocError::ExemptFromProperDocString { symbol } => {
-                                    eprintln!("Exempt from proper doc string: {symbol}");
-                                }
-                                _ => {
-                                    return Err(e);
-                                }
-                            },
-                        }
-                    }
-                }
-            }
-            docs.sort();
-            Ok(())
-        }
-    }
-
-    #[derive(Debug, Clone, Eq, Hash, PartialEq)]
-    struct DocStringSection {
-        usage: String,
-        description: String,
-        section: String,
-        example: Option<String>,
-    }
-
-    impl Display for DocStringSection {
-        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-            let example = self.example.clone().unwrap_or_default();
-            write!(
-                f,
-                "Usage: {usage}\n\n{description}\n\nSection: {section}\n\nExample: {example}",
-                usage = self.usage,
-                description = self.description,
-                section = self.section,
-                example = example,
-            )
-        }
-    }
-
-    #[derive(Eq)]
-    struct SloshDoc {
-        symbol: String,
-        symbol_type: String,
-        namespace: Namespace,
-        doc_string: DocStringSection,
-    }
-
-    impl PartialEq for SloshDoc {
-        fn eq(&self, other: &Self) -> bool {
-            self.fully_qualified_name()
-                .eq_ignore_ascii_case(&other.fully_qualified_name())
-        }
-    }
-
-    impl PartialOrd for SloshDoc {
-        fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-            self.fully_qualified_name()
-                .partial_cmp(&other.fully_qualified_name())
-        }
-    }
-
-    impl Ord for SloshDoc {
-        fn cmp(&self, other: &Self) -> Ordering {
-            self.fully_qualified_name()
-                .cmp(&other.fully_qualified_name())
-        }
-    }
-
-    impl SloshDoc {
-        fn new(
-            name: String,
-            symbol_type: String,
-            namespace: Namespace,
-            raw_doc_string: String,
-        ) -> DocResult<SloshDoc> {
-            let doc_string = SloshDoc::parse_doc_string(Cow::Borrowed(&name), raw_doc_string)?;
-            Ok(SloshDoc {
-                symbol: name,
-                symbol_type,
-                namespace,
-                doc_string,
-            })
-        }
-
-        /// Provide the fully
-        pub fn fully_qualified_name(&self) -> String {
-            self.namespace.to_string() + "::" + self.symbol.as_ref()
-        }
-
-        /// Given the rules for parsing slosh docstrings, parse one! See [`DOC_REGEX`]
-        /// for the specification.
-        pub fn parse_doc_string(
-            symbol: Cow<'_, String>,
-            raw_doc_string: String,
-        ) -> DocResult<DocStringSection> {
-            let cap = DOC_REGEX.captures(raw_doc_string.as_str()).ok_or_else(|| {
-                if EXEMPTIONS.contains(symbol.as_str()) {
-                    DocError::ExemptFromProperDocString {
-                        symbol: symbol.to_owned().to_string(),
-                    }
-                } else {
-                    DocError::NoDocString {
-                        symbol: symbol.to_owned().to_string(),
-                    }
-                }
-            })?;
-            let usage = cap
-                .get(1)
-                .ok_or_else(|| DocError::DocStringMustStartWithUsage {
-                    symbol: symbol.to_owned().to_string(),
-                })
-                .map(|x| x.as_str().to_string())?;
-            let description = cap
-                .get(2)
-                .ok_or_else(|| DocError::DocStringMissingSection {
-                    symbol: symbol.to_owned().to_string(),
-                    section: "Description".to_string(),
-                })
-                .map(|x| x.as_str().to_string())?;
-            let section = cap
-                .get(3)
-                .ok_or_else(|| DocError::DocStringMissingSection {
-                    symbol: symbol.to_owned().to_string(),
-                    section: "Section".to_string(),
-                })
-                .map(|x| x.as_str().to_string())?;
-            let example = cap.get(5).map(|x| x.as_str().to_string());
-
-            Ok(DocStringSection {
-                usage,
-                description,
-                section,
-                example,
-            })
-        }
-    }
-
-    enum DocError {
-        NoDocString { symbol: String },
-        DocStringMissingSection { symbol: String, section: String },
-        DocStringMustStartWithUsage { symbol: String },
-        ExemptFromProperDocString { symbol: String },
-    }
-
-    impl Debug for DocError {
-        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-            Display::fmt(self, f)
-        }
-    }
-
-    impl Display for DocError {
-        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-            let str = match self {
-                DocError::NoDocString{ symbol} => {
-                    format!(
-                        "Either documentation provided does not conform to conventional layout or no documentation string provided for symbol {symbol} all slosh functions written in Rust must have a valid documentation string."
-                    )
-                }
-                DocError::ExemptFromProperDocString{ symbol} => {
-                    format!(
-                        "No documentation needed for provided symbol {symbol}."
-                    )
-                }
-                DocError::DocStringMissingSection{ symbol, section} => {
-                    format!("Invalid documentation string for symbol {symbol}, missing required section {section:?}")
-                }
-                DocError::DocStringMustStartWithUsage{ symbol } => {
-                    format!(
-                        "Invalid documentation string for symbol {symbol}, first line must start with \"Usage:\""
-                    )
-                }
-            }
-            .to_string();
-            write!(f, "{}", str)
-        }
-    }
-
-    impl Error for DocError {}
-
-    type DocResult<T> = Result<T, DocError>;
-
     #[test]
-    fn test_global_slosh_docs() {
-        let mut env = new_slosh_vm();
-        set_builtins(&mut env);
+    fn test_load_path_no_home() {
+        // create home dir
+        let tmp_dir = TempDir::new("test_load_path").unwrap();
+        let home_dir = tmp_dir.path().to_str();
+        let home_path = home_dir.unwrap().to_string();
 
-        let mut docs: Vec<SloshDoc> = vec![];
-        Namespace::Global.add_docs(&mut docs, &mut env).unwrap();
+        let tmp_0 = tmp_dir.path().join("tmp_0");
+        let tmp_1 = tmp_dir.path().join("tmp_1");
+        {
+            // create a dir with an add fcn that adds 1 in  add.slosh
+            create_dir_all(tmp_0.clone()).unwrap();
+            let file_0 = tmp_0.as_path().join("add.slosh");
+            let mut file_0 = File::create(file_0).unwrap();
+            writeln!(file_0, "(def add (fn (x) (+ 1 x)))").unwrap();
+            File::flush(&mut file_0).unwrap();
 
-        let _val = exec(&mut env, "(prn \"hello slosh\")");
-
-        for doc in docs {
-            println!("ns: {:?}", doc.namespace);
-            println!("  sym: {}", doc.symbol);
-            println!("  type: {}", doc.symbol_type);
-            println!("      doc_string: {:?}", doc.doc_string);
-            if let Some(example) = doc.doc_string.example {
-                println!("      example: {:?}", example);
-                //TODO PC ISSUE #118.
-                // 1. exec_expression doesn't work, and might not w/o editing because it does
-                // not (by design) show errors, so might need to refactor that.
-                // 2. there is no assert-equal!?
-            }
+            // create a dir with an add fcn that adds 2 in add.slosh
+            create_dir_all(tmp_1.clone()).unwrap();
+            let file_1 = tmp_1.as_path().join("add.slosh");
+            let mut file_1 = File::create(file_1).unwrap();
+            writeln!(file_1, "(def add (fn (x) (+ 2 x)))").unwrap();
+            File::flush(&mut file_1).unwrap();
         }
+
+        let v = temp_env::with_var("HOME", home_dir, || {
+            ENV.with(|env| {
+                let mut vm = env.borrow_mut();
+                set_builtins(vm.deref_mut());
+                set_initial_load_path(
+                    vm.deref_mut(),
+                    vec![
+                        &home_path,
+                        tmp_0.to_str().unwrap().as_ref(),
+                        tmp_1.to_str().unwrap().as_ref(),
+                    ],
+                );
+                _ = exec(vm.deref_mut(), "(load \"add.slosh\")");
+                let v = exec(vm.deref_mut(), "(add 1)");
+                match v {
+                    Value::Int(i) => from_i56(&i),
+                    _ => {
+                        panic!("Value should be an integer");
+                    }
+                }
+            })
+        });
+        assert_eq!(v, 2i64);
     }
 }

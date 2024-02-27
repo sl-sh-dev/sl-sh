@@ -24,3 +24,5 @@ panic = "abort"
 
 [workspace.dependencies]
 bridge_types = { path = "bridge_types" }
+regex = "1"
+lazy_static = "1"
