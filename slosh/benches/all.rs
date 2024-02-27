@@ -1,4 +1,7 @@
+#[cfg(not(target_arch = "x86_64"))]
 use criterion::{criterion_group, criterion_main, Criterion};
+#[cfg(target_arch = "x86_64")]
+use iai::{black_box, main};
 
 use compile_state::state::{new_slosh_vm, CompileState, SloshVm, SloshVmTrait};
 use sl_compiler::pass1::pass1;
@@ -108,23 +111,46 @@ fn run_float_script(n: usize, m: f32, expected: f32) {
     }
 }
 
+#[cfg(target_arch = "x86_64")]
+fn iai_float_ten() {
+    black_box(run_float_script(10, 0.0001, 20.002));
+}
+
+#[cfg(target_arch = "x86_64")]
+fn iai_float_one_hundred() {
+    black_box(run_float_script(100, 0.5, 400.0));
+}
+
+#[cfg(target_arch = "x86_64")]
+fn iai_float_one_thousand() {
+    black_box(run_float_script(1000, 0.05, 2105.2483));
+}
+
+#[cfg(target_arch = "x86_64")]
+iai::main!(iai_float_ten, iai_float_one_hundred, iai_float_one_thousand);
+
+#[cfg(not(target_arch = "x86_64"))]
 fn float_ten(c: &mut Criterion) {
     c.bench_function("float_ten", |bench| {
         bench.iter(|| std::hint::black_box(run_float_script(10, 0.0001, 20.002)));
     });
 }
 
+#[cfg(not(target_arch = "x86_64"))]
 fn float_one_hundred(c: &mut Criterion) {
     c.bench_function("float_one_hundred", |bench| {
         bench.iter(|| std::hint::black_box(run_float_script(100, 0.5, 400.0)));
     });
 }
 
+#[cfg(not(target_arch = "x86_64"))]
 fn float_one_thousand(c: &mut Criterion) {
     c.bench_function("float_one_thousand", |bench| {
         bench.iter(|| std::hint::black_box(run_float_script(1000, 0.05, 2105.2483)));
     });
 }
 
+#[cfg(not(target_arch = "x86_64"))]
 criterion_group!(benches, float_ten, float_one_hundred, float_one_thousand);
+#[cfg(not(target_arch = "x86_64"))]
 criterion_main!(benches);
