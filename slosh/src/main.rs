@@ -235,7 +235,7 @@ fn get_color_closure() -> Option<ColorClosure> {
     })
 }
 
-fn set_builtins(env: &mut SloshVm) {
+pub fn set_builtins(env: &mut SloshVm) {
     add_shell_builtins(env);
     setup_collection_builtins(env);
     add_print_builtins(env);

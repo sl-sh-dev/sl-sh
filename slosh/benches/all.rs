@@ -1,40 +1,61 @@
 #[macro_use]
 extern crate bencher;
 
-use crate::load_one_expression;
 use bencher::{black_box, Bencher};
-use compile_state::state::{new_slosh_vm, SloshVm};
-use shell::glob::{expand_glob, GlobOutput};
-use sl_compiler::Reader;
-use slvm::{VMError, Value};
-use std::path::PathBuf;
+use compile_state::state::{new_slosh_vm, CompileState, SloshVm, SloshVmTrait};
+use sl_compiler::pass1::pass1;
+use sl_compiler::{compile, Reader};
+use slvm::{Chunk, VMError, VMResult, Value, RET};
+use std::sync::Arc;
 
-fn glob_to_vec(pat: impl Into<PathBuf>) -> Vec<PathBuf> {
-    match expand_glob(pat) {
-        GlobOutput::Arg(p) => {
-            vec![p]
-        }
-        GlobOutput::Args(ps) => ps,
+fn load_one_expression(
+    vm: &mut SloshVm,
+    exp: Value,
+    name: &'static str,
+    doc_string: Option<Value>,
+) -> VMResult<(Arc<Chunk>, Option<Value>)> {
+    let line_num = vm.line_num();
+    let mut state = CompileState::new_state(name, line_num, None);
+    state.chunk.dbg_args = Some(Vec::new());
+    state.doc_string = doc_string;
+    if let Err(e) = pass1(vm, &mut state, exp) {
+        println!(
+            "Compile error (pass one), {}, line {}: {}",
+            name,
+            vm.line_num(),
+            e
+        );
+        return Err(e);
     }
-}
-pub fn get_glob_from_dir(dir: PathBuf, glob: &str) -> Vec<PathBuf> {
-    let test_glob = dir.join(glob);
-    glob_to_vec(test_glob)
-}
-
-pub fn get_tests_directory() -> PathBuf {
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("tests");
-    path
-}
-
-pub fn get_globs_from_test_directory(glob: &str) -> Vec<PathBuf> {
-    let tests = get_tests_directory();
-    get_glob_from_dir(tests, glob)
+    if let Err(e) = compile(vm, &mut state, exp, 0) {
+        println!(
+            "Compile error, {} line {}: {} exp: {}",
+            name,
+            vm.line_num(),
+            e,
+            exp.display_value(vm)
+        );
+        return Err(e);
+    }
+    if let Err(e) = state.chunk.encode0(RET, vm.own_line()) {
+        println!("Compile error, {} line {}: {}", name, vm.line_num(), e);
+        return Err(e);
+    }
+    state.chunk.extra_regs = state.max_regs;
+    Ok((Arc::new(state.chunk), state.doc_string))
 }
 
 pub const FLOAT_BENCH: &'static str = r#"
-(defn eval-pol (n x)
+(def defmacro
+  (macro (name args & body)
+      `(def ~name (macro ~args ~@body))))
+(defmacro dotimes-i
+    (idx-bind times & body)
+    `(let (~idx-bind 0)
+        (while (< ~idx-bind ~times)
+            ~@body
+            (inc! ~idx-bind))))
+(def eval-pol (fn (n x)
   (let (su 0.0
         mu 10.0
         pu 0.0
@@ -47,37 +68,69 @@ pub const FLOAT_BENCH: &'static str = r#"
         (dotimes-i j 100
           (set! su (+ pol.~j (* su x))))
             (set! pu (+ pu su)))
-    pu))
-    (eval-pol 100 0.5)
+    pu)))
 "#;
 
-fn run_float_script() {
-    let scripts = get_globs_from_test_directory("*.benchmark");
-    for benchmark in scripts {
-        let vm = &mut new_slosh_vm();
-        let file = std::fs::File::open(benchmark).expect("benchmark file not found");
-        let mut reader = Reader::from_file(file, vm, "", 1, 0);
-        let mut last = Value::False;
-        while let Some(exp) = reader.next() {
-            let reader_vm = reader.vm();
-            let exp = exp
-                .map_err(|e| VMError::new("read", e.to_string()))
-                .unwrap();
-            reader_vm.heap_sticky(exp);
+pub fn run_bench(n: usize, m: f32) -> String {
+    format!("(eval-pol {} {})", n, m)
+}
 
-            let result = load_one_expression(reader_vm, exp, "", None);
+pub fn run_reader(reader: &mut Reader) -> VMResult<Value> {
+    let mut last = Value::False;
+    while let Some(exp) = reader.next() {
+        let reader_vm = reader.vm();
+        let exp = exp
+            .map_err(|e| VMError::new("read", e.to_string()))
+            .unwrap();
+        reader_vm.heap_sticky(exp);
 
-            reader_vm.heap_unsticky(exp);
-            let (chunk, _new_doc_string) = result.unwrap();
-            last = reader_vm.execute(chunk).unwrap();
+        let result = load_one_expression(reader_vm, exp, "", None);
+
+        reader_vm.heap_unsticky(exp);
+        let (chunk, _new_doc_string) = result.unwrap();
+        last = reader_vm.execute(chunk)?;
+    }
+    Ok(last)
+}
+
+fn run_float_script(n: usize, m: f32, expected: f32) {
+    let vm = &mut new_slosh_vm();
+    let mut reader = Reader::from_static_string(FLOAT_BENCH, vm, "", 1, 0);
+    _ = run_reader(&mut reader);
+
+    let mut reader = Reader::from_string(run_bench(n, m), vm, "", 1, 0);
+    let last = run_reader(&mut reader);
+    match last {
+        Ok(Value::Float(f)) => {
+            assert_eq!(f.0, expected);
         }
-        println!("Value: {:?}", last);
+        _ => {
+            panic!("Not a float");
+        }
     }
 }
 
-fn float(bench: &mut Bencher) {
-    bench.iter(|| black_box(run_float_script()));
+fn float_ten(bench: &mut Bencher) {
+    bench.iter(|| black_box(run_float_script(10, 0.0001, 20.002)));
 }
 
-benchmark_group!(benches, float);
+fn float_one_hundred(bench: &mut Bencher) {
+    bench.iter(|| black_box(run_float_script(100, 0.5, 400.0)));
+}
+
+fn float_one_thousand(bench: &mut Bencher) {
+    bench.iter(|| black_box(run_float_script(1000, 0.05, 2105.2483)));
+}
+
+fn float_ten_thousand(bench: &mut Bencher) {
+    bench.iter(|| black_box(run_float_script(10_000, 0.005, 20099.174)));
+}
+
+benchmark_group!(
+    benches,
+    float_ten,
+    float_one_hundred,
+    float_one_thousand,
+    float_ten_thousand
+);
 benchmark_main!(benches);
