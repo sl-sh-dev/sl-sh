@@ -180,3 +180,4 @@ These forms (written in Rust but callable from Lisp) are supported.
  - Install [bencher](https://bencher.dev/docs/tutorial/quick-start/)
  - To run benchmarks locally: `cargo bench`
  - To upload benchmarks to bencher.dev: `bencher run "cargo bench"`
+ - Consider using iai in cloud: https://bencher.dev/learn/benchmarking/rust/iai/
