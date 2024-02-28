@@ -169,9 +169,9 @@ macro_rules! get_int {
 macro_rules! get_float {
     ($vm:expr, $val:expr) => {{
         match $val {
-            $crate::Value::Byte(b) => Ok(b as f32),
-            $crate::Value::Int(i) => Ok(crate::from_i56(&i) as f32),
-            $crate::Value::Float(f) => Ok(f.0),
+            $crate::Value::Byte(b) => Ok(b as f64),
+            $crate::Value::Int(i) => Ok(crate::from_i56(&i) as f64),
+            $crate::Value::Float(f) => Ok(f64::from(f)),
             _ => Err($crate::VMError::new_value(format!(
                 "Not a float: {:?}",
                 $val
@@ -187,11 +187,12 @@ macro_rules! binary_math {
         let op2 = $vm.register(op2 as usize);
         match (op1, op2) {
             ($crate::Value::Float(op1_f), $crate::Value::Float(op2_f)) => {
-                *$vm.register_mut(dest as usize) = $bin_fn(op1_f.0, op2_f.0).into();
+                *$vm.register_mut(dest as usize) =
+                    $bin_fn(f64::from(op1_f), f64::from(op2_f)).into();
             }
             ($crate::Value::Float(op1_f), _) => {
                 *$vm.register_mut(dest as usize) = $bin_fn(
-                    op1_f.0,
+                    f64::from(op1_f),
                     get_float!($vm, op2).map_err(|e| (e, $chunk.clone()))?,
                 )
                 .into();
@@ -199,7 +200,7 @@ macro_rules! binary_math {
             (_, $crate::Value::Float(op2_f)) => {
                 *$vm.register_mut(dest as usize) = $bin_fn(
                     get_float!($vm, op1).map_err(|e| (e, $chunk.clone()))?,
-                    op2_f.0,
+                    f64::from(op2_f),
                 )
                 .into();
             }
@@ -221,24 +222,24 @@ macro_rules! div_math {
         let op2 = $vm.register(op2 as usize);
         match (op1, op2) {
             ($crate::Value::Float(op1_f), $crate::Value::Float(op2_f)) => {
-                let op1 = op1_f.0;
-                let op2 = op2_f.0;
+                let op1 = f64::from(op1_f);
+                let op2 = f64::from(op2_f);
                 if op2 == 0.0 {
                     return Err(($crate::VMError::new_vm("Divide by zero error."), $chunk));
                 }
                 *$vm.register_mut(dest as usize) = (op1 / op2).into();
             }
             ($crate::Value::Float(op1_f), _) => {
-                let op1 = op1_f.0;
-                let op2 = get_float!($vm, op2).map_err(|e| (e, $chunk.clone()))? as f32;
+                let op1 = f64::from(op1_f);
+                let op2 = get_float!($vm, op2).map_err(|e| (e, $chunk.clone()))? as f64;
                 if op2 == 0.0 {
                     return Err(($crate::VMError::new_vm("Divide by zero error."), $chunk));
                 }
                 *$vm.register_mut(dest as usize) = (op1 / op2).into();
             }
             (_, $crate::Value::Float(op2_f)) => {
-                let op1 = get_float!($vm, op1).map_err(|e| (e, $chunk.clone()))? as f32;
-                let op2 = op2_f.0;
+                let op1 = get_float!($vm, op1).map_err(|e| (e, $chunk.clone()))? as f64;
+                let op2 = f64::from(op2_f);
                 if op2 == 0.0 {
                     return Err(($crate::VMError::new_vm("Divide by zero error."), $chunk));
                 }
