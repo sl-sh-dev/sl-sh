@@ -480,18 +480,6 @@ impl<ENV> GVm<ENV> {
                                     }
                                 }
                             }
-                            /* Not yet...
-                            Value::StringConst(i) => {
-                                let mut iter = val.iter(self);
-                                for i in 0..len {
-                                    if let Some(item) = iter.next() {
-                                        *self.register_mut(dest + i) = item;
-                                    } else {
-                                        *self.register_mut(dest + i) = Value::Undefined;
-                                    }
-                                }
-                            }
-                             */
                             _ => return Err((VMError::new_vm("not a sequence"), chunk)),
                         }
                     }

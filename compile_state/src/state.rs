@@ -960,29 +960,36 @@ Example:
     (test::assert-equal (+ idx 2) v2)
     (test::assert-equal (+ idx 3) v3)
     (if (< idx 5) (this-fn (+ idx 1)))))0)"#),
-            let_while: add_special(vm, "let-while", r#"Usage: (let-while vals condition &rest let-body)
+            let_while: add_special(vm, "let-while", r#"Usage: (let-while (initial-bindings) (loop bindings) condition & let-body)
 
-Takes list, vals, of form (binding0 sexp0, binding1 sexp1, ...) and evaluates
+Takes list of initial bindings (done once before loop) of form (binding0 sexp0, binding1 sexp1, ...),
+and a list of loop bindings (done at the start of each iteration including the first) and evaluates
 let-body with all values of binding bound to the result of the evaluation of
-sexp while condition is true.
+both bindings while condition is true.
 
 Section: core
 
 Example:
-(def test-do-one "One1")
-(def test-do-two "Two1")
-(def test-do-three (let ((test-do-one "One")) (set! test-do-two "Two")(test::assert-equal "One" test-do-one)"Three"))
-(test::assert-equal "One1" test-do-one)
-(test::assert-equal "Two" test-do-two)
-(test::assert-equal "Three" test-do-three)
-((fn (idx) (let ((v2 (+ idx 2))(v3 (+ idx 3)))
-    (test::assert-equal (+ idx 2) v2)
-    (test::assert-equal (+ idx 3) v3)
-    (if (< idx 5) (recur (+ idx 1)))))0)
-((fn (idx) (let ((v2 (+ idx 2))(v3 (+ idx 3)))
-    (test::assert-equal (+ idx 2) v2)
-    (test::assert-equal (+ idx 3) v3)
-    (if (< idx 5) (this-fn (+ idx 1)))))0)"#),
+; both of these examples create a vector and iterate to print all the elements
+; use traditional lisp structure
+(def test-res [])
+(let-while (l [1 2 3]) (done (empty? l), f (first l),  l (rest l)) (not done)
+  (prn f)
+  (vec-push! test-res f))
+(let ([x y z] test-res)
+  (test::assert-equal 1 x)
+  (test::assert-equal 2 y)
+  (test::assert-equal 3 z))
+; same thing using destructuring
+(def test-res [])
+(let-while (l [1 2 3]) (done (empty? l), [% f & l] l) (not done)
+  (prn f)
+  (vec-push! test-res f))
+(let ([x y z] test-res)
+  (test::assert-equal 1 x)
+  (test::assert-equal 2 y)
+  (test::assert-equal 3 z))
+"#),
             call_cc: add_special(vm, "call/cc", ""),
             defer: add_special(vm, "defer", ""),
             on_error: add_special(vm, "on-error", ""),

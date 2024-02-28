@@ -1,5 +1,4 @@
 (def nil? (fn (v) (eq? (type v) :Nil)))
-(def undef? (fn (v) (eq? (type v) :Undefined)))
 (def pair? (fn (v) (eq? (type v) :Pair)))
 (def string? (fn (v) (eq? (type v) :String)))
 (def symbol? (fn (v) (eq? (type v) :Symbol)))
@@ -13,7 +12,7 @@
                                              (eq? t :Special)
                                              (eq? t :Builtin)
                                              (eq? t :Map)
-                                             (eq? t :Vactor)
+                                             (eq? t :Vector)
                                              (eq? t :Pair)))))
 
 #%
