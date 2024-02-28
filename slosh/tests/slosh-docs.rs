@@ -1,8 +1,10 @@
-mod common;
-
 use std::path::PathBuf;
 use std::process::Command;
 use tempdir::TempDir;
+
+pub fn get_slosh_exe() -> PathBuf {
+    PathBuf::from(env!("CARGO_BIN_EXE_slosh"))
+}
 
 // To run all tests in this executable
 //
@@ -23,7 +25,7 @@ fn test_slosh_doc_string_parsing_in_slosh() {
     let test_script = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("run-tests.slosh");
     println!("Slosh doc test script: {test_script:?}");
 
-    let slosh_path = common::get_slosh_exe().into_os_string();
+    let slosh_path = get_slosh_exe().into_os_string();
     let slosh_path = slosh_path.to_str();
 
     let tmp_dir = TempDir::new("test_load_path").unwrap();
