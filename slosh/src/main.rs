@@ -32,6 +32,7 @@ pub mod debug;
 pub mod docs;
 mod liner_rules;
 mod load_eval;
+pub use crate::load_eval::load_one_expression;
 mod shell_builtins;
 
 use crate::completions::ShellCompleter;
@@ -274,7 +275,7 @@ fn get_color_closure() -> Option<ColorClosure> {
     })
 }
 
-fn set_builtins(env: &mut SloshVm) {
+pub fn set_builtins(env: &mut SloshVm) {
     add_shell_builtins(env);
     setup_collection_builtins(env);
     add_print_builtins(env);

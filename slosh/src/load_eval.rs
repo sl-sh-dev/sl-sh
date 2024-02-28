@@ -22,7 +22,8 @@ const CORE_LISP: &str = from_utf8(include_bytes!("../../lisp/core.slosh"));
 const COLORS_LISP: &str = from_utf8(include_bytes!("../../lisp/sh-color.slosh"));
 pub const SLSHRC: &str = from_utf8(include_bytes!("../../init.slosh"));
 
-fn load_one_expression(
+//TODO PC no!!!
+pub fn load_one_expression(
     vm: &mut SloshVm,
     exp: Value,
     name: &'static str,
