@@ -1,20 +1,16 @@
 #!/usr/bin/env slosh
 
-(defn eval-pol (n x)
-  (let (su 0.0
-        mu 10.0
-        pu 0.0
-        pol (make-vec 100 0.0))
-    (dotimes-i i n
-        (set! su 0.0)
-        (dotimes-i j 100
-             (set! mu (/ (+ mu 2.0) 2.0))
-             (set! pol.~j mu))
-        (dotimes-i j 100
-          (set! su (+ pol.~j (* su x))))
-            (set! pu (+ pu su)))
-    pu))
+(load "float-bench.slosh")
 
-  (def pu (eval-pol 100 1.3))
+(def pu (eval-pol 100 0.5))
+(prn "(eval-pol 100 0.5) =>\n" pu)
+(assert-equal pu 400.0)
 
-  (prn "(eval-pol 100 1.3) =>\n" pu)
+(def pu (eval-pol 1000 0.05))
+(prn "(eval-pol 1000 0.05) =>\n" pu)
+(assert-equal pu 2105.2483)
+
+(def pu (eval-pol 10000 0.2))
+(prn "(eval-pol 10000 0.2) =>\n" pu)
+(assert-equal pu 25000.0)
+
