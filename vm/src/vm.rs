@@ -228,14 +228,14 @@ impl<ENV> GVm<ENV> {
                 (Value::StringConst(s1), Value::CharCluster(l, c)) => {
                     let s2 = format!("{}", String::from_utf8_lossy(&c[0..l as usize]));
                     let s1 = self.get_interned(s1);
-                    if s1 == &s2 {
+                    if s1 == s2 {
                         val = Value::True;
                     }
                 }
                 (Value::StringConst(s1), Value::CodePoint(c)) => {
                     let s2 = format!("{c}");
                     let s1 = self.get_interned(s1);
-                    if s1 == &s2 {
+                    if s1 == s2 {
                         val = Value::True;
                     }
                 }
@@ -260,14 +260,14 @@ impl<ENV> GVm<ENV> {
                 (Value::String(h1) | Value::CharClusterLong(h1), Value::CodePoint(c)) => {
                     let s1 = self.get_string(h1);
                     let s2 = format!("{c}");
-                    if s1 == &s2 {
+                    if s1 == s2 {
                         val = Value::True;
                     }
                 }
                 (Value::String(h1) | Value::CharClusterLong(h1), Value::CharCluster(l, c)) => {
                     let s1 = self.get_string(h1);
                     let s2 = format!("{}", String::from_utf8_lossy(&c[0..l as usize]));
-                    if s1 == &s2 {
+                    if s1 == s2 {
                         val = Value::True;
                     }
                 }
