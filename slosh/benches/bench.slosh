@@ -1,0 +1,16 @@
+#!/usr/bin/env slosh
+
+(load "float-bench.slosh")
+
+(def pu (eval-pol 100 0.5))
+(prn "(eval-pol 100 0.5) =>\n" pu)
+(assert-equal pu 400.0)
+
+(def pu (eval-pol 1000 0.05))
+(prn "(eval-pol 1000 0.05) =>\n" pu)
+(assert-equal pu 2105.2483)
+
+(def pu (eval-pol 10000 0.2))
+(prn "(eval-pol 10000 0.2) =>\n" pu)
+(assert-equal pu 25000.0)
+

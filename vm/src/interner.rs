@@ -78,7 +78,7 @@ impl Interner {
     }
 
     /// Intern name in this interner.  Will return the existing symbol if it
-    /// exists or add it and and return it if not.
+    /// exists or add it and return it if not.
     pub fn intern(&mut self, name: &str) -> Interned {
         if let Some(&id) = self.map.get(name) {
             return id;

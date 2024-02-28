@@ -80,7 +80,7 @@ https://sl-sh-dev.github.io/sl-sh/mydoc_api.html
 - Symbol
 - Keyword
 - Character (chars are grapheme clusters)
-- Float (32 bits- f32)
+- Float (56 bit float)
 - Integer (56 bit signed integer)
 - Byte
 
@@ -175,3 +175,9 @@ These forms (written in Rust but callable from Lisp) are supported.
 
 ## Links
 - sl-sh legacy shell: https://github.com/sl-sh-dev/sl-sh/legacy
+
+### Benchmarking
+ - Install [bencher](https://bencher.dev/docs/tutorial/quick-start/)
+ - To run benchmarks locally: `cargo bench`
+ - To upload benchmarks to bencher.dev: `bencher run "cargo bench"`
+ - Consider using iai in cloud: https://bencher.dev/learn/benchmarking/rust/iai/

@@ -1,10 +1,10 @@
 #![allow(unused)]
 
 // This is a utility file and is used as a regular module but also as a module
-// imported via the [`path`] attribute in other crates in this workspace. Therefore
+// imported via the [`path`] attribute in other crates in this workspace, therefore,
 // its imports may be different based on which crate it's being imported into.
 //
-// Therefore the convention is to have this test utilities file declare
+// As a result the convention is to have this test utilities file declare
 // `use super::*;` and it is up to the parent module to provide all necessary
 // dependencies.
 use super::*;

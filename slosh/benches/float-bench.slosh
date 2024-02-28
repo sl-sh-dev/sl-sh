@@ -1,0 +1,23 @@
+(def defmacro
+  (macro (name args & body)
+      `(def ~name (macro ~args ~@body))))
+(defmacro dotimes-i
+    (idx-bind times & body)
+    `(let (~idx-bind 0)
+        (while (< ~idx-bind ~times)
+            ~@body
+            (inc! ~idx-bind))))
+(def eval-pol (fn (n x)
+  (let (su 0.0
+        mu 10.0
+        pu 0.0
+        pol (make-vec 100 0.0))
+    (dotimes-i i n
+        (set! su 0.0)
+        (dotimes-i j 100
+             (set! mu (/ (+ mu 2.0) 2.0))
+             (set! pol.~j mu))
+        (dotimes-i j 100
+          (set! su (+ pol.~j (* su x))))
+            (set! pu (+ pu su)))
+    pu)))
