@@ -4,11 +4,11 @@
 
 (def pu (eval-pol 100 0.5))
 (prn "(eval-pol 100 0.5) =>\n" pu)
-(prn "passed: " (equal? pu 399.999999999585))
+(prn "passed: " (equal? pu 399.99999999958527))
 
 (def pu (eval-pol 1000 0.05))
 (prn "(eval-pol 1000 0.05) =>\n" pu)
-(prn "passed: " (equal? pu 2105.263157892448))
+(prn "passed: " (equal? pu 2105.2631578924484))
 
 (def pu (eval-pol 10000 0.2))
 (prn "(eval-pol 10000 0.2) =>\n" pu)
