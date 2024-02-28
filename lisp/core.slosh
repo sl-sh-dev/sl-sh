@@ -151,11 +151,11 @@ Create a macro and bind it to a symbol in the current scope.
 Section: core
 
 Example:
-(defmacro test-mac (x) (let (y (+ (ref (ref x)) 1)) `(set! ,x ,y)))
+(defmacro test-mac (x) (let (y (+ (ref x) 1)) `(set! ~x ~y)))
 (def test-mac-x 2)
 (test-mac test-mac-x)
 (test::assert-equal 3 test-mac-x)
-(defmacro test-mac (x) `(set! ,x 15))
+(defmacro test-mac (x) `(set! ~x 15))
 (test-mac test-mac-x)
 (test::assert-equal 15 test-mac-x)
 %#
@@ -202,9 +202,9 @@ Section: core
 Example:
 (defn defn-test (x y) (+ x y))
 (test::assert-equal 5 (defn-test 2 3))
-(defn defn-test (x y) (set! x (* x 2))(+ x y))
+(defn defn-test (x y) (set! x (* x 2)) (+ x y))
 (test::assert-equal 7 (defn-test 2 3))
-(defn defn-test (x y))
+(defn defn-test (x y) nil)
 (test::assert-false (defn-test 2 3))
 (defn defn-test (x y) #t)
 (test::assert-true (defn-test 2 3))
@@ -326,9 +326,17 @@ be restored as interior dyn's exit.
 Section: core
 
 Example:
-(defn test-dyn-fn () (prn \"Print dyn out\"))
-(dyn *stdout* (open \"/tmp/sl-sh.dyn.test\" :create :truncate) (test-dyn-fn))
-(test::assert-equal \"Print dyn out\" (read-line (open \"/tmp/sl-sh.dyn.test\" :read)))
+(defn test-dyn-fn (x) (str 1 x))
+(dyn str (fn (x y) (str 1 x y))
+    (let (res (test-dyn-fn 1))
+    (prn "res: " res)
+        (test::assert-equal "11" res)))
+    (prn "out: " out)
+(test::assert-equal out "11")
+
+;;(defn test-dyn-fn () (prn \"Print dyn out\"))
+;;(dyn *stdout* (open \"/tmp/sl-sh.dyn.test\" :create :truncate) (test-dyn-fn))
+;;(test::assert-equal \"Print dyn out\" (read-line (open \"/tmp/sl-sh.dyn.test\" :read)))
 %#
 (defmacro dyn
   (key value & expression)
@@ -378,12 +386,12 @@ Section: sequence
 
 Example:
 (assert-equal '(1 2) (butlast '(1 2 3)))
-(assert-equal '(1 2) (butlast '#(1 2 3)))
+(assert-equal '(1 2) (butlast [1 2 3]))
 (assert-equal nil (butlast '(1)))
-(assert-equal nil (butlast '#(1)))
+(assert-equal nil (butlast [1]))
 (assert-equal nil (butlast '()))
 (assert-equal nil (butlast nil))
-(assert-equal nil (butlast '#()))
+(assert-equal nil (butlast []))
 %#
 (def butlast nil) ; predeclare and assign butlast to avoid a warning when used in butlast declaration.
 (defn butlast
@@ -521,6 +529,7 @@ Section: conditional
 
 Example:
 
+(def b 0)
 (defn select-option (a)
     (cond ((= a 1) \"opt-one\")
           ((= a 2) (set! b 5) \"opt-two\")
@@ -530,7 +539,6 @@ Example:
           ((= a 2) \"opt-two\")
           ((= a 3) (str \"opt\" \"-three\"))
           (#t \"default\")))
-(def b 0)
 (assert-equal \"opt-one\" (select-option 1))
 (assert-equal b 0)
 (assert-equal \"opt-two\" (select-option 2))

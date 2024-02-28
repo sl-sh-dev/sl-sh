@@ -224,7 +224,7 @@ Example:
 (test::assert-equal "One" test-do-one)
 (test::assert-equal "Two" test-do-two)
 (test::assert-equal "Three" test-do-three)
-(let ((test-do-one nil))
+(let (test-do-one nil)
     ; Add this to tthe let's scope (shadow the outer test-do-two).
     (test::assert-equal "Default" (def ns::test-do-four "Default"))
     ; set the currently scoped value.
@@ -275,10 +275,11 @@ Section: core
 Example:
 (def test-do-one nil)
 (def test-do-two nil)
-(def test-do-three (do (set! test-do-one "One")(set! test-do-two "Two")"Three"))
+(def test-do-three (do (set! test-do-one "One") (set! test-do-two "Two") "Three"))
 (test::assert-equal "One" test-do-one)
 (test::assert-equal "Two" test-do-two)
-(test::assert-equal "Three" test-do-three"#),
+(test::assert-equal "Three" test-do-three)
+"#),
             fn_: add_special(vm, "fn", "Usage: (fn (param*) expr*) -> exprN
 
 Create a function (lambda).
@@ -476,7 +477,7 @@ Example:
 (test::assert-equal 1 *dec-test*)
 (def *dec-test* "xxx")
 (test::assert-error (dec! *dec-test*))
-(let ((dec-test 5))
+(let (dec-test 5)
   (test::assert-equal 4 (dec! dec-test))
   (test::assert-equal 4 dec-test)
   (test::assert-equal 1 (dec! dec-test 3))

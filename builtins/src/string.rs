@@ -462,9 +462,9 @@ Returns true if a character is whitespace, false/nil otherwise.
 Section: char
 
 Example:
-(test::assert-true (char-whitespace? #\ ))
-(test::assert-true (char-whitespace? #\tab))
-(test::assert-false (char-whitespace? #\s))
+(test::assert-true (char-whitespace? \ ))
+(test::assert-true (char-whitespace? \tab))
+(test::assert-false (char-whitespace? \s))
 ",
     );
     add_builtin(

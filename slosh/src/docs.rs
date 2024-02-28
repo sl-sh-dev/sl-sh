@@ -65,6 +65,7 @@ lazy_static! {
         exemption_set.insert("dump-regs");
         exemption_set.insert("dasm");
         exemption_set.insert("load");
+        exemption_set.insert("read");
         exemption_set.insert("eval");
         exemption_set.insert("*int-bits*");
         exemption_set.insert("get-prop");
@@ -321,6 +322,16 @@ impl SloshDoc {
     pub fn fully_qualified_name(&self) -> String {
         self.namespace.to_string() + "::" + self.symbol.as_ref()
     }
+
+    /// Return an empty documentation map.
+    fn nil_doc_map(vm: &mut SloshVm) -> HashMap<Value, Value> {
+        let mut map = HashMap::with_capacity(4);
+        insert_nil_section(&mut map, USAGE, vm);
+        insert_nil_section(&mut map, SECTION, vm);
+        insert_nil_section(&mut map, DESCRIPTION, vm);
+        insert_nil_section(&mut map, EXAMPLE, vm);
+        map
+    }
 }
 
 enum DocError {
@@ -387,24 +398,31 @@ fn insert_section(
     map.insert(key_const, value_text);
 }
 
+fn insert_nil_section(map: &mut HashMap<Value, Value>, key: &'static str, vm: &mut SloshVm) {
+    let key_const = Value::Keyword(vm.intern_static(key));
+    map.insert(key_const, Value::Nil);
+}
+
 impl SlFrom<SloshDoc> for HashMap<Value, Value> {
     fn sl_from(value: SloshDoc, vm: &mut SloshVm) -> VMResult<Self> {
-        let mut map;
+        let mut map = Self::with_capacity(4);
         match (value.doc_string.usage, value.doc_string.example) {
             (Some(usage), Some(example)) => {
-                map = Self::with_capacity(4);
                 insert_section(&mut map, USAGE, usage, vm);
                 insert_section(&mut map, EXAMPLE, example, vm);
             }
             (Some(usage), None) => {
-                map = Self::with_capacity(3);
                 insert_section(&mut map, USAGE, usage, vm);
+                insert_nil_section(&mut map, EXAMPLE, vm);
             }
             (None, Some(example)) => {
-                map = Self::with_capacity(3);
                 insert_section(&mut map, EXAMPLE, example, vm);
+                insert_nil_section(&mut map, USAGE, vm);
             }
-            (None, None) => map = Self::with_capacity(2),
+            (None, None) => {
+                insert_nil_section(&mut map, EXAMPLE, vm);
+                insert_nil_section(&mut map, USAGE, vm);
+            }
         }
         insert_section(&mut map, SECTION, value.doc_string.section, vm);
         insert_section(&mut map, DESCRIPTION, value.doc_string.description, vm);
@@ -425,7 +443,8 @@ fn doc_map(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         (Some(Value::Symbol(g)), None) => match SloshDoc::new(*g, vm, Namespace::Global) {
             Ok(slosh_doc) => Value::sl_from(slosh_doc, vm),
             Err(DocError::ExemptFromProperDocString { symbol: _ }) => {
-                Ok(vm.alloc_map(HashMap::new()))
+                let map = SloshDoc::nil_doc_map(vm);
+                Ok(vm.alloc_map(map))
             }
             Err(e) => Err(VMError::from(e)),
         },
