@@ -420,8 +420,9 @@ Example:
 (test::assert-equal 16 (* 2 2 4))
 (test::assert-equal 16.0 (* 2 2.0 4))
 (test::assert-equal 16.0 (* 2.0 2.0 4.0))
-(test::assert-equal 55.0000000001 (* 100 0.55))
-(test::assert-error (* 1 2 4 "5"))"#),
+(test::assert-equal 54.9999999999999 (* 100 0.55))
+(test::assert-error (* 1 2 4 "5"))
+"#),
             div: add_special(vm, "/", r#"Usage: (/ number+)
 
 Divide a sequence of numbers.  Requires at least two numbers.
@@ -441,7 +442,8 @@ Example:
 (test::assert-error (/ 1))
 (test::assert-error (/ 1 0))
 (test::assert-error (/ 10 5 0))
-(test::assert-error (/ 10 "5" 2))"#),
+(test::assert-error (/ 10 "5" 2))
+"#),
             inc: add_special(vm, "inc!", r#"Usage: (inc! symbol [number]) -> new value
 
 Increment the value in symbol by one or the optional number

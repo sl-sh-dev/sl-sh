@@ -573,12 +573,14 @@ Asserts the two values are identical.
 
 Section: core
 %#
-(defmacro assert-equal (expected-val right-val & body)
+(defn assert-equal (expected-val right-val & body)
     (if (equal? expected-val right-val)
         #t
         (let (ev (type expected-val)
               rv (type right-val))
-        (mk-err :assert `(apply str "Expected: " ~expected-val " (" ~ev "), Got: " ~right-val " (" (type ~rv) ")." ~@body)))))
+            (mk-err
+                :assert
+                `(str "Expected: " ~expected-val " [" ~ev "], Got: " ~right-val " [" ~rv "]." ~@body)))))
 
 #%
 Asserts the two values are identical.
@@ -592,7 +594,7 @@ Asserts the value is true.
 
 Section: core
 %#
-(defmacro assert-true (val & body) `(assert-equal #t val ~@body))
+(defmacro assert-true (val & body) `(assert-equal #t ~val ~@body))
 
 #%
 Asserts the value is true.
@@ -606,7 +608,7 @@ Asserts the value is false
 
 Section: core
 %#
-(defmacro assert-false (val & body) `(assert-equal #f val ~@body))
+(defmacro assert-false (val & body) `(assert-equal #f ~val ~@body))
 
 #%
 Asserts the value is false
@@ -620,7 +622,12 @@ Asserts the value is an error
 
 Section: core
 %#
-(defmacro assert-error (val & body) `(assert-true #t (err? ~val) ~@body))
+(defmacro assert-error (val & body)
+(if `(err? ~val)
+    #t
+    (mk-err
+        :assert
+        `(str "Expected error got: " ~val "." ~@body))))
 
 #%
 Asserts the value is false
