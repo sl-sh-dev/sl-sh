@@ -222,9 +222,9 @@ fn read(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
                 ));
             }
         };
-        let mut reader = Reader::from_string(string_as_code, vm, "", 1, 0);
+        let reader = Reader::from_string(string_as_code, vm, "", 1, 0);
         let mut vals = vec![];
-        while let Some(exp) = reader.next() {
+        for exp in reader {
             let exp = exp.map_err(|e| VMError::new("read", e.to_string()))?;
             vals.push(exp);
         }
