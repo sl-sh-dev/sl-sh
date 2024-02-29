@@ -28,7 +28,7 @@ use sl_liner::{keymap, ColorClosure, Context, Prompt};
 mod completions;
 mod config;
 pub mod debug;
-#[cfg(any(test, feature = "regex"))]
+#[cfg(any(test, feature = "lisp-test"))]
 pub mod docs;
 mod liner_rules;
 mod load_eval;
@@ -301,7 +301,7 @@ pub fn set_builtins(env: &mut SloshVm) {
     if let Ok(dir) = env::current_dir() {
         env::set_var("PWD", dir);
     }
-    #[cfg(any(test, feature = "regex"))]
+    #[cfg(any(test, feature = "lisp-test"))]
     {
         docs::add_builtins(env);
     }
@@ -566,7 +566,7 @@ mod tests {
     // I didn't really know this was possible but for test utilities just use
     // the path attribute!
     #[path = "../../../compiler/src/test_utils/utils.rs"]
-    mod utils;
+    pub mod utils;
 
     #[test]
     fn test_load_path_no_home() {

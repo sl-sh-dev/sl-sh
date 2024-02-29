@@ -216,7 +216,7 @@ Example:
         get_globals,
         "Usage: (get-globals)
 
-Return a vector containing all the symbols currently defined in the globally.
+Return a vector containing all the symbols currently defined globally.
 
 Section: core
 ",

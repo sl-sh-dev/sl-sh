@@ -1,12 +1,140 @@
+#%
+
+True if the expression is nil, false otherwise
+
+Section: type
+%#
 (def nil? (fn (v) (eq? (type v) :Nil)))
+
+#%
+Usage: (pair? expression)
+
+True if the expression is a pair, false otherwise.
+
+Section: type
+
+Example:
+(test::assert-true (pair? '(1 . 2)) "reader macro")
+(test::assert-true (pair? (join 1 2)) "join")
+(test::assert-true (pair? '(1 2)))
+(test::assert-false (pair? 1))
+(test::assert-false (pair? '#(1 2 3)))
+(test::assert-false (pair? (vec)))
+%#
 (def pair? (fn (v) (eq? (type v) :Pair)))
+
+#%
+Usage: (string? expression)
+
+True if the expression is a string, false otherwise.
+
+Section: type
+
+Example:
+(test::assert-true (string? "string"))
+(test::assert-false (string? 1))
+%#
 (def string? (fn (v) (eq? (type v) :String)))
+
+#%
+Usage: (symbol? expression)
+
+True if the expression is a symbol, false otherwise.
+
+Section: type
+
+Example:
+(test::assert-true (symbol? 'symbol))
+(test::assert-false (symbol? 1))
+%#
 (def symbol? (fn (v) (eq? (type v) :Symbol)))
+
+#%
+Usage: (vec? expression)
+
+True if the expression is a vector, false otherwise.
+
+Section: type
+
+Example:
+(test::assert-true (vec? '#(1 2 3)) "reader macro")
+(test::assert-true (vec? (make-vec)) "make-vec")
+(test::assert-true (vec? (vec 1 2 3)) "vec")
+(test::assert-false (vec? 1))
+(test::assert-false (vec? '(1 2 3)))
+(test::assert-false (vec? (list)))
+%#
 (def vec? (fn (v) (eq? (type v) :Vector)))
+
+#%
+Usage: (list? expression)
+
+True if the expression is a list, false otherwise.
+
+Section: type
+
+Example:
+(test::assert-true (list? '(1 2 3)) "reader macro")
+(test::assert-true (list? (list 1 2 3)) "list")
+(test::assert-false (list? 1))
+(test::assert-false (list? '#(1 2 3)))
+(test::assert-false (list? (vec)))
+(test::assert-false (list? '(1 . 2)))
+%#
 (def list? (fn (v) (if (or (nil? v)(pair? v))(if (nil? (cdr v)) #t (recur (cdr v))) #f)))
+
+#%
+Usage: (seq? expression)
+
+True if expression is a list or vector, false otherwise.
+
+Section: type
+
+Example:
+(test::assert-true (seq? '(1 2 3)))
+(test::assert-true (seq? '#(1 2 3)))
+(test::assert-true (seq? '()))
+(test::assert-true (seq? '#()))
+(test::assert-false (seq? "aaa"))
+(test::assert-false (seq? 1))
+%#
 (def seq? (fn (v) (or (pair? v)(vec? v))))
+
+#%
+Usage (empty? s)
+
+Section: collection
+
+Return false if length of s is 0, true otherwise.
+
+Example:
+(assert-true (empty? nil))
+(assert-true (empty? '#()))
+(assert-false (empty? '#(1)))
+%#
 (def empty? (fn (v) (= (len v) 0)))
+
+#%
+Usage (not-empty? s)
+
+Section: collection
+
+Return true if length of s is not 0, false otherwise.
+
+Example:
+(assert-false (empty? nil))
+(assert-false (empty? '#()))
+(assert-true (empty? '#(1)))
+%#
 (def not-empty? (fn (v) (> (len v) 0)))
+
+#%
+Usage: (callable? to-test)
+
+Section: type
+
+True if the to-test can be called as the first argument in an expression.
+%#
 (def callable? (fn (v) (let (t (type v))(or (eq? t :Lambda)
                                              (eq? t :Continuation)
                                              (eq? t :Special)
@@ -119,6 +247,11 @@ Example:
   (params bindings & body)
     `(call/cc (fn (break) ((fn ~params ~@body) ~@bindings))))
 
+#%
+Print the documentation for provided symbol.
+
+Section: core
+%#
 (defmacro doc (sym) `(prn (eval (get-prop '~sym :doc-string))))
 
 #%
@@ -238,7 +371,6 @@ Example:
         (list? obj) (last-list obj)
         (err "Not a vector or list"))))
 
-(def butlast nil) ; predeclare and assign butlast to avoid a warning when used in butlast declaration.
 #%
 Produces the provided list minus the last element.  Nil if the list is empty or one element.
 
@@ -253,6 +385,7 @@ Example:
 (assert-equal nil (butlast nil))
 (assert-equal nil (butlast '#()))
 %#
+(def butlast nil) ; predeclare and assign butlast to avoid a warning when used in butlast declaration.
 (defn butlast
   (obj)
   (if (vec? obj) (if (> (len obj) 0) (vec-slice obj 0 (- (len obj) 1)) nil)
@@ -422,3 +555,70 @@ Example:
                                 `(~condition ~(make-action action) ~@(make-cond (first (first others)) (rest (first others)) (rest others))))))
          `(if ~@(make-cond (first (first branches)) (rest (first branches)) (rest branches)))))))
 
+#%
+Does nothing for now, namespaces aren't yet implemented.
+
+Section: core
+%#
+(defmacro ns-import (val) nil)
+
+#%
+Asserts the two values are identical.
+
+Section: core
+%#
+(defmacro assert-equal (expected-val right-val & body)
+    (if (equal? expected-val right-val)
+        #t
+        (let (ev (type expected-val)
+              rv (type right-val))
+        (mk-err :assert `(apply str "Expected: " ~expected-val " (" ~ev "), Got: " ~right-val " (" (type ~rv) ")." ~@body)))))
+
+#%
+Asserts the two values are identical.
+
+Section: core
+%#
+(defmacro test::assert-equal (& body) `(assert-equal ~@body))
+
+#%
+Asserts the value is true.
+
+Section: core
+%#
+(defmacro assert-true (val & body) `(assert-equal #t val ~@body))
+
+#%
+Asserts the value is true.
+
+Section: core
+%#
+(defmacro test::assert-true (& body) `(assert-true ~@body))
+
+#%
+Asserts the value is false
+
+Section: core
+%#
+(defmacro assert-false (val & body) `(assert-equal #f val ~@body))
+
+#%
+Asserts the value is false
+
+Section: core
+%#
+(defmacro test::assert-false (& body) `(assert-false ~@body))
+
+#%
+Asserts the value is an error
+
+Section: core
+%#
+(defmacro assert-error (val & body) `(assert-true #t (err? ~val) ~@body))
+
+#%
+Asserts the value is false
+
+Section: core
+%#
+(defmacro test::assert-error (& body) `(assert-error ~@body))
