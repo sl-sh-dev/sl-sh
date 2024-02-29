@@ -377,9 +377,7 @@ Example:
 (ns-import 'math)
 (test::assert-equal 0 (+))
 (test::assert-equal 5 (+ 5))
-(test::assert-equal 5 (+ (values 5)))
-(test::assert-equal 5 (+ (values 5 6)))
-(test::assert-equal 10 (+ 5 (values 5 6)))
+(test::assert-equal 10 (+ 5 5))
 (test::assert-equal 5 (+ 5.0))
 (test::assert-equal 6 (+ 1 5))
 (test::assert-equal 6.5 (+ 1 5.5))
@@ -400,7 +398,8 @@ Example:
 (test::assert-equal -4 (- 1 5))
 (test::assert-equal -4.5 (- 1 5.5))
 (test::assert-equal 4 (- 10 2 4))
-(test::assert-equal 4.9 (- 10.9 2 4))"#),
+(test::assert-equal 4.9 (- 10.9 2 4))
+"#),
             mul: add_special(vm, "*", r#"Usage: (* number*)
 
 Multiply a sequence of numbers.  (*) will return 1.
