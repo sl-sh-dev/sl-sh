@@ -230,12 +230,7 @@ impl<ENV> GVm<ENV> {
             Value::Continuation(handle) => {
                 let k = self.heap().get_continuation(handle);
                 if num_args != 1 {
-                    return Err((
-                        VMError::new_vm(format!(
-                            "Continuation takes one argument, supplied {num_args}."
-                        )),
-                        chunk,
-                    ));
+                    return Err((VMError::new_vm("Continuation takes one argument."), chunk));
                 }
                 let from = self.k_defers(k);
                 if let Some(from) = from {
