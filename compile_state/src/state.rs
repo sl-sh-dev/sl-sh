@@ -257,7 +257,7 @@ Example:
 (test::assert-equal "One" test-do-one)
 (test::assert-equal "Two" test-do-two)
 (test::assert-equal "Three" test-do-three)
-(let ((test-do-one nil))
+(let (test-do-one nil)
     ; set the currently scoped value.
     (test::assert-equal "1111" (set! test-do-one "1111"))
     (test::assert-equal "1111" test-do-one))
@@ -290,7 +290,7 @@ Example:
 (def test-fn1 nil)
 (def test-fn2 nil)
 (def test-fn3 nil)
-(def test-fn-empty ((fn ())))
+(def test-fn-empty ((fn () nil)))
 (test::assert-false test-fn-empty)
 ((fn () (set! test-fn1 1)))
 (test::assert-equal 1 test-fn1)
@@ -315,11 +315,11 @@ Section: core
 Example:
 (def test-macro1 nil)
 (def test-macro2 nil)
-(def test-macro-empty (macro ()))
+(def test-macro-empty (macro () nil))
 (test::assert-false (test-macro-empty))
 (def test-mac nil)
 (def mac-var 2)
-(let ((mac-var 3))
+(let (mac-var 3)
   (set! test-mac (macro (x) (set! test-macro2 100)(test::assert-equal 3 mac-var)`(* ,mac-var ,x))))
 (set! test-macro1 (test-mac 10))
 (test::assert-equal 30 test-macro1)
@@ -457,7 +457,7 @@ Example:
 (test::assert-equal 5 *inc-test*)
 (def *inc-test* "xxx")
 (test::assert-error (inc! *inc-test*))
-(let ((inc-test 1))
+(let (inc-test 1)
   (test::assert-equal 2 (inc! inc-test))
   (test::assert-equal 2 inc-test)
   (test::assert-equal 5 (inc! inc-test 3))
@@ -899,12 +899,13 @@ Example:
 ; Note the unicode symbol is only one char even though it is more then one byte.
 (test::assert-equal 6 (len "12345Σ"))
 (test::assert-equal 3 (len '(1 2 3)))
-(test::assert-equal 3 (len '#(1 2 3)))
+(test::assert-equal 3 (len [1 2 3]))
 (test::assert-equal 3 (len (list 1 2 3)))
 (test::assert-equal 3 (len (vec 1 2 3)))
 (test::assert-error (len 100))
 (test::assert-error (len 100.0))
-(test::assert-error (len #\\x))"#,
+(test::assert-error (len \tab))
+"#,
             ),
             clear: add_special(
                 vm,
@@ -948,15 +949,15 @@ Section: core
 Example:
 (def test-do-one "One1")
 (def test-do-two "Two1")
-(def test-do-three (let ((test-do-one "One")) (set! test-do-two "Two")(test::assert-equal "One" test-do-one)"Three"))
+(def test-do-three (let (test-do-one "One") (set! test-do-two "Two")(test::assert-equal "One" test-do-one)"Three"))
 (test::assert-equal "One1" test-do-one)
 (test::assert-equal "Two" test-do-two)
 (test::assert-equal "Three" test-do-three)
-((fn (idx) (let ((v2 (+ idx 2))(v3 (+ idx 3)))
+((fn (idx) (let (v2 (+ idx 2) v3 (+ idx 3))
     (test::assert-equal (+ idx 2) v2)
     (test::assert-equal (+ idx 3) v3)
     (if (< idx 5) (recur (+ idx 1)))))0)
-((fn (idx) (let ((v2 (+ idx 2))(v3 (+ idx 3)))
+((fn (idx) (let (v2 (+ idx 2) v3 (+ idx 3))
     (test::assert-equal (+ idx 2) v2)
     (test::assert-equal (+ idx 3) v3)
     (if (< idx 5) (this-fn (+ idx 1)))))0)"#),

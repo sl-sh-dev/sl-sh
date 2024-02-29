@@ -3,6 +3,7 @@
 (let (globals (get-globals-sorted)
       globals-len (len globals)
       i 0)
+    (load "init.slosh")
     (while (< i globals-len)
         (prn "Symbol: " globals.~i)
         (prn "===")
@@ -16,6 +17,7 @@
             (dotimes-i j (len read-in)
                 (let (line (prn (str read-in.~j))
                     evaled (eval read-in.~j))
+                    ;; TODO PC need to exit if something fails!
                     (prn "Result: " (str evaled)))))
         (prn "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
         (inc! i)))

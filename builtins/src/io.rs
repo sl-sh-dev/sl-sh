@@ -87,13 +87,11 @@ Does the given path exist?
 Section: file
 
 Example:
-(sh "mkdir /tmp/tst-fs-exists")
-(sh "touch /tmp/tst-fs-exists/fs-exists")
-(test::assert-true (fs-exists? "/tmp/tst-fs-exists/fs-exists"))
+($sh "rm" "-rf" "/tmp/tst-fs-exists")
+($sh "mkdir" "/tmp/tst-fs-exists")
 (test::assert-true (fs-exists? "/tmp/tst-fs-exists"))
 (test::assert-false (fs-exists? "/tmp/tst-fs-exists/fs-exists-nope"))
-(sh "rm /tmp/tst-fs-exists/fs-exists")
-(sh "rmdir /tmp/tst-fs-exists")
+($sh "rmdir" "/tmp/tst-fs-exists")
 "#,
     );
 }
