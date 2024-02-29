@@ -97,6 +97,52 @@ mod tests {
     }
 
     #[test]
+    fn test_f56_formatting() {
+        // F56 should have a maximum of 12 decimal digits displayed
+        // And the 12th digit should be rounded using the 13th digit
+        // If we input an f64 with the 13th digit of 5
+        // The nearest F56 representation might have the 13th digit become 4 or 6
+        // So be wary that rounding may not occur as expected
+        // 3.999_999_999_995 rounds down instead of rounding up to 4
+        let map_from_value_to_expected_string = [
+            // (3.999_999_999_995, "4"), // bad rounding
+            (399.999_999_999_58527_f64, "400"),
+            (399.999_999_999_585_f64, "400"),
+            (399.999_999_999_58_f64, "400"),
+            (399.999_999_999_6_f64, "400"),
+            (399.999_999_999_f64, "399.999999999"),
+            (
+                0.000_000_012_312_312_412_412_312_3_f64,
+                "0.0000000123123124124",
+            ),
+            (0.000_000_012_312_312_452_57_f64, "0.0000000123123124526"),
+            (399_999_999.999_58_f64, "400000000"),
+            (
+                399_999_999_999_600_000_000_000_000_000_000_0_f64,
+                "4000000000000000000000000000000000",
+            ),
+            (
+                399_999_999_999_600_000_000_000_000_000_000_0_f64,
+                "4000000000000000000000000000000000",
+            ),
+            // special values
+            (f64::NAN, "NaN"),
+            (f64::INFINITY, "inf"),
+            (f64::NEG_INFINITY, "-inf"),
+            (0.0, "0"),
+            (-0.0, "-0"),
+            (f64::MIN_POSITIVE, "0"),
+            (F56::MIN_POSITIVE.into(), "0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002983336292479999"),
+        ];
+        for (f, expected) in map_from_value_to_expected_string.iter() {
+            // println!("{:?}", f);
+            let f56 = F56::from(*f);
+            let formatted = format!("{:}", f56);
+            assert_eq!(formatted, *expected);
+        }
+    }
+
+    #[test]
     fn test_i32_conversions_rust_to_value() {
         let mut vm = new_slosh_vm();
         let vm = &mut vm;

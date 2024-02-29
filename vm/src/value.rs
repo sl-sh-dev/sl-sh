@@ -152,17 +152,18 @@ impl Display for F56 {
         // F56 only has 12, meaning that .0023 appears as .0022999999999999687
         // if F56 knew to only print 12 digits then it would be fine,
         // but when going through f64, it thinks it has 15 perfect digits.
+        let as_f64 = f64::from(*self);
 
-        // We can set the precision to 12 but that increases numbers like 1.0 to 1.0000000000000
-        // So let's do that, and remove the trailing zeros and decimal points added on
-        let first_pass = format!("{:.*}", F56::DIGITS, f64::from(*self));
-        // remove trailing zeros and trailing decimal point
-        let second_pass = if first_pass.contains('.') {
-            first_pass.trim_end_matches('0').trim_end_matches('.')
-        } else {
-            &first_pass
-        };
-        write!(f, "{}", second_pass)
+        // Handle special cases by printing the f64 value
+        if as_f64.is_nan() || as_f64.is_infinite() || as_f64 == 0.0 {
+            return write!(f, "{}", as_f64);
+        }
+
+        // round to a max of F56::DIGITS sig figs
+        let exponent_value = as_f64.log10().floor() as i32; // the number after 'e' in scientific notation
+        let scale = 10f64.powi(exponent_value - F56::DIGITS as i32 + 1);
+        let rounded = (as_f64 / scale).round() * scale;
+        write!(f, "{}", rounded)
     }
 }
 impl From<f64> for F56 {
