@@ -160,10 +160,14 @@ impl Display for F56 {
         }
 
         // round to a max of F56::DIGITS sig figs
-        let exponent_value = as_f64.log10().floor() as i32; // the number after 'e' in scientific notation
-        let scale = 10f64.powi(exponent_value - F56::DIGITS as i32 + 1);
-        let rounded = (as_f64 / scale).round() * scale;
-        write!(f, "{}", rounded)
+        let orig_exponent_value = as_f64.abs().log10().floor() as i32; // the number after 'e' in scientific notation
+        let target_exponent_value = F56::DIGITS as i32 - 1; // exponent that we will shift this number to
+
+        let scale_factor = 10f64.powi(target_exponent_value - orig_exponent_value);
+        let scaled_and_rounded = (as_f64 * scale_factor).round();
+        return write!(f, "{}", scaled_and_rounded / scale_factor);
+        // beware that 1e11 / 1e11 == 1, so this works
+        // but 1e11 * 1e-11 = 0.9999999999999 which would kill this algorithm
     }
 }
 impl From<f64> for F56 {
