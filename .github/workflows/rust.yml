@@ -26,7 +26,7 @@ jobs:
     - name: Run Benches
       run: |
         pushd ./slosh/benches
-        ./sls ./bench.slosh
+        ../../.sls ./bench.slosh
         popd
 
   build-linux:

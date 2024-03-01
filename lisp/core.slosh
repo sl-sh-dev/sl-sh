@@ -574,11 +574,11 @@ Asserts the two values are identical.
 Section: core
 %#
 (defmacro assert-equal (expected-val right-val & body)
-    (if (equal? expected-val right-val)
+    `(if (equal? ~expected-val ~right-val)
         #t
-        (let (ev (type expected-val)
-              rv (type right-val))
-        (err (mk-err :assert `(str "Expected: " ~expected-val " (" ~ev "), Got: " ~right-val " (" (type ~rv) ")." ~@body))))))
+        (let (ev (type ~expected-val)
+              rv (type ~right-val))
+        (err (mk-err :assert (str "Expected: " ~expected-val " (" ev "), Got: " ~right-val " (" rv ")." ~@body))))))
 
 #%
 Asserts the two values are identical.
