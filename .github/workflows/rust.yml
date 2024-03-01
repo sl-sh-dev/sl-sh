@@ -10,25 +10,6 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
-  build-benches:
-
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v2
-    - name: Build Release
-      run: |
-          cargo version
-          rustc --version
-          cargo build --release --verbose
-          cp ./target/release/slosh ./sls
-          strip ./sls
-    - name: Run Benches
-      run: |
-        pushd ./slosh/benches
-        ../../.sls ./bench.slosh
-        popd
-
   build-linux:
 
     runs-on: ubuntu-latest
