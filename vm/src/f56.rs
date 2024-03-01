@@ -63,28 +63,7 @@ impl std::fmt::Debug for F56 {
 }
 impl Display for F56 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        // Converting the F56 to f64 to print it almost works
-        // But the f64 is slightly more precise and the internal implementation of f64->string
-        // knows that the f64 has 15 decimal digits that are guaranteed accurate.
-        // F56 only has 12, meaning that .0023 appears as .0022999999999999687
-        // if F56 knew to only print 12 digits then it would be fine,
-        // but when going through f64, it thinks it has 15 perfect digits.
-        let as_f64 = f64::from(*self);
-
-        // Handle special cases by printing the f64 value
-        if as_f64.is_nan() || as_f64.is_infinite() || as_f64 == 0.0 {
-            return write!(f, "{}", as_f64);
-        }
-
-        // round to a max of F56::DIGITS sig figs
-        let orig_exponent_value = as_f64.abs().log10().floor() as i32; // the number after 'e' in scientific notation
-        let target_exponent_value = F56::DIGITS as i32 - 1; // exponent that we will shift this number to
-
-        let scale_factor = 10f64.powi(target_exponent_value - orig_exponent_value);
-        let scaled_and_rounded = (as_f64 * scale_factor).round();
-        write!(f, "{}", scaled_and_rounded / scale_factor)
-        // beware that 1e11 / 1e11 == 1, so this works
-        // but 1e11 * 1e-11 = 0.9999999999999 which would kill this algorithm
+        write!(f, "{}", F56::round_f64_to_f56_precision(f64::from(*self)))
     }
 }
 impl From<f64> for F56 {
@@ -239,6 +218,21 @@ impl F56 {
     // We could round up if the 7th bit is 1, but this is might cause issues.
     // Mantissas like 0xFFFF_FFFF_... can catastrophically round to 0x0000_0000_...
     pub const ROUNDUP_ENABLED: bool = false;
+}
+
+impl F56 {
+    pub fn round_f64_to_f56_precision(raw_f64: f64) -> f64 {
+        if raw_f64.is_nan() || raw_f64.is_infinite() || raw_f64 == 0.0 {
+            return raw_f64;
+        }
+        // round to a max of F56::DIGITS sig figs
+        let orig_exponent_value = raw_f64.abs().log10().floor() as i32; // the number after 'e' in scientific notation
+        let target_exponent_value = F56::DIGITS as i32 - 1; // exponent that we will shift this number to
+        let scale_factor = 10f64.powi(target_exponent_value - orig_exponent_value);
+        let scaled_and_rounded = (raw_f64 * scale_factor).round();
+
+        scaled_and_rounded / scale_factor
+    }
 }
 
 #[cfg(test)]
