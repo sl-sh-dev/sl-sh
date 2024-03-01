@@ -12,7 +12,7 @@
         (prn "Description: " (str  doc.:description))
         (prn "Section: " (str doc.:section))
         (let (example (str doc.:example)
-              read-in (read example))
+              read-in (read-all example))
             (prn "Example: " example)
             #|(dotimes-i j (len read-in)
                 (let (line (prn (str read-in.~j))

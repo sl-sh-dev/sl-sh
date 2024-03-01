@@ -207,7 +207,7 @@ fn eval(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-fn read(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+fn read_all(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if let (Some(exp), None) = (registers.first(), registers.get(1)) {
         let string_as_code = match exp {
             Value::CharCluster(l, c) => {
@@ -239,5 +239,5 @@ fn read(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
 pub fn add_load_builtins(env: &mut SloshVm) {
     env.set_global_builtin("load", load);
     env.set_global_builtin("eval", eval);
-    env.set_global_builtin("read", read);
+    env.set_global_builtin("read-all", read_all);
 }
