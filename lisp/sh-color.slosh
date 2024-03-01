@@ -42,12 +42,12 @@ Set the foreground color to the desired rgb where each arg is an integer between
 Section: shell
 
 Example:
+(test::assert-equal "\\x1b[38;2;0;0;0m" (fg-color-rgb 0 0 0))
 (test::assert-equal "\\x1b[38;2;128;128;128m" (fg-color-rgb 128 128 128))
-(test::assert-equal "\\x1b[38;2;255;255;255m" (fg-color-rgb 255 255 255))
 (test::assert-equal "\\x1b[38;2;255;0;0m" (fg-color-rgb 255 0 0))
 (test::assert-equal "\\x1b[38;2;0;255;0m" (fg-color-rgb 0 255 0))
 (test::assert-equal "\\x1b[38;2;0;0;255m" (fg-color-rgb 0 0 255))
-(test::assert-equal "\\x1b[38;2;0;0;0m" (fg-color-rgb 0 0 0))
+(test::assert-equal "\\x1b[38;2;255;255;255m" (fg-color-rgb 255 255 255))
 %#
 (defn fg-color-rgb (R G B)
   (get-rgb-seq R G B :font))

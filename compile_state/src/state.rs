@@ -224,7 +224,7 @@ Example:
 (test::assert-equal "One" test-do-one)
 (test::assert-equal "Two" test-do-two)
 (test::assert-equal "Three" test-do-three)
-(let ((test-do-one nil))
+(let (test-do-one nil)
     ; Add this to tthe let's scope (shadow the outer test-do-two).
     (test::assert-equal "Default" (def ns::test-do-four "Default"))
     ; set the currently scoped value.
@@ -257,7 +257,7 @@ Example:
 (test::assert-equal "One" test-do-one)
 (test::assert-equal "Two" test-do-two)
 (test::assert-equal "Three" test-do-three)
-(let ((test-do-one nil))
+(let (test-do-one nil)
     ; set the currently scoped value.
     (test::assert-equal "1111" (set! test-do-one "1111"))
     (test::assert-equal "1111" test-do-one))
@@ -275,10 +275,11 @@ Section: core
 Example:
 (def test-do-one nil)
 (def test-do-two nil)
-(def test-do-three (do (set! test-do-one "One")(set! test-do-two "Two")"Three"))
+(def test-do-three (do (set! test-do-one "One") (set! test-do-two "Two") "Three"))
 (test::assert-equal "One" test-do-one)
 (test::assert-equal "Two" test-do-two)
-(test::assert-equal "Three" test-do-three"#),
+(test::assert-equal "Three" test-do-three)
+"#),
             fn_: add_special(vm, "fn", "Usage: (fn (param*) expr*) -> exprN
 
 Create a function (lambda).
@@ -289,7 +290,7 @@ Example:
 (def test-fn1 nil)
 (def test-fn2 nil)
 (def test-fn3 nil)
-(def test-fn-empty ((fn ())))
+(def test-fn-empty ((fn () nil)))
 (test::assert-false test-fn-empty)
 ((fn () (set! test-fn1 1)))
 (test::assert-equal 1 test-fn1)
@@ -314,11 +315,11 @@ Section: core
 Example:
 (def test-macro1 nil)
 (def test-macro2 nil)
-(def test-macro-empty (macro ()))
+(def test-macro-empty (macro () nil))
 (test::assert-false (test-macro-empty))
 (def test-mac nil)
 (def mac-var 2)
-(let ((mac-var 3))
+(let (mac-var 3)
   (set! test-mac (macro (x) (set! test-macro2 100)(test::assert-equal 3 mac-var)`(* ,mac-var ,x))))
 (set! test-macro1 (test-mac 10))
 (test::assert-equal 30 test-macro1)
@@ -376,9 +377,7 @@ Example:
 (ns-import 'math)
 (test::assert-equal 0 (+))
 (test::assert-equal 5 (+ 5))
-(test::assert-equal 5 (+ (values 5)))
-(test::assert-equal 5 (+ (values 5 6)))
-(test::assert-equal 10 (+ 5 (values 5 6)))
+(test::assert-equal 10 (+ 5 5))
 (test::assert-equal 5 (+ 5.0))
 (test::assert-equal 6 (+ 1 5))
 (test::assert-equal 6.5 (+ 1 5.5))
@@ -399,7 +398,8 @@ Example:
 (test::assert-equal -4 (- 1 5))
 (test::assert-equal -4.5 (- 1 5.5))
 (test::assert-equal 4 (- 10 2 4))
-(test::assert-equal 4.9 (- 10.9 2 4))"#),
+(test::assert-equal 4.9 (- 10.9 2 4))
+"#),
             mul: add_special(vm, "*", r#"Usage: (* number*)
 
 Multiply a sequence of numbers.  (*) will return 1.
@@ -419,8 +419,9 @@ Example:
 (test::assert-equal 16 (* 2 2 4))
 (test::assert-equal 16.0 (* 2 2.0 4))
 (test::assert-equal 16.0 (* 2.0 2.0 4.0))
-(test::assert-equal 55.0000000001 (* 100 0.55))
-(test::assert-error (* 1 2 4 "5"))"#),
+(test::assert-equal 54.9999999999999 (* 100 0.55))
+(test::assert-error (* 1 2 4 "5"))
+"#),
             div: add_special(vm, "/", r#"Usage: (/ number+)
 
 Divide a sequence of numbers.  Requires at least two numbers.
@@ -440,7 +441,8 @@ Example:
 (test::assert-error (/ 1))
 (test::assert-error (/ 1 0))
 (test::assert-error (/ 10 5 0))
-(test::assert-error (/ 10 "5" 2))"#),
+(test::assert-error (/ 10 "5" 2))
+"#),
             inc: add_special(vm, "inc!", r#"Usage: (inc! symbol [number]) -> new value
 
 Increment the value in symbol by one or the optional number
@@ -456,7 +458,7 @@ Example:
 (test::assert-equal 5 *inc-test*)
 (def *inc-test* "xxx")
 (test::assert-error (inc! *inc-test*))
-(let ((inc-test 1))
+(let (inc-test 1)
   (test::assert-equal 2 (inc! inc-test))
   (test::assert-equal 2 inc-test)
   (test::assert-equal 5 (inc! inc-test 3))
@@ -476,7 +478,7 @@ Example:
 (test::assert-equal 1 *dec-test*)
 (def *dec-test* "xxx")
 (test::assert-error (dec! *dec-test*))
-(let ((dec-test 5))
+(let (dec-test 5)
   (test::assert-equal 4 (dec! dec-test))
   (test::assert-equal 4 dec-test)
   (test::assert-equal 1 (dec! dec-test 3))
@@ -898,12 +900,13 @@ Example:
 ; Note the unicode symbol is only one char even though it is more then one byte.
 (test::assert-equal 6 (len "12345Σ"))
 (test::assert-equal 3 (len '(1 2 3)))
-(test::assert-equal 3 (len '#(1 2 3)))
+(test::assert-equal 3 (len [1 2 3]))
 (test::assert-equal 3 (len (list 1 2 3)))
 (test::assert-equal 3 (len (vec 1 2 3)))
 (test::assert-error (len 100))
 (test::assert-error (len 100.0))
-(test::assert-error (len #\\x))"#,
+(test::assert-error (len \tab))
+"#,
             ),
             clear: add_special(
                 vm,
@@ -947,15 +950,15 @@ Section: core
 Example:
 (def test-do-one "One1")
 (def test-do-two "Two1")
-(def test-do-three (let ((test-do-one "One")) (set! test-do-two "Two")(test::assert-equal "One" test-do-one)"Three"))
+(def test-do-three (let (test-do-one "One") (set! test-do-two "Two")(test::assert-equal "One" test-do-one)"Three"))
 (test::assert-equal "One1" test-do-one)
 (test::assert-equal "Two" test-do-two)
 (test::assert-equal "Three" test-do-three)
-((fn (idx) (let ((v2 (+ idx 2))(v3 (+ idx 3)))
+((fn (idx) (let (v2 (+ idx 2) v3 (+ idx 3))
     (test::assert-equal (+ idx 2) v2)
     (test::assert-equal (+ idx 3) v3)
     (if (< idx 5) (recur (+ idx 1)))))0)
-((fn (idx) (let ((v2 (+ idx 2))(v3 (+ idx 3)))
+((fn (idx) (let (v2 (+ idx 2) v3 (+ idx 3))
     (test::assert-equal (+ idx 2) v2)
     (test::assert-equal (+ idx 3) v3)
     (if (< idx 5) (this-fn (+ idx 1)))))0)"#),

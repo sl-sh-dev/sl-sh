@@ -207,7 +207,37 @@ fn eval(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
+fn read_all(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    if let (Some(exp), None) = (registers.first(), registers.get(1)) {
+        let string_as_code = match exp {
+            Value::CharCluster(l, c) => {
+                format!("{}", String::from_utf8_lossy(&c[0..*l as usize]))
+            }
+            Value::CharClusterLong(h) => vm.get_string(*h).to_string(),
+            Value::StringConst(i) => vm.get_interned(*i).to_string(),
+            Value::String(h) => vm.get_string(*h).to_string(),
+            _ => {
+                return Err(VMError::new_compile(
+                    "read: only accepts strings as arguments.",
+                ));
+            }
+        };
+        let reader = Reader::from_string(string_as_code, vm, "", 1, 0);
+        let mut vals = vec![];
+        for exp in reader {
+            let exp = exp.map_err(|e| VMError::new("read", e.to_string()))?;
+            vals.push(exp);
+        }
+        Ok(vm.alloc_vector(vals))
+    } else {
+        Err(VMError::new_compile(
+            "eval: wrong number of args, expected one",
+        ))
+    }
+}
+
 pub fn add_load_builtins(env: &mut SloshVm) {
     env.set_global_builtin("load", load);
     env.set_global_builtin("eval", eval);
+    env.set_global_builtin("read-all", read_all);
 }

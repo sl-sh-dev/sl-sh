@@ -366,7 +366,14 @@ impl<ENV> GVm<ENV> {
                     let v1 = self.get_value(v1);
                     val = self.is_equal_pair(v1, val2)?;
                 }
-                (_, _) => {} // TODO XXX: are these cases meaningful?
+                (_, _) => {} //
+                             // TODO PC: are these cases meaningful?
+                             // Yes, but the initial check (at the top) val1 == val2 will handle most of this.
+                             // For errors we might need to explicitly match since it is possible to create the
+                             // "same" error as two different heap object. For the other stuff I think it is very
+                             // unlikely to have different heap objects for the same callable. It may be possible
+                             // (for instance compile same function twice) but even that case it may be ok to
+                             // consider those different things...
                              // (Value::Error(e1), Value::Error(e2)) => {}
                              // (Value::Lambda(_), Value::Lambda(_)) => {}
                              // (Value::Closure(_), Value::Closure(_) )=> {}
