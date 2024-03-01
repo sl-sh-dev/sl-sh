@@ -165,7 +165,7 @@ impl Display for F56 {
 
         let scale_factor = 10f64.powi(target_exponent_value - orig_exponent_value);
         let scaled_and_rounded = (as_f64 * scale_factor).round();
-        return write!(f, "{}", scaled_and_rounded / scale_factor);
+        write!(f, "{}", scaled_and_rounded / scale_factor)
         // beware that 1e11 / 1e11 == 1, so this works
         // but 1e11 * 1e-11 = 0.9999999999999 which would kill this algorithm
     }
