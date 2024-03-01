@@ -8,10 +8,10 @@ pub fn get_slosh_exe() -> PathBuf {
 
 // To run all tests in this executable
 //
-// cargo test --features regex --package slosh --test slosh-docs
+// cargo test --features lisp-test --package slosh --test slosh-tests
 //
-// This integration test exists to test all the functions that slosh has by default.
-// This differs from the unit tests that test the docs in the docs module
+// This integration test exists to test all the functions that slosh has by default
+// when loaded from the executable.
 
 #[test]
 /// [toggle appropriately](https://stackoverflow.com/questions/48583049/run-additional-tests-by-using-a-feature-flag-to-cargo-test)
@@ -19,9 +19,9 @@ pub fn get_slosh_exe() -> PathBuf {
 /// look at all these amazing [environment variables](https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates)!
 /// EXE only works [with integration tests](https://doc.rust-lang.org/rust-by-example/testing/integration_testing.html)
 /// To Execute:
-///     cargo test --features lisp-test --package slosh --test slosh-docs test_slosh_doc_string_parsing_in_slosh -- --exact
+///     cargo test --features lisp-test --package slosh --test slosh-tests run_slosh_tests_with_lisp_test_feature -- --exact
 ///
-fn test_slosh_doc_string_parsing_in_slosh() {
+fn run_slosh_tests_with_lisp_test_feature() {
     let test_script = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("run-tests.slosh");
     println!("Slosh doc test script: {test_script:?}");
 

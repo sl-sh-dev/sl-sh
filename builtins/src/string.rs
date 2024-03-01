@@ -442,11 +442,11 @@ Make a new string by applying lambda to each char in input string.
 Section: string
 
 Example:
-(test::assert-equal "XstringXstrX" (str-map "xstringxstrx" (fn (ch) (if (= #\x ch) #\X ch))))
-(def test-str-map (str-map "xstringxstrx" (fn (ch) (if (= #\x ch) #\X ch))))
+(test::assert-equal "XstringXstrX" (str-map "xstringxstrx" (fn (ch) (if (= \x ch) \X ch))))
+(def test-str-map (str-map "xstringxstrx" (fn (ch) (if (equal? \x ch) \X ch))))
 (test::assert-equal "XstringXstrX" test-str-map)
 (test::assert-true (string? test-str-map))
-(def test-str-map (str-map (str "xstringxstrx") (fn (ch) (if (= #\x ch) #\X ch))))
+(def test-str-map (str-map (str "xstringxstrx") (fn (ch) (if (equal? \x ch) \X ch))))
 (test::assert-equal "XstringXstrX" test-str-map)
 (test::assert-true (string? test-str-map))
 "#,
@@ -462,9 +462,9 @@ Returns true if a character is whitespace, false/nil otherwise.
 Section: char
 
 Example:
-(test::assert-true (char-whitespace? #\ ))
-(test::assert-true (char-whitespace? #\tab))
-(test::assert-false (char-whitespace? #\s))
+(test::assert-true (char-whitespace? \ ))
+(test::assert-true (char-whitespace? \tab))
+(test::assert-false (char-whitespace? \s))
 ",
     );
     add_builtin(

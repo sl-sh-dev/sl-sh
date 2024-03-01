@@ -127,10 +127,10 @@ Returns a slice of a vector (0 based indexes, end is exclusive).
 Section: vector
 
 Example:
-(test::assert-equal '(5 6) (vec-slice '#(1 2 3 4 5 6) 4 6))
-(test::assert-equal '(1 2 3) (vec-slice '#(1 2 3 4 5 6) 0 3))
-(test::assert-equal '(3 4 5) (vec-slice '#(1 2 3 4 5 6) 2 5))
-(test::assert-equal '(3 4 5 6) (vec-slice '#(1 2 3 4 5 6) 2))
+(test::assert-equal '(5 6) (vec-slice [1 2 3 4 5 6] 4 6))
+(test::assert-equal '(1 2 3) (vec-slice [1 2 3 4 5 6] 0 3))
+(test::assert-equal '(3 4 5) (vec-slice [1 2 3 4 5 6] 2 5))
+(test::assert-equal '(3 4 5 6) (vec-slice [1 2 3 4 5 6] 2))
 ",
     );
     add_builtin(
