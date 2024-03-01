@@ -208,7 +208,7 @@ impl F56 {
     // Smallest positive normal F56, roughly 2.98e-154
     pub const MIN_POSITIVE: F56 = F56([0x00, 0b0010_0000, 0x00, 0x00, 0x00, 0x00, 0x00]);
     // Smallest positive subnormal F56, roughly 8.48e-168
-    pub const MIN_POSITIVE_SUBNORMAL: F56 = F56([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+    pub const MIN_POSITIVE_SUBNORMAL: F56 = F56([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]);
     // Minimum numer of decimal digits of precision (experimentally derived)
     // for comparison, f32 has 6-9 decimal digits of precision and f64 has 15-17. I believe F56 has 12-14
     pub const DIGITS: usize = 12;
