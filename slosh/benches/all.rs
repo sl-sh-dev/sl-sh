@@ -76,7 +76,7 @@ pub fn get_float_benchmark() -> PathBuf {
     get_benches_directory().join("float-bench.slosh")
 }
 
-fn run_float_script(n: usize, m: f32, expected: f32) {
+fn run_float_script(n: usize, m: f32, expected: f64) {
     let vm = &mut new_slosh_vm();
     let fname = get_float_benchmark();
     match std::fs::File::open(&fname) {
@@ -92,8 +92,7 @@ fn run_float_script(n: usize, m: f32, expected: f32) {
     let last = run_reader(&mut reader);
     match last {
         Ok(Value::Float(f)) => {
-            let f: f32 = f.into();
-            assert_eq!(f, expected);
+            assert_eq!(f64::from(f), expected);
         }
         _ => {
             panic!("Not a float");
@@ -107,15 +106,15 @@ mod instruction_count {
     use iai::{black_box, main};
 
     fn float_one_hundred() {
-        black_box(run_float_script(100, 0.5, 400.0));
+        black_box(run_float_script(100, 0.5, 399.99999999958527));
     }
 
     fn float_one_thousand() {
-        black_box(run_float_script(1000, 0.05, 2105.2483));
+        black_box(run_float_script(1000, 0.05, 2105.2631578924484));
     }
 
     fn float_ten_thousand() {
-        black_box(run_float_script(10_000, 0.2, 25000.0));
+        black_box(run_float_script(10_000, 0.2, 24999.999999998603));
     }
 
     main!(float_one_hundred, float_one_thousand, float_ten_thousand,);
@@ -132,19 +131,19 @@ mod wall_clock {
 
     fn float_one_hundred(c: &mut Criterion) {
         c.bench_function("float_ten", |bench| {
-            bench.iter(|| std::hint::black_box(run_float_script(100, 0.5, 400.0)));
+            bench.iter(|| std::hint::black_box(run_float_script(100, 0.5, 399.99999999958527)));
         });
     }
 
     fn float_one_thousand(c: &mut Criterion) {
         c.bench_function("float_one_thousand", |bench| {
-            bench.iter(|| std::hint::black_box(run_float_script(1000, 0.05, 2105.2483)));
+            bench.iter(|| std::hint::black_box(run_float_script(1000, 0.05, 2105.2631578924484)));
         });
     }
 
     fn float_ten_thousand(c: &mut Criterion) {
         c.bench_function("float_one_hundred", |bench| {
-            bench.iter(|| std::hint::black_box(run_float_script(10_000, 0.2, 25000.0)));
+            bench.iter(|| std::hint::black_box(run_float_script(10_000, 0.2, 24999.999999998603)));
         });
     }
 

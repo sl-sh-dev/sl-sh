@@ -174,7 +174,7 @@ impl SlFrom<&Value> for String {
     }
 }
 
-//TODO PC finish testing negative cases e.g. asserting that errrors are thrown.
+//TODO PC finish testing negative cases e.g. asserting that errors are thrown.
 #[cfg(test)]
 mod tests {
     use super::*;

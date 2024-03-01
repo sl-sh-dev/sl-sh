@@ -64,6 +64,7 @@ syn match sloshLeadWhite		contained			"^\s\+"
 " ---------------------------------------------------------------------
 " Standard slosh Functions and Macros: {{{1
 syn keyword sloshFunc	def	do
+syn keyword sloshFunc	defn	do
 syn keyword sloshFunc	fn	macro	if
 syn keyword sloshFunc	and	or	let	err
 syn keyword sloshFunc	call/cc	defer	on-error	while
@@ -121,7 +122,7 @@ syn cluster sloshDocStringGroup	contains=sloshParen0,sloshParen1,sloshParen2,slo
 syn match   sloshComment	";.*$"				contains=@sloshCommentGroup
 syn region  sloshCommentRegion	start="#|" end="|#"		contains=sloshCommentRegion,@sloshCommentGroup
 "syn region  sloshCommentDocStr	start="#!" end="!#"	contains=sloshComment,sloshCommentRegion,@sloshDocStringGroup,@sloshCommentGroup
-syn region  sloshCommentDocStr	start="#!" end="!#"	contains=sloshComment,sloshCommentRegion,@sloshCommentGroup
+syn region  sloshCommentDocStr	start="#%" end="%#"	contains=sloshComment,sloshCommentRegion,@sloshCommentGroup
 syn match   sloshTodo		contained	"todo.*$"
 syn match   sloshTodo		contained	"TODO.*$"
 
@@ -155,7 +156,7 @@ if !exists("skip_slosh_syntax_inits")
   hi def link sloshVar			Statement
 
   "hi def hlDocString ctermfg=blue	guifg=darkslateblue
-  hi def hlDocString ctermfg=magenta	guifg=green1
+  hi def hlDocString ctermfg=lightgreen	guifg=green1
   if &bg == "dark"
    hi def hlLevel0 ctermfg=red		guifg=red1
    hi def hlLevel1 ctermfg=yellow	guifg=orange1
