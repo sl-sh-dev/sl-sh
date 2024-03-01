@@ -44,13 +44,13 @@ Dot notation can also be used with set! to set elements:
 Other vector functions:
 - vec: longform for '[]' syntax, prefer using brackets
 - make-vec: takes a capacity and default value, makes a vector of that size with all values set to default
-- vec-push!: descructive, pushes a new value to the end of a vec (increases len by one)
-- vec-pop!: descructive, pops the last value from a vector and returns it (decreses vecotr len by one)
-- vec-slice: takes a vecotr, start inde and option end index (defaults to end of vector), returns a new vec of eleemnts start (inclusive) end (exclusive)
+- vec-push!: destructive, pushes a new value to the end of a vec (increases len by one)
+- vec-pop!: destructive, pops the last value from a vector and returns it (decreases vector len by one)
+- vec-slice: takes a vector, start index and optional end index (defaults to end of vector), returns a new vec of elements start (inclusive) end (exclusive)
 
 
 ## HashMap
-A map of key/value pairs.  Use the '{' reader macro to create hashmap:
+A map of key/value pairs.  Use the '{' reader macro to create a hashmap:
 (def hm {:x 1, :y 2, :z 3})
 Use dot notation (see vectors) to access and set keys:
 (let (hm {:x 1, :y 2, :z 3})
@@ -60,12 +60,12 @@ Use dot notation (see vectors) to access and set keys:
   (prn hm.:x ", " hm.:y ", " hm.:z))
 
 Other hashmap function:
-- make-hash: longfor for '{}' reader macro, prefer '{}'
+- make-hash: longform for '{}' reader macro, prefer '{}'
 
 
 ## Pair/ConsCell/List
-This is a traditional Lisp conscell data type, pair of vaues (car, cdr).  It can
-used to create a linked list of values.
+This is a traditional Lisp conscell data type, pair of values (car, cdr).  It can
+be used to create a linked list of values.
 
 Other Pair function:
 - car

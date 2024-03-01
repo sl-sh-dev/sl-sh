@@ -8,7 +8,7 @@ use crate::compile::compile_call::{
 };
 use crate::compile::compile_cond::{compile_and, compile_if, compile_or, compile_while};
 use crate::compile::compile_fn::compile_fn;
-use crate::compile::compile_let::compile_let;
+use crate::compile::compile_let::{compile_let, compile_let_while};
 use crate::compile::compile_math::compile_math;
 use crate::compile::compile_seq::{compile_cons, compile_vec};
 use crate::compile::compile_store::{compile_def, compile_set};
@@ -226,6 +226,9 @@ fn compile_special(
             }
             Value::Special(i) if i == env.specials().let_ => {
                 compile_let(env, state, cdr, result)?;
+            }
+            Value::Special(i) if i == env.specials().let_while => {
+                compile_let_while(env, state, cdr, result)?;
             }
             Value::Special(i) if i == env.specials().call_cc => {
                 if cdr.len() != 1 {

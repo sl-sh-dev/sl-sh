@@ -140,7 +140,7 @@ True if the to-test can be called as the first argument in an expression.
                                              (eq? t :Special)
                                              (eq? t :Builtin)
                                              (eq? t :Map)
-                                             (eq? t :Vactor)
+                                             (eq? t :Vector)
                                              (eq? t :Pair)))))
 
 #%
@@ -414,9 +414,9 @@ Example:
 %#
 (defn first
   (obj)
-  (if (vec? obj) (if (empty? obj) nil obj.0)
+  (if (vec? obj) (if (empty? obj) obj obj.0)
       (list? obj) (car obj)
-      (err "Not a vector or list")))
+      (err (str "Not a vector or list, " (type obj)))))
 
 #%
 Produces the provided list or vector minus the first element.  Nil if the
@@ -438,7 +438,7 @@ Example:
 %#
 (defn rest
   (obj)
-  (if (vec? obj) (vec-slice obj 1)
+  (if (vec? obj) (if (empty? obj) obj (vec-slice obj 1))
       (list? obj) (cdr obj)
       (err "Not a vector or list")))
 
@@ -457,11 +457,8 @@ Example:
 (defmacro seq-for
   (bind in items & body)
   (if (not (eq? in 'in)) (err "Invalid seq-for: (for [i] in [sequence] (body))"))
-          `((fn (lst)
-              (if (not-empty? lst)
-                  (let (~bind (first lst))
-                    ~@body
-                    (recur (rest lst)))))~items))
+    (let (lst (gensym))
+    `(let-while (~lst ~items) (~bind (first ~lst), done (empty? ~lst), ~lst (rest ~lst)) (not done) ~@body)))
 
 #%
 Usage: (match condition (value form*)*) -> result

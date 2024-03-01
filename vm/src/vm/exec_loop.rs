@@ -470,7 +470,7 @@ impl<ENV> GVm<ENV> {
                         let dest = dest as usize;
                         let val = self.register(src as usize);
                         match val {
-                            Value::Vector(_) | Value::Pair(_) | Value::List(_, _) => {
+                            Value::Vector(_) | Value::Pair(_) | Value::List(_, _) | Value::Nil => {
                                 let mut iter = val.iter(self);
                                 for i in 0..len {
                                     if let Some(item) = iter.next() {
@@ -491,7 +491,7 @@ impl<ENV> GVm<ENV> {
                         let dest = dest as usize;
                         let val = self.register(src as usize);
                         match val {
-                            Value::Vector(_) | Value::Pair(_) | Value::List(_, _) => {
+                            Value::Vector(_) | Value::Pair(_) | Value::List(_, _) | Value::Nil => {
                                 let mut iter = val.iter(self);
                                 for i in 0..len - 1 {
                                     if let Some(item) = iter.next() {

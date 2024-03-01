@@ -128,10 +128,29 @@ impl DestructState {
             for r in &destructure.register_labels {
                 match r {
                     Register::Named(i, sreg) => {
-                        let reg = state.symbols.borrow_mut().insert(*i);
+                        let mut syms = state.symbols.borrow_mut();
+                        if let Some(lets) = &state.lets {
+                            if let Some(r) = lets.get(i) {
+                                let reg = syms.reserve_reg();
+                                if *r != reg {
+                                    state.chunk.encode2(
+                                        SET,
+                                        *r as u16,
+                                        reg as u16,
+                                        env.own_line(),
+                                    )?;
+                                }
+                                continue;
+                            }
+                        }
+                        let reg = syms.insert(*i);
+                        if let Some(lets) = &mut state.lets {
+                            lets.insert(*i, reg);
+                        }
                         if reg != *sreg as usize {
                             panic!("Failed to line up regs {} vs {}", reg, *sreg);
                         }
+                        drop(syms);
                         setup_dbg(env, state, reg, *i);
                     }
                     Register::Reserved(sreg) => {

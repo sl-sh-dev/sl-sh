@@ -1,5 +1,6 @@
 use compile_state::state::{CompileState, Symbols};
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 use slvm::opcodes::*;
@@ -32,6 +33,100 @@ fn compile_let_value(
     Ok(())
 }
 
+fn add_right_side_exp(
+    env: &mut SloshVm,
+    right_exps: &mut Vec<RightSideExp>,
+    a: Value,
+    value: Value,
+    state: &mut CompileState,
+    symbols: Rc<RefCell<Symbols>>,
+    allow_shadows: bool,
+) -> VMResult<()> {
+    let a = resolve_destruct_containers(env, a);
+    match a {
+        Value::Symbol(i) => {
+            if symbols.borrow().contains_symbol(i) {
+                if allow_shadows {
+                    let reg = symbols.borrow_mut().reserve_reg();
+                    right_exps.push((Some(i), Some(reg), value, None));
+                } else {
+                    let r = symbols.borrow().get(i).expect("we have the symbol!");
+                    right_exps.push((Some(i), Some(r), value, None));
+                }
+            } else {
+                let reg = symbols.borrow_mut().insert(i);
+                if let Some(lets) = &mut state.lets {
+                    lets.insert(i, reg);
+                }
+                setup_dbg(env, state, reg, i);
+                right_exps.push((None, Some(reg), value, None));
+            }
+        }
+        Value::Vector(h) => {
+            let reg = symbols.borrow_mut().reserve_reg();
+            setup_dbg(env, state, reg, env.specials().scratch);
+            let dtype = DestructType::Vector(h, reg);
+            right_exps.push((None, Some(reg), value, Some(dtype)));
+        }
+        Value::Map(h) => {
+            let reg = symbols.borrow_mut().reserve_reg();
+            setup_dbg(env, state, reg, env.specials().scratch);
+            let dtype = DestructType::Map(h, reg);
+            right_exps.push((None, Some(reg), value, Some(dtype)));
+        }
+        _ => {
+            return Err(VMError::new_compile(
+                "must be a symbol or destructure pattern",
+            ))
+        }
+    }
+    Ok(())
+}
+
+fn compile_right_exps(
+    env: &mut SloshVm,
+    right_exps: Vec<RightSideExp>,
+    state: &mut CompileState,
+    symbols: Rc<RefCell<Symbols>>,
+    free_reg: &mut usize,
+) -> VMResult<()> {
+    let mut destruct_state = DestructState::new();
+    for (interned, reg, val, destruct_type) in right_exps {
+        match (interned, reg, destruct_type) {
+            (Some(interned), Some(reg), None) => {
+                // Use the reserved but unnamed reg.  Do this so we can access any
+                // previous version of this name before we shadow it.
+                setup_dbg(env, state, reg, interned);
+                compile_let_value(env, state, val, reg as u16)?;
+                symbols.borrow_mut().insert_reserved(interned, reg);
+                if let Some(lets) = &mut state.lets {
+                    lets.insert(interned, reg);
+                }
+                if *free_reg < reg + 1 {
+                    *free_reg = reg + 1;
+                }
+            }
+            (None, Some(reg), None) => {
+                compile_let_value(env, state, val, reg as u16)?;
+                if *free_reg < reg + 1 {
+                    *free_reg = reg + 1;
+                }
+            }
+            (None, Some(reg), Some(dtype)) => {
+                if *free_reg < reg + 1 {
+                    *free_reg = reg + 1;
+                }
+                destruct_state.do_destructure(env, state, dtype)?;
+                compile_let_value(env, state, val, reg as u16)?;
+                destruct_state.compile(env, state, free_reg)?;
+                *free_reg = state.reserved_regs();
+            }
+            _ => panic!("Broken let compile, both interned and a reg!"),
+        }
+    }
+    Ok(())
+}
+
 fn let_inner(
     env: &mut SloshVm,
     state: &mut CompileState,
@@ -50,7 +145,6 @@ fn let_inner(
     let mut cdr_iter = cdr.iter();
     let args = cdr_iter.next().unwrap(); // unwrap safe, length is at least 1
     let mut right_exps: Vec<RightSideExp> = Vec::new();
-    let mut destruct_state = DestructState::new();
     let args: Vec<Value> = get_args_iter(env, *args, "let")?.collect();
     let mut args_iter = args.iter();
     while let Some(a) = args_iter.next() {
@@ -62,64 +156,18 @@ fn let_inner(
                 a.display_value(env)
             )));
         };
-        let a = resolve_destruct_containers(env, *a);
-        match a {
-            Value::Symbol(i) => {
-                if symbols.borrow().contains_symbol(i) {
-                    let reg = symbols.borrow_mut().reserve_reg();
-                    right_exps.push((Some(i), Some(reg), value, None));
-                } else {
-                    let reg = symbols.borrow_mut().insert(i);
-                    setup_dbg(env, state, reg, i);
-                    right_exps.push((None, Some(reg), value, None));
-                }
-            }
-            Value::Vector(h) => {
-                let reg = symbols.borrow_mut().reserve_reg();
-                setup_dbg(env, state, reg, env.specials().scratch);
-                let dtype = DestructType::Vector(h, reg);
-                right_exps.push((None, Some(reg), value, Some(dtype)));
-            }
-            Value::Map(h) => {
-                let reg = symbols.borrow_mut().reserve_reg();
-                setup_dbg(env, state, reg, env.specials().scratch);
-                let dtype = DestructType::Map(h, reg);
-                right_exps.push((None, Some(reg), value, Some(dtype)));
-            }
-            _ => return Err(VMError::new_compile("must be a symbol")),
-        }
+        add_right_side_exp(
+            env,
+            &mut right_exps,
+            *a,
+            value,
+            state,
+            symbols.clone(),
+            true,
+        )?;
     }
     let mut free_reg = result;
-    for (interned, reg, val, destruct_type) in right_exps {
-        match (interned, reg, destruct_type) {
-            (Some(interned), Some(reg), None) => {
-                // Use the reserved but unnamed reg.  Do this so we can access any
-                // previous version of this name before we shadow it.
-                setup_dbg(env, state, reg, interned);
-                compile_let_value(env, state, val, reg as u16)?;
-                symbols.borrow_mut().insert_reserved(interned, reg);
-                if free_reg < reg + 1 {
-                    free_reg = reg + 1;
-                }
-            }
-            (None, Some(reg), None) => {
-                compile_let_value(env, state, val, reg as u16)?;
-                if free_reg < reg + 1 {
-                    free_reg = reg + 1;
-                }
-            }
-            (None, Some(reg), Some(dtype)) => {
-                if free_reg < reg + 1 {
-                    free_reg = reg + 1;
-                }
-                destruct_state.do_destructure(env, state, dtype)?;
-                compile_let_value(env, state, val, reg as u16)?;
-                destruct_state.compile(env, state, &mut free_reg)?;
-                free_reg = state.reserved_regs();
-            }
-            _ => panic!("Broken let compile, both interned and a reg!"),
-        }
-    }
+    compile_right_exps(env, right_exps, state, symbols.clone(), &mut free_reg)?;
     let last_thing = if cdr.len() > 1 { cdr.len() - 2 } else { 0 };
     for (i, r) in cdr_iter.enumerate() {
         if i == last_thing {
@@ -157,12 +205,155 @@ pub(crate) fn compile_let(
     }
     let old_symbols = state.symbols.clone();
     let old_tail = state.tail;
+    let old_lets = state.lets.take();
+    state.lets = Some(HashMap::new());
     state.tail = false;
     let old_defers = state.defers;
     let result = let_inner(env, state, cdr, result, old_tail);
     state.tail = old_tail;
     state.symbols = old_symbols;
     state.defers = old_defers;
+    state.lets = old_lets;
+    result
+}
+
+fn let_while_inner(
+    env: &mut SloshVm,
+    state: &mut CompileState,
+    cdr: &[Value],
+    result: usize,
+) -> VMResult<()> {
+    let start_defers = state.defers;
+    let symbols = Rc::new(RefCell::new(Symbols::with_let(state.symbols.clone())));
+    state.symbols = symbols.clone();
+    let mut first_reg = symbols.borrow().regs_count();
+    let mut cdr_iter = cdr.iter();
+    let init_bindings = cdr_iter
+        .next()
+        .expect("had enough params (>= 3) must have init_bindings"); // unwrap safe, length is at least 1
+    let init_bindings: Vec<Value> = get_args_iter(env, *init_bindings, "let-while")?.collect();
+    let init_bindings_iter = init_bindings.iter();
+    let loop_bindings = cdr_iter
+        .next()
+        .expect("had enough params (>= 3) must have loop_bindings"); // unwrap safe, length is at least 2
+    let loop_bindings: Vec<Value> = get_args_iter(env, *loop_bindings, "let-while")?.collect();
+    let mut init_loop_bindings_iter = init_bindings_iter.chain(loop_bindings.iter());
+    let mut right_exps: Vec<RightSideExp> = Vec::new();
+    while let Some(a) = init_loop_bindings_iter.next() {
+        while first_reg <= result {
+            // Make sure we do not step on the result or any other regs in temp use below it.
+            first_reg = symbols.borrow_mut().reserve_reg();
+        }
+        let value = if let Some(r) = init_loop_bindings_iter.next() {
+            *r
+        } else {
+            return Err(VMError::new_compile(format!(
+                "let: symbol {} must have a value",
+                a.display_value(env)
+            )));
+        };
+        add_right_side_exp(
+            env,
+            &mut right_exps,
+            *a,
+            value,
+            state,
+            symbols.clone(),
+            true,
+        )?;
+    }
+    let mut free_reg = result;
+    compile_right_exps(env, right_exps, state, symbols.clone(), &mut free_reg)?;
+
+    let jmp_cond = state.chunk.add_jump(0);
+    state.chunk.encode1(JMP, jmp_cond as u16, env.own_line())?;
+
+    if let Some(conditional) = cdr_iter.next() {
+        let jmp_loop_start = state.chunk.add_jump(state.chunk.code.len() as u32);
+        for r in cdr_iter {
+            compile(env, state, *r, free_reg)?;
+        }
+
+        let mut right_exps: Vec<RightSideExp> = Vec::new();
+        let mut loop_bindings_iter = loop_bindings.iter();
+        while let Some(a) = loop_bindings_iter.next() {
+            let value = if let Some(r) = loop_bindings_iter.next() {
+                *r
+            } else {
+                return Err(VMError::new_compile(format!(
+                    "let: symbol {} must have a value",
+                    a.display_value(env)
+                )));
+            };
+            add_right_side_exp(
+                env,
+                &mut right_exps,
+                *a,
+                value,
+                state,
+                symbols.clone(),
+                false,
+            )?;
+        }
+        let mut free_reg2 = result;
+        compile_right_exps(env, right_exps, state, symbols.clone(), &mut free_reg2)?;
+        /*if free_reg2 != result && free_reg != free_reg2 {
+            panic!("mismatch in let-while lets!");
+        }XXXX*/
+
+        state
+            .chunk
+            .update_jump(jmp_cond, state.chunk.code.len() as u32);
+        compile(env, state, *conditional, free_reg)?;
+        state
+            .chunk
+            .encode2(JMPT, free_reg as u16, jmp_loop_start as u16, env.own_line())?;
+    } else {
+        return Err(VMError::new_compile(format!(
+            "missing conditional, line {}",
+            env.line_num()
+        )));
+    }
+
+    if free_reg != result {
+        state
+            .chunk
+            .encode2(MOV, result as u16, free_reg as u16, env.own_line())?;
+    }
+    for _ in start_defers..state.defers {
+        state.chunk.encode0(DFRPOP, env.own_line())?;
+    }
+    for i in first_reg..symbols.borrow().regs_count() {
+        if i != result {
+            // TODO- should probably add a bulk opcode for this sort of clearing.
+            state.chunk.encode1(CLRREG, i as u16, env.own_line())?;
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn compile_let_while(
+    env: &mut SloshVm,
+    state: &mut CompileState,
+    cdr: &[Value],
+    result: usize,
+) -> VMResult<()> {
+    if cdr.len() < 3 {
+        return Err(VMError::new_compile(
+            "Too few arguments, need at least 3 (init-bindings, loop-bindings, conditional).",
+        ));
+    }
+    let old_symbols = state.symbols.clone();
+    let old_tail = state.tail;
+    let old_lets = state.lets.take();
+    state.lets = Some(HashMap::new());
+    state.tail = false;
+    let old_defers = state.defers;
+    let result = let_while_inner(env, state, cdr, result);
+    state.tail = old_tail;
+    state.symbols = old_symbols;
+    state.defers = old_defers;
+    state.lets = old_lets;
     result
 }
 
