@@ -1,4 +1,4 @@
-use crate::{f56::F56, Handle, Heap, Interned, VMError, VMResult};
+use crate::{Handle, Heap, Interned, VMError, VMResult, F56};
 use std::collections::{BTreeSet, HashMap};
 use std::fmt;
 use std::fmt::{Display, Formatter};
