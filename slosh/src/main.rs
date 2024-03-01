@@ -120,11 +120,6 @@ Paths are a vector and are searched in index order for the file name of
 the path to be loaded.
 
 Section: scripting
-
-Example:
-;(set '*load-path '(\"/path\"))
-;(load \"script-in-path\")
-t
 ",
     );
 }

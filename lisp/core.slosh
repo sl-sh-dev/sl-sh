@@ -18,7 +18,7 @@ Example:
 (test::assert-true (pair? (join 1 2)) "join")
 (test::assert-true (pair? '(1 2)))
 (test::assert-false (pair? 1))
-(test::assert-false (pair? '#(1 2 3)))
+(test::assert-false (pair? [1 2 3]))
 (test::assert-false (pair? (vec)))
 %#
 (def pair? (fn (v) (eq? (type v) :Pair)))
@@ -57,7 +57,7 @@ True if the expression is a vector, false otherwise.
 Section: type
 
 Example:
-(test::assert-true (vec? '#(1 2 3)) "reader macro")
+(test::assert-true (vec? [1 2 3]) "reader macro")
 (test::assert-true (vec? (make-vec)) "make-vec")
 (test::assert-true (vec? (vec 1 2 3)) "vec")
 (test::assert-false (vec? 1))
@@ -77,8 +77,8 @@ Example:
 (test::assert-true (list? '(1 2 3)) "reader macro")
 (test::assert-true (list? (list 1 2 3)) "list")
 (test::assert-false (list? 1))
-(test::assert-false (list? '#(1 2 3)))
-(test::assert-false (list? (vec)))
+(test::assert-false (list? [1 2 3]))
+(test::assert-false (list? []))
 (test::assert-false (list? '(1 . 2)))
 %#
 (def list? (fn (v) (if (or (nil? v)(pair? v))(if (nil? (cdr v)) #t (recur (cdr v))) #f)))
@@ -92,9 +92,9 @@ Section: type
 
 Example:
 (test::assert-true (seq? '(1 2 3)))
-(test::assert-true (seq? '#(1 2 3)))
+(test::assert-true (seq? [1 2 3]))
 (test::assert-true (seq? '()))
-(test::assert-true (seq? '#()))
+(test::assert-true (seq? []))
 (test::assert-false (seq? "aaa"))
 (test::assert-false (seq? 1))
 %#
@@ -109,8 +109,8 @@ Return false if length of s is 0, true otherwise.
 
 Example:
 (assert-true (empty? nil))
-(assert-true (empty? '#()))
-(assert-false (empty? '#(1)))
+(assert-true (empty? []))
+(assert-false (empty? [1]))
 %#
 (def empty? (fn (v) (= (len v) 0)))
 
@@ -123,8 +123,8 @@ Return true if length of s is not 0, false otherwise.
 
 Example:
 (assert-false (empty? nil))
-(assert-false (empty? '#()))
-(assert-true (empty? '#(1)))
+(assert-false (empty? []))
+(assert-true (empty? [1]))
 %#
 (def not-empty? (fn (v) (> (len v) 0)))
 
@@ -151,11 +151,11 @@ Create a macro and bind it to a symbol in the current scope.
 Section: core
 
 Example:
-(defmacro test-mac (x) (let (y (+ (ref (ref x)) 1)) `(set! ,x ,y)))
+(defmacro test-mac (x) (let (y (+ (ref x) 1)) `(set! ~x ~y)))
 (def test-mac-x 2)
 (test-mac test-mac-x)
 (test::assert-equal 3 test-mac-x)
-(defmacro test-mac (x) `(set! ,x 15))
+(defmacro test-mac (x) `(set! ~x 15))
 (test-mac test-mac-x)
 (test::assert-equal 15 test-mac-x)
 %#
@@ -202,9 +202,9 @@ Section: core
 Example:
 (defn defn-test (x y) (+ x y))
 (test::assert-equal 5 (defn-test 2 3))
-(defn defn-test (x y) (set! x (* x 2))(+ x y))
+(defn defn-test (x y) (set! x (* x 2)) (+ x y))
 (test::assert-equal 7 (defn-test 2 3))
-(defn defn-test (x y))
+(defn defn-test (x y) nil)
 (test::assert-false (defn-test 2 3))
 (defn defn-test (x y) #t)
 (test::assert-true (defn-test 2 3))
@@ -230,14 +230,14 @@ Example:
 (def tot 0)
 (loop (idx) (0)
     (set! tot (+ tot 1))
-    (if (= idx 2) (break))
-    (recur (+ idx 1)))
+    (when (not (= idx 2))
+        (recur (+ idx 1))))
 (assert-equal 3 tot)
 (assert-equal 11 (loop (idx) (0)
     (if (= idx 2) (break 11))
     (recur (+ idx 1))))
 (assert-false (loop (idx) (0)
-    (if (= idx 2) (break))
+    (if (= idx 2) (break 0))
     (recur (+ idx 1))))
 (assert-error (loop (idx) (0)
     (if (= idx 2) (break 1 3))
@@ -326,9 +326,15 @@ be restored as interior dyn's exit.
 Section: core
 
 Example:
-(defn test-dyn-fn () (prn \"Print dyn out\"))
-(dyn *stdout* (open \"/tmp/sl-sh.dyn.test\" :create :truncate) (test-dyn-fn))
-(test::assert-equal \"Print dyn out\" (read-line (open \"/tmp/sl-sh.dyn.test\" :read)))
+(defmacro mystr (& body) `(str ~@body))
+(defn test-dyn-fn (x) (mystr 1 x))
+(def out (dyn mystr (fn (x y) (str 1 x y)) (test-dyn-fn 101)))
+(prn "out: " out)
+(test::assert-equal "11101" (str out))
+
+;;(defn test-dyn-fn () (prn \"Print dyn out\"))
+;;(dyn *stdout* (open \"/tmp/sl-sh.dyn.test\" :create :truncate) (test-dyn-fn))
+;;(test::assert-equal \"Print dyn out\" (read-line (open \"/tmp/sl-sh.dyn.test\" :read)))
 %#
 (defmacro dyn
   (key value & expression)
@@ -355,10 +361,10 @@ Section: sequence
 
 Example:
 (assert-equal 3 (last '(1 2 3)))
-(assert-equal 3 (last '#(1 2 3)))
+(assert-equal 3 (last [1 2 3]))
 (assert-equal nil (last '()))
 (assert-equal nil (last nil))
-(assert-equal nil (last '#()))
+(assert-equal nil (last []))
 %#
 (defn last
   (obj)
@@ -378,12 +384,12 @@ Section: sequence
 
 Example:
 (assert-equal '(1 2) (butlast '(1 2 3)))
-(assert-equal '(1 2) (butlast '#(1 2 3)))
+(assert-equal '(1 2) (butlast [1 2 3]))
 (assert-equal nil (butlast '(1)))
-(assert-equal nil (butlast '#(1)))
+(assert-equal nil (butlast [1]))
 (assert-equal nil (butlast '()))
 (assert-equal nil (butlast nil))
-(assert-equal nil (butlast '#()))
+(assert-equal nil (butlast []))
 %#
 (def butlast nil) ; predeclare and assign butlast to avoid a warning when used in butlast declaration.
 (defn butlast
@@ -407,10 +413,10 @@ Section: sequence
 
 Example:
 (assert-equal 1 (first '(1 2 3)))
-(assert-equal 1 (first '#(1 2 3)))
+(assert-equal 1 (first [1 2 3]))
 (assert-equal nil (first '()))
 (assert-equal nil (first nil))
-(assert-equal nil (first '#()))
+(assert-equal nil (first []))
 %#
 (defn first
   (obj)
@@ -429,12 +435,12 @@ Section: sequence
 
 Example:
 (assert-equal '(2 3) (rest '(1 2 3)))
-(assert-equal '(2 3) (rest '#(1 2 3)))
+(assert-equal '(2 3) (rest [1 2 3]))
 (assert-equal nil (rest '(1)))
-(assert-equal nil (rest '#(1)))
+(assert-equal nil (rest [1]))
 (assert-equal nil (rest '()))
 (assert-equal nil (rest nil))
-(assert-equal nil (rest '#()))
+(assert-equal nil (rest []))
 %#
 (defn rest
   (obj)
@@ -521,6 +527,7 @@ Section: conditional
 
 Example:
 
+(def b 0)
 (defn select-option (a)
     (cond ((= a 1) \"opt-one\")
           ((= a 2) (set! b 5) \"opt-two\")
@@ -530,7 +537,6 @@ Example:
           ((= a 2) \"opt-two\")
           ((= a 3) (str \"opt\" \"-three\"))
           (#t \"default\")))
-(def b 0)
 (assert-equal \"opt-one\" (select-option 1))
 (assert-equal b 0)
 (assert-equal \"opt-two\" (select-option 2))
@@ -568,11 +574,11 @@ Asserts the two values are identical.
 Section: core
 %#
 (defmacro assert-equal (expected-val right-val & body)
-    (if (equal? expected-val right-val)
+    `(if (equal? ~expected-val ~right-val)
         #t
-        (let (ev (type expected-val)
-              rv (type right-val))
-        (mk-err :assert `(apply str "Expected: " ~expected-val " (" ~ev "), Got: " ~right-val " (" (type ~rv) ")." ~@body)))))
+        (let (ev (type ~expected-val)
+              rv (type ~right-val))
+        (err (mk-err :assert (str "Expected: " ~expected-val " (" ev "), Got: " ~right-val " (" rv ")." ~@body))))))
 
 #%
 Asserts the two values are identical.
@@ -586,7 +592,7 @@ Asserts the value is true.
 
 Section: core
 %#
-(defmacro assert-true (val & body) `(assert-equal #t val ~@body))
+(defmacro assert-true (val & body) `(assert-equal #t ~val ~@body))
 
 #%
 Asserts the value is true.
@@ -600,7 +606,7 @@ Asserts the value is false
 
 Section: core
 %#
-(defmacro assert-false (val & body) `(assert-equal #f val ~@body))
+(defmacro assert-false (val & body) `(assert-equal #f ~val ~@body))
 
 #%
 Asserts the value is false
@@ -614,10 +620,15 @@ Asserts the value is an error
 
 Section: core
 %#
-(defmacro assert-error (val & body) `(assert-true #t (err? ~val) ~@body))
+(defmacro assert-error (val & body)
+(if `(err? ~val)
+    #t
+    (mk-err
+        :assert
+        `(str "Expected error got: " ~val "." ~@body))))
 
 #%
-Asserts the value is false
+Asserts the value is an error
 
 Section: core
 %#
