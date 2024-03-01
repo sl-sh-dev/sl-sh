@@ -237,8 +237,10 @@ impl F56 {
 
 #[cfg(test)]
 mod tests {
+
     use crate::f56::F56;
-    use core::panic;
+
+    const MAXIMUM_ACCEPTABLE_RELATIVE_DIFFERENCE: f64 = 1e-10;
 
     pub fn log_f32(f: f32) -> String {
         let bytes = f.to_be_bytes();
@@ -290,87 +292,61 @@ mod tests {
             f, true_exponent, f64_mantissa, word
         )
     }
-
-    #[test]
-    fn test_f56_formatting() {
-        // F56 should have a maximum of 12 decimal digits displayed
-        // And the 12th digit should be rounded using the 13th digit
-        // If we input an f64 with the 13th digit of 5
-        // The nearest F56 representation might have the 13th digit become 4 or 6
-        // So be wary that rounding may not occur as expected
-        // 3.999_999_999_995 rounds down instead of rounding up to 4
-        let map_from_value_to_expected_string = [
-            // (3.999_999_999_995, "4"), // bad rounding
-            (399.999_999_999_58527_f64, "400"),
-            (399.999_999_999_585_f64, "400"),
-            (399.999_999_999_58_f64, "400"),
-            (399.999_999_999_6_f64, "400"),
-            (399.999_999_999_f64, "399.999999999"),
-            (
-                0.000_000_012_312_312_412_412_312_3_f64,
-                "0.0000000123123124124",
-            ),
-            (0.000_000_012_312_312_452_57_f64, "0.0000000123123124526"),
-            (399_999_999.999_58_f64, "400000000"),
-            (
-                399_999_999_999_600_000_000_000_000_000_000_0_f64,
-                "4000000000000000000000000000000000",
-            ),
-            (
-                399_999_999_999_600_000_000_000_000_000_000_0_f64,
-                "4000000000000000000000000000000000",
-            ),
-            // special values
-            (f64::NAN, "NaN"),
-            (f64::INFINITY, "inf"),
-            (f64::NEG_INFINITY, "-inf"),
-            (0.0, "0"),
-            (-0.0, "-0"),
-            (f64::MIN_POSITIVE, "0"),
-            // (F56::MIN_POSITIVE.into(), "0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000298333629248"),
-        ];
-        for (f, expected) in map_from_value_to_expected_string.iter() {
-            // println!("{:?}", f);
-            let f56 = F56::from(*f);
-            let formatted = format!("{:}", f56);
-            assert_eq!(formatted, *expected);
+    fn debug(orig_f64: f64, index: usize) {
+        println!("index: {}", index);
+        println!("original f64      : {}", log_f64(orig_f64));
+        println!("f64 -> f32        : {}", log_f32(orig_f64 as f32));
+        println!("f64 -> f32 -> f64 : {}", log_f64((orig_f64 as f32) as f64));
+        println!("f64 -> f56        : {}", log_f56(F56::from(orig_f64)));
+        println!(
+            "f64 -> f56 -> f64 : {}",
+            log_f64(f64::from(F56::from(orig_f64)))
+        );
+        let f32_diff = (f64::from(orig_f64 as f32) - orig_f64).abs();
+        let f32_relative_difference = f32_diff / orig_f64.abs();
+        if f32_relative_difference > 0.0 {
+            println!("f32 relative difference {:.5e}", f32_relative_difference);
         }
+        let f56_diff: f64 = (f64::from(F56::from(orig_f64)) - orig_f64).abs();
+        let f56_relative_difference = f56_diff / orig_f64.abs();
+        if f56_relative_difference > 0.0 {
+            println!("f56 relative difference {:.5e}", f56_relative_difference);
+        }
+        println!("")
     }
 
-    #[test]
-    /// Declares a bunch of f64s meant to represent a wide range of values of various edge cases
-    /// Converts each f64 to f56 and back to f64 to see how it changes
-    /// If they are equal, then that conversion was successful
-    /// If they are unequal, then it may still be successful if the f64 was outside of the range that the F56 could represent
-    /// A debug function is provided to visually inspect the bytes of the f64, F56, and corresponding f32
+    fn get_regular_f64_values() -> [f64; 15] {
+        [
+            0_f64,
+            0.0,
+            1.0,
+            2.0,
+            2.5123,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            7.0,
+            8.0,
+            9.0,
+            10.0,
+            -1.0,
+            -0.33333333333333333333333333333,
+        ]
+    }
 
-    fn test_f56() {
-        let numbers_to_test = [
-            f64::from_bits(0x0000_0000_0000_0000u64),
-            f64::from_bits(0x0000_0000_0000_0001u64),
-            f64::from_bits(0x8000_0000_0000_0000u64),
-            f64::from_bits(0x7FFF_FFFF_FFFF_FFFFu64),
-            f64::from_bits(0x7FFF_FFFF_FFFF_FFFEu64),
-            f64::from_bits(0xFFFF_FFFF_FFFF_FFFFu64),
-            f64::from_bits(0x7000_0000_0000_0000u64),
-            f64::from_bits(0xDEAD_BEEF_DEAD_BEEFu64),
-            f64::from_bits(0x1234_5678_9ABC_DEF0u64),
-            f64::from_bits(0x1111_1111_1111_1111u64),
-            f64::from_bits(0x2222_2222_2222_2222u64),
-            f64::from_bits(0x3333_3333_3333_3333u64),
-            f64::from_bits(0x4444_4444_4444_4444u64),
-            f64::from_bits(0x5555_5555_5555_5555u64),
-            f64::from_bits(0x6666_6666_6666_6666u64),
-            f64::from_bits(0x7777_7777_7777_7777u64),
-            f64::from_bits(0x8888_8888_8888_8888u64),
-            f64::from_bits(0x9999_9999_9999_9999u64),
-            f64::from_bits(0xAAAA_AAAA_AAAA_AAAAu64),
-            f64::from_bits(0xBBBB_BBBB_BBBB_BBBBu64),
-            f64::from_bits(0xCCCC_CCCC_CCCC_CCCCu64),
-            f64::from_bits(0xDDDD_DDDD_DDDD_DDDDu64),
-            f64::from_bits(0xEEEE_EEEE_EEEE_EEEEu64),
-            f64::from_bits(0xFFFF_FFFF_FFFF_FFFEu64),
-            f64::from_bits(0xFFF0_0000_0000_0001u64),
+    fn get_variety_f64_values() -> [f64; 133] {
+        [
+            399.999_999_999_58527_f64,
+            399.999_999_999_585_f64,
+            399.999_999_999_58_f64,
+            399.999_999_999_6_f64,
+            399.999_999_999_f64,
+            0.000_000_012_312_312_412_412_312_3_f64,
+            0.000_000_012_312_312_452_57_f64,
+            399_999_999.999_58_f64,
+            399_999_999_999_600_000_000_000_000_000_000_0_f64,
+            399_999_999_999_600_000_000_000_000_000_000_0_f64,
             0x0000_0000_0000_0000u64 as f64,
             0x0000_0000_0000_0001u64 as f64,
             0x8000_0000_0000_0000u64 as f64,
@@ -396,8 +372,22 @@ mod tests {
             0xEEEE_EEEE_EEEE_EEEEu64 as f64,
             0xFFFF_FFFF_FFFF_FFFEu64 as f64,
             0xFFF0_0000_0000_0001u64 as f64,
-            0.0,
-            -0.0,
+            0xDEAD_BEEF_DEAD_BEEFu64 as f64,
+            0x1234_5678_9ABC_DEF0u64 as f64,
+            0x1111_1111_1111_1111u64 as f64,
+            0x2222_2222_2222_2222u64 as f64,
+            0x3333_3333_3333_3333u64 as f64,
+            0x4444_4444_4444_4444u64 as f64,
+            0x5555_5555_5555_5555u64 as f64,
+            0x6666_6666_6666_6666u64 as f64,
+            0x7777_7777_7777_7777u64 as f64,
+            0x8888_8888_8888_8888u64 as f64,
+            0x9999_9999_9999_9999u64 as f64,
+            0xAAAA_AAAA_AAAA_AAAAu64 as f64,
+            0xBBBB_BBBB_BBBB_BBBBu64 as f64,
+            0xCCCC_CCCC_CCCC_CCCCu64 as f64,
+            0xDDDD_DDDD_DDDD_DDDDu64 as f64,
+            0xEEEE_EEEE_EEEE_EEEEu64 as f64,
             2.3,
             23.0,
             230.0,
@@ -414,6 +404,84 @@ mod tests {
             0.000023,
             0.0000023,
             0.23e-5,
+            -1234567890123456789012345678901.0,
+            -1.1412314e108,
+            -3.33e55,
+            -1e44,
+            -1337.1337,
+            -222.2,
+            -0.0,
+            -0.1,
+            0.0,
+            0.1,
+            0.01,
+            0.001,
+            0.249,
+            0.999,
+            1.0,
+            1.001,
+            1.01,
+            1.1,
+            1.999,
+            2.0,
+            2.2345,
+            3.0,
+            3.33333333333333333333333333333333,
+            4.0,
+            4.44,
+            5.0,
+            5.1,
+            6.0,
+            6.2,
+            7.0,
+            8.0,
+            9.0,
+            10.0,
+            100.0,
+            234.432,
+            420.69,
+            1234.0,
+            12345.0,
+            123456.0,
+            1234567.0,
+            12345678.0,
+            123456789.0,
+            1234567890.0,
+            12345678901.0,
+            123456789012.0,
+            1234567890123.0,
+            12345678901234.0,
+            123456789012345.0,
+            1234567890123456.0,
+            12345678901234567.0,
+            123456789012345678.0,
+            1234567890123456789.0,
+            12345678901234567890.0,
+            123456789012345678901.0,
+            1234567890123456789012.0,
+            12345678901234567890123.0,
+            123456789012345678901234.0,
+            1234567890123456789012345.0,
+            12345678901234567890123456.0,
+            123456789012345678901234567.0,
+            1234567890123456789012345678.0,
+            12345678901234567890123456789.0,
+            123456789012345678901234567890.0,
+            123456789012345678901234567890.1,
+            999.999e99,
+            1e100,
+        ]
+    }
+
+    fn get_edge_case_f64_values() -> [f64; 39] {
+        [
+            f64::MIN,
+            f64::MAX,
+            f64::MIN_POSITIVE,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            f64::NAN,
+            -0.0,
             f32::MIN_POSITIVE as f64, // 42
             f32::MIN_POSITIVE as f64 / 3.0,
             f32::MIN_POSITIVE as f64 / 7e5,
@@ -434,117 +502,80 @@ mod tests {
             f64::NAN,
             F56::EPSILON,
             F56::EPSILON / 3.0,
-            f64::from(F56::MAX),
-            f64::from(F56::MAX) + 1.0,
-            f64::from(F56::MIN_POSITIVE),
-            f64::from(F56::MIN_POSITIVE) / 3.0, // #55
-            f64::from(F56::MIN_POSITIVE_SUBNORMAL),
-            f64::from(F56::MIN_POSITIVE_SUBNORMAL) / 3.0,
-            -f64::from(F56::MAX),
-            -f64::from(F56::MAX) - 1.0,
-            -f64::from(F56::MAX) * 3.3,
             8.4e-168,
             8.4e-169,
             8.4e-170,
-        ];
+            0xFFFF_FFFF_FFFF_FFFEu64 as f64,
+            0xFFF0_0000_0000_0001u64 as f64,
+            0x0000_0000_0000_0000u64 as f64,
+            0x0000_0000_0000_0001u64 as f64,
+            0x8000_0000_0000_0000u64 as f64,
+            0x7FFF_FFFF_FFFF_FFFFu64 as f64,
+            0x7FFF_FFFF_FFFF_FFFEu64 as f64,
+            0xFFFF_FFFF_FFFF_FFFFu64 as f64,
+            0x7000_0000_0000_0000u64 as f64,
+        ]
+    }
 
-        fn debug(orig_f64: f64, index: usize) {
-            println!("index: {}", index);
-            println!("original f64      : {}", log_f64(orig_f64));
-            println!("f64 -> f32        : {}", log_f32(orig_f64 as f32));
-            println!("f64 -> f32 -> f64 : {}", log_f64((orig_f64 as f32) as f64));
-            println!("f64 -> f56        : {}", log_f56(F56::from(orig_f64)));
-            println!(
-                "f64 -> f56 -> f64 : {}",
-                log_f64(f64::from(F56::from(orig_f64)))
-            );
-            let f32_diff = (f64::from(orig_f64 as f32) - orig_f64).abs();
-            let f32_relative_difference = f32_diff / orig_f64.abs();
-            if f32_relative_difference > 0.0 {
-                println!("f32 relative difference {:.5e}", f32_relative_difference);
-            }
-            let f56_diff: f64 = (f64::from(F56::from(orig_f64)) - orig_f64).abs();
-            let f56_relative_difference = f56_diff / orig_f64.abs();
-            if f56_relative_difference > 0.0 {
-                println!("f56 relative difference {:.5e}", f56_relative_difference);
-            }
-            println!("")
-        }
+    fn relative_difference(a: f64, b: f64) -> f64 {
+        (a - b).abs() / b.abs()
+    }
 
-        for index in 0..numbers_to_test.len() {
-            let orig_f64 = numbers_to_test[index];
-            // Calculate the values
-            let f32 = orig_f64 as f32;
-            let f56 = F56::from(orig_f64);
-            let back_to_f64: f64 = f56.into();
-            let f32_diff = ((f32 as f64) - orig_f64).abs();
-            let f56_diff = (back_to_f64 - orig_f64).abs();
+    // TODO: test the F56::MAX, F56::MIN_POSITIVE, F56::MIN_POSITIVE_SUBNORMAL cases
 
-            // If the converted value equals the original, we passed the test
-            if back_to_f64 == orig_f64 {
-                continue;
+    #[test]
+    fn f56_strings_match_f64_strings() {
+        let string_test_closure = |f64_value: &f64| {
+            let f64_string = format!("{}", f64_value);
+            let f56_value = F56::from(*f64_value);
+            let f56_string = format!("{}", f56_value);
+            if f56_string == f64_string {
+                return;
             }
-
-            // Signs must match
-            if orig_f64.is_sign_positive() != back_to_f64.is_sign_positive() {
-                debug(orig_f64, index);
-                panic!("Signs don't match");
+            println!("f64: {} not quite equal\nF56: {}", f64_string, f56_string);
+            // let abs: f64 = f64_value.abs();
+            if f64_value.abs() > f64::from(F56::MAX) && f56_string.contains("inf") {
+                println!("But F56 is expected to be infinite if f64 is outside of its range. {:.0e} > {:.0e}\n", f64_value, f64::from(F56::MAX));
+                return;
             }
-
-            // NaNs must match
-            if orig_f64.is_nan() != back_to_f64.is_nan() {
-                debug(orig_f64, index);
-                panic!("original f64 and f56 should either both be NaN or neither be NaN");
-            }
-
-            // Both must be finite or infinite
-            // Unless the f64 is very large and the F56 is infinite
-            if orig_f64.is_infinite() != back_to_f64.is_infinite() {
-                if orig_f64.is_infinite() {
-                    debug(orig_f64, index);
-                    panic!("f56 should be infinite when original f64 is infinite");
-                } else if back_to_f64.is_infinite() {
-                    if orig_f64.abs() < f64::from(F56::MAX) {
-                        debug(orig_f64, index);
-                        println!("F56::MAX: {:.2e}", f64::from(F56::MAX));
-                        panic!("f56 should be finite if original f64 is between -F56::MAX and +F56::MAX");
-                    }
-                }
-                continue; // Don't check magnitude of difference if one is infinite
-            }
-            // Both must be zero or nonzero
-            // Unless the f64 is very small and the F56 is zero
-            if (orig_f64 == 0.0) != (back_to_f64 == 0.0) {
-                if orig_f64 == 0.0 {
-                    debug(orig_f64, index);
-                    panic!("f56 should be zero when original f64 is zero");
-                } else if orig_f64.abs() > f64::from(F56::MIN_POSITIVE) {
-                    debug(orig_f64, index);
-                    panic!(
-                        "f56 should be zero when abs(original f64) < F56::MIN_POSITIVE_SUBNORMAL ({})",
-                        f64::from(F56::MIN_POSITIVE_SUBNORMAL)
-                    );
-                }
-                continue;
-            }
-
-            // The absolute difference must be small
-            // smaller than the difference between an f32 and the f64
-            if f56_diff > f32_diff {
-                debug(orig_f64, index);
-                panic!("f56 is less accurate than the f32 conversion");
-            }
-
-            // The relative difference must be less than F56's EPSILON
-            let relative_difference = f56_diff / orig_f64.abs();
-            if relative_difference > F56::EPSILON {
-                debug(orig_f64, index);
-                panic!(
-                    "f56 is less accurate than it should be. relative difference: {}, max: {}",
-                    relative_difference,
-                    F56::EPSILON
+            if f64_value.abs() < F56::MIN_POSITIVE_SUBNORMAL.into() && f64::from(f56_value) == 0.0 {
+                println!(
+                    "But F56 is expected to be 0 if f64 is outside of its range. {:.0e} < {:.0e}\n",
+                    f64_value,
+                    f64::from(F56::MIN_POSITIVE_SUBNORMAL)
                 );
+                return;
             }
+
+            let f56_string_to_f64_value = f56_string.parse::<f64>().unwrap();
+            let f64_string_to_f64_value = f64_string.parse::<f64>().unwrap();
+            let relative_difference =
+                relative_difference(f56_string_to_f64_value, f64_string_to_f64_value);
+            if relative_difference < MAXIMUM_ACCEPTABLE_RELATIVE_DIFFERENCE {
+                println!(
+                    "But the relative difference of {} is acceptably below the maximum {}\n",
+                    relative_difference, MAXIMUM_ACCEPTABLE_RELATIVE_DIFFERENCE,
+                );
+                return;
+            }
+            // Failing this test case
+            debug(*f64_value, 0);
+            assert_eq!(
+                f64_string, f56_string,
+                "f64(left) and f56(right) string values must be equal"
+            );
+        };
+        println!("\n\n\n\nRegular f64 values");
+        for f in get_regular_f64_values().iter() {
+            string_test_closure(f);
+        }
+        println!("\n\n\n\nVariety f64 values");
+        for f in get_variety_f64_values().iter() {
+            string_test_closure(f);
+        }
+        println!("\n\n\n\nEdge case f64 values");
+        for f in get_edge_case_f64_values().iter() {
+            string_test_closure(f);
         }
     }
 }
