@@ -152,17 +152,22 @@ impl Display for F56 {
         // F56 only has 12, meaning that .0023 appears as .0022999999999999687
         // if F56 knew to only print 12 digits then it would be fine,
         // but when going through f64, it thinks it has 15 perfect digits.
+        let as_f64 = f64::from(*self);
 
-        // We can set the precision to 12 but that increases numbers like 1.0 to 1.0000000000000
-        // So let's do that, and remove the trailing zeros and decimal points added on
-        let first_pass = format!("{:.*}", F56::DIGITS, f64::from(*self));
-        // remove trailing zeros and trailing decimal point
-        let second_pass = if first_pass.contains('.') {
-            first_pass.trim_end_matches('0').trim_end_matches('.')
-        } else {
-            &first_pass
-        };
-        write!(f, "{}", second_pass)
+        // Handle special cases by printing the f64 value
+        if as_f64.is_nan() || as_f64.is_infinite() || as_f64 == 0.0 {
+            return write!(f, "{}", as_f64);
+        }
+
+        // round to a max of F56::DIGITS sig figs
+        let orig_exponent_value = as_f64.abs().log10().floor() as i32; // the number after 'e' in scientific notation
+        let target_exponent_value = F56::DIGITS as i32 - 1; // exponent that we will shift this number to
+
+        let scale_factor = 10f64.powi(target_exponent_value - orig_exponent_value);
+        let scaled_and_rounded = (as_f64 * scale_factor).round();
+        write!(f, "{}", scaled_and_rounded / scale_factor)
+        // beware that 1e11 / 1e11 == 1, so this works
+        // but 1e11 * 1e-11 = 0.9999999999999 which would kill this algorithm
     }
 }
 impl From<f64> for F56 {
