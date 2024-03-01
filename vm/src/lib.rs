@@ -21,3 +21,6 @@ pub use crate::interner::*;
 
 pub mod fxhasher;
 pub use crate::fxhasher::*;
+
+pub mod f56;
+pub use crate::f56::*;
