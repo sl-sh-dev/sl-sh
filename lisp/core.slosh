@@ -573,7 +573,7 @@ Asserts the two values are identical.
 
 Section: core
 %#
-(defn assert-equal (expected-val right-val & body)
+(defmacro assert-equal (expected-val right-val & body)
     (if (equal? expected-val right-val)
         #t
         (let (ev (type expected-val)
@@ -628,7 +628,7 @@ Section: core
         `(str "Expected error got: " ~val "." ~@body))))
 
 #%
-Asserts the value is false
+Asserts the value is an error
 
 Section: core
 %#
