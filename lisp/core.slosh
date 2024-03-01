@@ -572,7 +572,7 @@ Section: core
         #t
         (let (ev (type expected-val)
               rv (type right-val))
-        (mk-err :assert `(apply str "Expected: " ~expected-val " (" ~ev "), Got: " ~right-val " (" (type ~rv) ")." ~@body)))))
+        (err (mk-err :assert `(str "Expected: " ~expected-val " (" ~ev "), Got: " ~right-val " (" (type ~rv) ")." ~@body))))))
 
 #%
 Asserts the two values are identical.
