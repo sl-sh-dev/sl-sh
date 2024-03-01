@@ -24,7 +24,10 @@ jobs:
           cp ./target/release/slosh ./sls
           strip ./sls
     - name: Run Benches
-      run: ./sls ./slosh/benches/bench.slosh
+      run: |
+        pushd ./slosh/benches
+        ./sls ./bench.slosh
+        popd
 
   build-linux:
 
