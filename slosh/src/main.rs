@@ -403,7 +403,7 @@ fn run_shell_tty() -> i32 {
             Ok(input) => input,
             Err(err) => match err.kind() {
                 ErrorKind::UnexpectedEof => {
-                    status = 1; //TODO PC fix
+                    status = 1;
                     break;
                 }
                 ErrorKind::Interrupted => {
