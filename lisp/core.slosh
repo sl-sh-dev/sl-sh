@@ -327,8 +327,7 @@ Section: core
 
 Example:
 (def *dyn-test* 1)
-(defmacro mystr (& body) `(str ~@body))
-(defn test-dyn-fn (x) (mystr *dyn-test* x))
+(defn test-dyn-fn (val) (str *dyn-test* val))
 (def out (dyn *dyn-test* 11 (test-dyn-fn 101)))
 (test::assert-equal "11101" (str out))
 ;; when file handling works
