@@ -193,7 +193,7 @@ pub fn add_misc_builtins(env: &mut SloshVm) {
         env,
         "rem",
         remainder,
-        "Usage: (% int int)
+        "Usage: (rem int int)
 
 Remainder from dividing first int by the second.
 
@@ -201,13 +201,13 @@ Section: math
 
 Example:
 (ns-import 'math)
-(test::assert-equal 0 (% 50 10))
-(test::assert-equal 5 (% 55 10))
-(test::assert-equal 1 (% 1 2))
-(test::assert-error (%))
-(test::assert-error (% 1))
-(test::assert-error (% 1 2 3))
-(test::assert-error (% 1 2.0))
+(test::assert-equal 0 (rem 50 10))
+(test::assert-equal 5 (rem 55 10))
+(test::assert-equal 1 (rem 1 2))
+(test::assert-error (rem))
+(test::assert-error (rem 1))
+(test::assert-error (rem 1 2 3))
+(test::assert-error (rem 1 2.0))
 ",
     );
     add_builtin(

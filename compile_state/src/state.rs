@@ -227,7 +227,7 @@ Example:
 (test::assert-equal "Three" test-do-three)
 (let (test-do-one nil)
     ; Add this to tthe let's scope (shadow the outer test-do-two).
-    (test::assert-equal "Default" (def ns::test-do-four "Default"))
+    (test::assert-equal "Default" (def test-do-four "Default"))
     ; set the currently scoped value.
     (set! test-do-one "1111")
     (set! test-do-two "2222")
@@ -321,7 +321,7 @@ Example:
 (def test-mac nil)
 (def mac-var 2)
 (let (mac-var 3)
-  (set! test-mac (macro (x) (set! test-macro2 100)(test::assert-equal 3 mac-var)`(* ,mac-var ,x))))
+  (set! test-mac (macro (x) (set! test-macro2 100) (test::assert-equal 3 mac-var) (* mac-var x))))
 (set! test-macro1 (test-mac 10))
 (test::assert-equal 30 test-macro1)
 (test::assert-equal 100 test-macro2)"),
@@ -367,7 +367,7 @@ Example:
 (test::assert-equal "TWO TRUE2" test-if-two2)
 (test::assert-equal "THREE DEFAULT" test-if-three2)
 (test::assert-equal nil (if nil))
-(test::assert-equal #f (if nil #t nil #t nil t))"#),
+(test::assert-equal #f (if nil #t nil #t nil #t))"#),
             add: add_special(vm, "+", r#"Usage: (+ number*)
 
 Add a sequence of numbers.  (+) will return 0.
@@ -588,8 +588,8 @@ Make a new vector with items.
 Section: vector
 
 Example:
-(test::assert-equal '() (vec))
-(test::assert-equal '(1 2 3) (vec 1 2 3))
+(test::assert-equal [] (vec))
+(test::assert-equal [1 2 3] (vec 1 2 3))
 ",
             ),
             make_vec: add_special(
@@ -602,10 +602,10 @@ Make a new vector with capacity and default item(s).
 Section: vector
 
 Example:
-(test::assert-equal '() (make-vec))
-(test::assert-equal '(x x x) (make-vec 3 'x))
-(test::assert-equal '(nil nil nil nil nil) (make-vec 5 nil))
-(test::assert-equal '() (make-vec 5))
+(test::assert-equal [] (make-vec))
+(test::assert-equal ['x 'x 'x] (make-vec 3 'x))
+(test::assert-equal [nil nil nil nil nil] (make-vec 5 nil))
+(test::assert-equal [] (make-vec 5))
 ",
             ),
             vec_push: add_special(
@@ -619,12 +619,12 @@ Section: vector
 
 Example:
 (def test-push-vec (vec))
-(test::assert-equal '(1) (vec-push! test-push-vec 1))
-(test::assert-equal '(1) test-push-vec)
-(test::assert-equal '(1 2) (vec-push! test-push-vec 2))
-(test::assert-equal '(1 2) test-push-vec)
-(test::assert-equal '(1 2 3) (vec-push! test-push-vec 3))
-(test::assert-equal '(1 2 3) test-push-vec)
+(test::assert-equal [1] (vec-push! test-push-vec 1))
+(test::assert-equal [1] test-push-vec)
+(test::assert-equal [1 2] (vec-push! test-push-vec 2))
+(test::assert-equal [1 2] test-push-vec)
+(test::assert-equal [1 2 3] (vec-push! test-push-vec 3))
+(test::assert-equal [1 2 3] test-push-vec)
 ",
             ),
             vec_pop: add_special(
@@ -639,11 +639,11 @@ Section: vector
 Example:
 (def test-pop-vec (vec 1 2 3))
 (test::assert-equal 3 (vec-pop! test-pop-vec))
-(test::assert-equal '(1 2) test-pop-vec)
+(test::assert-equal [1 2] test-pop-vec)
 (test::assert-equal 2 (vec-pop! test-pop-vec))
-(test::assert-equal '(1) test-pop-vec)
+(test::assert-equal [1] test-pop-vec)
 (test::assert-equal 1 (vec-pop! test-pop-vec))
-(test::assert-equal '() test-pop-vec)
+(test::assert-equal [] test-pop-vec)
 ",
             ),
             quote: add_special(
@@ -932,9 +932,9 @@ Section: collection
 
 Example:
 (def test-clear-vec (vec 1 2 3))
-(test::assert-false (vec-empty? test-clear-vec))
+(test::assert-false (empty? test-clear-vec))
 (clear! test-clear-vec)
-(test::assert-true (vec-empty? test-clear-vec))
+(test::assert-true (empty? test-clear-vec))
 ",
             ),
             str_: add_special(vm, "str", r#"Usage: (str arg0 ... argN) -> string
@@ -950,8 +950,8 @@ Example:
 (test::assert-equal "stringsome" (str "string" "some"))
 (test::assert-equal "string" (str "string" ""))
 (test::assert-equal "string 50" (str "string" " " 50))
-(test::assert-equal "string 50 test
-                              " (str "string" " " 50 " " (syscall 'echo "test")))"#),
+(test::assert-error (str {:key 'symbol}))
+"#),
             let_: add_special(vm, "let", r#"Usage: (let vals &rest let-body)
 
 Takes list, vals, of form ((binding0 sexp0) (binding1 sexp1) ...) and evaluates

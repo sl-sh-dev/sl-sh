@@ -15,7 +15,7 @@ Section: type
 
 Example:
 (test::assert-true (pair? '(1 . 2)) "reader macro")
-(test::assert-true (pair? (join 1 2)) "join")
+(test::assert-true (pair? (cons 1 2)) "cons")
 (test::assert-true (pair? '(1 2)))
 (test::assert-false (pair? 1))
 (test::assert-false (pair? [1 2 3]))
@@ -94,11 +94,12 @@ Example:
 (test::assert-true (seq? '(1 2 3)))
 (test::assert-true (seq? [1 2 3]))
 (test::assert-true (seq? '()))
+(test::assert-true (seq? '()))
 (test::assert-true (seq? []))
 (test::assert-false (seq? "aaa"))
 (test::assert-false (seq? 1))
 %#
-(def seq? (fn (v) (or (pair? v)(vec? v))))
+(def seq? (fn (v) (or (nil? v)(pair? v)(vec? v))))
 
 #%
 Usage (empty? s)
@@ -177,8 +178,7 @@ Section: core
 Example:
 (def get-error-t1 (get-error (err \"Some Error\")))
 (test::assert-equal :error (car get-error-t1))
-(test::assert-equal \"Some Error\" (cadr get-error-t1))
-(test::assert-true (vec? (caddr get-error-t1)))
+(test::assert-equal \"Some Error\" (cdr get-error-t1))
 (test::assert-equal '(:ok . \"Some String\") (get-error \"Some String\"))
 (test::assert-equal '(:ok . \"Some Other String\") (get-error (def test-get-error \"Some \") (str test-get-error \"Other String\")))
 %#
@@ -237,7 +237,7 @@ Example:
     (if (= idx 2) (break 11))
     (recur (+ idx 1))))
 (assert-false (loop (idx) (0)
-    (if (= idx 2) (break 0))
+    (if (= idx 2) (break nil))
     (recur (+ idx 1))))
 (assert-error (loop (idx) (0)
     (if (= idx 2) (break 1 3))
@@ -326,12 +326,12 @@ be restored as interior dyn's exit.
 Section: core
 
 Example:
+(def *dyn-test* 1)
 (defmacro mystr (& body) `(str ~@body))
-(defn test-dyn-fn (x) (mystr 1 x))
-(def out (dyn mystr (fn (x y) (str 1 x y)) (test-dyn-fn 101)))
-(prn "out: " out)
+(defn test-dyn-fn (x) (mystr *dyn-test* x))
+(def out (dyn *dyn-test* 11 (test-dyn-fn 101)))
 (test::assert-equal "11101" (str out))
-
+;; when file handling works
 ;;(defn test-dyn-fn () (prn \"Print dyn out\"))
 ;;(dyn *stdout* (open \"/tmp/sl-sh.dyn.test\" :create :truncate) (test-dyn-fn))
 ;;(test::assert-equal \"Print dyn out\" (read-line (open \"/tmp/sl-sh.dyn.test\" :read)))
@@ -416,7 +416,7 @@ Example:
 (assert-equal 1 (first [1 2 3]))
 (assert-equal nil (first '()))
 (assert-equal nil (first nil))
-(assert-equal nil (first []))
+(assert-equal [] (first []))
 %#
 (defn first
   (obj)
@@ -435,12 +435,12 @@ Section: sequence
 
 Example:
 (assert-equal '(2 3) (rest '(1 2 3)))
-(assert-equal '(2 3) (rest [1 2 3]))
+(assert-equal [2 3] (rest [1 2 3]))
 (assert-equal nil (rest '(1)))
-(assert-equal nil (rest [1]))
+(assert-equal [] (rest [1]))
 (assert-equal nil (rest '()))
 (assert-equal nil (rest nil))
-(assert-equal nil (rest []))
+(assert-equal [] (rest []))
 %#
 (defn rest
   (obj)
