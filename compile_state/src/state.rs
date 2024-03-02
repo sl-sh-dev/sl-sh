@@ -870,7 +870,7 @@ The and form will stop evaluating when the first expression produces nil/#f.
 Section: conditional
 
 Example:
-(test::assert-equal nil (and nil (err "and- can not happen")))
+(test::assert-equal #f (and nil (err "and- can not happen")))
 (test::assert-equal #f (and #f (err "and- can not happen")))
 (test::assert-equal "and- done" (and #t "and- done"))
 (test::assert-equal "and- done" (and #t #t "and- done"))

@@ -5,7 +5,7 @@
 (let (globals (get-globals-sorted)
       globals-len (len globals)
       i 0
-      failing-tests #| {:dec! "dec!"
+      failing-tests {} #| {:dec! "dec!"
                      :inc! "inc!"
                      :xar! "xar!"
                      :xdr! "xdr!"} |# )
