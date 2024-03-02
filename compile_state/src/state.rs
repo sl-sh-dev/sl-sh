@@ -836,7 +836,7 @@ Example:
             eq: add_special(vm, "eq?", ""),
             equal: add_special(vm, "equal?", r#"Usage: (equal? val0 val1)
 
-Like '=' but works for all value sensical types, not just primitives.
+Like '=' but works for most value types where it makes sense, not just primitives.
 
 Section: core
 
