@@ -679,8 +679,8 @@ Example:
 (test::assert-equal `(1 2 3) '(1 2 3))
 (def test-bquote-one 1)
 (def test-bquote-list '(1 2 3))
-(test::assert-equal (list 1 2 3) `(,test-bquote-one 2 3))
-(test::assert-equal (list 1 2 3) `(,@test-bquote-list))
+(test::assert-equal (list 1 2 3) `(~test-bquote-one 2 3))
+(test::assert-equal (list 1 2 3) `(~@test-bquote-list))
             ",
             ),
             recur: add_special(
@@ -735,12 +735,7 @@ Example:
 (test::assert-false (= 1.1 1.0))
 (test::assert-true (= 1.1 1.1))
 (test::assert-false (= 3 2 3))
-(test::assert-false (= "aab" "aaa"))
-(test::assert-true (= "aaa" "aaa"))
-(test::assert-true (= "aaa" "aaa" "aaa"))
-(test::assert-false (= "aaa" "aaaa" "aaa"))
-(test::assert-false (= "ccc" "aab" "aaa"))
-(test::assert-false (= "aaa" "aab")) "#),
+"#),
             numneq: add_special(vm, "/=", ""),
             numlt: add_special(vm, "<", r#"Usage: (< val0 ... valN)
 
@@ -761,10 +756,11 @@ Example:
 (test::assert-false (< 2.1 2.0 3.0))
 (test::assert-false (< 2 1))
 (test::assert-false (< 3 2 3))
-(test::assert-true (< "aaa" "aab"))
-(test::assert-false (< "aaa" "aaa"))
-(test::assert-true (< "aaa" "aab" "ccc"))
-(test::assert-false (< "baa" "aab"))"#),
+(test::assert-true (< 1.00000000000001 1.0000000000001 ))
+(test::assert-true (< 10.0000000000001 10.000000000001))
+(test::assert-true (< 100.000000000001 100.00000000001))
+(test::assert-false (< 1000.000000000001 1000.00000000001))
+"#),
             numlte: add_special(vm, "<=", r#"Usage: (<= val0 ... valN)
 
 Less than or equal.  Works for int, float or string.
@@ -783,10 +779,11 @@ Example:
 (test::assert-false (<= 2.1 2.0 3.0))
 (test::assert-false (<= 2 1))
 (test::assert-false (<= 3 2 3))
-(test::assert-true (<= "aaa" "aab"))
-(test::assert-true (<= "aaa" "aaa"))
-(test::assert-true (<= "aaa" "aab" "ccc"))
-(test::assert-false (<= "baa" "aab"))"#),
+(test::assert-true (<= 1.00000000000001 1.0000000000001 ))
+(test::assert-true (<= 10.0000000000001 10.000000000001))
+(test::assert-true (<= 100.000000000001 100.00000000001))
+(test::assert-true (<= 1000.000000000001 1000.00000000001))
+"#),
             numgt: add_special(vm, ">", r#"Usage: (> val0 ... valN)
 
 Greater than.  Works for int, float or string.
@@ -807,10 +804,11 @@ Example:
 (test::assert-true (> 3 2 1))
 (test::assert-true (> 1.1 1.0))
 (test::assert-false (> 3 2 3))
-(test::assert-true (> "aab" "aaa"))
-(test::assert-false (> "aaa" "aaa"))
-(test::assert-true (> "ccc" "aab" "aaa"))
-(test::assert-false (> "aaa" "aab"))"#),
+(test::assert-true (> 1.0000000000001 1.00000000000001))
+(test::assert-true (> 10.000000000001 10.0000000000001))
+(test::assert-true (> 100.00000000001 100.000000000001))
+(test::assert-false (> 1000.00000000001 1000.000000000001))
+"#),
             numgte: add_special(vm, ">=", r#"Usage: (>= val0 ... valN)
 
 Greater than or equal.  Works for int, float or string.
@@ -830,12 +828,26 @@ Example:
 (test::assert-true (>= 2 1))
 (test::assert-true (>= 1.1 1.0))
 (test::assert-false (>= 3 2 3))
-(test::assert-true (>= "aab" "aaa"))
-(test::assert-true (>= "aaa" "aaa"))
-(test::assert-true (>= "ccc" "aab" "aaa"))
-(test::assert-false (>= "aaa" "aab"))"#),
+(test::assert-true (>= 1.0000000000001 1.00000000000001))
+(test::assert-true (>= 10.000000000001 10.0000000000001))
+(test::assert-true (>= 100.00000000001 100.000000000001))
+(test::assert-true (>= 1000.00000000001 1000.000000000001))
+"#),
             eq: add_special(vm, "eq?", ""),
-            equal: add_special(vm, "equal?", ""),
+            equal: add_special(vm, "equal?", r#"Usage: (equal? val0 val1)
+
+Like '=' but works for all value sensical types, not just primitives.
+
+Section: core
+
+Example:
+(test::assert-false (equal? "aab" "aaa"))
+(test::assert-true (equal? "aaa" "aaa"))
+(test::assert-true (equal? "aaa" "aaa" "aaa"))
+(test::assert-false (equal? "aaa" "aaaa" "aaa"))
+(test::assert-false (equal? "ccc" "aab" "aaa"))
+(test::assert-false (equal? "aaa" "aab"))
+"#),
             type_: add_special(vm, "type", ""),
             not: add_special(vm, "not", "Usage: (not expression)
 
@@ -858,7 +870,7 @@ The and form will stop evaluating when the first expression produces nil/#f.
 Section: conditional
 
 Example:
-(test::assert-equal #f (and nil (err "and- can not happen")))
+(test::assert-equal nil (and nil (err "and- can not happen")))
 (test::assert-equal #f (and #f (err "and- can not happen")))
 (test::assert-equal "and- done" (and #t "and- done"))
 (test::assert-equal "and- done" (and #t #t "and- done"))

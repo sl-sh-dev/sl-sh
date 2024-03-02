@@ -505,7 +505,7 @@ mod test {
     use crate::{set_builtins, set_initial_load_path, ENV};
     use compile_state::state::new_slosh_vm;
     use std::collections::BTreeMap;
-    use std::ops::DerefMut;
+    use std::ops::{Add, DerefMut};
     use tempdir::TempDir;
 
     #[path = "../../tests/utils.rs"]
@@ -533,9 +533,9 @@ mod test {
                         println!("{} ===============================", symbol);
                         println!("Should Run test for: {}", symbol);
                         println!("Code:\n{}", example);
-                        //let val = exec(&mut vm, example);
-                        //println!("{}:\n{:?}", symbol, val);
-                        //assert!(!matches!(val, Value::Error(_)));
+                        let val = exec(&mut vm, example);
+                        println!("{}:\n{:?}", symbol, val);
+                        assert!(!matches!(val, Value::Error(_)));
                         println!("{} ===============================", symbol);
                     }
                 }

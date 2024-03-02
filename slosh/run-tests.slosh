@@ -8,7 +8,7 @@
         (prn "Symbol: " globals.~i)
         (prn "===")
         (prn "doc: " (doc globals.~i))
-        #| (def doc (doc-map globals.~i))
+        (def doc (doc-map globals.~i))
         (prn "Usage: " (str doc.:usage))
         (prn "Description: " (str  doc.:description))
         (prn "Section: " (str doc.:section))
@@ -21,6 +21,6 @@
                     (if (err? evaled)
                         (do (prn "Err: " (str evaled))
                            (mk-err evaled))
-                        (prn "Result: " (str evaled)))))) |#
+                        (prn "Result: " (str evaled))))))
         (prn "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
         (inc! i)))

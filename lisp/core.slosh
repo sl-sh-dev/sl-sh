@@ -384,9 +384,9 @@ Section: sequence
 
 Example:
 (assert-equal '(1 2) (butlast '(1 2 3)))
-(assert-equal '(1 2) (butlast [1 2 3]))
+(assert-equal [1 2] (butlast [1 2 3]))
 (assert-equal nil (butlast '(1)))
-(assert-equal nil (butlast [1]))
+(assert-equal [] (butlast [1]))
 (assert-equal nil (butlast '()))
 (assert-equal nil (butlast nil))
 (assert-equal nil (butlast []))

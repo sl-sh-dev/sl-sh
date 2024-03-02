@@ -227,6 +227,15 @@ impl<ENV> GVm<ENV> {
             {
                 val = Value::True;
             }
+        } else if val1.is_nil() || val2.is_nil() || val1.is_undef() || val2.is_undef() {
+            val = match (val1, val2) {
+                (Value::Nil | Value::Undefined, Value::True) => Value::False,
+                (Value::Nil | Value::Undefined, Value::False) => Value::True,
+                (Value::True, Value::Nil | Value::Undefined) => Value::False,
+                (Value::False, Value::Nil | Value::Undefined) => Value::True,
+                (Value::Nil | Value::Undefined, Value::Nil | Value::Undefined) => Value::True,
+                _ => Value::False,
+            };
         } else {
             match (val1, val2) {
                 (Value::StringConst(s1), Value::CharCluster(l, c)) => {
