@@ -303,6 +303,9 @@ impl SloshDoc {
         let slot = vm.global_intern_slot(g);
         if let Some(slot) = slot {
             let doc_string = DocStringSection::from_symbol(slot, sym, vm)?;
+            if doc_string.usage.is_none() {
+                get_usage(sym, g, vm);
+            }
             let symbol = sym.display_value(&vm);
             let symbol_type = sym.display_type(&vm).to_string();
             Ok(SloshDoc {
@@ -332,6 +335,25 @@ impl SloshDoc {
         insert_nil_section(&mut map, EXAMPLE, vm);
         map
     }
+}
+
+fn get_usage(sym: Value, g: Interned, vm: &mut SloshVm) {
+    let mut doc_str = String::new();
+    // the old way
+    let exp_d = exp.get();
+    let p_iter = match &exp_d.data {
+        ExpEnum::Lambda(f) => f.params.iter(),
+        ExpEnum::Macro(m) => m.params.iter(),
+        _ => return,
+    };
+
+    doc_str.push_str("\n\nUsage: (");
+    doc_str.push_str(sym.display_value(vm));
+    for arg in p_iter {
+        doc_str.push(' ');
+        doc_str.push_str(arg);
+    }
+    doc_str.push(')');
 }
 
 enum DocError {
