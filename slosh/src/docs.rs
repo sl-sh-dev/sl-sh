@@ -511,7 +511,7 @@ mod test {
     #[path = "../../tests/utils.rs"]
     mod utils;
     #[test]
-    fn exec_all_rust_examples() {
+    fn exec_all_lisp_in_rust_examples() {
         // create home dir
         let tmp_dir = TempDir::new("test_load_path").unwrap();
         let home_dir = tmp_dir.path().to_str();
