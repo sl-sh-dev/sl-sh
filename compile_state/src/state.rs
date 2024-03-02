@@ -847,6 +847,7 @@ Example:
 (test::assert-false (equal? "aaa" "aaaa" "aaa"))
 (test::assert-false (equal? "ccc" "aab" "aaa"))
 (test::assert-false (equal? "aaa" "aab"))
+(assert-true (equal? (get-error (/ 1 0)) (get-error (/ 1 0))))
 "#),
             type_: add_special(vm, "type", ""),
             not: add_special(vm, "not", "Usage: (not expression)
