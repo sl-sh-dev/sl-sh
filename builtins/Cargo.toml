@@ -11,3 +11,7 @@ compile_state = { path = "../compile_state" }
 unicode-segmentation = "1.10.1"
 bridge_types = { workspace = true }
 bridge_macros = { path = "../bridge_macros" }
+static_assertions = "1.1.0"
+
+[dev-dependencies]
+trybuild = "1.0"

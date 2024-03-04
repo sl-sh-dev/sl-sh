@@ -77,6 +77,12 @@
 //!  [`Value`]::Byte(u8),
 //!  [`Value`]::Int([u8; 7]), // Store a 7 byte int (i56...).
 //!  [`Value`]::Float(F56),
+//!
+//!  [`Value`]::Pair(Handle),
+//!  [`Value`]::List(Handle, u16),
+//!  [`Value`]::Vector(Handle),
+//!  [`Value`]::Map(Handle),
+//!
 //!  [`Value`]::Symbol(Interned),
 //!  [`Value`]::Keyword(Interned),
 //!  [`Value`]::Special(Interned), // Intended for symbols that are compiled.
@@ -84,11 +90,7 @@
 //!  [`Value`]::Undefined,
 //!  [`Value`]::Nil,
 //!
-//!  [`Value`]::Vector(Handle),
-//!  [`Value`]::Map(Handle),
 //!  [`Value`]::Bytes(Handle),
-//!  [`Value`]::Pair(Handle),
-//!  [`Value`]::List(Handle, u16),
 //!  [`Value`]::Lambda(Handle),
 //!  [`Value`]::Closure(Handle),
 //!  [`Value`]::Continuation(Handle),
@@ -192,5 +194,14 @@ where
     #[inline]
     fn sl_as_mut(&mut self, vm: &'a mut SloshVm) -> VMResult<&'a mut U> {
         (*self).sl_as_mut(vm)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn macro_tests() {
+        let t = trybuild::TestCases::new();
+        t.compile_fail("tests/*.rs");
     }
 }

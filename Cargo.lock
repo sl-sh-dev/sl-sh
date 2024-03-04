@@ -89,6 +89,8 @@ dependencies = [
  "bridge_types",
  "compile_state",
  "slvm",
+ "static_assertions",
+ "trybuild",
  "unicode-segmentation",
 ]
 

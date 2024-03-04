@@ -4,6 +4,26 @@ use compile_state::state::SloshVm;
 use slvm::value::ValueType;
 use slvm::{from_i56, to_i56, VMError, VMResult, Value};
 
+impl SlFrom<()> for Value {
+    fn sl_from(_value: (), _vm: &mut SloshVm) -> VMResult<Self> {
+        Ok(Value::Nil)
+    }
+}
+
+impl SlFrom<&Value> for () {
+    fn sl_from(value: &Value, _vm: &mut SloshVm) -> VMResult<()> {
+        match value {
+            Value::Nil => Ok(()),
+            _ => Err(VMError::new_conversion(
+                ErrorStrings::fix_me_mismatched_type(
+                    <&'static str>::from(ValueType::Nil),
+                    value.display_type(_vm),
+                ),
+            )),
+        }
+    }
+}
+
 impl SlFrom<i32> for Value {
     fn sl_from(value: i32, _vm: &mut SloshVm) -> VMResult<Self> {
         Ok(to_i56(value as i64))
@@ -41,6 +61,28 @@ mod tests {
     use crate::types::SlFrom;
     use crate::types::SlInto;
     use compile_state::state::new_slosh_vm;
+
+    #[test]
+    fn ts2() {
+        let l = 1i64.saturating_add(i64::MAX);
+        println!("{:?}", l);
+        println!("max {:?}", i64::MAX);
+    }
+
+    #[test]
+    fn ts() {
+        let l = f64::MAX + f64::MAX;
+        // [127, 240, 0, 0, 0, 0, 0, 0]
+        let b = l == f64::INFINITY;
+        assert!(b, "l should be infinity");
+        println!("{:?}", (l as u64).to_be_bytes());
+        println!("max {:?}", u64::MAX);
+        let l = l as u64;
+        println!("my {:?}", 0xFFFFFFFFFFFFFFFFu64);
+        let p = l & 0xFFFFFFFFFFFFFFFFu64;
+        println!("{:?}", p);
+    }
+
     use core::panic;
     use slvm::F56;
     use slvm::{to_i56, Value};

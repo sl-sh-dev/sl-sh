@@ -12,6 +12,7 @@
 //! 8. To avoid needing to do lifetimes, if the return value is one of the INPUT values have
 //!     that marked in the annotation... OTHERWISE data may be copied!
 //!     OR allow for simple lifetimes?
+//! 9. VMError should not be new_vm
 
 use bridge_types::Param;
 use bridge_types::PassingStyle;
@@ -134,14 +135,16 @@ fn opt_is_valid_generic_type<'a>(
     type_path: &TypePath,
     possible_types: &'a [&str],
 ) -> Option<&'a str> {
-    if type_path.path.segments.len() == 1 && type_path.path.segments.first().is_some() {
-        let path_segment = &type_path.path.segments.first().unwrap();
-        let ident = &path_segment.ident;
-        for type_name in possible_types {
-            if ident == type_name {
-                return Some(type_name);
+    match type_path.path.segments.first() {
+        Some(path_segment) if type_path.path.segments.len() == 1 => {
+            let ident = &path_segment.ident;
+            for type_name in possible_types {
+                if ident == type_name {
+                    return Some(type_name);
+                }
             }
         }
+        _ => {}
     }
     None
 }
@@ -196,7 +199,7 @@ fn get_generic_argument_from_type(ty: &Type) -> Option<(&GenericArgument, &TypeP
 
 fn generate_assertions_code_for_return_type_conversions(return_type: &Type) -> TokenStream2 {
     quote! {
-      static_assertions::assert_impl_all!(#return_type: std::convert::Into<crate::types::Expression>);
+      static_assertions::assert_impl_all!(#return_type: builtins::types::SlInto<slvm::Value>);
     }
 }
 
@@ -309,9 +312,9 @@ fn parse_param(
             quote! {
                 let param = arg_types[#idx];
                 match param.handle {
-                    crate::builtins_util::TypeHandle::Direct => match args.get(#idx) {
+                    bridge_types::TypeHandle::Direct => match args.get(#idx) {
                         None => {
-                            return Err(crate::types::LispError::new(format!(
+                            return Err(slvm::VMError::new_vm(format!(
                                 "{} not given enough arguments, expected at least {} arguments, got {}.",
                                 fn_name,
                                 #required_args,
@@ -323,7 +326,7 @@ fn parse_param(
                         },
                     },
                     _ => {
-                        return Err(crate::types::LispError::new(format!(
+                        return Err(slvm::VMError::new_vm(format!(
                             "{} failed to parse its arguments, internal error.",
                             fn_name,
                         )));
@@ -336,12 +339,12 @@ fn parse_param(
                 let param = arg_types[#idx];
                 let arg = args.get(#idx);
                 match param.handle {
-                    crate::builtins_util::TypeHandle::Optional => {
+                    bridge_types::TypeHandle::Optional => {
                         let #arg_name = arg.map(|x| x.to_owned());
                         #inner
                     },
                     _ => {
-                        return Err(crate::types::LispError::new(format!(
+                        return Err(slvm::VMError::new_vm(format!(
                             "{} failed to parse its arguments, internal error.",
                             fn_name,
                         )));
@@ -354,12 +357,12 @@ fn parse_param(
                 let param = arg_types[#idx];
                 let arg = args.get(#idx);
                 match param.handle {
-                    crate::builtins_util::TypeHandle::VarArgs => {
-                        let #arg_name = args[#idx..].iter().map(|x| x.clone()).collect::<Vec<crate::types::Expression>>();
+                    bridge_types::TypeHandle::VarArgs => {
+                        let #arg_name = args[#idx..].iter().map(|x| x.clone()).collect::<Vec<slvm::Value>>();
                         #inner
                     },
                     _ => {
-                        return Err(crate::types::LispError::new(format!(
+                        return Err(slvm::VMError::new_vm(format!(
                             "{} failed to parse its arguments, internal error.",
                             fn_name,
                         )));
@@ -391,7 +394,7 @@ fn make_orig_fn_call(
     required_args: usize,
     arg_names: Vec<Ident>,
 ) -> MacroResult<TokenStream> {
-    // the original function call must return an Expression object
+    // the original function call must return an Value object
     // this means all returned rust native types must implement TryIntoExpression
     // this is nested inside the builtin expression which must always
     // return a VMResult.
@@ -456,25 +459,25 @@ fn make_orig_fn_call(
     let original_fn_call = match (return_type, lisp_return, returns_none) {
         (Some(_), Some(SupportedGenericReturnTypes::VMResult), true) => quote! {
             #fn_body?;
-            return Ok(crate::types::Expression::make_nil());
+            return Ok(slvm::Value::Nil);
         },
         (Some(_), Some(SupportedGenericReturnTypes::Option), true) => quote! {
             #fn_body;
-            return Ok(crate::types::Expression::make_nil());
+            return Ok(slvm::Value::Nil);
         },
         (Some(_), Some(SupportedGenericReturnTypes::VMResult), false) => quote! {
             return #fn_body.map(Into::into);
         },
         (Some(_), Some(SupportedGenericReturnTypes::Option), false) => quote! {
             if let Some(val) = #fn_body {
-                return Ok(val.into());
+                return Ok(val.sl_into(environment));
             } else {
-                return Ok(crate::types::Expression::make_nil());
+                return Ok(slvm::Value::Nil);
             }
         },
         // coerce to Expression
         (Some(_), None, _) => quote! {
-            return Ok(#fn_body.into());
+            return Ok(#fn_body.sl_into(environment));
         },
         (None, Some(_), _) => {
             unreachable!("If this functions returns a VMResult it must also return a value.");
@@ -482,14 +485,14 @@ fn make_orig_fn_call(
         // no return
         (None, None, _) => quote! {
             #fn_body;
-            return Ok(crate::types::Expression::make_nil());
+            return Ok(slvm::Value::Nil);
         },
     };
     let const_params_len = get_const_params_len_ident();
     Ok(quote! {
         match args.get(#const_params_len) {
-            Some(_) if #const_params_len == 0 || arg_types[#const_params_len - 1].handle != crate::builtins_util::TypeHandle::VarArgs => {
-                return Err(crate::types::LispError::new(format!(
+            Some(_) if #const_params_len == 0 || arg_types[#const_params_len - 1].handle != bridge_types::TypeHandle::VarArgs => {
+                return Err(slvm::VMError::new_vm(format!(
                     "{} given too many arguments, expected at least {} arguments, got {}.",
                     fn_name,
                     #required_args,
@@ -565,7 +568,7 @@ fn parse_variadic_args_type(
                     let #arg_name = if !crate::is_sequence!(#arg_name)
                     {
                         let err_str = format!("{}: Expected a vector or list for argument at position {}.", #fn_name, #arg_pos);
-                        return Err(LispError::new(err_str));
+                        return Err(slvm::VMError::new_vm(err_str));
                     } else {
                         #arg_name
                     };
@@ -589,9 +592,8 @@ fn parse_variadic_args_type(
             };
             Ok(quote! {{
                 #arg_check
-                use crate::builtins_util::TryIntoExpression;
 
-                static_assertions::assert_impl_all!(crate::types::Expression: crate::builtins_util::TryIntoExpression<#wrapped_ty>);
+                static_assertions::assert_impl_all!(slvm::Value: crate::types::SlFrom<#wrapped_ty>);
                 let #arg_name = #arg_name
                     .iter()
                     .map(|#arg_name| {
@@ -609,7 +611,7 @@ fn parse_variadic_args_type(
                         if !crate::is_sequence!(#arg_name)
                         {
                             let err_str = format!("{}: Expected a vector or list for argument at position {}.", #fn_name, #arg_pos);
-                            return Err(LispError::new(err_str));
+                            return Err(slvm::VMError::new_vm(err_str));
                         }
                     }
                 } else {
@@ -631,31 +633,31 @@ fn parse_variadic_args_type(
                 for (elem, arg_name) in type_tuple.elems.iter().zip(arg_names.iter()) {
                     types.push(elem.clone());
                     type_assertions.push(quote! {
-                        static_assertions::assert_impl_all!(crate::types::Expression: crate::builtins_util::TryIntoExpression<#elem>);
+                        static_assertions::assert_impl_all!(slvm::Value: crate::types::SlFrom<#elem>);
                     });
                     args.push(quote! {
                         let #arg_name: #elem = #arg_name.clone().try_into_for(#fn_name)?;
                     })
                 }
                 Ok(quote! {{
-                    use crate::builtins_util::TryIntoExpression;
+                    use crate::types::SlFrom;
                     use std::convert::TryInto;
                     #(#type_assertions)*
                     #arg_check
                     let #arg_name = #arg_name
                         .iter()
                         .map(|#arg_name| {
-                            let #arg_name = #arg_name.iter().collect::<Vec<crate::types::Expression>>();
+                            let #arg_name = #arg_name.iter().collect::<Vec<slvm::Value>>();
                             match #arg_name.try_into() {
                                 Ok(#arg_name) => {
-                                    let #arg_name: [crate::Expression; #tuple_len] = #arg_name;
+                                    let #arg_name: [slvm::Value; #tuple_len] = #arg_name;
                                     let [#(#arg_names),*] = #arg_name;
                                     #(#args)*
                                     Ok((#(#arg_names),*))
                                 }
                                 Err(_) => {
                                     let err_str = format!("{}: Expected a sl_sh vector or list of tuples of length {} corresponding to the argument at position {}.", #fn_name, #tuple_len, #arg_pos);
-                                    Err(LispError::new(err_str))
+                                    Err(slvm::VMError::new_vm(err_str))
                                 }
                             }
                         })
@@ -678,7 +680,7 @@ fn parse_variadic_args_type(
     }
 }
 
-/// for Option<Expression> values the ref_exp must first be parsed as an
+/// for Option<Value> values the ref_exp must first be parsed as an
 /// Option, and only in the case that the option is Some will it be
 /// necessary to match against every ExpEnum variant.
 #[allow(clippy::too_many_arguments)]
@@ -697,7 +699,7 @@ fn parse_optional_type(
         let #arg_name = Some(#arg_name);
         #inner
     };
-    // in the case that the value is some, which means the Expression is no longer
+    // in the case that the value is some, which means the Value is no longer
     // wrapped in Option, the parse_typehandle_value_type can be repurposed but
     // with the caveat that after the value of inner it is handed first wraps
     // the matched ExpEnum in Some bound to the #arg_name like the
@@ -756,7 +758,7 @@ fn get_type_or_wrapped_type<'a>(ty: &'a TypePath, possible_types: &'a [&str]) ->
     RustType::Path(ty.clone(), ty.span())
 }
 
-/// for regular Expression values (no Optional/VarArgs) ref_exp
+/// for regular Value values (no Optional/VarArgs) ref_exp
 /// just needs to be matched based on it's ExpEnum variant.
 #[allow(clippy::too_many_arguments)]
 fn parse_direct_type(
@@ -791,7 +793,7 @@ fn parse_direct_type(
                         )
                     };
                 let callback_declaration = quote! {
-                    let callback = |#arg_name: #fn_ref| -> crate::VMResult<crate::types::Expression> {
+                    let callback = |#arg_name: #fn_ref| -> crate::VMResult<slvm::Value> {
                         #inner
                     };
                 };
@@ -799,14 +801,14 @@ fn parse_direct_type(
                 match passing_style {
                     PassingStyle::Value | PassingStyle::Reference => Ok(quote! {{
                         use crate::types::RustProcedure;
-                        let typed_data: crate::types::TypedWrapper<#ty, crate::types::Expression> =
+                        let typed_data: crate::types::TypedWrapper<#ty, slvm::Value> =
                             crate::types::TypedWrapper::new(&#arg_name);
                         #callback_declaration
                         typed_data.apply(#fn_name_ident, callback)
                     }}),
                     PassingStyle::MutReference => Ok(quote! {{
                         use crate::types::RustProcedureRefMut;
-                        let mut typed_data: crate::types::TypedWrapper<#ty, crate::types::Expression> =
+                        let mut typed_data: crate::types::TypedWrapper<#ty, slvm::Value> =
                             crate::types::TypedWrapper::new(&#arg_name);
                         #callback_declaration
                         typed_data.apply_ref_mut(#fn_name_ident, callback)
@@ -895,64 +897,64 @@ fn embed_params_vec(params: &[Param]) -> TokenStream {
     for param in params {
         tokens.push(match (param.handle, param.passing_style) {
             (TypeHandle::Direct, PassingStyle::MutReference) => {
-                quote! { crate::builtins_util::Param {
-                    handle: crate::builtins_util::TypeHandle::Direct,
-                    passing_style: crate::builtins_util::PassingStyle::MutReference
+                quote! { bridge_types::Param {
+                    handle: bridge_types::TypeHandle::Direct,
+                    passing_style: bridge_types::PassingStyle::MutReference
                 }}
             }
             (TypeHandle::Optional, PassingStyle::MutReference) => {
-                quote! { crate::builtins_util::Param {
-                    handle: crate::builtins_util::TypeHandle::Optional,
-                    passing_style: crate::builtins_util::PassingStyle::MutReference
+                quote! { bridge_types::Param {
+                    handle: bridge_types::TypeHandle::Optional,
+                    passing_style: bridge_types::PassingStyle::MutReference
                 }}
             }
             (TypeHandle::VarArgs, PassingStyle::MutReference) => {
-                quote! { crate::builtins_util::Param {
-                    handle: crate::builtins_util::TypeHandle::VarArgs,
-                    passing_style: crate::builtins_util::PassingStyle::MutReference
+                quote! { bridge_types::Param {
+                    handle: bridge_types::TypeHandle::VarArgs,
+                    passing_style: bridge_types::PassingStyle::MutReference
                 }}
             }
             (TypeHandle::Direct, PassingStyle::Reference) => {
-                quote! {crate::builtins_util::Param {
-                    handle: crate::builtins_util::TypeHandle::Direct,
-                    passing_style: crate::builtins_util::PassingStyle::Reference
+                quote! {bridge_types::Param {
+                    handle: bridge_types::TypeHandle::Direct,
+                    passing_style: bridge_types::PassingStyle::Reference
                 }}
             }
             (TypeHandle::Optional, PassingStyle::Reference) => {
-                quote! { crate::builtins_util::Param {
-                    handle: crate::builtins_util::TypeHandle::Optional,
-                    passing_style: crate::builtins_util::PassingStyle::Reference
+                quote! { bridge_types::Param {
+                    handle: bridge_types::TypeHandle::Optional,
+                    passing_style: bridge_types::PassingStyle::Reference
                 }}
             }
             (TypeHandle::VarArgs, PassingStyle::Reference) => {
-                quote! { crate::builtins_util::Param {
-                    handle: crate::builtins_util::TypeHandle::VarArgs,
-                    passing_style: crate::builtins_util::PassingStyle::Reference
+                quote! { bridge_types::Param {
+                    handle: bridge_types::TypeHandle::VarArgs,
+                    passing_style: bridge_types::PassingStyle::Reference
                 }}
             }
             (TypeHandle::Direct, PassingStyle::Value) => {
-                quote! { crate::builtins_util::Param {
-                    handle: crate::builtins_util::TypeHandle::Direct,
-                    passing_style: crate::builtins_util::PassingStyle::Value
+                quote! { bridge_types::Param {
+                    handle: bridge_types::TypeHandle::Direct,
+                    passing_style: bridge_types::PassingStyle::Value
                 }}
             }
             (TypeHandle::Optional, PassingStyle::Value) => {
-                quote! { crate::builtins_util::Param {
-                    handle: crate::builtins_util::TypeHandle::Optional,
-                    passing_style: crate::builtins_util::PassingStyle::Value
+                quote! { bridge_types::Param {
+                    handle: bridge_types::TypeHandle::Optional,
+                    passing_style: bridge_types::PassingStyle::Value
                 }}
             }
             (TypeHandle::VarArgs, PassingStyle::Value) => {
-                quote! { crate::builtins_util::Param {
-                    handle: crate::builtins_util::TypeHandle::VarArgs,
-                    passing_style: crate::builtins_util::PassingStyle::Value
+                quote! { bridge_types::Param {
+                    handle: bridge_types::TypeHandle::VarArgs,
+                    passing_style: bridge_types::PassingStyle::Value
                 }}
             }
         });
     }
     let const_params_len = get_const_params_len_ident();
     quote! {
-        let arg_types: [crate::builtins_util::Param; #const_params_len] = [ #(#tokens),* ];
+        let arg_types: [bridge_types::Param; #const_params_len] = [ #(#tokens),* ];
     }
 }
 
@@ -982,21 +984,15 @@ fn generate_intern_fn(
     let parse_name = get_parse_fn_name(original_fn_name_str);
     let intern_name = get_intern_fn_name(original_fn_name_str);
     quote! {
-        fn #intern_name<S: std::hash::BuildHasher>(
-            interner: &mut crate::Interner,
-            data: &mut std::collections::HashMap<&'static str, (crate::types::Expression, String), S>,
-        ) {
+        fn #intern_name(env: &mut compile_state::state::SloshVm) {
             let #fn_name_ident = #fn_name;
-            data.insert(
-                interner.intern(#fn_name_ident),
-                crate::types::Expression::make_function(#parse_name, #doc_comments),
-            );
+            builtins::add_builtin(env, #fn_name_ident, #parse_name, #doc_comments);
         }
     }
 }
 
 /// write the parse_ version of the provided function. The function it generates takes an environment
-/// and a list of Expressions, evaluates those expressions and then maps the provided list of expressions
+/// and a list of Value, evaluates those expressions and then maps the provided list of expressions
 /// to a list of ArgType values. To accomplish this information from compile time, arg_types,
 /// is manually inserted into this function. This way the evaluated list of args and the expected
 /// list of args can be compared and the appropriate vector of arguments can be created and
@@ -1005,7 +1001,6 @@ fn generate_intern_fn(
 /// one argument is shown below.
 fn generate_parse_fn(
     original_fn_name_str: &str,
-    eval_values: bool,
     fn_name_ident: &Ident,
     fn_name: &str,
     args_len: usize,
@@ -1015,32 +1010,12 @@ fn generate_parse_fn(
     let parse_name = get_parse_fn_name(original_fn_name_str);
     let arg_vec_literal = embed_params_vec(params);
 
-    // in slosh this will change because the args are already evaluated and the macro will
-    // be dealing with a slice so... keep this allocation at runtime for now because it
-    // simplified the implementation and is more realistic long-term even though it's
-    // suboptimal in this case.
-    let make_args = if eval_values {
-        quote! {
-            let args = crate::builtins_util::make_args(environment, args)?;
-            let args = args.into_iter().collect::<Vec<Expression>>();
-            let args = args.as_slice();
-
-        }
-    } else {
-        quote! {
-            let args = crate::builtins_util::make_args_eval_no_values(environment, args)?;
-            let args = args.into_iter().collect::<Vec<Expression>>();
-            let args = args.as_slice();
-        }
-    };
-
     let const_params_len = get_const_params_len_ident();
     quote! {
         fn #parse_name(
-            environment: &mut crate::environment::Environment,
-            args: &mut dyn Iterator<Item = crate::types::Expression>,
-        ) -> crate::VMResult<crate::types::Expression> {
-            #make_args
+            environment: &mut compile_state::state::SloshVm,
+            args: &[slvm::Value],
+        ) -> crate::VMResult<slvm::Value> {
             let #fn_name_ident = #fn_name;
             const #const_params_len: usize = #args_len;
             #arg_vec_literal
@@ -1283,7 +1258,7 @@ fn parse_type_tuple(
     let tuple_len = type_tuple.elems.len();
     let tokens = if !type_tuple.elems.is_empty() {
         for (i, ty) in type_tuple.elems.iter().enumerate() {
-            expressions.push(quote! { crate::types::Expression });
+            expressions.push(quote! { slvm::Value });
             let arg_name_pair = Ident::new(
                 &(arg_name_base.to_string() + &i.to_string()),
                 Span::call_site(),
@@ -1307,22 +1282,22 @@ fn parse_type_tuple(
     };
     let arg_pos = get_arg_pos(arg_name)?;
     let tokens = quote! {{
-        use std::convert::TryInto;
+        use crate::types::SlInto;
         if !crate::is_sequence!(#arg_name)
         {
             let err_str = format!("{}: Expected a vector or list for argument at position {}.", #fn_name, #arg_pos);
-            return Err(crate::types::LispError::new(err_str));
+            return Err(crate::VMError::new_vm(err_str));
         }
-        let #arg_name = #arg_name.iter().collect::<Vec<crate::types::Expression>>();
+        let #arg_name = #arg_name.iter().collect::<Vec<slvm::Value>>();
         match #arg_name.try_into() {
             Ok(#arg_name) => {
-                let #arg_name: [crate::Expression; #tuple_len] = #arg_name;
+                let #arg_name: [slvm::Value; #tuple_len] = #arg_name;
                 let [#(#arg_names),*] = #arg_name;
                 #tokens
             }
             Err(_) => {
                 let err_str = format!("{}: Expected a sl_sh vector or list with {} elements corresponding to the tuple at argument position {}.", #fn_name, #tuple_len, #arg_pos);
-                return Err(crate::types::LispError::new(err_str));
+                return Err(slvm::VMError::new_vm(err_str));
             }
         }
     }};
@@ -1517,7 +1492,7 @@ fn get_const_params_len_ident() -> Ident {
 fn parse_attributes(
     original_item_fn: &ItemFn,
     attr_args: AttributeArgs,
-) -> MacroResult<(String, Ident, bool, bool, bool)> {
+) -> MacroResult<(String, Ident, bool, bool)> {
     let vals = attr_args
         .iter()
         .map(get_attribute_name_value)
@@ -1532,8 +1507,6 @@ fn parse_attributes(
         })?;
     let fn_name_ident = Ident::new(&fn_name_ident, Span::call_site());
 
-    let eval_values =
-        get_bool_attribute_value_with_key(original_item_fn, "eval_values", vals.as_slice())?;
     let takes_env =
         get_bool_attribute_value_with_key(original_item_fn, "takes_env", vals.as_slice())?;
 
@@ -1541,7 +1514,7 @@ fn parse_attributes(
     let inline =
         !get_bool_attribute_value_with_key(original_item_fn, "do_not_inline", vals.as_slice())?;
 
-    Ok((fn_name, fn_name_ident, eval_values, takes_env, inline))
+    Ok((fn_name, fn_name_ident, takes_env, inline))
 }
 
 /// this function outputs all of the generated code, it is composed into two different functions:
@@ -1556,7 +1529,7 @@ fn generate_sl_sh_fn(
     original_item_fn: &ItemFn,
     attr_args: AttributeArgs,
 ) -> MacroResult<TokenStream> {
-    let (fn_name, fn_name_ident, eval_values, takes_env, inline) =
+    let (fn_name, fn_name_ident, takes_env, inline) =
         parse_attributes(original_item_fn, attr_args)?;
     let original_fn_name_str = original_item_fn.sig.ident.to_string();
     let original_fn_name_str = original_fn_name_str.as_str();
@@ -1578,21 +1551,20 @@ fn generate_sl_sh_fn(
     } else {
         original_item_fn.sig.inputs.len()
     };
-    let parse_fn = generate_parse_fn(
-        original_fn_name_str,
-        eval_values,
-        &fn_name_ident,
-        fn_name.as_str(),
-        args_len,
-        params.as_slice(),
-        builtin_fn,
-    );
     let doc_comments = get_documentation_for_fn(original_item_fn)?;
     let intern_fn = generate_intern_fn(
         original_fn_name_str,
         &fn_name_ident,
         fn_name.as_str(),
         doc_comments,
+    );
+    let parse_fn = generate_parse_fn(
+        original_fn_name_str,
+        &fn_name_ident,
+        fn_name.as_str(),
+        args_len,
+        params.as_slice(),
+        builtin_fn,
     );
     let tokens = quote! {
         #parse_fn
@@ -1647,7 +1619,6 @@ pub fn sl_sh_fn(
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::convert::TryInto;
 
     // serves as a model for what it's like at runtime to iterate over the parameters of a function,
     // T serves as a generic so these tests can run with some data, but in practice T is some

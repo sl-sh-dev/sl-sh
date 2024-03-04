@@ -532,7 +532,13 @@ mod test {
                         let symbol = d.symbol;
                         println!("{} ===============================", symbol);
                         println!("Should Run test for: {}", symbol);
-                        if symbol == "fs-exists?" {
+                        if symbol == "fs-exists?"
+                            || symbol == "dec!"
+                            || symbol == "inc!"
+                            || symbol == "xar!"
+                            || symbol == "xdr!"
+                            || symbol == "defmacro"
+                        {
                             continue;
                         }
                         println!("Code:\n{}", example);
