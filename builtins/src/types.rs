@@ -16,7 +16,7 @@
 //! ## rosetta stone for bridge macros
 //! Rust Type                   | Slosh Type & Traits   <br>&emsp; <br> S -> R Convert Slosh -> Rust <br> &emsp; - Occurs when coercing slush arguments to the parameter types in the signature of the annotated Rust function. <br> R -> S Convert Rust -> Slosh <br> &emsp; - Occurs when coercing some returned Rust type to a Slosh type. |
 //! ----------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|
-//! [`String`]                  | [Value]`::String`         |
+//! [`String`]                  | [Value]`::String`           |
 //!                             |                             | S -> R
 //!                             |                             |     &emsp;- [`SlInto`] [`String`] for `&`[`Value`]
 //!                             |                             | R -> S
@@ -63,38 +63,40 @@
 //!                             |                             |     &emsp;* Note: Always does an allocation and returns a [`Value`]`::String` type.
 //!                             |                             |     &emsp;- [`SlFromRef`] `&`[`Value`] for [`LooseString`]
 //!                             |                             |
-//! Value::Int32                |                             |
-//! Value::UInt32               |                             |
-//! Value::Int64                |                             |
-//! Value::UInt64               |                             |
-//! Value::Float64              |                             |
-//! Value::Byte                 |                             |
-//! Value::Symbol               |                             |
-//! Value::Keyword              |                             |
-//! Value::Special              |                             |
-//! Value::Builtin              |                             |
-//! Value::True                 |                             |
-//! Value::False                |                             |
-//! Value::Nil                  |                             |
-//! Value::Undefined            |                             |
-//! Value::Vector               |                             |
-//! Value::PersistentVec        |                             |
-//! Value::VecNode              |                             |
-//! Value::PersistentMap        |                             |
-//! Value::MapNode              |                             |
-//! Value::Map                  |                             |
-//! Value::Bytes                |                             |
-//! Value::Pair                 |                             |
-//! Value::List                 |                             |
-//! Value::Lambda               |                             |
-//! Value::Closure              |                             |
-//! Value::Continuation         |                             |
-//! Value::CallFrame            |                             |
-//! Value::Value                |                             |
-//! Value::Error                |                             |
-//! Value::StringConst          |                             |
+//! [`primitives`]                    | [`Value`]::True / [`Value`]::False / [`Value`]::Nil |
+//!                             |                             | S -> R
+//!                             |                             |     &emsp;- [`Into`] [`bool`] for `&`[`Value`]
+//!                             |                             | R -> S
+//!                             |                             |     &emsp;- [`SlFrom`] `&`[`Value`] for [`primitives`]
+//!                             |                             |
+//!                             |                             |
+//!                             |                             |
+//!                             |                             |
+//!                             |                             |
+//!                             |                             |
+//!  [`Value`]::Byte(u8),
+//!  [`Value`]::Int([u8; 7]), // Store a 7 byte int (i56...).
+//!  [`Value`]::Float(F56),
+//!  [`Value`]::Symbol(Interned),
+//!  [`Value`]::Keyword(Interned),
+//!  [`Value`]::Special(Interned), // Intended for symbols that are compiled.
+//!  [`Value`]::Builtin(u32),
+//!  [`Value`]::Undefined,
+//!  [`Value`]::Nil,
+//!
+//!  [`Value`]::Vector(Handle),
+//!  [`Value`]::Map(Handle),
+//!  [`Value`]::Bytes(Handle),
+//!  [`Value`]::Pair(Handle),
+//!  [`Value`]::List(Handle, u16),
+//!  [`Value`]::Lambda(Handle),
+//!  [`Value`]::Closure(Handle),
+//!  [`Value`]::Continuation(Handle),
+//!  [`Value`]::CallFrame(Handle),
+//!  [`Value`]::Error(Handle),
 
 pub mod numbers;
+pub mod primitives;
 pub mod string_char;
 
 use compile_state::state::SloshVm;
