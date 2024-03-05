@@ -471,8 +471,9 @@ fn make_orig_fn_call(
         },
         (Some(_), Some(SupportedGenericReturnTypes::Option), false) => quote! {
             if let Some(val) = #fn_body {
-                use builtins::types::SlInto;
-                return Ok(val.sl_into(environment));
+                use builtins::types::SlFrom;
+                let val = slvm::Value::sl_from(val, environment)?;
+                Ok(val)
             } else {
                 return Ok(slvm::Value::Nil);
             }
@@ -480,7 +481,7 @@ fn make_orig_fn_call(
         // coerce to Expression
         (Some(_), None, _) => quote! {
             use builtins::types::SlInto;
-            return Ok(#fn_body.sl_into(environment));
+            return #fn_body.sl_into(environment);
         },
         (None, Some(_), _) => {
             unreachable!("If this functions returns a VMResult it must also return a value.");

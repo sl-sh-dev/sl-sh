@@ -205,12 +205,12 @@ mod tests {
     #[test]
     fn macro_passing_tests() {
         let t = trybuild::TestCases::new();
-        t.pass("trybuild_tests/*pass.rs");
+        t.pass("tests/*pass.rs");
     }
 
     #[test]
     fn macro_failing_tests() {
         let t = trybuild::TestCases::new();
-        t.compile_fail("trybuild_tests/*fail.rs");
+        t.compile_fail("trybuild/tests/*fail.rs");
     }
 }
