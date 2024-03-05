@@ -63,7 +63,7 @@
 //!                             |                             |     &emsp;* Note: Always does an allocation and returns a [`Value`]`::String` type.
 //!                             |                             |     &emsp;- [`SlFromRef`] `&`[`Value`] for [`LooseString`]
 //!                             |                             |
-//! [`primitives`]                    | [`Value`]::True / [`Value`]::False / [`Value`]::Nil |
+//! [`bool`]                    | [`Value`]::True / [`Value`]::False / [`Value`]::Nil |
 //!                             |                             | S -> R
 //!                             |                             |     &emsp;- [`Into`] [`bool`] for `&`[`Value`]
 //!                             |                             | R -> S
@@ -101,13 +101,10 @@ pub mod numbers;
 pub mod primitives;
 pub mod string_char;
 
-use compile_state::state::SloshVm;
-use slvm::VMResult;
 #[cfg(doc)]
-use {
-    bridge_types::{LooseString, SloshChar},
-    slvm::Value,
-};
+use bridge_types::{LooseString, SloshChar};
+use compile_state::state::SloshVm;
+use slvm::{VMResult, Value};
 
 pub trait SlFrom<T>: Sized {
     /// Converts to this type from the input type.
@@ -197,11 +194,23 @@ where
     }
 }
 
+impl SlFrom<Value> for Value {
+    fn sl_from(value: Value, _vm: &mut SloshVm) -> VMResult<Self> {
+        Ok(value)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
-    fn macro_tests() {
+    fn macro_passing_tests() {
         let t = trybuild::TestCases::new();
-        t.compile_fail("tests/*.rs");
+        t.pass("trybuild_tests/*pass.rs");
+    }
+
+    #[test]
+    fn macro_failing_tests() {
+        let t = trybuild::TestCases::new();
+        t.compile_fail("trybuild_tests/*fail.rs");
     }
 }

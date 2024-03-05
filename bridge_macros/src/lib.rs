@@ -32,6 +32,7 @@ extern crate static_assertions;
 
 type MacroResult<T> = Result<T, Error>;
 
+//TODO fix for the issue where a user used a fully qualified path and the rust code fails?
 const POSSIBLE_RETURN_TYPES: [&str; 2] = ["VMResult", "Option"];
 const SPECIAL_ARG_TYPES: [&str; 2] = ["Option", "VarArgs"];
 const POSSIBLE_ARG_TYPES: [&str; 3] = ["Option", "VarArgs", "Vec"];
@@ -470,6 +471,7 @@ fn make_orig_fn_call(
         },
         (Some(_), Some(SupportedGenericReturnTypes::Option), false) => quote! {
             if let Some(val) = #fn_body {
+                use builtins::types::SlInto;
                 return Ok(val.sl_into(environment));
             } else {
                 return Ok(slvm::Value::Nil);
@@ -477,6 +479,7 @@ fn make_orig_fn_call(
         },
         // coerce to Expression
         (Some(_), None, _) => quote! {
+            use builtins::types::SlInto;
             return Ok(#fn_body.sl_into(environment));
         },
         (None, Some(_), _) => {
@@ -599,7 +602,7 @@ fn parse_variadic_args_type(
                     .map(|#arg_name| {
                         #arg_name.clone().try_into_for(#fn_name)
                     })
-                    .collect::<crate::VMResult<#ty>>()?;
+                    .collect::<slvm::VMResult<#ty>>()?;
                 #inner
             }})
         }
@@ -661,7 +664,7 @@ fn parse_variadic_args_type(
                                 }
                             }
                         })
-                        .collect::<crate::VMResult<#collect_type<(#(#types),*)>>>()?;
+                        .collect::<slvm::VMResult<#collect_type<(#(#types),*)>>>()?;
                     #inner
                 }})
             } else {
@@ -793,7 +796,7 @@ fn parse_direct_type(
                         )
                     };
                 let callback_declaration = quote! {
-                    let callback = |#arg_name: #fn_ref| -> crate::VMResult<slvm::Value> {
+                    let callback = |#arg_name: #fn_ref| -> slvm::VMResult<slvm::Value> {
                         #inner
                     };
                 };
@@ -1015,7 +1018,7 @@ fn generate_parse_fn(
         fn #parse_name(
             environment: &mut compile_state::state::SloshVm,
             args: &[slvm::Value],
-        ) -> crate::VMResult<slvm::Value> {
+        ) -> slvm::VMResult<slvm::Value> {
             let #fn_name_ident = #fn_name;
             const #const_params_len: usize = #args_len;
             #arg_vec_literal
@@ -1282,7 +1285,6 @@ fn parse_type_tuple(
     };
     let arg_pos = get_arg_pos(arg_name)?;
     let tokens = quote! {{
-        use crate::types::SlInto;
         if !crate::is_sequence!(#arg_name)
         {
             let err_str = format!("{}: Expected a vector or list for argument at position {}.", #fn_name, #arg_pos);

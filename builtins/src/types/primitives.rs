@@ -25,6 +25,20 @@ impl SlFrom<bool> for Value {
     }
 }
 
+impl<T> SlFrom<Value> for Option<T>
+where
+    T: SlFrom<Value>,
+{
+    fn sl_from(value: Value, vm: &mut SloshVm) -> VMResult<Self> {
+        if value.is_nil() {
+            Ok(None)
+        } else {
+            let t = T::sl_from(value, vm)?;
+            Ok(Some(t))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::types::SlInto;
