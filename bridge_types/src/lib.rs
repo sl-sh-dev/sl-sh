@@ -27,7 +27,7 @@ pub type VarArgs<T> = Vec<T>;
 /// - StringConst
 ///
 /// Always does an allocation and returns a [`Value`]`::String` type.
-pub type LooseString<'a, T> = Cow<'a, T>;
+pub type LooseString<'a> = Cow<'a, str>;
 
 /// [Value](../slvm/value/enum.Value.html)
 /// Type to hold Slosh's notion of a char.
