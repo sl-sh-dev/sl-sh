@@ -53,6 +53,7 @@ pub fn return_string() -> VMResult<String> {
     Ok("return_string".to_string())
 }
 
+//TODO PC document use of generics in return parameters and limitatons,
 /// obligatory doc
 #[sl_sh_fn(fn_name = "return_loose_string")]
 pub fn return_loose_string<'a>() -> VMResult<LooseString<'a>> {

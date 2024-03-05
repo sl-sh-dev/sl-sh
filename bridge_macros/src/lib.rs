@@ -1532,7 +1532,7 @@ fn parse_attributes(
         1 => Some(generics),
         _ => {
             return Err(Error::new(
-                original_item_fn.span(),
+                original_item_fn.sig.generics.span(),
                 "sl_sh_fn only supports functions with 0 or 1 generic lifetime parameters.",
             ))
         }
