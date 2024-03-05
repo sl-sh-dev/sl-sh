@@ -467,7 +467,8 @@ fn make_orig_fn_call(
             return Ok(slvm::Value::Nil);
         },
         (Some(_), Some(SupportedGenericReturnTypes::VMResult), false) => quote! {
-            return #fn_body.map(Into::into);
+            use builtins::types::SlInto;
+            return #fn_body.and_then(|x| x.sl_into(environment));
         },
         (Some(_), Some(SupportedGenericReturnTypes::Option), false) => quote! {
             if let Some(val) = #fn_body {
