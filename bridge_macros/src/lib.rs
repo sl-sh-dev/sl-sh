@@ -24,9 +24,9 @@ use std::fmt::{Display, Formatter};
 use syn::__private::{Span, TokenStream2};
 use syn::spanned::Spanned;
 use syn::{
-    parse, parse_macro_input, AttributeArgs, Error, FnArg, GenericArgument, Ident, Item, ItemFn,
-    Lit, Meta, NestedMeta, PathArguments, ReturnType, Type, TypeBareFn, TypePath, TypeReference,
-    TypeTuple,
+    parse, parse_macro_input, AttributeArgs, Error, FnArg, GenericArgument, Generics, Ident, Item,
+    ItemFn, Lit, Meta, NestedMeta, PathArguments, ReturnType, Type, TypeBareFn, TypePath,
+    TypeReference, TypeTuple,
 };
 extern crate static_assertions;
 
@@ -1005,6 +1005,7 @@ fn generate_intern_fn(
 /// call the ExpandVecToArgs trait is used. A sample parse_ function for a function that takes
 /// one argument is shown below.
 fn generate_parse_fn(
+    generics: Option<Generics>,
     original_fn_name_str: &str,
     fn_name_ident: &Ident,
     fn_name: &str,
@@ -1016,6 +1017,11 @@ fn generate_parse_fn(
     let arg_vec_literal = embed_params_vec(params);
 
     let const_params_len = get_const_params_len_ident();
+    let parse_name = if let Some(generics) = generics {
+        quote! { #parse_name #generics }
+    } else {
+        quote! { #parse_name }
+    };
     quote! {
         fn #parse_name(
             environment: &mut compile_state::state::SloshVm,
@@ -1113,9 +1119,11 @@ fn generate_builtin_fn(
     let (return_type, _) = get_return_type(original_item_fn)?;
     let mut conversions_assertions_code = vec![];
     if let Some(return_type) = return_type {
-        conversions_assertions_code.push(generate_assertions_code_for_return_type_conversions(
-            &return_type,
-        ));
+        if get_generic_argument_from_type(&return_type).is_none() {
+            conversions_assertions_code.push(generate_assertions_code_for_return_type_conversions(
+                &return_type,
+            ));
+        }
     }
     let tokens = quote! {
         #(#conversions_assertions_code)*
@@ -1496,7 +1504,7 @@ fn get_const_params_len_ident() -> Ident {
 fn parse_attributes(
     original_item_fn: &ItemFn,
     attr_args: AttributeArgs,
-) -> MacroResult<(String, Ident, bool, bool)> {
+) -> MacroResult<(String, Ident, bool, bool, Option<Generics>)> {
     let vals = attr_args
         .iter()
         .map(get_attribute_name_value)
@@ -1518,7 +1526,18 @@ fn parse_attributes(
     let inline =
         !get_bool_attribute_value_with_key(original_item_fn, "do_not_inline", vals.as_slice())?;
 
-    Ok((fn_name, fn_name_ident, takes_env, inline))
+    let generics = original_item_fn.sig.generics.clone();
+    let generics = match generics.params.len() {
+        0 => None,
+        1 => Some(generics),
+        _ => {
+            return Err(Error::new(
+                original_item_fn.span(),
+                "sl_sh_fn only supports functions with 0 or 1 generic lifetime parameters.",
+            ))
+        }
+    };
+    Ok((fn_name, fn_name_ident, takes_env, inline, generics))
 }
 
 /// this function outputs all of the generated code, it is composed into two different functions:
@@ -1533,7 +1552,7 @@ fn generate_sl_sh_fn(
     original_item_fn: &ItemFn,
     attr_args: AttributeArgs,
 ) -> MacroResult<TokenStream> {
-    let (fn_name, fn_name_ident, takes_env, inline) =
+    let (fn_name, fn_name_ident, takes_env, inline, generics) =
         parse_attributes(original_item_fn, attr_args)?;
     let original_fn_name_str = original_item_fn.sig.ident.to_string();
     let original_fn_name_str = original_fn_name_str.as_str();
@@ -1563,6 +1582,7 @@ fn generate_sl_sh_fn(
         doc_comments,
     );
     let parse_fn = generate_parse_fn(
+        generics,
         original_fn_name_str,
         &fn_name_ident,
         fn_name.as_str(),

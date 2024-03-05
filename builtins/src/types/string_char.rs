@@ -1,9 +1,21 @@
-use crate::types::{SlAsMut, SlAsRef, SlFrom, SlFromRef};
+use crate::types::{SlAsMut, SlAsRef, SlFrom, SlFromRef, SlIntoRef};
 use bridge_types::{ErrorStrings, LooseString, SloshChar};
 use compile_state::state::SloshVm;
 use slvm::value::ValueType;
 use slvm::{VMError, VMResult, Value, ValueTypes};
 use std::borrow::Cow;
+
+impl<'a> SlFrom<Cow<'a, str>> for Value {
+    fn sl_from(value: Cow<'a, str>, vm: &mut SloshVm) -> VMResult<Self> {
+        value.sl_into_ref(vm)
+    }
+}
+
+impl<'a> SlFrom<SloshChar<'a>> for Value {
+    fn sl_from(value: SloshChar<'a>, vm: &mut SloshVm) -> VMResult<Self> {
+        value.sl_into_ref(vm)
+    }
+}
 
 impl<'a> SlFromRef<'a, &Value> for LooseString<'a> {
     fn sl_from_ref(value: &Value, vm: &'a mut SloshVm) -> VMResult<Self> {

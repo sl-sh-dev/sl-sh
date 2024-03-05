@@ -35,6 +35,7 @@ pub type LooseString<'a> = Cow<'a, str>;
 /// In slosh a character can either be an actual char, e.g. a [`Value`]`::CodePoint`
 /// or a [`Value`]`::CharCluster`/[`Value`]`::CharClusterLong` in which case it will
 /// be stored in an &str.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SloshChar<'a> {
     Char(char),
     String(Cow<'a, str>),
