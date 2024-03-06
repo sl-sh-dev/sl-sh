@@ -1,4 +1,4 @@
-use crate::add_builtin;
+use compile_state::add_builtin;
 use compile_state::state::SloshVm;
 use slvm::{VMError, VMResult, Value};
 use std::collections::HashMap;

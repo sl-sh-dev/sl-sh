@@ -1,4 +1,5 @@
-use crate::{add_builtin, SloshVm};
+use crate::SloshVm;
+use compile_state::add_builtin;
 use slvm::{VMError, VMResult, Value};
 
 pub fn vec_slice(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {

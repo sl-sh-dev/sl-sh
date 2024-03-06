@@ -1,7 +1,7 @@
 extern crate core;
 
-use compile_state::state::{CompileEnvironment, SloshVm, SloshVmTrait};
-use slvm::{CallFuncSig, VMError, VMResult, Value};
+use compile_state::state::{SloshVm, SloshVmTrait};
+use slvm::{VMError, VMResult, Value};
 
 pub mod collections;
 pub mod conversions;
@@ -163,18 +163,6 @@ fn remainder(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-pub fn add_builtin(
-    env: &mut SloshVm,
-    name: &str,
-    func: CallFuncSig<CompileEnvironment>,
-    doc_string: &str,
-) {
-    let si = env.set_global_builtin(name, func);
-    let key = env.intern("doc-string");
-    let s = env.alloc_string(doc_string.to_string());
-    env.set_global_property(si, key, s);
-}
-
 pub fn add_global_value(env: &mut SloshVm, name: &str, val: Value, doc_string: &str) {
     let si = env.set_named_global(name, val);
     let key = env.intern("doc-string");
@@ -189,7 +177,7 @@ pub fn add_misc_builtins(env: &mut SloshVm) {
     env.set_global_builtin("sizeof-value", sizeof_value);
     env.set_global_builtin("gensym", gensym);
     env.set_global_builtin("expand-macro", expand_macro);
-    add_builtin(
+    compile_state::add_builtin(
         env,
         "rem",
         remainder,
@@ -210,7 +198,7 @@ Example:
 (test::assert-error (rem 1 2.0))
 ",
     );
-    add_builtin(
+    compile_state::add_builtin(
         env,
         "get-globals",
         get_globals,

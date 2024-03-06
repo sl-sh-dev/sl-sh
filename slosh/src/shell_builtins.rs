@@ -1,6 +1,6 @@
 use crate::config::VERSION_STRING;
 use crate::SHELL_ENV;
-use builtins::add_builtin;
+use compile_state::add_builtin;
 use compile_state::state::SloshVm;
 use shell::platform::{FromFileDesc, Platform, Sys};
 use slvm::{VMError, VMResult, Value};

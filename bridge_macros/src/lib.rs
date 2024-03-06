@@ -989,7 +989,7 @@ fn generate_intern_fn(
     quote! {
         fn #intern_name(env: &mut compile_state::state::SloshVm) {
             let #fn_name_ident = #fn_name;
-            crate::add_builtin(env, #fn_name_ident, #parse_name, #doc_comments);
+            compile_state::add_builtin(env, #fn_name_ident, #parse_name, #doc_comments);
         }
     }
 }
