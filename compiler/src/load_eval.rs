@@ -1,7 +1,7 @@
+use crate::pass1::pass1;
+use crate::{compile, Reader};
+use builtins::expand_tilde;
 use compile_state::state::{CompileState, SloshVm, SloshVmTrait};
-use shell::builtins::expand_tilde;
-use sl_compiler::pass1::pass1;
-use sl_compiler::{compile, Reader};
 use slvm::{Chunk, VMError, VMResult, Value, RET};
 use std::borrow::Cow;
 use std::fs;
@@ -60,7 +60,7 @@ pub fn load_one_expression(
     Ok((Arc::new(state.chunk), state.doc_string))
 }
 
-pub(crate) fn load_internal(vm: &mut SloshVm, name: &'static str) -> VMResult<Value> {
+pub fn load_internal(vm: &mut SloshVm, name: &'static str) -> VMResult<Value> {
     let fname = if fs::metadata::<&Path>(name.as_ref()).is_ok() {
         Ok(Cow::Borrowed(name))
     } else {

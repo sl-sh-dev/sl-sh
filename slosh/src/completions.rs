@@ -5,8 +5,8 @@ use std::env;
 use std::path::Path;
 
 use crate::ENV;
+use builtins::expand_tilde;
 use shell::builtins::compress_tilde;
-use shell::builtins::expand_tilde;
 use slvm::{VMResult, Value};
 
 /// Unescape filenames for the completer so that special characters will be properly shown.

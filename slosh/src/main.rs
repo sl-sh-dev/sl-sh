@@ -16,12 +16,8 @@ use compile_state::state::*;
 use sl_compiler::compile::*;
 use sl_compiler::reader::*;
 
-use builtins::collections::setup_collection_builtins;
-use builtins::conversions::add_conv_builtins;
-use builtins::io::add_io_builtins;
-use builtins::print::{add_print_builtins, display_value};
-use builtins::string::add_str_builtins;
-use builtins::{add_global_value, add_misc_builtins};
+use builtins::add_global_value;
+use builtins::print::display_value;
 use sl_liner::vi::AlphanumericAndVariableKeywordRule;
 use sl_liner::{keymap, ColorClosure, Context, Prompt};
 
@@ -31,19 +27,19 @@ pub mod debug;
 #[cfg(any(test, feature = "lisp-test"))]
 pub mod docs;
 mod liner_rules;
-mod load_eval;
-pub use crate::load_eval::load_one_expression;
+
+pub use sl_compiler::load_eval::load_one_expression;
 mod shell_builtins;
 
 use crate::completions::ShellCompleter;
 use crate::liner_rules::make_editor_rules;
-use crate::load_eval::{add_load_builtins, load_internal, SLSHRC};
 use crate::shell_builtins::add_shell_builtins;
 use config::*;
 use debug::*;
 use shell::platform::{Platform, Sys, STDIN_FILENO};
+use sl_compiler::load_eval::{load_internal, SLSHRC};
 use sl_compiler::pass1::pass1;
-use slvm::{Value, INT_BITS, INT_MAX, INT_MIN};
+use slvm::Value;
 
 thread_local! {
     /// Env (job control status, etc) for the shell.
@@ -271,15 +267,10 @@ fn get_color_closure() -> Option<ColorClosure> {
 }
 
 pub fn set_builtins(env: &mut SloshVm) {
+    sl_compiler::set_builtins(env);
     add_shell_builtins(env);
-    setup_collection_builtins(env);
-    add_print_builtins(env);
-    add_load_builtins(env);
-    add_str_builtins(env);
-    add_misc_builtins(env);
-    add_io_builtins(env);
-    add_conv_builtins(env);
     env.set_global_builtin("dump-regs", builtin_dump_regs);
+
     let uid = Sys::current_uid();
     let euid = Sys::effective_uid();
     env::set_var("UID", format!("{uid}"));
@@ -287,19 +278,15 @@ pub fn set_builtins(env: &mut SloshVm) {
     env.set_named_global("*uid*", uid.into());
     env.set_named_global("*euid*", euid.into());
     env.set_named_global("*last-status*", 0.into());
-    env.set_named_global("*int-bits*", (INT_BITS as i64).into());
-    env.set_named_global("*int-max*", INT_MAX.into());
-    env.set_named_global("*int-min*", INT_MIN.into());
     // Initialize the HOST variable
     let host: OsString = Sys::gethostname().unwrap_or_else(|| "Operating system hostname is not a string capable of being parsed by native platform???".into());
     env::set_var("HOST", host);
     if let Ok(dir) = env::current_dir() {
         env::set_var("PWD", dir);
     }
+
     #[cfg(any(test, feature = "lisp-test"))]
-    {
-        docs::add_builtins(env);
-    }
+    docs::add_builtins(env);
 }
 
 fn main() {

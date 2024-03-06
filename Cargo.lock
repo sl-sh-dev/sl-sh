@@ -722,6 +722,7 @@ dependencies = [
 name = "shell"
 version = "0.1.0"
 dependencies = [
+ "builtins",
  "cfg-if",
  "chrono",
  "glob",

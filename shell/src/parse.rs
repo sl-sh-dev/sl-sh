@@ -2,11 +2,11 @@
 //! Parses a string into a shell command.
 //! Roughly a subset of <https://www.gnu.org/software/bash/manual/html_node/Shell-Expansions.html>
 
-use crate::builtins::expand_tilde;
 use crate::command_data::{Arg, CommandWithArgs, Redirects, Run};
 use crate::glob::{expand_glob, GlobOutput};
 use crate::jobs::Jobs;
 use crate::platform::{FileDesc, STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
+use builtins::expand_tilde;
 use std::fmt::{Display, Formatter};
 use std::io;
 use std::io::ErrorKind;
