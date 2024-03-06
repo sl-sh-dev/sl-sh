@@ -1,8 +1,16 @@
+//! This module contains F56, a 7-byte struct that represents a 56-bit floating point number.
+//! The SLVM uses 8-byte Values but the first byte stores the type of the Value so 7 bytes remain for the float.
+//! Check out value.rs to see how the F56 is one of the enum variants of the Value struct.
+//!
+//! There are open questions about the benefits of using F56 over f32 that will depend on some peformance benchmarking.
+//! f32 is simpler and faster.
+//! Additionally, there are questions about whether to impl the Eq and Hash Traits https://github.com/sl-sh-dev/sl-sh/issues/125
+
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
-/// This struct uses 7 bytes to represent a floating point number.
-/// Most operations are done by converting to f64, performing the operation, and then converting back to F56
+/// The F56 struct represents a 56-bit floating point number using 7 bytes.
+/// Most operations on F56 are done by converting to f64, performing the operation, and then converting back to F56
 ///
 /// F56 uses 1 bit for the sign, 10 bits for the exponent, and 45 bits for the mantissa.
 /// Compared to f32, it has +2 exponent bits and +22 mantissa bits.
