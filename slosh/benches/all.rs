@@ -172,7 +172,7 @@ mod instruction_count {
     }
 
     fn recursive_vec_search_ten_thousand() {
-        bench.iter(|| std::hint::black_box(run_recursive_search_script(10_000)));
+        black_box(run_recursive_search_script(10_000));
     }
 
     fn continuation_vec_search_one_hundred() {
