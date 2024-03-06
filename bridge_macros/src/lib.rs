@@ -353,7 +353,7 @@ fn parse_param(
                 let arg = args.get(#idx);
                 match param.handle {
                     bridge_types::TypeHandle::Optional => {
-                        let #arg_name = arg.map(|x| x.to_owned());
+                        let #arg_name = arg;
                         #inner
                     },
                     _ => {

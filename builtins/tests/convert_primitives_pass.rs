@@ -118,3 +118,7 @@ pub fn accept_float(_f: f64) {}
 pub fn accept_and_return_float(f: f64) -> f64 {
     f
 }
+
+/// obligatory doc
+#[sl_sh_fn(fn_name = "accept_return_float")]
+pub fn accept_opt(_f: Option<f64>) {}
