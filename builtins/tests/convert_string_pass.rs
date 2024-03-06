@@ -65,6 +65,8 @@ pub fn return_slosh_char<'a>() -> VMResult<SloshChar<'a>> {
     Ok(SloshChar::String(Cow::Borrowed("a")))
 }
 
+//TODO PC return &str and &mut String?
+
 /// obligatory doc
 #[sl_sh_fn(fn_name = "accept_str")]
 pub fn accept_str(_s: &str) {}

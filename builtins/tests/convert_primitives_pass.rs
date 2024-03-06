@@ -64,6 +64,13 @@ pub fn main() {
         "[rt]: accept_float given too many arguments, expected at least 1 arguments, got 2.",
         err.to_string()
     );
+
+    let args = vec![Value::Float(F56::from(42_f64))];
+    assert_eq!(
+        Value::Float(F56::from(42_f64)),
+        parse_accept_and_return_float(&mut vm, args.as_slice()).unwrap()
+    );
+    assert_eq!(42_f64, accept_and_return_float(42_f64));
 }
 
 /// obligatory doc
@@ -105,3 +112,9 @@ pub fn return_char() -> char {
 /// obligatory doc
 #[sl_sh_fn(fn_name = "accept_float")]
 pub fn accept_float(_f: f64) {}
+
+/// obligatory doc
+#[sl_sh_fn(fn_name = "accept_return_float")]
+pub fn accept_and_return_float(f: f64) -> f64 {
+    f
+}
