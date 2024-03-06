@@ -39,7 +39,31 @@ pub fn main() {
         Value::CodePoint(point),
         parse_return_char(&mut vm, args.as_slice()).unwrap()
     );
-    assert_eq!(point, return_char());
+
+    let args = vec![Value::Float(F56::from(42_f64))];
+    assert_eq!(
+        Value::Nil,
+        parse_accept_float(&mut vm, args.as_slice()).unwrap()
+    );
+    assert_eq!((), accept_float(42_f64));
+
+    //TODO PC fix error messages, at least 1 arguments is wrong here and weird.
+    let args = vec![];
+    let err = parse_accept_float(&mut vm, args.as_slice()).unwrap_err();
+    assert_eq!(
+        "[rt]: accept_float not given enough arguments, expected at least 1 arguments, got 0.",
+        err.to_string()
+    );
+
+    let args = vec![
+        Value::Float(F56::from(42_f64)),
+        Value::Float(F56::from(42_f64)),
+    ];
+    let err = parse_accept_float(&mut vm, args.as_slice()).unwrap_err();
+    assert_eq!(
+        "[rt]: accept_float given too many arguments, expected at least 1 arguments, got 2.",
+        err.to_string()
+    );
 }
 
 /// obligatory doc
@@ -77,3 +101,7 @@ pub fn return_false() -> bool {
 pub fn return_char() -> char {
     'a'
 }
+
+/// obligatory doc
+#[sl_sh_fn(fn_name = "accept_float")]
+pub fn accept_float(_f: f64) {}

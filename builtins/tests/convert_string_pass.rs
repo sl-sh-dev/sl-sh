@@ -64,3 +64,11 @@ pub fn return_loose_string<'a>() -> VMResult<LooseString<'a>> {
 pub fn return_slosh_char<'a>() -> VMResult<SloshChar<'a>> {
     Ok(SloshChar::String(Cow::Borrowed("a")))
 }
+
+/// obligatory doc
+#[sl_sh_fn(fn_name = "accept_str")]
+pub fn accept_str(_s: &str) {}
+
+/// obligatory doc
+#[sl_sh_fn(fn_name = "accept_str_mut")]
+pub fn accept_str_mut(_s: &mut String) {}

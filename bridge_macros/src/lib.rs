@@ -308,6 +308,18 @@ fn parse_param(
     required_args: usize,
     idx: usize,
 ) -> TokenStream {
+    let some_match = match param.passing_style {
+        PassingStyle::Value | PassingStyle::Reference => {
+            quote! {
+                #arg_name
+            }
+        }
+        PassingStyle::MutReference => {
+            quote! {
+                ref mut #arg_name
+            }
+        }
+    };
     match param.handle {
         TypeHandle::Direct => {
             quote! {
@@ -322,7 +334,7 @@ fn parse_param(
                                 args.len()
                             )));
                         }
-                        Some(#arg_name) => {
+                        Some(#some_match) => {
                             #inner
                         },
                     },
@@ -783,40 +795,26 @@ fn parse_direct_type(
         let ty = get_type_or_wrapped_type(ty, SPECIAL_ARG_TYPES.as_slice());
         match ty {
             RustType::Path(ty, _span) => {
-                let str = ty.to_token_stream().to_string();
-                // handle &str differently, want impl RustProcedure<F> for TypedWrapper<&str>
-                // w/o this special case it generate RustProcedureRefMut on a TypedWrapper<str> which is unsized.
-                let (fn_ref, passing_style, ty) =
-                    if str == "str" && passing_style == PassingStyle::Reference {
-                        let passing_style = PassingStyle::Value;
-                        (quote! { &#ty }, passing_style, quote! { &#ty })
-                    } else {
-                        (
-                            tokens_for_matching_references(passing_style, &ty),
-                            passing_style,
-                            quote! { #ty },
-                        )
-                    };
-                let callback_declaration = quote! {
-                    let callback = |#arg_name: #fn_ref| -> slvm::VMResult<slvm::Value> {
-                        #inner
-                    };
-                };
+                let (passing_style, ty) = (
+                    passing_style,
+                    tokens_for_matching_references(passing_style, &ty),
+                );
 
                 match passing_style {
-                    PassingStyle::Value | PassingStyle::Reference => Ok(quote! {{
-                        use crate::types::RustProcedure;
-                        let typed_data: crate::types::TypedWrapper<#ty, slvm::Value> =
-                            crate::types::TypedWrapper::new(&#arg_name);
-                        #callback_declaration
-                        typed_data.apply(#fn_name_ident, callback)
+                    PassingStyle::Value => Ok(quote! {{
+                        use builtins::types::SlInto;
+                        let #arg_name: #ty = #arg_name.sl_into(environment)?;
+                        #inner
+                    }}),
+                    PassingStyle::Reference => Ok(quote! {{
+                        use builtins::types::SlAsRef;
+                        let #arg_name: #ty = #arg_name.sl_as_ref(environment)?;
+                        #inner
                     }}),
                     PassingStyle::MutReference => Ok(quote! {{
-                        use crate::types::RustProcedureRefMut;
-                        let mut typed_data: crate::types::TypedWrapper<#ty, slvm::Value> =
-                            crate::types::TypedWrapper::new(&#arg_name);
-                        #callback_declaration
-                        typed_data.apply_ref_mut(#fn_name_ident, callback)
+                        use builtins::types::SlAsMut;
+                        let #arg_name: #ty = #arg_name.sl_as_mut(environment)?;
+                        #inner
                     }}),
                 }
             }
