@@ -99,7 +99,7 @@ Example:
 (test::assert-false (seq? "aaa"))
 (test::assert-false (seq? 1))
 %#
-(def seq? (fn (v) (or (nil? v)(pair? v)(vec? v))))
+(def seq? (fn (v) (or (pair? v)(vec? v))))
 
 #%
 Usage (empty? s)
