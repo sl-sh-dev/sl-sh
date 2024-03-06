@@ -81,34 +81,3 @@ pub fn accept_str_mut(_s: &mut String) {}
 //pub fn accept_str_return_str(s: &str) -> &str {
 //    s
 //}
-
-/// Usage: (str-sub string start [length]) -> string
-///
-/// Return a substring from a string given start (0 based) and optional length.
-/// If length is 0 or not provided produces the rest of the string from start to
-/// string end.
-///
-/// Section: string
-///
-/// Example:
-/// (test::assert-equal "string" (str-sub "stringxxxyyyxxxsome" 0 6))
-/// (test::assert-equal "some" (str-sub "stringxxxyyyxxxsome" 15 4))
-/// (test::assert-equal "yyy" (str-sub "stringxxxyyyxxxsome" 9 3))
-/// (test::assert-equal "some" (str-sub "stringxxxyyyxxxsome" 15))
-#[sl_sh_fn(fn_name = "str-sub")]
-fn str_sub(s: &str, start: usize, length: Option<usize>) -> VMResult<String> {
-    let len = if let Some(length) = length {
-        length
-    } else {
-        0usize
-    };
-    if (start + len) <= s.len() {
-        if len > 0 {
-            Ok(s[start..(start + len)].to_string())
-        } else {
-            Ok(s[start..].to_string())
-        }
-    } else {
-        Err(VMError::new_vm("str-sub index out of range"))
-    }
-}

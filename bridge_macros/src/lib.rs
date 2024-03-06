@@ -200,7 +200,7 @@ fn get_generic_argument_from_type(ty: &Type) -> Option<(&GenericArgument, &TypeP
 
 fn generate_assertions_code_for_return_type_conversions(return_type: &Type) -> TokenStream2 {
     quote! {
-      static_assertions::assert_impl_all!(#return_type: builtins::types::SlInto<slvm::Value>);
+      static_assertions::assert_impl_all!(#return_type: crate::types::SlInto<slvm::Value>);
     }
 }
 
@@ -479,12 +479,12 @@ fn make_orig_fn_call(
             return Ok(slvm::Value::Nil);
         },
         (Some(_), Some(SupportedGenericReturnTypes::VMResult), false) => quote! {
-            use builtins::types::SlInto;
+            use crate::types::SlInto;
             return #fn_body.and_then(|x| x.sl_into(environment));
         },
         (Some(_), Some(SupportedGenericReturnTypes::Option), false) => quote! {
             if let Some(val) = #fn_body {
-                use builtins::types::SlFrom;
+                use crate::types::SlFrom;
                 let val = slvm::Value::sl_from(val, environment)?;
                 Ok(val)
             } else {
@@ -493,7 +493,7 @@ fn make_orig_fn_call(
         },
         // coerce to Expression
         (Some(_), None, _) => quote! {
-            use builtins::types::SlInto;
+            use crate::types::SlInto;
             return #fn_body.sl_into(environment);
         },
         (None, Some(_), _) => {
@@ -802,17 +802,17 @@ fn parse_direct_type(
 
                 match passing_style {
                     PassingStyle::Value => Ok(quote! {{
-                        use builtins::types::SlInto;
+                        use crate::types::SlInto;
                         let #arg_name: #ty = #arg_name.sl_into(environment)?;
                         #inner
                     }}),
                     PassingStyle::Reference => Ok(quote! {{
-                        use builtins::types::SlAsRef;
+                        use crate::types::SlAsRef;
                         let #arg_name: #ty = #arg_name.sl_as_ref(environment)?;
                         #inner
                     }}),
                     PassingStyle::MutReference => Ok(quote! {{
-                        use builtins::types::SlAsMut;
+                        use crate::types::SlAsMut;
                         let #arg_name: #ty = #arg_name.sl_as_mut(environment)?;
                         #inner
                     }}),
@@ -989,7 +989,7 @@ fn generate_intern_fn(
     quote! {
         fn #intern_name(env: &mut compile_state::state::SloshVm) {
             let #fn_name_ident = #fn_name;
-            builtins::add_builtin(env, #fn_name_ident, #parse_name, #doc_comments);
+            crate::add_builtin(env, #fn_name_ident, #parse_name, #doc_comments);
         }
     }
 }
@@ -1296,7 +1296,7 @@ fn parse_type_tuple(
         if !crate::is_sequence!(#arg_name)
         {
             let err_str = format!("{}: Expected a vector or list for argument at position {}.", #fn_name, #arg_pos);
-            return Err(crate::VMError::new_vm(err_str));
+            return Err(slvm::VMError::new_vm(err_str));
         }
         let #arg_name = #arg_name.iter().collect::<Vec<slvm::Value>>();
         match #arg_name.try_into() {
