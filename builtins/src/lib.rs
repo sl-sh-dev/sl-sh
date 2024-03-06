@@ -163,20 +163,6 @@ fn remainder(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-#[macro_export]
-macro_rules! is_sequence {
-    ($expression:expr) => {{
-        match $expression {
-            Value::Pair(_) => true,
-            Value::Vector(_) => true,
-            Value::Nil => true,
-            Value::List(_, _) => true,
-            Value::Map(_) => true,
-            _ => false,
-        }
-    }};
-}
-
 pub fn add_builtin(
     env: &mut SloshVm,
     name: &str,
