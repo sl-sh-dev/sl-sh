@@ -81,28 +81,6 @@ mod tests {
     use crate::types::SlFrom;
     use crate::types::SlInto;
     use compile_state::state::new_slosh_vm;
-
-    #[test]
-    fn ts2() {
-        let l = 1i64.saturating_add(i64::MAX);
-        println!("{:?}", l);
-        println!("max {:?}", i64::MAX);
-    }
-
-    #[test]
-    fn ts() {
-        let l = f64::MAX + f64::MAX;
-        // [127, 240, 0, 0, 0, 0, 0, 0]
-        let b = l == f64::INFINITY;
-        assert!(b, "l should be infinity");
-        println!("{:?}", (l as u64).to_be_bytes());
-        println!("max {:?}", u64::MAX);
-        let l = l as u64;
-        println!("my {:?}", 0xFFFFFFFFFFFFFFFFu64);
-        let p = l & 0xFFFFFFFFFFFFFFFFu64;
-        println!("{:?}", p);
-    }
-
     use core::panic;
     use slvm::F56;
     use slvm::{to_i56, Value};
