@@ -81,22 +81,27 @@ impl SlFrom<&Value> for usize {
         match value {
             Value::Int(i) => usize::try_from(from_i56(i)).map_err(|_| {
                 VMError::new_conversion(ErrorStrings::fix_me_mismatched_type(
-                    <&'static str>::from(ValueType::Float),
+                    <&'static str>::from(ValueType::Int),
                     value.display_type(vm),
                 ))
             }),
-            Value::Float(f) => {
-                let f = f64::from(*f) as i64;
-                usize::try_from(f).map_err(|_| {
-                    VMError::new_conversion(ErrorStrings::fix_me_mismatched_type(
-                        <&'static str>::from(ValueType::Float),
-                        value.display_type(vm),
-                    ))
-                })
-            }
             _ => Err(VMError::new_conversion(
                 ErrorStrings::fix_me_mismatched_type(
-                    String::from(ValueTypes::from([ValueType::Int, ValueType::Float])),
+                    String::from(ValueTypes::from([ValueType::Int])),
+                    value.display_type(vm),
+                ),
+            )),
+        }
+    }
+}
+
+impl SlFrom<&Value> for i64 {
+    fn sl_from(value: &Value, vm: &mut SloshVm) -> VMResult<Self> {
+        match value {
+            Value::Int(i) => Ok(from_i56(i)),
+            _ => Err(VMError::new_conversion(
+                ErrorStrings::fix_me_mismatched_type(
+                    <&'static str>::from(ValueType::Int),
                     value.display_type(vm),
                 ),
             )),

@@ -1,0 +1,23 @@
+warning: unused import: `SlAsMut`
+ --> trybuild/tests/borrow_checker_immut_mut_fail.rs:2:28
+  |
+2 | use compile_state::types::{SlAsMut, SlAsRef, SlInto};
+  |                            ^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `slvm::Value`
+ --> trybuild/tests/borrow_checker_immut_mut_fail.rs:3:5
+  |
+3 | use slvm::Value;
+  |     ^^^^^^^^^^^
+
+error[E0502]: cannot borrow `vm` as mutable because it is also borrowed as immutable
+  --> trybuild/tests/borrow_checker_immut_mut_fail.rs:12:37
+   |
+11 |     let y: &str = (&dest2).sl_as_ref(&vm).unwrap();
+   |                                      --- immutable borrow occurs here
+12 |     let x: String = (&dest).sl_into(&mut vm).unwrap();
+   |                                     ^^^^^^^ mutable borrow occurs here
+13 |     println!("y: {}", y);
+   |                       - immutable borrow later used here

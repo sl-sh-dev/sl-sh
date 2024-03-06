@@ -82,7 +82,7 @@ impl SlFrom<char> for Value {
 }
 
 impl<'a> SlAsRef<'a, str> for &Value {
-    fn sl_as_ref(&self, vm: &'a mut SloshVm) -> VMResult<&'a str> {
+    fn sl_as_ref(&self, vm: &'a SloshVm) -> VMResult<&'a str> {
         match self {
             Value::String(h) => Ok(vm.get_string(*h)),
             Value::StringConst(i) => Ok(vm.get_interned(*i)),

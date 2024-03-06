@@ -54,7 +54,7 @@ where
 
 pub trait SlAsRef<'a, T: ?Sized> {
     /// Converts this type into a shared reference of the (usually inferred) input type.
-    fn sl_as_ref(&self, vm: &'a mut SloshVm) -> VMResult<&'a T>;
+    fn sl_as_ref(&self, vm: &'a SloshVm) -> VMResult<&'a T>;
 }
 
 // SlAsRef lifts over &
@@ -63,7 +63,7 @@ where
     T: SlAsRef<'a, U>,
 {
     #[inline]
-    fn sl_as_ref(&self, vm: &'a mut SloshVm) -> VMResult<&'a U> {
+    fn sl_as_ref(&self, vm: &'a SloshVm) -> VMResult<&'a U> {
         <T as SlAsRef<'a, U>>::sl_as_ref(*self, vm)
     }
 }
@@ -74,7 +74,7 @@ where
     T: SlAsRef<'a, U>,
 {
     #[inline]
-    fn sl_as_ref(&self, vm: &'a mut SloshVm) -> VMResult<&'a U> {
+    fn sl_as_ref(&self, vm: &'a SloshVm) -> VMResult<&'a U> {
         <T as SlAsRef<'a, U>>::sl_as_ref(*self, vm)
     }
 }
