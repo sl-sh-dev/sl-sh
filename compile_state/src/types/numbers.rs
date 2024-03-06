@@ -1,6 +1,6 @@
+use crate::state::SloshVm;
 use crate::types::SlFrom;
 use bridge_types::ErrorStrings;
-use compile_state::state::SloshVm;
 use slvm::value::ValueType;
 use slvm::{from_i56, to_i56, VMError, VMResult, Value, ValueTypes, F56};
 
@@ -106,9 +106,9 @@ impl SlFrom<&Value> for usize {
 
 #[cfg(test)]
 mod tests {
+    use crate::state::new_slosh_vm;
     use crate::types::SlFrom;
     use crate::types::SlInto;
-    use compile_state::state::new_slosh_vm;
     use core::panic;
     use slvm::F56;
     use slvm::{to_i56, Value};

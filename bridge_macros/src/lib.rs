@@ -200,7 +200,7 @@ fn get_generic_argument_from_type(ty: &Type) -> Option<(&GenericArgument, &TypeP
 
 fn generate_assertions_code_for_return_type_conversions(return_type: &Type) -> TokenStream2 {
     quote! {
-      static_assertions::assert_impl_all!(#return_type: crate::types::SlInto<slvm::Value>);
+      static_assertions::assert_impl_all!(#return_type: compile_state::types::SlInto<slvm::Value>);
     }
 }
 
@@ -479,12 +479,12 @@ fn make_orig_fn_call(
             return Ok(slvm::Value::Nil);
         },
         (Some(_), Some(SupportedGenericReturnTypes::VMResult), false) => quote! {
-            use crate::types::SlInto;
+            use compile_state::types::SlInto;
             return #fn_body.and_then(|x| x.sl_into(environment));
         },
         (Some(_), Some(SupportedGenericReturnTypes::Option), false) => quote! {
             if let Some(val) = #fn_body {
-                use crate::types::SlFrom;
+                use compile_state::types::SlFrom;
                 let val = slvm::Value::sl_from(val, environment)?;
                 Ok(val)
             } else {
@@ -493,7 +493,7 @@ fn make_orig_fn_call(
         },
         // coerce to Expression
         (Some(_), None, _) => quote! {
-            use crate::types::SlInto;
+            use compile_state::types::SlInto;
             return #fn_body.sl_into(environment);
         },
         (None, Some(_), _) => {
@@ -610,7 +610,7 @@ fn parse_variadic_args_type(
             Ok(quote! {{
                 #arg_check
 
-                static_assertions::assert_impl_all!(slvm::Value: crate::types::SlFrom<#wrapped_ty>);
+                static_assertions::assert_impl_all!(slvm::Value: compile_state::types::SlFrom<#wrapped_ty>);
                 let #arg_name = #arg_name
                     .iter()
                     .map(|#arg_name| {
@@ -650,14 +650,14 @@ fn parse_variadic_args_type(
                 for (elem, arg_name) in type_tuple.elems.iter().zip(arg_names.iter()) {
                     types.push(elem.clone());
                     type_assertions.push(quote! {
-                        static_assertions::assert_impl_all!(slvm::Value: crate::types::SlFrom<#elem>);
+                        static_assertions::assert_impl_all!(slvm::Value: compile_state::types::SlFrom<#elem>);
                     });
                     args.push(quote! {
                         let #arg_name: #elem = #arg_name.clone().try_into_for(#fn_name)?;
                     })
                 }
                 Ok(quote! {{
-                    use crate::types::SlFrom;
+                    use compile_state::types::SlFrom;
                     use std::convert::TryInto;
                     #(#type_assertions)*
                     #arg_check
@@ -802,17 +802,17 @@ fn parse_direct_type(
 
                 match passing_style {
                     PassingStyle::Value => Ok(quote! {{
-                        use crate::types::SlInto;
+                        use compile_state::types::SlInto;
                         let #arg_name: #ty = #arg_name.sl_into(environment)?;
                         #inner
                     }}),
                     PassingStyle::Reference => Ok(quote! {{
-                        use crate::types::SlAsRef;
+                        use compile_state::types::SlAsRef;
                         let #arg_name: #ty = #arg_name.sl_as_ref(environment)?;
                         #inner
                     }}),
                     PassingStyle::MutReference => Ok(quote! {{
-                        use crate::types::SlAsMut;
+                        use compile_state::types::SlAsMut;
                         let #arg_name: #ty = #arg_name.sl_as_mut(environment)?;
                         #inner
                     }}),
@@ -887,7 +887,7 @@ fn parse_type(
             fn_name.0,
             arg_name,
             inner,
-            quote! { crate::VarArgs },
+            quote! { bridge_types::VarArgs },
         )?,
     };
     Ok(outer_parse(arg_name, tokens, param, required_args, idx))

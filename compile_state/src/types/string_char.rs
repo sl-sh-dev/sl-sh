@@ -1,6 +1,6 @@
+use crate::state::SloshVm;
 use crate::types::{SlAsMut, SlAsRef, SlFrom, SlFromRef, SlIntoRef};
 use bridge_types::{ErrorStrings, LooseString, SloshChar};
-use compile_state::state::SloshVm;
 use slvm::value::ValueType;
 use slvm::{VMError, VMResult, Value, ValueTypes};
 use std::borrow::Cow;
@@ -189,9 +189,8 @@ impl SlFrom<&Value> for String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::gensym;
+    use crate::state::new_slosh_vm;
     use crate::types::{SlAsMut, SlAsRef, SlFromRef, SlInto, SlIntoRef};
-    use compile_state::state::new_slosh_vm;
 
     pub const CODE_POINT: char = 'न';
     pub const CHAR_CLUSTER: &'static str = "ते";
@@ -219,6 +218,16 @@ mod tests {
         );
         assert!(matches!(val, Value::String(_)));
         val
+    }
+
+    fn gensym(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+        if !registers.is_empty() {
+            return Err(VMError::new_vm("gensym: takes no arguments".to_string()));
+        }
+        let line = vm.env().line();
+        let sym_idx = vm.env_mut().next_gensym();
+        let sym = vm.intern(&format!("#<SYM:{line}:{sym_idx}>"));
+        Ok(Value::Symbol(sym))
     }
 
     pub fn create_symbol(vm: &mut SloshVm) -> Value {
@@ -310,7 +319,7 @@ mod tests {
         match param.handle {
             bridge_types::TypeHandle::Direct => match args.get(0usize) {
                 None => {
-                    return Err(crate::VMError::new_conversion(&*{
+                    return Err(VMError::new_conversion(&*{
                         let res =
                                 format!("{} not given enough arguments, expected at least {} arguments, got {}.", fn_name, 1usize, args.len());
                         res
@@ -322,7 +331,7 @@ mod tests {
                             || arg_types[PARAMS_LEN - 1].handle
                                 != bridge_types::TypeHandle::VarArgs =>
                     {
-                        return Err(crate::VMError::new_conversion(&*{
+                        return Err(VMError::new_conversion(&*{
                             let res =
                                             format!("{} given too many arguments, expected at least {} arguments, got {}.",
                                                     fn_name, 1usize, args.len());
@@ -337,7 +346,7 @@ mod tests {
                 },
             },
             _ => {
-                return Err(crate::VMError::new_conversion(&*{
+                return Err(VMError::new_conversion(&*{
                     let res = format!("{} failed to parse its arguments, internal error.", fn_name);
                     res
                 }));
@@ -359,7 +368,7 @@ mod tests {
         match param.handle {
             bridge_types::TypeHandle::Direct => match args.get(0usize) {
                 None => {
-                    return Err(crate::VMError::new_conversion(&*{
+                    return Err(VMError::new_conversion(&*{
                         let res =
                                 format!("{} not given enough arguments, expected at least {} arguments, got {}.", fn_name, 1usize, args.len());
                         res
@@ -371,7 +380,7 @@ mod tests {
                             || arg_types[PARAMS_LEN - 1].handle
                                 != bridge_types::TypeHandle::VarArgs =>
                     {
-                        return Err(crate::VMError::new_conversion(&*{
+                        return Err(VMError::new_conversion(&*{
                             let res =
                                             format!("{} given too many arguments, expected at least {} arguments, got {}.",
                                                     fn_name, 1usize, args.len());
@@ -387,7 +396,7 @@ mod tests {
                 },
             },
             _ => {
-                return Err(crate::VMError::new_conversion(&*{
+                return Err(VMError::new_conversion(&*{
                     let res = format!("{} failed to parse its arguments, internal error.", fn_name);
                     res
                 }));

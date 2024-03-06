@@ -1,7 +1,7 @@
 use bridge_macros::sl_sh_fn;
 use bridge_types::{LooseString, SloshChar};
 use compile_state::state::new_slosh_vm;
-use slvm::{VMError, VMResult, Value};
+use slvm::{VMResult, Value};
 use std::borrow::Cow;
 
 pub fn main() {
