@@ -313,7 +313,7 @@ fn usage(vm: &mut SloshVm, slot: u32, sym: &Value) -> String {
         }
     };
     if let Some(args) = args {
-        doc_str.push_str("(");
+        doc_str.push('(');
         doc_str.push_str(&name);
         for a in args {
             let arg = vm.get_interned(a);
