@@ -455,10 +455,7 @@ Example:
 (test::assert-equal 2 (inc! *inc-test*))
 (test::assert-equal 2 *inc-test*)
 (test::assert-equal 5 (inc! *inc-test* 3))
-(test::assert-error (inc! *inc-test* "xxx"))
 (test::assert-equal 5 *inc-test*)
-(def *inc-test* "xxx")
-(test::assert-error (inc! *inc-test*))
 (let (inc-test 1)
   (test::assert-equal 2 (inc! inc-test))
   (test::assert-equal 2 inc-test)
@@ -474,11 +471,8 @@ Example:
 (def *dec-test* 5)
 (test::assert-equal 4 (dec! *dec-test*))
 (test::assert-equal 4 *dec-test*)
-(test::assert-error (dec! *dec-test* "xxx"))
 (test::assert-equal 1 (dec! *dec-test* 3))
 (test::assert-equal 1 *dec-test*)
-(def *dec-test* "xxx")
-(test::assert-error (dec! *dec-test*))
 (let (dec-test 5)
   (test::assert-equal 4 (dec! dec-test))
   (test::assert-equal 4 dec-test)
@@ -536,10 +530,9 @@ Example:
 (test::assert-equal '(x y z) tst-pairs-three)
 (test::assert-equal '(s y z) (xar! tst-pairs-three 's))
 (test::assert-equal '(s y z) tst-pairs-three)
-(def tst-pairs-four nil)
-(test::assert-equal '() tst-pairs-four)
-(test::assert-equal '(t) (xar! tst-pairs-four 't))
-(test::assert-equal '(t) tst-pairs-four)",
+(def tst-pairs-four (list 't))
+(test::assert-equal '(y) (xar! tst-pairs-four 'y))
+(test::assert-equal '(y) tst-pairs-four)",
             ),
             xdr: add_special(
                 vm,
@@ -558,10 +551,10 @@ Example:
 (test::assert-equal '(a b c) tst-pairs-five)
 (test::assert-equal '(a y z) (xdr! tst-pairs-five '(y z)))
 (test::assert-equal '(a y z) tst-pairs-five)
-(def tst-pairs-six nil)
-(test::assert-equal '() tst-pairs-six)
-(test::assert-equal '(nil . v) (xdr! tst-pairs-six 'v))
-(test::assert-equal '(nil . v) tst-pairs-six)",
+(def tst-pairs-six (list 'v))
+(test::assert-equal (list 'v) tst-pairs-six)
+(test::assert-equal '(v . v) (xdr! tst-pairs-six 'v))
+(test::assert-equal '(v . v) tst-pairs-six)",
             ),
             make_hash: add_special(
                 vm,

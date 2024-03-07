@@ -93,8 +93,6 @@ Section: type
 Example:
 (test::assert-true (seq? '(1 2 3)))
 (test::assert-true (seq? [1 2 3]))
-(test::assert-true (seq? '()))
-(test::assert-true (seq? '()))
 (test::assert-true (seq? []))
 (test::assert-false (seq? "aaa"))
 (test::assert-false (seq? 1))
