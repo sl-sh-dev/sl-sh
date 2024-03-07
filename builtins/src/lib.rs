@@ -2,9 +2,6 @@ extern crate core;
 
 use compile_state::state::{CompileEnvironment, SloshVm, SloshVmTrait};
 use slvm::{CallFuncSig, VMError, VMResult, Value};
-use std::env;
-use std::ffi::OsString;
-use std::path::PathBuf;
 
 pub mod collections;
 pub mod conversions;
@@ -224,38 +221,4 @@ Return a vector containing all the symbols currently defined globally.
 Section: core
 ",
     );
-}
-
-/// Takes a PathBuf, if it contains ~ then replaces it with HOME and returns the new PathBuf, else
-/// returns path.  If path is not utf-8 then it will not expand ~.
-pub fn expand_tilde(path: PathBuf) -> PathBuf {
-    if let Some(path_str) = path.to_str() {
-        if path_str.contains('~') {
-            let home: PathBuf = match env::var_os("HOME") {
-                Some(val) => val.into(),
-                None => "/".into(),
-            };
-            let mut new_path = OsString::new();
-            let mut last_ch = ' ';
-            let mut buf = [0_u8; 4];
-            let mut quoted = false;
-            for ch in path_str.chars() {
-                if ch == '\'' && last_ch != '\\' {
-                    quoted = !quoted;
-                }
-                if ch == '~' && !quoted && (last_ch == ' ' || last_ch == ':' || last_ch == '=') {
-                    // Strip the trailing / if it exists.
-                    new_path.push(home.components().as_path().as_os_str());
-                } else {
-                    new_path.push(ch.encode_utf8(&mut buf));
-                }
-                last_ch = ch;
-            }
-            new_path.into()
-        } else {
-            path
-        }
-    } else {
-        path
-    }
 }

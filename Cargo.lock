@@ -722,7 +722,6 @@ dependencies = [
 name = "shell"
 version = "0.1.0"
 dependencies = [
- "builtins",
  "cfg-if",
  "chrono",
  "glob",
@@ -737,6 +736,7 @@ dependencies = [
  "builtins",
  "chrono",
  "compile_state",
+ "shell",
  "slvm",
  "unicode-segmentation",
  "unicode_reader",

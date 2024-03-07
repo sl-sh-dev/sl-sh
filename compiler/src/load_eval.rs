@@ -1,7 +1,7 @@
 use crate::pass1::pass1;
 use crate::{compile, Reader};
-use builtins::expand_tilde;
 use compile_state::state::{CompileState, SloshVm, SloshVmTrait};
+use shell::builtins::expand_tilde;
 use slvm::{Chunk, VMError, VMResult, Value, RET};
 use std::borrow::Cow;
 use std::fs;
