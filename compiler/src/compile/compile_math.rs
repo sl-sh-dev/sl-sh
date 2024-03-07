@@ -28,6 +28,69 @@ fn make_math_comp(
     Ok(())
 }
 
+fn compile_inc_dec(
+    env: &mut SloshVm,
+    state: &mut CompileState,
+    cdr: &[Value],
+    result: usize,
+    opcode: OpCode,
+) -> VMResult<()> {
+    let mut global_slot = None;
+    let dest = if let Value::Symbol(si) = cdr[0] {
+        if let Some(idx) = state.get_symbol(si) {
+            idx
+        } else if let Some(slot) = env.global_intern_slot(si) {
+            global_slot = Some(slot);
+            state
+                .chunk
+                .encode_refi(result as u16, slot, env.own_line())?;
+            result
+        } else {
+            let sym = env.get_interned(si);
+            return Err(VMError::new_compile(format!(
+                "Special {sym} not defined (maybe you need to use 'def {sym}' to pre-declare it)."
+            )));
+        }
+    } else {
+        return Err(VMError::new_compile("expected symbol"));
+    };
+    if cdr.len() == 1 {
+        state
+            .chunk
+            .encode2(opcode, dest as u16, 1, env.own_line())?;
+    } else if cdr.len() == 2 {
+        let amount = match cdr[1] {
+            Value::Byte(i) => i as u16,
+            Value::Int(i) => {
+                let i = from_i56(&i);
+                if i >= 0 && i <= u16::MAX as i64 {
+                    i as u16
+                } else {
+                    return Err(VMError::new_compile("second arg to large"));
+                }
+            }
+            _ => return Err(VMError::new_compile("second arg must be integer")),
+        };
+        state
+            .chunk
+            .encode2(opcode, dest as u16, amount, env.own_line())?;
+    } else {
+        return Err(VMError::new_compile("malformed"));
+    }
+    if dest != result {
+        // Make sure we produce something...
+        state
+            .chunk
+            .encode2(MOV, result as u16, dest as u16, env.own_line())?;
+    }
+    if let Some(global_slot) = global_slot {
+        state
+            .chunk
+            .encode_def(dest as u16, global_slot, env.own_line(), false)?;
+    }
+    Ok(())
+}
+
 pub(crate) fn compile_math(
     env: &mut SloshVm,
     state: &mut CompileState,
@@ -37,81 +100,10 @@ pub(crate) fn compile_math(
 ) -> VMResult<bool> {
     match car {
         Value::Special(i) if i == env.specials().inc => {
-            let dest = if let Value::Symbol(si) = cdr[0] {
-                if let Some(idx) = state.get_symbol(si) {
-                    idx
-                } else if let Some(slot) = env.global_intern_slot(i) {
-                    state
-                        .chunk
-                        .encode_refi(result as u16, slot, env.own_line())?;
-                    result
-                } else {
-                    let sym = env.get_interned(i);
-                    return Err(VMError::new_compile(format!("Special {sym} not defined (maybe you need to use 'def {sym}' to pre-declare it).")));
-                }
-            } else {
-                return Err(VMError::new_compile("inc!: expected symbol"));
-            };
-            if cdr.len() == 1 {
-                state.chunk.encode2(INC, dest as u16, 1, env.own_line())?;
-            } else if cdr.len() == 2 {
-                let amount = match cdr[1] {
-                    Value::Byte(i) => i as u16,
-                    Value::Int(i) => {
-                        let i = from_i56(&i);
-                        if i >= 0 && i <= u16::MAX as i64 {
-                            i as u16
-                        } else {
-                            return Err(VMError::new_compile("inc!: second arg to large"));
-                        }
-                    }
-                    _ => return Err(VMError::new_compile("inc!: second arg must be integer")),
-                };
-                state
-                    .chunk
-                    .encode2(INC, dest as u16, amount, env.own_line())?;
-            } else {
-                return Err(VMError::new_compile("inc!: malformed"));
-            }
+            compile_inc_dec(env, state, cdr, result, INC)?;
         }
         Value::Special(i) if i == env.specials().dec => {
-            let dest = if let Value::Symbol(si) = cdr[0] {
-                if let Some(idx) = state.get_symbol(si) {
-                    idx
-                } else if let Some(slot) = env.global_intern_slot(i) {
-                    state
-                        .chunk
-                        .encode_refi(result as u16, slot, env.own_line())?;
-                    result
-                } else {
-                    let sym = env.get_interned(i);
-                    return Err(VMError::new_compile(format!("Special {sym} not defined (maybe you need to use 'def {sym}' to pre-declare it).")));
-                }
-            } else {
-                return Err(VMError::new_compile("dec!: expected symbol"));
-            };
-            if cdr.len() == 1 {
-                state.chunk.encode2(DEC, dest as u16, 1, env.own_line())?;
-            } else if cdr.len() == 2 {
-                // XXX TODO- int 64s
-                let amount = match cdr[1] {
-                    Value::Byte(i) => i as u16,
-                    Value::Int(i) => {
-                        let i = from_i56(&i);
-                        if i >= 0 && i <= u16::MAX as i64 {
-                            i as u16
-                        } else {
-                            return Err(VMError::new_compile("dec!: second arg to large"));
-                        }
-                    }
-                    _ => return Err(VMError::new_compile("dec!: second arg must be integer")),
-                };
-                state
-                    .chunk
-                    .encode2(DEC, dest as u16, amount, env.own_line())?;
-            } else {
-                return Err(VMError::new_compile("dec!: malformed"));
-            }
+            compile_inc_dec(env, state, cdr, result, DEC)?;
         }
         Value::Special(i) if i == env.specials().add => {
             if cdr.is_empty() {
