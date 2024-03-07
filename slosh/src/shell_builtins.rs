@@ -117,6 +117,18 @@ fn version(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
 pub fn add_shell_builtins(env: &mut SloshVm) {
     add_builtin(
         env,
+        "usage",
+        crate::get_usage,
+        r#"Usage: (usage 'symbol)
+
+Provides usage information derived from the bytecode. Documentation can also have it's
+own usage string provided in the doc string but this function returns what the actual
+function's compiled code provides.
+
+Section: core"#,
+    );
+    add_builtin(
+        env,
         "$sh",
         sh_str,
         "Runs a shell command and returns a string of the output with newlines removed.",

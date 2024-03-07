@@ -40,7 +40,7 @@ use debug::*;
 use shell::platform::{Platform, Sys, STDIN_FILENO};
 use sl_compiler::load_eval::{load_internal, SLSHRC};
 use sl_compiler::pass1::pass1;
-use slvm::Value;
+use slvm::{VMError, VMResult, Value, INT_BITS, INT_MAX, INT_MIN};
 
 thread_local! {
     /// Env (job control status, etc) for the shell.
@@ -265,6 +265,64 @@ fn get_color_closure() -> Option<ColorClosure> {
             None
         }
     })
+}
+
+fn get_usage(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    if registers.len() > 1 {
+        Err(VMError::new_compile(
+            "usage: too many args, requires one symbol as an argument",
+        ))
+    } else {
+        match registers.iter().next() {
+            None => Err(VMError::new_compile(
+                "usage: no args provides, requires one symbol as an argument",
+            )),
+            Some(sym) => match sym {
+                Value::Symbol(i) => match vm.global_intern_slot(*i) {
+                    None => Err(VMError::new_compile(
+                        "usage: symbol provided is not defined.",
+                    )),
+                    Some(slot) => {
+                        let usage = usage(vm, slot, sym);
+                        Ok(vm.alloc_string(usage))
+                    }
+                },
+                _ => Err(VMError::new_compile(
+                    "usage: requires one symbol as an argument",
+                )),
+            },
+        }
+    }
+}
+
+fn usage(vm: &mut SloshVm, slot: u32, sym: &Value) -> String {
+    let name = sym.display_value(vm);
+    let mut doc_str = String::new();
+    let sym = vm.get_global(slot);
+    let args = match sym {
+        Value::Lambda(h) => {
+            let l = vm.get_lambda(h);
+            l.dbg_args.clone()
+        }
+        Value::Closure(h) => {
+            let (l, _h) = vm.get_closure(h);
+            l.dbg_args.clone()
+        }
+        _ => {
+            return doc_str;
+        }
+    };
+    if let Some(args) = args {
+        doc_str.push_str("(");
+        doc_str.push_str(&name);
+        for a in args {
+            let arg = vm.get_interned(a);
+            doc_str.push(' ');
+            doc_str.push_str(arg);
+        }
+        doc_str.push(')');
+    }
+    doc_str
 }
 
 pub fn set_builtins(env: &mut SloshVm) {

@@ -250,7 +250,13 @@ Print the documentation for provided symbol.
 
 Section: core
 %#
-(defmacro doc (sym) `(prn (eval (get-prop '~sym :doc-string))))
+(defmacro doc (sym)
+    (let (docs (eval `(get-prop ~sym :doc-string))
+         has-usage (str-starts-with "Usage:" (str-trim (str docs))))
+        (do
+        (if has-usage
+          (prn docs)
+          `(prn "Usage: " (eval (usage ~sym)) "\n\n" ~docs)))))
 
 #%
 Evaluate body a number of times equal to times' numerical value.

@@ -196,47 +196,6 @@ impl Display for DocStringSection {
     }
 }
 
-fn get_usage(mut sym: Value, vm: &mut SloshVm) -> String {
-    let name = &sym.display_value(vm);
-    let mut doc_str = String::new();
-    match sym {
-        // should be a symbol that refers to a lambda for closure
-        Value::Symbol(i) => {
-            let slot = vm.global_intern_slot(i);
-            if let Some(slot) = slot {
-                sym = vm.get_global(slot);
-            }
-        }
-        _ => {}
-    }
-    let args = match sym {
-        Value::Lambda(h) => {
-            let l = vm.get_lambda(h);
-            l.dbg_args.clone()
-        }
-        Value::Closure(h) => {
-            let (l, _h) = vm.get_closure(h);
-            l.dbg_args.clone()
-        }
-        _ => {
-            return doc_str;
-        }
-    };
-    if let Some(args) = args {
-        doc_str.push_str("(");
-        doc_str.push_str(name);
-        for a in args {
-            let arg = vm.get_interned(a);
-            doc_str.push(' ');
-            doc_str.push_str(arg);
-        }
-        doc_str.push(')');
-        doc_str.push('\n');
-        doc_str.push('\n');
-    }
-    doc_str
-}
-
 impl DocStringSection {
     pub fn from_symbol(slot: u32, sym: Value, vm: &mut SloshVm) -> DocResult<DocStringSection> {
         let docstring_key = vm.intern_static("doc-string");
@@ -250,7 +209,7 @@ impl DocStringSection {
             })
             // return default empty string and have parse_doc_string handle error if no doc provided.
             .unwrap_or_default();
-        let backup_usage = get_usage(sym, vm);
+        let backup_usage = crate::usage(vm, slot, &sym);
         Self::parse_doc_string(Cow::Owned(sym_str), raw_doc_string, backup_usage)
     }
 
@@ -524,7 +483,7 @@ pub fn add_builtins(env: &mut SloshVm) {
 Returns documentation for given symbol as map. Keyword is a documentation fragment
 (usage, section, description, example) and value is text describing given fragment.
 
-Section: global
+Section: core
 
 Example:
 #t
