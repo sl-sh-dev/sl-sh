@@ -196,6 +196,47 @@ impl Display for DocStringSection {
     }
 }
 
+fn get_usage(mut sym: Value, vm: &mut SloshVm) -> String {
+    let name = &sym.display_value(vm);
+    let mut doc_str = String::new();
+    match sym {
+        // should be a symbol that refers to a lambda for closure
+        Value::Symbol(i) => {
+            let slot = vm.global_intern_slot(i);
+            if let Some(slot) = slot {
+                sym = vm.get_global(slot);
+            }
+        }
+        _ => {}
+    }
+    let args = match sym {
+        Value::Lambda(h) => {
+            let l = vm.get_lambda(h);
+            l.dbg_args.clone()
+        }
+        Value::Closure(h) => {
+            let (l, _h) = vm.get_closure(h);
+            l.dbg_args.clone()
+        }
+        _ => {
+            return doc_str;
+        }
+    };
+    if let Some(args) = args {
+        doc_str.push_str("(");
+        doc_str.push_str(name);
+        for a in args {
+            let arg = vm.get_interned(a);
+            doc_str.push(' ');
+            doc_str.push_str(arg);
+        }
+        doc_str.push(')');
+        doc_str.push('\n');
+        doc_str.push('\n');
+    }
+    doc_str
+}
+
 impl DocStringSection {
     pub fn from_symbol(slot: u32, sym: Value, vm: &mut SloshVm) -> DocResult<DocStringSection> {
         let docstring_key = vm.intern_static("doc-string");
@@ -209,7 +250,8 @@ impl DocStringSection {
             })
             // return default empty string and have parse_doc_string handle error if no doc provided.
             .unwrap_or_default();
-        Self::parse_doc_string(Cow::Owned(sym_str), raw_doc_string)
+        let backup_usage = get_usage(sym, vm);
+        Self::parse_doc_string(Cow::Owned(sym_str), raw_doc_string, backup_usage)
     }
 
     /// Given the rules for parsing slosh docstrings, parse one! See [`DOC_REGEX`]
@@ -217,6 +259,7 @@ impl DocStringSection {
     pub fn parse_doc_string(
         symbol: Cow<'_, String>,
         raw_doc_string: String,
+        backup_usage: String,
     ) -> DocResult<DocStringSection> {
         let cap = DOC_REGEX.captures(raw_doc_string.as_str()).ok_or_else(|| {
             if EXEMPTIONS.contains(symbol.as_str()) {
@@ -229,7 +272,10 @@ impl DocStringSection {
                 }
             }
         })?;
-        let usage = cap.get(2).map(|x| x.as_str().trim().to_string());
+        let mut usage = cap.get(2).map(|x| x.as_str().trim().to_string());
+        if usage.is_none() && !backup_usage.trim().is_empty() {
+            usage = Some(backup_usage);
+        }
         let description = cap
             .get(3)
             .ok_or_else(|| DocError::DocStringMissingSection {
@@ -303,9 +349,6 @@ impl SloshDoc {
         let slot = vm.global_intern_slot(g);
         if let Some(slot) = slot {
             let doc_string = DocStringSection::from_symbol(slot, sym, vm)?;
-            if doc_string.usage.is_none() {
-                get_usage(sym, g, vm);
-            }
             let symbol = sym.display_value(&vm);
             let symbol_type = sym.display_type(&vm).to_string();
             Ok(SloshDoc {
@@ -335,25 +378,6 @@ impl SloshDoc {
         insert_nil_section(&mut map, EXAMPLE, vm);
         map
     }
-}
-
-fn get_usage(sym: Value, g: Interned, vm: &mut SloshVm) {
-    let mut doc_str = String::new();
-    // the old way
-    let exp_d = exp.get();
-    let p_iter = match &exp_d.data {
-        ExpEnum::Lambda(f) => f.params.iter(),
-        ExpEnum::Macro(m) => m.params.iter(),
-        _ => return,
-    };
-
-    doc_str.push_str("\n\nUsage: (");
-    doc_str.push_str(sym.display_value(vm));
-    for arg in p_iter {
-        doc_str.push(' ');
-        doc_str.push_str(arg);
-    }
-    doc_str.push(')');
 }
 
 enum DocError {
@@ -796,7 +820,11 @@ core
     fn test_doc_string_regex() {
         for ((result, label), test_case) in REGEX_TEST_CASES.iter() {
             let fake_symbol = Cow::Owned("fake-symbol".to_string());
-            match DocStringSection::parse_doc_string(fake_symbol, test_case.to_string()) {
+            match DocStringSection::parse_doc_string(
+                fake_symbol,
+                test_case.to_string(),
+                "".to_string(),
+            ) {
                 ok @ Ok(_) => {
                     assert_eq!(
                         ok.is_ok(),
