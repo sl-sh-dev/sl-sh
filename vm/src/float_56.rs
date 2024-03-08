@@ -8,6 +8,7 @@
 
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
+use std::str::FromStr;
 
 /// The F56 struct represents a 56-bit floating point number using 7 bytes.
 /// Most operations on F56 are done by converting to f64, performing the operation, and then converting back to F56
@@ -208,6 +209,12 @@ impl From<F56> for f64 {
 impl From<F56> for f32 {
     fn from(f: F56) -> f32 {
         f64::from(f) as f32
+    }
+}
+impl FromStr for F56 {
+    type Err = std::num::ParseFloatError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        f64::from_str(s).map(|f| F56::from(f))
     }
 }
 impl F56 {
