@@ -22,7 +22,25 @@ const CORE_LISP: &str = from_utf8(include_bytes!("../../lisp/core.slosh"));
 const COLORS_LISP: &str = from_utf8(include_bytes!("../../lisp/sh-color.slosh"));
 pub const SLSHRC: &str = from_utf8(include_bytes!("../../init.slosh"));
 
-//TODO PC no!!!
+/// With the given reader, for each sexp compile then load and execute.
+pub fn run_reader(reader: &mut Reader) -> VMResult<Value> {
+    let mut last = Value::False;
+    while let Some(exp) = reader.next() {
+        let reader_vm = reader.vm();
+        let exp = exp
+            .map_err(|e| VMError::new("read", e.to_string()))
+            .unwrap();
+        reader_vm.heap_sticky(exp);
+
+        let result = load_one_expression(reader_vm, exp, "", None);
+
+        reader_vm.heap_unsticky(exp);
+        let (chunk, _new_doc_string) = result.unwrap();
+        last = reader_vm.execute(chunk)?;
+    }
+    Ok(last)
+}
+
 pub fn load_one_expression(
     vm: &mut SloshVm,
     exp: Value,

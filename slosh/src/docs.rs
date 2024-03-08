@@ -501,30 +501,12 @@ Section: core
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{load_one_expression, set_builtins, set_initial_load_path, ENV};
+    use crate::{run_reader, set_builtins, set_initial_load_path, ENV};
     use compile_state::state::new_slosh_vm;
     use sl_compiler::Reader;
     use std::collections::BTreeMap;
     use std::ops::DerefMut;
     use tempdir::TempDir;
-
-    pub fn run_reader(reader: &mut Reader) -> VMResult<Value> {
-        let mut last = Value::False;
-        while let Some(exp) = reader.next() {
-            let reader_vm = reader.vm();
-            let exp = exp
-                .map_err(|e| VMError::new("read", e.to_string()))
-                .unwrap();
-            reader_vm.heap_sticky(exp);
-
-            let result = load_one_expression(reader_vm, exp, "", None);
-
-            reader_vm.heap_unsticky(exp);
-            let (chunk, _new_doc_string) = result.unwrap();
-            last = reader_vm.execute(chunk)?;
-        }
-        Ok(last)
-    }
 
     #[test]
     fn exec_global_slosh_tests_in_rust() {
