@@ -501,15 +501,31 @@ Section: core
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::tests::utils::exec;
-    use crate::{set_builtins, set_initial_load_path, ENV};
+    use crate::{load_one_expression, set_builtins, set_initial_load_path, ENV};
     use compile_state::state::new_slosh_vm;
+    use sl_compiler::Reader;
     use std::collections::BTreeMap;
     use std::ops::DerefMut;
     use tempdir::TempDir;
 
-    #[path = "../../tests/utils.rs"]
-    mod utils;
+    pub fn run_reader(reader: &mut Reader) -> VMResult<Value> {
+        let mut last = Value::False;
+        while let Some(exp) = reader.next() {
+            let reader_vm = reader.vm();
+            let exp = exp
+                .map_err(|e| VMError::new("read", e.to_string()))
+                .unwrap();
+            reader_vm.heap_sticky(exp);
+
+            let result = load_one_expression(reader_vm, exp, "", None);
+
+            reader_vm.heap_unsticky(exp);
+            let (chunk, _new_doc_string) = result.unwrap();
+            last = reader_vm.execute(chunk)?;
+        }
+        Ok(last)
+    }
+
     #[test]
     fn exec_global_slosh_tests_in_rust() {
         // create home dir
@@ -522,7 +538,9 @@ mod test {
                 let mut vm = env.borrow_mut();
                 set_builtins(vm.deref_mut());
                 set_initial_load_path(vm.deref_mut(), vec![&home_path]);
-                _ = exec(vm.deref_mut(), "(load \"init.slosh\")");
+                let mut reader =
+                    Reader::from_string(r#"(load "core.slosh")"#.to_string(), &mut vm, "", 1, 0);
+                _ = run_reader(&mut reader).unwrap();
 
                 let mut docs: Vec<SloshDoc> = vec![];
                 Namespace::Global.add_docs(&mut docs, &mut vm).unwrap();
@@ -536,7 +554,8 @@ mod test {
                             continue;
                         }
                         println!("Code:\n{}", example);
-                        let val = exec(&mut vm, example);
+                        let mut reader = Reader::from_string(example, &mut vm, "", 1, 0);
+                        let val = run_reader(&mut reader).unwrap();
                         println!("{}:\n{:?}", symbol, val);
                         assert!(!matches!(val, Value::Error(_)));
                         println!("{} ===============================", symbol);
