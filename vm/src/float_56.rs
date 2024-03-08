@@ -39,29 +39,18 @@ impl PartialEq for F56 {
         if self_as_f64.is_nan() && other_as_f64.is_nan() {
             return true;
         };
-        // Round to nearest multiple of F56::EPSILON for equality test
-        // Note how this is different from testing that the difference between the two is less than F56::EPSILON
-        // But this is necessary to guarantee that a == b => hash(a) == hash(b)
-        let precision = 1.0 / F56::EPSILON;
-        // since we are just comparing the values, we don't actually need to calculate the rounded value
-        // so we can omit the last step to divide by precision from both sides
-        let self_scaled = (self_as_f64 * precision).round();
-        let other_scaled = (other_as_f64 * precision).round();
-        self_scaled == other_scaled
+        return F56::round_f64_to_f56_precision(self_as_f64 - other_as_f64) == 0.0;
     }
 }
 impl Hash for F56 {
     fn hash<H: Hasher>(&self, state: &mut H) {
+        let self_as_f64 = f64::from(*self);
         // Make sure NaN hashes to the same value
-        if f64::from(*self).is_nan() {
+        if self_as_f64.is_nan() {
             state.write_u64(0x7FF8000000000000u64);
             return;
         }
-        // round to the nearest multiple of F56::EPSILON
-        // this way, two equal F56s will always hash to the same value
-        let precision = 1.0 / F56::EPSILON;
-        let value = f64::from(*self);
-        let rounded = (value * precision).round() / precision;
+        let rounded = F56::round_f64_to_f56_precision(self_as_f64);
         state.write_u64(rounded.to_bits())
     }
 }
