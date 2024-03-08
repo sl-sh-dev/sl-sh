@@ -1,8 +1,8 @@
 use crate::state::{CompileEnvironment, SloshVm, SloshVmTrait};
 use slvm::CallFuncSig;
 
+pub mod lisp_adapters;
 pub mod state;
-pub mod types;
 
 pub fn add_builtin(
     env: &mut SloshVm,

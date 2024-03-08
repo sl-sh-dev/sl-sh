@@ -1,6 +1,6 @@
 use compile_state::add_builtin;
+use compile_state::lisp_adapters::SlFrom;
 use compile_state::state::{SloshVm, SloshVmTrait};
-use compile_state::types::SlFrom;
 use lazy_static::lazy_static;
 use regex::{Regex, RegexBuilder};
 use slvm::VMErrorObj::Message;

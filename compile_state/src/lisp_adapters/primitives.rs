@@ -1,5 +1,5 @@
+use crate::lisp_adapters::SlFrom;
 use crate::state::SloshVm;
-use crate::types::SlFrom;
 use slvm::{VMResult, Value};
 
 impl SlFrom<&Value> for bool {
@@ -41,8 +41,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use crate::lisp_adapters::SlInto;
     use crate::state::new_slosh_vm;
-    use crate::types::SlInto;
     use slvm::Value;
 
     #[test]

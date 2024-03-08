@@ -1,5 +1,5 @@
+use crate::lisp_adapters::{SlAsMut, SlAsRef, SlFrom, SlFromRef, SlIntoRef};
 use crate::state::SloshVm;
-use crate::types::{SlAsMut, SlAsRef, SlFrom, SlFromRef, SlIntoRef};
 use bridge_types::{ErrorStrings, LooseString, SloshChar};
 use slvm::value::ValueType;
 use slvm::{VMError, VMResult, Value, ValueTypes};
@@ -189,8 +189,8 @@ impl SlFrom<&Value> for String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::lisp_adapters::{SlAsMut, SlAsRef, SlFromRef, SlInto, SlIntoRef};
     use crate::state::new_slosh_vm;
-    use crate::types::{SlAsMut, SlAsRef, SlFromRef, SlInto, SlIntoRef};
 
     pub const CODE_POINT: char = 'न';
     pub const CHAR_CLUSTER: &'static str = "ते";
