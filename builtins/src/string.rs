@@ -347,13 +347,13 @@ Example:
 
 (test::assert-equal "   some string" (str-trim "   some string" :right))
 (test::assert-equal "   some string" (str-trim "   some string   " :right))
-(test::assert-equal "   some string" (str-trim (str "   some string   " :right)))
+(test::assert-equal "   some string" (str-trim (str "   some string   ") :right))
 (test::assert-equal "some string" (str-trim "some string   " :right))
 (test::assert-equal "some string" (str-trim "some string" :right))
 
 (test::assert-equal "some string" (str-trim "   some string" :left))
 (test::assert-equal "some string   " (str-trim "   some string   " :left))
-(test::assert-equal "some string   " (str-trim (str "   some string   " :left)))
+(test::assert-equal "some string   " (str-trim (str "   some string   ")  :left))
 (test::assert-equal "some string   " (str-trim "some string   " :left))
 (test::assert-equal "some string" (str-trim "some string" :left))
 "#,
@@ -381,13 +381,13 @@ Example:
 
 (test::assert-equal "   some string" (str-trim! (str  "   some string") :right))
 (test::assert-equal "   some string" (str-trim! (str  "   some string   ") :right))
-(test::assert-equal "   some string" (str-trim! (str  (str "   some string   ") :right)))
+(test::assert-equal "   some string" (str-trim! (str  (str "   some string   "))  :right))
 (test::assert-equal "some string" (str-trim! (str  "some string   ") :right))
 (test::assert-equal "some string" (str-trim! (str  "some string") :right))
 
 (test::assert-equal "some string" (str-trim! (str  "   some string") :left))
 (test::assert-equal "some string   " (str-trim! (str  "   some string   ") :left))
-(test::assert-equal "some string   " (str-trim! (str  (str "   some string   ") :left)))
+(test::assert-equal "some string   " (str-trim! (str  (str "   some string   "))  :left))
 (test::assert-equal "some string   " (str-trim! (str  "some string   ") :left))
 (test::assert-equal "some string" (str-trim! (str  "some string") :left))
 "#,
@@ -442,11 +442,11 @@ Make a new string by applying lambda to each char in input string.
 Section: string
 
 Example:
-(test::assert-equal "XstringXstrX" (str-map "xstringxstrx" (fn (ch) (if (= \x ch) \X ch))))
-(def test-str-map (str-map "xstringxstrx" (fn (ch) (if (equal? \x ch) \X ch))))
+(test::assert-equal "XstringXstrX" (str-map "xstringxstrx" (fn (ch) (if (equal? "x" ch) "X" ch))))
+(def test-str-map (str-map "xstringxstrx" (fn (ch) (if (equal? "x" ch) "X" ch))))
 (test::assert-equal "XstringXstrX" test-str-map)
 (test::assert-true (string? test-str-map))
-(def test-str-map (str-map (str "xstringxstrx") (fn (ch) (if (equal? \x ch) \X ch))))
+(def test-str-map (str-map (str "xstringxstrx") (fn (ch) (if (equal? "x" ch) "X" ch))))
 (test::assert-equal "XstringXstrX" test-str-map)
 (test::assert-true (string? test-str-map))
 "#,
@@ -510,12 +510,12 @@ Use a pattern to split a string (:whitespace to split on whitespace).
 Section: string
 
 Example:
-(test::assert-equal '("some" "yyy" "string") (str-split "somexxxyyyxxxstring" "xxx"))
-(test::assert-equal '("some" "yyy" "string" "") (str-split "somexxxyyyxxxstringxxx" "xxx"))
-(test::assert-equal '("" "some" "yyy" "string" "") (str-split "xxxsomexxxyyyxxxstringxxx" "xxx"))
-(test::assert-equal '("some" "yyy" "string") (str-split "some yyy string" :whitespace))
-(test::assert-equal '("somexxxyyyxxxstring") (str-split "somexxxyyyxxxstring" :whitespace))
-(test::assert-equal '("somexxxyyyxxxstring") (str-split "somexxxyyyxxxstring" "zzz"))
+(test::assert-equal ["some" "yyy" "string"] (str-split "somexxxyyyxxxstring" "xxx"))
+(test::assert-equal ["some" "yyy" "string" ""] (str-split "somexxxyyyxxxstringxxx" "xxx"))
+(test::assert-equal ["" "some" "yyy" "string" ""] (str-split "xxxsomexxxyyyxxxstringxxx" "xxx"))
+(test::assert-equal ["some" "yyy" "string"] (str-split "some yyy string" :whitespace))
+(test::assert-equal ["somexxxyyyxxxstring"] (str-split "somexxxyyyxxxstring" :whitespace))
+(test::assert-equal ["somexxxyyyxxxstring"] (str-split "somexxxyyyxxxstring" "zzz"))
 "#,
     );
 }

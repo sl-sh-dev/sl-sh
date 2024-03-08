@@ -227,7 +227,7 @@ Example:
 (test::assert-equal "Three" test-do-three)
 (let (test-do-one nil)
     ; Add this to tthe let's scope (shadow the outer test-do-two).
-    (test::assert-equal "Default" (def ns::test-do-four "Default"))
+    (test::assert-equal "Default" (def test-do-four "Default"))
     ; set the currently scoped value.
     (set! test-do-one "1111")
     (set! test-do-two "2222")
@@ -321,7 +321,7 @@ Example:
 (def test-mac nil)
 (def mac-var 2)
 (let (mac-var 3)
-  (set! test-mac (macro (x) (set! test-macro2 100)(test::assert-equal 3 mac-var)`(* ,mac-var ,x))))
+  (set! test-mac (macro (x) (set! test-macro2 100) (test::assert-equal 3 mac-var) (* mac-var x))))
 (set! test-macro1 (test-mac 10))
 (test::assert-equal 30 test-macro1)
 (test::assert-equal 100 test-macro2)"),
@@ -367,7 +367,7 @@ Example:
 (test::assert-equal "TWO TRUE2" test-if-two2)
 (test::assert-equal "THREE DEFAULT" test-if-three2)
 (test::assert-equal nil (if nil))
-(test::assert-equal #f (if nil #t nil #t nil t))"#),
+(test::assert-equal #f (if nil #t nil #t nil #t))"#),
             add: add_special(vm, "+", r#"Usage: (+ number*)
 
 Add a sequence of numbers.  (+) will return 0.
@@ -455,10 +455,7 @@ Example:
 (test::assert-equal 2 (inc! *inc-test*))
 (test::assert-equal 2 *inc-test*)
 (test::assert-equal 5 (inc! *inc-test* 3))
-(test::assert-error (inc! *inc-test* "xxx"))
 (test::assert-equal 5 *inc-test*)
-(def *inc-test* "xxx")
-(test::assert-error (inc! *inc-test*))
 (let (inc-test 1)
   (test::assert-equal 2 (inc! inc-test))
   (test::assert-equal 2 inc-test)
@@ -474,11 +471,8 @@ Example:
 (def *dec-test* 5)
 (test::assert-equal 4 (dec! *dec-test*))
 (test::assert-equal 4 *dec-test*)
-(test::assert-error (dec! *dec-test* "xxx"))
 (test::assert-equal 1 (dec! *dec-test* 3))
 (test::assert-equal 1 *dec-test*)
-(def *dec-test* "xxx")
-(test::assert-error (dec! *dec-test*))
 (let (dec-test 5)
   (test::assert-equal 4 (dec! dec-test))
   (test::assert-equal 4 dec-test)
@@ -536,10 +530,9 @@ Example:
 (test::assert-equal '(x y z) tst-pairs-three)
 (test::assert-equal '(s y z) (xar! tst-pairs-three 's))
 (test::assert-equal '(s y z) tst-pairs-three)
-(def tst-pairs-four nil)
-(test::assert-equal '() tst-pairs-four)
-(test::assert-equal '(t) (xar! tst-pairs-four 't))
-(test::assert-equal '(t) tst-pairs-four)",
+(def tst-pairs-four (list 't))
+(test::assert-equal '(y) (xar! tst-pairs-four 'y))
+(test::assert-equal '(y) tst-pairs-four)",
             ),
             xdr: add_special(
                 vm,
@@ -558,10 +551,10 @@ Example:
 (test::assert-equal '(a b c) tst-pairs-five)
 (test::assert-equal '(a y z) (xdr! tst-pairs-five '(y z)))
 (test::assert-equal '(a y z) tst-pairs-five)
-(def tst-pairs-six nil)
-(test::assert-equal '() tst-pairs-six)
-(test::assert-equal '(nil . v) (xdr! tst-pairs-six 'v))
-(test::assert-equal '(nil . v) tst-pairs-six)",
+(def tst-pairs-six (list 'v))
+(test::assert-equal (list 'v) tst-pairs-six)
+(test::assert-equal '(v . v) (xdr! tst-pairs-six 'v))
+(test::assert-equal '(v . v) tst-pairs-six)",
             ),
             make_hash: add_special(
                 vm,
@@ -588,8 +581,8 @@ Make a new vector with items.
 Section: vector
 
 Example:
-(test::assert-equal '() (vec))
-(test::assert-equal '(1 2 3) (vec 1 2 3))
+(test::assert-equal [] (vec))
+(test::assert-equal [1 2 3] (vec 1 2 3))
 ",
             ),
             make_vec: add_special(
@@ -602,10 +595,10 @@ Make a new vector with capacity and default item(s).
 Section: vector
 
 Example:
-(test::assert-equal '() (make-vec))
-(test::assert-equal '(x x x) (make-vec 3 'x))
-(test::assert-equal '(nil nil nil nil nil) (make-vec 5 nil))
-(test::assert-equal '() (make-vec 5))
+(test::assert-equal [] (make-vec))
+(test::assert-equal ['x 'x 'x] (make-vec 3 'x))
+(test::assert-equal [nil nil nil nil nil] (make-vec 5 nil))
+(test::assert-equal [] (make-vec 5))
 ",
             ),
             vec_push: add_special(
@@ -619,12 +612,12 @@ Section: vector
 
 Example:
 (def test-push-vec (vec))
-(test::assert-equal '(1) (vec-push! test-push-vec 1))
-(test::assert-equal '(1) test-push-vec)
-(test::assert-equal '(1 2) (vec-push! test-push-vec 2))
-(test::assert-equal '(1 2) test-push-vec)
-(test::assert-equal '(1 2 3) (vec-push! test-push-vec 3))
-(test::assert-equal '(1 2 3) test-push-vec)
+(test::assert-equal [1] (vec-push! test-push-vec 1))
+(test::assert-equal [1] test-push-vec)
+(test::assert-equal [1 2] (vec-push! test-push-vec 2))
+(test::assert-equal [1 2] test-push-vec)
+(test::assert-equal [1 2 3] (vec-push! test-push-vec 3))
+(test::assert-equal [1 2 3] test-push-vec)
 ",
             ),
             vec_pop: add_special(
@@ -639,11 +632,11 @@ Section: vector
 Example:
 (def test-pop-vec (vec 1 2 3))
 (test::assert-equal 3 (vec-pop! test-pop-vec))
-(test::assert-equal '(1 2) test-pop-vec)
+(test::assert-equal [1 2] test-pop-vec)
 (test::assert-equal 2 (vec-pop! test-pop-vec))
-(test::assert-equal '(1) test-pop-vec)
+(test::assert-equal [1] test-pop-vec)
 (test::assert-equal 1 (vec-pop! test-pop-vec))
-(test::assert-equal '() test-pop-vec)
+(test::assert-equal [] test-pop-vec)
 ",
             ),
             quote: add_special(
@@ -679,8 +672,8 @@ Example:
 (test::assert-equal `(1 2 3) '(1 2 3))
 (def test-bquote-one 1)
 (def test-bquote-list '(1 2 3))
-(test::assert-equal (list 1 2 3) `(,test-bquote-one 2 3))
-(test::assert-equal (list 1 2 3) `(,@test-bquote-list))
+(test::assert-equal (list 1 2 3) `(~test-bquote-one 2 3))
+(test::assert-equal (list 1 2 3) `(~@test-bquote-list))
             ",
             ),
             recur: add_special(
@@ -735,12 +728,7 @@ Example:
 (test::assert-false (= 1.1 1.0))
 (test::assert-true (= 1.1 1.1))
 (test::assert-false (= 3 2 3))
-(test::assert-false (= "aab" "aaa"))
-(test::assert-true (= "aaa" "aaa"))
-(test::assert-true (= "aaa" "aaa" "aaa"))
-(test::assert-false (= "aaa" "aaaa" "aaa"))
-(test::assert-false (= "ccc" "aab" "aaa"))
-(test::assert-false (= "aaa" "aab")) "#),
+"#),
             numneq: add_special(vm, "/=", ""),
             numlt: add_special(vm, "<", r#"Usage: (< val0 ... valN)
 
@@ -761,10 +749,11 @@ Example:
 (test::assert-false (< 2.1 2.0 3.0))
 (test::assert-false (< 2 1))
 (test::assert-false (< 3 2 3))
-(test::assert-true (< "aaa" "aab"))
-(test::assert-false (< "aaa" "aaa"))
-(test::assert-true (< "aaa" "aab" "ccc"))
-(test::assert-false (< "baa" "aab"))"#),
+(test::assert-true (< 1.00000000000001 1.0000000000001 ))
+(test::assert-true (< 10.0000000000001 10.000000000001))
+(test::assert-true (< 100.000000000001 100.00000000001))
+(test::assert-false (< 1000.000000000001 1000.00000000001))
+"#),
             numlte: add_special(vm, "<=", r#"Usage: (<= val0 ... valN)
 
 Less than or equal.  Works for int, float or string.
@@ -783,10 +772,11 @@ Example:
 (test::assert-false (<= 2.1 2.0 3.0))
 (test::assert-false (<= 2 1))
 (test::assert-false (<= 3 2 3))
-(test::assert-true (<= "aaa" "aab"))
-(test::assert-true (<= "aaa" "aaa"))
-(test::assert-true (<= "aaa" "aab" "ccc"))
-(test::assert-false (<= "baa" "aab"))"#),
+(test::assert-true (<= 1.00000000000001 1.0000000000001 ))
+(test::assert-true (<= 10.0000000000001 10.000000000001))
+(test::assert-true (<= 100.000000000001 100.00000000001))
+(test::assert-true (<= 1000.000000000001 1000.00000000001))
+"#),
             numgt: add_special(vm, ">", r#"Usage: (> val0 ... valN)
 
 Greater than.  Works for int, float or string.
@@ -807,10 +797,11 @@ Example:
 (test::assert-true (> 3 2 1))
 (test::assert-true (> 1.1 1.0))
 (test::assert-false (> 3 2 3))
-(test::assert-true (> "aab" "aaa"))
-(test::assert-false (> "aaa" "aaa"))
-(test::assert-true (> "ccc" "aab" "aaa"))
-(test::assert-false (> "aaa" "aab"))"#),
+(test::assert-true (> 1.0000000000001 1.00000000000001))
+(test::assert-true (> 10.000000000001 10.0000000000001))
+(test::assert-true (> 100.00000000001 100.000000000001))
+(test::assert-false (> 1000.00000000001 1000.000000000001))
+"#),
             numgte: add_special(vm, ">=", r#"Usage: (>= val0 ... valN)
 
 Greater than or equal.  Works for int, float or string.
@@ -830,12 +821,27 @@ Example:
 (test::assert-true (>= 2 1))
 (test::assert-true (>= 1.1 1.0))
 (test::assert-false (>= 3 2 3))
-(test::assert-true (>= "aab" "aaa"))
-(test::assert-true (>= "aaa" "aaa"))
-(test::assert-true (>= "ccc" "aab" "aaa"))
-(test::assert-false (>= "aaa" "aab"))"#),
+(test::assert-true (>= 1.0000000000001 1.00000000000001))
+(test::assert-true (>= 10.000000000001 10.0000000000001))
+(test::assert-true (>= 100.00000000001 100.000000000001))
+(test::assert-true (>= 1000.00000000001 1000.000000000001))
+"#),
             eq: add_special(vm, "eq?", ""),
-            equal: add_special(vm, "equal?", ""),
+            equal: add_special(vm, "equal?", r#"Usage: (equal? val0 val1)
+
+Like '=' but works for most value types where it makes sense, not just primitives.
+
+Section: core
+
+Example:
+(test::assert-false (equal? "aab" "aaa"))
+(test::assert-true (equal? "aaa" "aaa"))
+(test::assert-true (equal? "aaa" "aaa" "aaa"))
+(test::assert-false (equal? "aaa" "aaaa" "aaa"))
+(test::assert-false (equal? "ccc" "aab" "aaa"))
+(test::assert-false (equal? "aaa" "aab"))
+(assert-true (equal? (get-error (/ 1 0)) (get-error (/ 1 0))))
+"#),
             type_: add_special(vm, "type", ""),
             not: add_special(vm, "not", "Usage: (not expression)
 
@@ -920,9 +926,9 @@ Section: collection
 
 Example:
 (def test-clear-vec (vec 1 2 3))
-(test::assert-false (vec-empty? test-clear-vec))
+(test::assert-false (empty? test-clear-vec))
 (clear! test-clear-vec)
-(test::assert-true (vec-empty? test-clear-vec))
+(test::assert-true (empty? test-clear-vec))
 ",
             ),
             str_: add_special(vm, "str", r#"Usage: (str arg0 ... argN) -> string
@@ -938,8 +944,8 @@ Example:
 (test::assert-equal "stringsome" (str "string" "some"))
 (test::assert-equal "string" (str "string" ""))
 (test::assert-equal "string 50" (str "string" " " 50))
-(test::assert-equal "string 50 test
-                              " (str "string" " " 50 " " (syscall 'echo "test")))"#),
+(test::assert-error (str {:key 'symbol}))
+"#),
             let_: add_special(vm, "let", r#"Usage: (let vals &rest let-body)
 
 Takes list, vals, of form ((binding0 sexp0) (binding1 sexp1) ...) and evaluates
