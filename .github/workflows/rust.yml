@@ -33,8 +33,8 @@ jobs:
           cargo build --workspace --verbose
     - name: Run rust tests
       run: cargo test --verbose
-    - name: Run lisp tests
-      run: cargo test --features lisp-test --package slosh --test slosh-tests -- --nocapture
+    - name: Run lisp integration tests
+      run: cargo test --workspace --features lisp-test
 
 
   build-macos:
@@ -50,8 +50,8 @@ jobs:
           cargo build --workspace --verbose
     - name: Run rust tests
       run: cargo test --verbose
-    - name: Run lisp tests
-      run: cargo test --features lisp-test --package slosh --test slosh-tests -- --nocapture
+    - name: Run lisp integration tests
+      run: cargo test --workspace --features lisp-test
 
 # if this gets too slow consider
 # https://github.com/Swatinem/rust-cache
