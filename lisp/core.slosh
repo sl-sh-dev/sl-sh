@@ -93,13 +93,11 @@ Section: type
 Example:
 (test::assert-true (seq? '(1 2 3)))
 (test::assert-true (seq? [1 2 3]))
-(test::assert-true (seq? '()))
-(test::assert-true (seq? '()))
 (test::assert-true (seq? []))
 (test::assert-false (seq? "aaa"))
 (test::assert-false (seq? 1))
 %#
-(def seq? (fn (v) (or (nil? v)(pair? v)(vec? v))))
+(def seq? (fn (v) (or (pair? v)(vec? v))))
 
 #%
 Usage (empty? s)
@@ -152,7 +150,7 @@ Create a macro and bind it to a symbol in the current scope.
 Section: core
 
 Example:
-(defmacro test-mac (x) (let (y (+ (ref x) 1)) `(set! ~x ~y)))
+(defmacro test-mac (x) `(inc! ~x))
 (def test-mac-x 2)
 (test-mac test-mac-x)
 (test::assert-equal 3 test-mac-x)

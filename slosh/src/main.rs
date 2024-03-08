@@ -33,6 +33,7 @@ pub mod docs;
 mod liner_rules;
 mod load_eval;
 pub use crate::load_eval::load_one_expression;
+pub use crate::load_eval::run_reader;
 mod shell_builtins;
 
 use crate::completions::ShellCompleter;
