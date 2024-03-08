@@ -6,6 +6,13 @@ use sl_compiler::{compile, new_slosh_vm_with_builtins, Reader};
 use slvm::{Chunk, VMError, VMResult, Value, RET};
 use std::sync::Arc;
 
+// TODO PC would be nice to not have to copy load_one_expression and run_reader.
+// the refactor in issue #143 should help with this as both of these functions could
+// be moved to a crate all.rs and the slosh crate depend on so they can be referenced.
+// ALSO. might be nice to get more clarity on their usage. Is this the best way to be using them?
+// are they only used in test and if so does it make sense to use them here or should we actually be
+// using something else?
+
 fn load_one_expression(
     vm: &mut SloshVm,
     exp: Value,

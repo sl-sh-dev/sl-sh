@@ -29,6 +29,7 @@ pub mod docs;
 mod liner_rules;
 
 pub use sl_compiler::load_eval::load_one_expression;
+pub use sl_compiler::load_eval::run_reader;
 mod shell_builtins;
 
 use crate::completions::ShellCompleter;
@@ -390,7 +391,7 @@ fn run_shell_tty() -> i32 {
             Ok(input) => input,
             Err(err) => match err.kind() {
                 ErrorKind::UnexpectedEof => {
-                    status = 1; //TODO PC fix
+                    status = 1;
                     break;
                 }
                 ErrorKind::Interrupted => {

@@ -174,7 +174,6 @@ impl SlFrom<&Value> for String {
     }
 }
 
-//TODO PC finish testing negative cases e.g. asserting that errors are thrown.
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -253,6 +252,20 @@ mod tests {
                 panic!("Should return a string!")
             }
         }
+    }
+
+    #[test]
+    fn try_conversion_error() {
+        let mut vm = new_slosh_vm();
+        let value = create_string(&mut vm);
+        let c: VMResult<char> = (&value).sl_into(&mut vm);
+        assert!(c.is_err());
+        let err = VMError::new_conversion(ErrorStrings::fix_me_mismatched_type_with_context(
+            String::from(ValueTypes::from([ValueType::CodePoint])),
+            value.display_type(&mut vm),
+            "Provided value can not be more than one byte, e.g. a char.",
+        ));
+        assert_eq!(c.err().unwrap().to_string(), err.to_string());
     }
 
     #[test]
