@@ -11,7 +11,6 @@ unicode_reader = "1"
 slvm = { path = "../vm" }
 builtins = { path = "../builtins" }
 compile_state = { path = "../compile_state" }
-shell = { path = "../shell" }
 
 [build-dependencies]
 chrono = "0.4"

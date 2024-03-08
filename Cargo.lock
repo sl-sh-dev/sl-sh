@@ -736,7 +736,6 @@ dependencies = [
  "builtins",
  "chrono",
  "compile_state",
- "shell",
  "slvm",
  "unicode-segmentation",
  "unicode_reader",
