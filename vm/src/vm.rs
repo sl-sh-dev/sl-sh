@@ -220,11 +220,8 @@ impl<ENV> GVm<ENV> {
                 val = Value::True;
             }
         } else if val1.is_number() && val2.is_number() {
-            if (10f64.powf(F56::DIGITS as f64)
-                * (val1.get_float(self)? - val2.get_float(self)?).abs())
-            .round()
-                == 0f64
-            {
+            let diff = (val1.get_float(self)? - val2.get_float(self)?).abs();
+            if F56::round_f64_to_f56_precision(diff) == 0.0 {
                 val = Value::True;
             }
         } else {
