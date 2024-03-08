@@ -28,6 +28,9 @@ use std::str::FromStr;
 /// smallest positive subnormal value is 8.48e-168 (2^-555)
 /// smallest positive normal value is 2.98e-154 (2^-510)
 /// maximum finite value is 1.34e154
+///
+/// A f64 number like 1.00000000001 with 12 decimal digits will be 1.000000000001
+/// A f64 number like 1.000000000001 with 13 decimal digits will be converted to 1.0
 #[derive(Copy, Clone)]
 pub struct F56(pub [u8; 7]);
 impl Eq for F56 {}
