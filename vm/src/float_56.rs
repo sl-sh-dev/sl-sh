@@ -42,7 +42,7 @@ impl PartialEq for F56 {
         if self_as_f64.is_nan() && other_as_f64.is_nan() {
             return true;
         };
-        return F56::round_f64_to_f56_precision(self_as_f64 - other_as_f64) == 0.0;
+        F56::round_f64_to_f56_precision(self_as_f64 - other_as_f64) == 0.0
     }
 }
 impl Hash for F56 {
@@ -207,7 +207,7 @@ impl From<F56> for f32 {
 impl FromStr for F56 {
     type Err = std::num::ParseFloatError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        f64::from_str(s).map(|f| F56::from(f))
+        f64::from_str(s).map(F56::from)
     }
 }
 impl F56 {
