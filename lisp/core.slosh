@@ -251,7 +251,7 @@ Print the documentation for provided symbol.
 Section: core
 %#
 (defmacro doc (sym)
-    (let (docs (eval `(get-prop ~sym :doc-string))
+    (let (docs `(get-prop ~sym :doc-string)
          has-usage (str-starts-with "Usage:" (str-trim (str docs))))
         (do
         `(if ~has-usage
