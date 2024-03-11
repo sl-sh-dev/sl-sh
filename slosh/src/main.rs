@@ -283,7 +283,26 @@ fn get_usage(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
                         "usage: symbol provided is not defined.",
                     )),
                     Some(slot) => {
-                        let usage = usage(vm, slot, sym);
+                        let mut usage = usage(vm, slot, sym);
+                        if usage.trim().is_empty() {
+                            let docstring_key = vm.intern_static("doc-string");
+                            let raw_doc_string = vm
+                                .get_global_property(slot, docstring_key)
+                                .and_then(|x| match x {
+                                    Value::String(h) => Some(vm.get_string(h).to_string()),
+                                    Value::StringConst(i) => Some(vm.get_interned(i).to_string()),
+                                    _ => None,
+                                })
+                                // return default empty string and have parse_doc_string handle error if no doc provided.
+                                .unwrap_or_default();
+                            if let Some(test) = raw_doc_string.trim().lines().next() {
+                                if test.starts_with("Usage:") {
+                                    usage = test.to_string();
+                                }
+                            }
+                        } else {
+                            usage = format!("Usage: {}", usage);
+                        }
                         Ok(vm.alloc_string(usage))
                     }
                 },
