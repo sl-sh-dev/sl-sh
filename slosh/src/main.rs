@@ -40,7 +40,7 @@ use debug::*;
 use shell::platform::{Platform, Sys, STDIN_FILENO};
 use sl_compiler::load_eval::{load_internal, SLSHRC};
 use sl_compiler::pass1::pass1;
-use slvm::{VMError, VMResult, Value, INT_BITS, INT_MAX, INT_MIN};
+use slvm::{VMError, VMResult, Value};
 
 thread_local! {
     /// Env (job control status, etc) for the shell.
