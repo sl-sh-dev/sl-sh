@@ -8,6 +8,7 @@
 
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
+use std::str::FromStr;
 
 /// The F56 struct represents a 56-bit floating point number using 7 bytes.
 /// Most operations on F56 are done by converting to f64, performing the operation, and then converting back to F56
@@ -27,6 +28,9 @@ use std::hash::{Hash, Hasher};
 /// smallest positive subnormal value is 8.48e-168 (2^-555)
 /// smallest positive normal value is 2.98e-154 (2^-510)
 /// maximum finite value is 1.34e154
+///
+/// A f64 number like 1.00000000001 with 12 decimal digits will be 1.000000000001
+/// A f64 number like 1.000000000001 with 13 decimal digits will be converted to 1.0
 #[derive(Copy, Clone)]
 pub struct F56(pub [u8; 7]);
 impl Eq for F56 {}
@@ -38,29 +42,18 @@ impl PartialEq for F56 {
         if self_as_f64.is_nan() && other_as_f64.is_nan() {
             return true;
         };
-        // Round to nearest multiple of F56::EPSILON for equality test
-        // Note how this is different from testing that the difference between the two is less than F56::EPSILON
-        // But this is necessary to guarantee that a == b => hash(a) == hash(b)
-        let precision = 1.0 / F56::EPSILON;
-        // since we are just comparing the values, we don't actually need to calculate the rounded value
-        // so we can omit the last step to divide by precision from both sides
-        let self_scaled = (self_as_f64 * precision).round();
-        let other_scaled = (other_as_f64 * precision).round();
-        self_scaled == other_scaled
+        F56::round_f64_to_f56_precision(self_as_f64 - other_as_f64) == 0.0
     }
 }
 impl Hash for F56 {
     fn hash<H: Hasher>(&self, state: &mut H) {
+        let self_as_f64 = f64::from(*self);
         // Make sure NaN hashes to the same value
-        if f64::from(*self).is_nan() {
+        if self_as_f64.is_nan() {
             state.write_u64(0x7FF8000000000000u64);
             return;
         }
-        // round to the nearest multiple of F56::EPSILON
-        // this way, two equal F56s will always hash to the same value
-        let precision = 1.0 / F56::EPSILON;
-        let value = f64::from(*self);
-        let rounded = (value * precision).round() / precision;
+        let rounded = F56::round_f64_to_f56_precision(self_as_f64);
         state.write_u64(rounded.to_bits())
     }
 }
@@ -202,12 +195,19 @@ impl From<F56> for f64 {
         let f64_sign = f56_sign as u64;
         let f64_mantissa = f56_mantissa << 7_u64; // we add 7 bits in mantissa, but they're all zeros
         let word: u64 = f64_sign << 63 | f64_biased_exponent << 52 | f64_mantissa;
-        f64::from_be_bytes(word.to_be_bytes())
+        let converted_to_f64 = f64::from_be_bytes(word.to_be_bytes());
+        F56::round_f64_to_f56_precision(converted_to_f64)
     }
 }
 impl From<F56> for f32 {
     fn from(f: F56) -> f32 {
         f64::from(f) as f32
+    }
+}
+impl FromStr for F56 {
+    type Err = std::num::ParseFloatError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        f64::from_str(s).map(F56::from)
     }
 }
 impl F56 {
@@ -585,5 +585,47 @@ mod tests {
         for f in get_edge_case_f64_values().iter() {
             string_test_closure(f);
         }
+    }
+
+    #[test]
+    fn f56_operations() {
+        // Simulate (eq 4.9 (- 10.9 2 4))
+        let op1 = "10.9".parse::<F56>().unwrap();
+        let op2 = "2".parse::<F56>().unwrap();
+        let op3 = "4".parse::<F56>().unwrap();
+        let target = "4.9".parse::<F56>().unwrap();
+
+        let op1_f64 = f64::from(op1);
+        let op2_f64 = f64::from(op2);
+        let op3_f64 = f64::from(op3);
+        let target_f64 = f64::from(target);
+
+        let calculated_f64 = op1_f64 - op2_f64 - op3_f64;
+        assert_eq!(calculated_f64, target_f64);
+
+        // Test < on numbers too precise for F56
+        let op1 = "1.0000000000001".parse::<F56>().unwrap(); // 14 digits (rounds to 1.0)
+        let op2 = "1.000000000001".parse::<F56>().unwrap(); // 13 digits (rounds to 1.0)
+        let lt = f64::from(op1) < f64::from(op2);
+        let gt = f64::from(op1) > f64::from(op2);
+        assert_eq!(op1, op2);
+        assert!(!lt);
+        assert!(!gt);
+
+        // Test < on numbers straddling precision boundary
+        let op1 = "1.000000000001".parse::<F56>().unwrap(); // 13 digits (rounds to 1.0)
+        let op2 = "1.00000000001".parse::<F56>().unwrap(); // 12 digits (stays at 1.000000000001)
+        let lt = f64::from(op1) < f64::from(op2);
+        let gt = f64::from(op1) > f64::from(op2);
+        assert!(lt);
+        assert!(!gt);
+        assert_ne!(op1, op2);
+
+        // Test op1 - op2 > 0 instead of op1 > op2
+        let lt = (f64::from(op1) - f64::from(op2)) < 0.0;
+        let gt = (f64::from(op1) - f64::from(op2)) > 0.0;
+        assert!(lt);
+        assert!(!gt);
+        assert_ne!((f64::from(op1) - f64::from(op2)), 0.0);
     }
 }
