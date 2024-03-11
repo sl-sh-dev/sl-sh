@@ -1,13 +1,13 @@
+use crate::pass1::pass1;
+use crate::{compile, Reader};
 use compile_state::state::{CompileState, SloshVm, SloshVmTrait};
-use shell::builtins::expand_tilde;
-use sl_compiler::pass1::pass1;
-use sl_compiler::{compile, Reader};
 use slvm::{Chunk, VMError, VMResult, Value, RET};
 use std::borrow::Cow;
-use std::fs;
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
+use std::{env, fs};
 
 const fn from_utf8(bytes: &[u8]) -> &str {
     if let Ok(s) = std::str::from_utf8(bytes) {
@@ -78,7 +78,7 @@ pub fn load_one_expression(
     Ok((Arc::new(state.chunk), state.doc_string))
 }
 
-pub(crate) fn load_internal(vm: &mut SloshVm, name: &'static str) -> VMResult<Value> {
+pub fn load_internal(vm: &mut SloshVm, name: &'static str) -> VMResult<Value> {
     let fname = if fs::metadata::<&Path>(name.as_ref()).is_ok() {
         Ok(Cow::Borrowed(name))
     } else {
@@ -170,6 +170,40 @@ fn find_first_instance_of_file_in_load_path<'a>(
         }
     } else {
         Err(VMError::new("io", format!("{name}: *load-path* not set!")))
+    }
+}
+
+/// Takes a PathBuf, if it contains ~ then replaces it with HOME and returns the new PathBuf, else
+/// returns path.  If path is not utf-8 then it will not expand ~.
+pub fn expand_tilde(path: PathBuf) -> PathBuf {
+    if let Some(path_str) = path.to_str() {
+        if path_str.contains('~') {
+            let home: PathBuf = match env::var_os("HOME") {
+                Some(val) => val.into(),
+                None => "/".into(),
+            };
+            let mut new_path = OsString::new();
+            let mut last_ch = ' ';
+            let mut buf = [0_u8; 4];
+            let mut quoted = false;
+            for ch in path_str.chars() {
+                if ch == '\'' && last_ch != '\\' {
+                    quoted = !quoted;
+                }
+                if ch == '~' && !quoted && (last_ch == ' ' || last_ch == ':' || last_ch == '=') {
+                    // Strip the trailing / if it exists.
+                    new_path.push(home.components().as_path().as_os_str());
+                } else {
+                    new_path.push(ch.encode_utf8(&mut buf));
+                }
+                last_ch = ch;
+            }
+            new_path.into()
+        } else {
+            path
+        }
+    } else {
+        path
     }
 }
 

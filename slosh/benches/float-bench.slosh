@@ -1,12 +1,7 @@
-(def defmacro
-  (macro (name args & body)
-      `(def ~name (macro ~args ~@body))))
-(defmacro dotimes-i
-    (idx-bind times & body)
-    `(let (~idx-bind 0)
-        (while (< ~idx-bind ~times)
-            ~@body
-            (inc! ~idx-bind))))
+#!/usr/bin/env slosh
+
+(load "core.slosh")
+
 (def eval-pol (fn (n x)
   (let (su 0.0
         mu 10.0
