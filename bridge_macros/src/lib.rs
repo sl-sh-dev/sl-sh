@@ -200,7 +200,7 @@ fn get_generic_argument_from_type(ty: &Type) -> Option<(&GenericArgument, &TypeP
 
 fn generate_assertions_code_for_return_type_conversions(return_type: &Type) -> TokenStream2 {
     quote! {
-      static_assertions::assert_impl_all!(#return_type: compile_state::lisp_adapters::SlInto<slvm::Value>);
+      static_assertions::assert_impl_all!(#return_type: bridge_adapters::lisp_adapters::SlInto<slvm::Value>);
     }
 }
 
@@ -479,12 +479,12 @@ fn make_orig_fn_call(
             return Ok(slvm::Value::Nil);
         },
         (Some(_), Some(SupportedGenericReturnTypes::VMResult), false) => quote! {
-            use compile_state::lisp_adapters::SlInto;
+            use bridge_adapters::lisp_adapters::SlInto;
             return #fn_body.and_then(|x| x.sl_into(environment));
         },
         (Some(_), Some(SupportedGenericReturnTypes::Option), false) => quote! {
             if let Some(val) = #fn_body {
-                use compile_state::lisp_adapters::SlFrom;
+                use bridge_adapters::lisp_adapters::SlFrom;
                 let val = slvm::Value::sl_from(val, environment)?;
                 Ok(val)
             } else {
@@ -493,7 +493,7 @@ fn make_orig_fn_call(
         },
         // coerce to Expression
         (Some(_), None, _) => quote! {
-            use compile_state::lisp_adapters::SlInto;
+            use bridge_adapters::lisp_adapters::SlInto;
             return #fn_body.sl_into(environment);
         },
         (None, Some(_), _) => {
@@ -610,7 +610,7 @@ fn parse_variadic_args_type(
             Ok(quote! {{
                 #arg_check
 
-                static_assertions::assert_impl_all!(slvm::Value: compile_state::lisp_adapters::SlFrom<#wrapped_ty>);
+                static_assertions::assert_impl_all!(slvm::Value: bridge_adapters::lisp_adapters::SlFrom<#wrapped_ty>);
                 let #arg_name = #arg_name
                     .iter()
                     .map(|#arg_name| {
@@ -650,14 +650,14 @@ fn parse_variadic_args_type(
                 for (elem, arg_name) in type_tuple.elems.iter().zip(arg_names.iter()) {
                     types.push(elem.clone());
                     type_assertions.push(quote! {
-                        static_assertions::assert_impl_all!(slvm::Value: compile_state::lisp_adapters::SlFrom<#elem>);
+                        static_assertions::assert_impl_all!(slvm::Value: bridge_adapters::lisp_adapters::SlFrom<#elem>);
                     });
                     args.push(quote! {
                         let #arg_name: #elem = #arg_name.clone().try_into_for(#fn_name)?;
                     })
                 }
                 Ok(quote! {{
-                    use compile_state::lisp_adapters::SlFrom;
+                    use bridge_adapters::lisp_adapters::SlFrom;
                     use std::convert::TryInto;
                     #(#type_assertions)*
                     #arg_check
@@ -802,17 +802,17 @@ fn parse_direct_type(
 
                 match passing_style {
                     PassingStyle::Value => Ok(quote! {{
-                        use compile_state::lisp_adapters::SlInto;
+                        use bridge_adapters::lisp_adapters::SlInto;
                         let #arg_name: #ty = #arg_name.sl_into(environment)?;
                         #inner
                     }}),
                     PassingStyle::Reference => Ok(quote! {{
-                        use compile_state::lisp_adapters::SlAsRef;
+                        use bridge_adapters::lisp_adapters::SlAsRef;
                         let #arg_name: #ty = #arg_name.sl_as_ref(environment)?;
                         #inner
                     }}),
                     PassingStyle::MutReference => Ok(quote! {{
-                        use compile_state::lisp_adapters::SlAsMut;
+                        use bridge_adapters::lisp_adapters::SlAsMut;
                         let #arg_name: #ty = #arg_name.sl_as_mut(environment)?;
                         #inner
                     }}),
@@ -989,7 +989,7 @@ fn generate_intern_fn(
     quote! {
         fn #intern_name(env: &mut compile_state::state::SloshVm) {
             let #fn_name_ident = #fn_name;
-            compile_state::add_builtin(env, #fn_name_ident, #parse_name, #doc_comments);
+            bridge_adapters::add_builtin(env, #fn_name_ident, #parse_name, #doc_comments);
         }
     }
 }

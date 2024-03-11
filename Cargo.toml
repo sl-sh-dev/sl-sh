@@ -11,6 +11,7 @@ members = [
     "shell",
     "bridge_macros",
     "bridge_types",
+    "bridge_adapters",
 ]
 
 exclude = [ "legacy" ]

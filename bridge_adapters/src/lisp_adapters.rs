@@ -1,4 +1,5 @@
-use crate::state::SloshVm;
+use compile_state::state::SloshVm;
+
 #[cfg(doc)]
 use bridge_types::{LooseString, SloshChar};
 use slvm::{VMResult, Value};

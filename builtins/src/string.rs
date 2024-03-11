@@ -1,6 +1,6 @@
 use crate::SloshVm;
+use bridge_adapters::add_builtin;
 use bridge_macros::sl_sh_fn;
-use compile_state::add_builtin;
 use slvm::{Handle, VMError, VMResult, Value};
 use unicode_segmentation::UnicodeSegmentation;
 

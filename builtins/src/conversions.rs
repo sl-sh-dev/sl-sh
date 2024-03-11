@@ -1,4 +1,4 @@
-use compile_state::add_builtin;
+use bridge_adapters::add_builtin;
 use compile_state::state::{SloshVm, SloshVmTrait};
 use slvm::{VMError, VMResult, Value};
 

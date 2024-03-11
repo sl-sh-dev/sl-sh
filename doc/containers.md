@@ -67,8 +67,6 @@ Other hashmap function:
 This is a traditional Lisp conscell data type, pair of values (car, cdr).  It can
 be used to create a linked list of values.
 
-Note: an empty list is not nil and nil is not an empty list.
-
 Other Pair function:
 - car
 - cdr

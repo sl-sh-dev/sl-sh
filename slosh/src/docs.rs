@@ -1,5 +1,5 @@
-use compile_state::add_builtin;
-use compile_state::lisp_adapters::SlFrom;
+use bridge_adapters::add_builtin;
+use bridge_adapters::lisp_adapters::SlFrom;
 use compile_state::state::{SloshVm, SloshVmTrait};
 use lazy_static::lazy_static;
 use regex::{Regex, RegexBuilder};

@@ -177,7 +177,7 @@ pub fn add_misc_builtins(env: &mut SloshVm) {
     env.set_global_builtin("sizeof-value", sizeof_value);
     env.set_global_builtin("gensym", gensym);
     env.set_global_builtin("expand-macro", expand_macro);
-    compile_state::add_builtin(
+    bridge_adapters::add_builtin(
         env,
         "rem",
         remainder,
@@ -198,7 +198,7 @@ Example:
 (test::assert-error (rem 1 2.0))
 ",
     );
-    compile_state::add_builtin(
+    bridge_adapters::add_builtin(
         env,
         "get-globals",
         get_globals,
