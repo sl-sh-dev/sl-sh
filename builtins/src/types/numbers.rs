@@ -2,7 +2,27 @@ use crate::types::SlFrom;
 use bridge_types::ErrorStrings;
 use compile_state::state::SloshVm;
 use slvm::value::ValueType;
-use slvm::{from_i56, to_i56, VMError, VMResult, Value};
+use slvm::{from_i56, to_i56, VMError, VMResult, Value, ValueTypes, F56};
+
+impl SlFrom<()> for Value {
+    fn sl_from(_value: (), _vm: &mut SloshVm) -> VMResult<Self> {
+        Ok(Value::Nil)
+    }
+}
+
+impl SlFrom<&Value> for () {
+    fn sl_from(value: &Value, _vm: &mut SloshVm) -> VMResult<()> {
+        match value {
+            Value::Nil => Ok(()),
+            _ => Err(VMError::new_conversion(
+                ErrorStrings::fix_me_mismatched_type(
+                    <&'static str>::from(ValueType::Nil),
+                    value.display_type(_vm),
+                ),
+            )),
+        }
+    }
+}
 
 impl SlFrom<i32> for Value {
     fn sl_from(value: i32, _vm: &mut SloshVm) -> VMResult<Self> {
@@ -29,6 +49,54 @@ impl SlFrom<&Value> for i32 {
             _ => Err(VMError::new_conversion(
                 ErrorStrings::fix_me_mismatched_type(
                     <&'static str>::from(ValueType::Int),
+                    value.display_type(vm),
+                ),
+            )),
+        }
+    }
+}
+
+impl SlFrom<f64> for Value {
+    fn sl_from(value: f64, _vm: &mut SloshVm) -> VMResult<Self> {
+        Ok(Value::Float(F56::from(value)))
+    }
+}
+
+impl SlFrom<&Value> for f64 {
+    fn sl_from(value: &Value, vm: &mut SloshVm) -> VMResult<Self> {
+        match value {
+            Value::Float(f56) => Ok(f64::from(*f56)),
+            _ => Err(VMError::new_conversion(
+                ErrorStrings::fix_me_mismatched_type(
+                    <&'static str>::from(ValueType::Float),
+                    value.display_type(vm),
+                ),
+            )),
+        }
+    }
+}
+
+impl SlFrom<&Value> for usize {
+    fn sl_from(value: &Value, vm: &mut SloshVm) -> VMResult<Self> {
+        match value {
+            Value::Int(i) => usize::try_from(from_i56(i)).map_err(|_| {
+                VMError::new_conversion(ErrorStrings::fix_me_mismatched_type(
+                    <&'static str>::from(ValueType::Float),
+                    value.display_type(vm),
+                ))
+            }),
+            Value::Float(f) => {
+                let f = f64::from(*f) as i64;
+                usize::try_from(f).map_err(|_| {
+                    VMError::new_conversion(ErrorStrings::fix_me_mismatched_type(
+                        <&'static str>::from(ValueType::Float),
+                        value.display_type(vm),
+                    ))
+                })
+            }
+            _ => Err(VMError::new_conversion(
+                ErrorStrings::fix_me_mismatched_type(
+                    String::from(ValueTypes::from([ValueType::Int, ValueType::Float])),
                     value.display_type(vm),
                 ),
             )),

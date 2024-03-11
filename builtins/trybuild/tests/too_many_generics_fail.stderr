@@ -1,0 +1,5 @@
+error: sl_sh_fn only supports functions with 0 or 1 generic lifetime parameters.
+ --> trybuild/tests/too_many_generics_fail.rs:7:25
+  |
+7 | pub fn too_many_generics<'a, 'b>(a: &'a str, b: &'b str) -> &'a str {
+  |                         ^

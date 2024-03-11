@@ -27,7 +27,7 @@ pub type VarArgs<T> = Vec<T>;
 /// - StringConst
 ///
 /// Always does an allocation and returns a [`Value`]`::String` type.
-pub type LooseString<'a, T> = Cow<'a, T>;
+pub type LooseString<'a> = Cow<'a, str>;
 
 /// [Value](../slvm/value/enum.Value.html)
 /// Type to hold Slosh's notion of a char.
@@ -35,6 +35,7 @@ pub type LooseString<'a, T> = Cow<'a, T>;
 /// In slosh a character can either be an actual char, e.g. a [`Value`]`::CodePoint`
 /// or a [`Value`]`::CharCluster`/[`Value`]`::CharClusterLong` in which case it will
 /// be stored in an &str.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SloshChar<'a> {
     Char(char),
     String(Cow<'a, str>),

@@ -1,11 +1,23 @@
-use crate::types::{SlAsMut, SlAsRef, SlFrom, SlFromRef};
+use crate::types::{SlAsMut, SlAsRef, SlFrom, SlFromRef, SlIntoRef};
 use bridge_types::{ErrorStrings, LooseString, SloshChar};
 use compile_state::state::SloshVm;
 use slvm::value::ValueType;
 use slvm::{VMError, VMResult, Value, ValueTypes};
 use std::borrow::Cow;
 
-impl<'a> SlFromRef<'a, &Value> for LooseString<'a, str> {
+impl<'a> SlFrom<Cow<'a, str>> for Value {
+    fn sl_from(value: Cow<'a, str>, vm: &mut SloshVm) -> VMResult<Self> {
+        value.sl_into_ref(vm)
+    }
+}
+
+impl<'a> SlFrom<SloshChar<'a>> for Value {
+    fn sl_from(value: SloshChar<'a>, vm: &mut SloshVm) -> VMResult<Self> {
+        value.sl_into_ref(vm)
+    }
+}
+
+impl<'a> SlFromRef<'a, &Value> for LooseString<'a> {
     fn sl_from_ref(value: &Value, vm: &'a mut SloshVm) -> VMResult<Self> {
         match value {
             Value::String(h) => Ok(LooseString::Borrowed(vm.get_string(*h))),
@@ -39,8 +51,8 @@ impl<'a> SlFromRef<'a, &Value> for LooseString<'a, str> {
     }
 }
 
-impl<'a> SlFromRef<'a, LooseString<'a, str>> for Value {
-    fn sl_from_ref(value: LooseString<'a, str>, vm: &'a mut SloshVm) -> VMResult<Self> {
+impl<'a> SlFromRef<'a, LooseString<'a>> for Value {
+    fn sl_from_ref(value: LooseString<'a>, vm: &'a mut SloshVm) -> VMResult<Self> {
         match value {
             LooseString::Borrowed(s) => Ok(vm.alloc_string(s.to_string())),
             LooseString::Owned(s) => Ok(vm.alloc_string(s)),
@@ -520,7 +532,7 @@ mod tests {
         let loose_strings_as_vals = get_values_that_can_be_cast_to_loose_strings(vm);
 
         for val in loose_strings_as_vals {
-            let _loose_string: LooseString<str> = (&val)
+            let _loose_string: LooseString = (&val)
                 .sl_into_ref(vm)
                 .expect("This value should be convertable to a LooseString");
         }
