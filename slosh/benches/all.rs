@@ -155,7 +155,6 @@ fn run_continuation_search_script(n: usize) {
 #[cfg(target_arch = "x86_64")]
 mod instruction_count {
     use super::*;
-    use criterion::Criterion;
     use iai::{black_box, main};
 
     fn float_one_hundred() {
