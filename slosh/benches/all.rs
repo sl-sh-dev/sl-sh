@@ -155,15 +155,22 @@ fn run_continuation_search_script(n: usize) {
 #[cfg(target_arch = "x86_64")]
 mod instruction_count {
     use super::*;
-    use iai_callgrind::{library_benchmark, library_benchmark_group, main};
+    use iai_callgrind::{library_benchmark, library_benchmark_group, main, LibraryBenchmarkConfig};
     use std::hint::black_box;
 
     #[library_benchmark]
-    #[bench::one_hundred(100, 0.5, 400.0)]
-    #[bench::one_thousand(1000, 0.05, 2105.26315904)]
-    #[bench::ten_thousand(10000, 0.2, 25000.0)]
-    fn float(n: usize, m: f32, expected: f64) {
-        black_box(run_float_script(n, m, expected));
+    fn bench_float_one_hundred() {
+        black_box(run_float_script(100, 0.5, 400.0));
+    }
+
+    #[library_benchmark]
+    fn bench_float_one_thousand() {
+        black_box(run_float_script(1000, 0.05, 2105.26315904));
+    }
+
+    #[library_benchmark]
+    fn bench_float_ten_thousand() {
+        black_box(run_float_script(10000, 0.2, 25000.0));
     }
 
     #[library_benchmark]
@@ -198,7 +205,11 @@ mod instruction_count {
 
     library_benchmark_group!(
         name = bench_slosh_group;
-        benchmarks = float,
+        config = LibraryBenchmarkConfig::default()
+            .raw_callgrind_args(["--cache-sim=yes"]);
+        benchmarks = bench_float_one_hundred,
+        bench_float_one_thousand,
+        bench_float_ten_thousand,
         recursive_vec_search_one_hundred,
         recursive_vec_search_one_thousand,
         recursive_vec_search_ten_thousand,
@@ -210,7 +221,7 @@ mod instruction_count {
     main!(library_benchmark_groups = bench_slosh_group);
 
     pub fn run_public() {
-        run();
+        main();
     }
 }
 
