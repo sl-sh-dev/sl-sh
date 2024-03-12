@@ -28,8 +28,7 @@ temp-env = "0.3.6"
 regex = { workspace = true }
 lazy_static = { workspace = true }
 criterion = "0.5"
-iai = "0.1"
-
+iai-callgrind = "0.10.2"
 
 [build-dependencies]
 chrono = "0.4.7"

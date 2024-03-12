@@ -22,7 +22,11 @@ codegen-units = 1
 #debug = true
 panic = "abort"
 
+[profile.bench]
+debug = true
+
 [workspace.dependencies]
 bridge_types = { path = "bridge_types" }
 regex = "1"
 lazy_static = "1"
+
