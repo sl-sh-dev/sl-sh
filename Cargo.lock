@@ -66,6 +66,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "327762f6e5a765692301e5bb513e0d9fef63be86bbc14528052b1cd3e6f03e07"
 
 [[package]]
+name = "bridge_adapters"
+version = "0.1.0"
+dependencies = [
+ "bridge_types",
+ "compile_state",
+ "slvm",
+]
+
+[[package]]
 name = "bridge_macros"
 version = "0.1.0"
 dependencies = [
@@ -85,6 +94,7 @@ version = "0.1.0"
 name = "builtins"
 version = "0.1.0"
 dependencies = [
+ "bridge_adapters",
  "bridge_macros",
  "bridge_types",
  "compile_state",
@@ -773,6 +783,7 @@ dependencies = [
 name = "slosh"
 version = "0.10.0"
 dependencies = [
+ "bridge_adapters",
  "builtins",
  "chrono",
  "compile_state",

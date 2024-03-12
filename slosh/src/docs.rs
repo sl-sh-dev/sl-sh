@@ -1,5 +1,5 @@
-use builtins::add_builtin;
-use builtins::types::SlFrom;
+use bridge_adapters::add_builtin;
+use bridge_adapters::lisp_adapters::SlFrom;
 use compile_state::state::{SloshVm, SloshVmTrait};
 use lazy_static::lazy_static;
 use regex::{Regex, RegexBuilder};
@@ -567,7 +567,7 @@ mod test {
         let mut docs: Vec<SloshDoc> = vec![];
         Namespace::Global.add_docs(&mut docs, &mut env).unwrap();
         for d in docs {
-            assert!(d.doc_string.usage.is_some(), "All global builtins must have a usage section, because it can NOT be inferred from the environment.");
+            assert!(d.doc_string.usage.is_some(), "All global builtins must have a usage section, because it can NOT be inferred from the environment: {}.", d.symbol);
         }
     }
 
@@ -764,6 +764,13 @@ core
 
 
     ",
+            );
+
+            set.insert(
+                (true, "str-sub test"),
+                " Usage: (str-sub string start [length]) -> string\n\n Return a substring from a string given start (0 based) and optional length.\n If length is 0 or not provided produces the r
+est of the string from start to\n string end.\n\n Section: string\n\n Example:\n (test::assert-equal \"string\" (str-sub \"stringxxxyyyxxxsome\" 0 6))\n (test::assert-equal \"some\" (str-sub
+ \"stringxxxyyyxxxsome\" 15 4))\n (test::assert-equal \"yyy\" (str-sub \"stringxxxyyyxxxsome\" 9 3))\n (test::assert-equal \"some\" (str-sub \"stringxxxyyyxxxsome\" 15))\n",
             );
 
             set

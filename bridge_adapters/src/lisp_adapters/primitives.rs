@@ -1,4 +1,4 @@
-use crate::types::SlFrom;
+use crate::lisp_adapters::SlFrom;
 use compile_state::state::SloshVm;
 use slvm::{VMResult, Value};
 
@@ -41,7 +41,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::types::SlInto;
+    use crate::lisp_adapters::SlInto;
     use compile_state::state::new_slosh_vm;
     use slvm::Value;
 
