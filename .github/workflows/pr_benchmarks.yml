@@ -14,12 +14,20 @@ jobs:
     env:
       BENCHER_PROJECT: sl-sh
       BENCHER_TESTBED: ubuntu-latest
-      BENCHER_ADAPTER: rust_iai
+      BENCHER_ADAPTER: rust_iai_callgrind
     steps:
       - run: sudo apt-get update
       - run: sudo apt install -y valgrind
+      - cargo install --version 0.10.2 iai-callgrind-runner
       - uses: actions/checkout@v4
       - uses: bencherdev/bencher@main
+      - name: Install iai-callgrind-runner
+        run: |
+          version=$(cargo metadata --format-version=1 |\
+            jq '.packages[] | select(.name == "iai-callgrind").version' |\
+            tr -d '"'
+          )
+          cargo install iai-callgrind-runner --version $version
       - name: Track Benchmarks with Bencher
         run: |
           bencher run \
