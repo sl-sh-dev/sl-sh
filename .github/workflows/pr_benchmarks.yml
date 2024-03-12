@@ -18,7 +18,6 @@ jobs:
     steps:
       - run: sudo apt-get update
       - run: sudo apt install -y valgrind
-      - run: cargo install --version 0.10.2 iai-callgrind-runner
       - uses: actions/checkout@v4
       - uses: bencherdev/bencher@main
       - run: cargo install iai-callgrind-runner --version 0.10.2
