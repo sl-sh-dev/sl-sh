@@ -220,26 +220,14 @@ mod tests {
         val
     }
 
-    fn gensym(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
-        if !registers.is_empty() {
-            return Err(VMError::new_vm("gensym: takes no arguments".to_string()));
-        }
-        let line = vm.env().line();
-        let sym_idx = vm.env_mut().next_gensym();
-        let sym = vm.intern(&format!("#<SYM:{line}:{sym_idx}>"));
-        Ok(Value::Symbol(sym))
-    }
-
     pub fn create_symbol(vm: &mut SloshVm) -> Value {
-        let v = vec![];
-        let val = gensym(vm, v.as_slice()).unwrap();
+        let val = Value::Symbol(vm.intern(&format!("create-symbol-test")));
         assert!(matches!(val, Value::Symbol(_)));
         val
     }
 
     pub fn create_keyword(vm: &mut SloshVm) -> Value {
-        let v = vec![];
-        let val = gensym(vm, v.as_slice()).unwrap();
+        let val = Value::Symbol(vm.intern(&format!("create-keywork-test")));
         match val {
             Value::Symbol(i) => {
                 let val = Value::Keyword(i);
@@ -247,7 +235,7 @@ mod tests {
                 val
             }
             _ => {
-                unreachable!("gensym should always return a symbol.")
+                unreachable!("should always return a symbol.")
             }
         }
     }
