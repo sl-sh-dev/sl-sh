@@ -18,12 +18,10 @@ jobs:
     steps:
       - run: sudo apt-get update
       - run: sudo apt install -y valgrind
-      - cargo install --version 0.10.2 iai-callgrind-runner
+      - run: cargo install --version 0.10.2 iai-callgrind-runner
       - uses: actions/checkout@v4
       - uses: bencherdev/bencher@main
-      - name: Install iai-callgrind-runner
-        run: |
-          cargo install iai-callgrind-runner --version 0.10.2
+      - run: cargo install iai-callgrind-runner --version 0.10.2
       - name: Track Benchmarks with Bencher
         run: |
           bencher run \
