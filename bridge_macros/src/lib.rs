@@ -582,7 +582,7 @@ fn parse_variadic_args_type(
         RustType::Path(wrapped_ty, _span) => {
             let arg_check = if arg_name_itself_is_iter {
                 quote! {
-                    let #arg_name = if matches!(#arg_name, slvm::Value::List(_) | slvm::Value::Vector(_) | slvm::Value::Pair(_))
+                    let #arg_name = if matches!(#arg_name, slvm::Value::List(_, _) | slvm::Value::Vector(_) | slvm::Value::Pair(_))
                     {
                         let err_str = format!("{}: Expected a vector or list for argument at position {}.", #fn_name, #arg_pos);
                         return Err(slvm::VMError::new_vm(err_str));
@@ -626,7 +626,7 @@ fn parse_variadic_args_type(
                 let arg_pos = get_arg_pos(arg_name)?;
                 let arg_check = if arg_name_itself_is_iter {
                     quote! {
-                        if !matches!(#arg_name, slvm::Value::List(_) | slvm::Value::Vector(_) | slvm::Value::Pair(_))
+                        if !matches!(#arg_name, slvm::Value::List(_, _) | slvm::Value::Vector(_) | slvm::Value::Pair(_))
                         {
                             let err_str = format!("{}: Expected a vector or list for argument at position {}.", #fn_name, #arg_pos);
                             return Err(slvm::VMError::new_vm(err_str));
@@ -664,9 +664,9 @@ fn parse_variadic_args_type(
                     #(#type_assertions)*
                     #arg_check
                     let #arg_name = #arg_name
-                        .iter()
+                        .iter(environment)
                         .map(|#arg_name| {
-                            let #arg_name = #arg_name.iter().collect::<Vec<slvm::Value>>();
+                            let #arg_name = #arg_name.iter(environment).collect::<Vec<slvm::Value>>();
                             match #arg_name.sl_into(environment) {
                                 Ok(#arg_name) => {
                                     let #arg_name: [slvm::Value; #tuple_len] = #arg_name;
@@ -1296,7 +1296,7 @@ fn parse_type_tuple(
     let arg_pos = get_arg_pos(arg_name)?;
     let tokens = quote! {{
         use bridge_adapters::lisp_adapters::SlInto;
-        if !matches!(#arg_name, slvm::Value::List(_) | slvm::Value::Vector(_) | slvm::Value::Pair(_))
+        if !matches!(#arg_name, slvm::Value::List(_, _) | slvm::Value::Vector(_) | slvm::Value::Pair(_))
         {
             let err_str = format!("{}: Expected a vector or list for argument at position {}.", #fn_name, #arg_pos);
             return Err(slvm::VMError::new_vm(err_str));

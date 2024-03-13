@@ -37,3 +37,9 @@ pub fn accept_mult_option(_opt1: Option<char>, _opt2: Option<char>) -> VMResult<
 pub fn accept_varargs(_args: VarArgs<char>) -> VMResult<()> {
     Ok(())
 }
+
+/// obligatory doc
+#[sl_sh_fn(fn_name = "accept_vec")]
+pub fn accept_vec(_args: Vec<char>) -> VMResult<()> {
+    Ok(())
+}
