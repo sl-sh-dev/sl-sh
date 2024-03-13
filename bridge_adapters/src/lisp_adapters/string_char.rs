@@ -81,6 +81,12 @@ impl SlFrom<char> for Value {
     }
 }
 
+impl<'a> SlFromRef<'a, &Value> for &'a str {
+    fn sl_from_ref(value: &Value, vm: &'a mut SloshVm) -> VMResult<Self> {
+        value.sl_as_ref(vm)
+    }
+}
+
 impl<'a> SlAsRef<'a, str> for &Value {
     fn sl_as_ref(&self, vm: &'a SloshVm) -> VMResult<&'a str> {
         match self {
