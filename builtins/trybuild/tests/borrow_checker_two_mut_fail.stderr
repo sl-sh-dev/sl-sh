@@ -1,0 +1,10 @@
+error[E0499]: cannot borrow `vm` as mutable more than once at a time
+  --> trybuild/tests/borrow_checker_two_mut_fail.rs:14:30
+   |
+11 |             let d = vm.get_string_mut(d).unwrap();
+   |                     -- first mutable borrow occurs here
+...
+14 |                     let d2 = vm.get_string_mut(d2).unwrap();
+   |                              ^^ second mutable borrow occurs here
+15 |                     println!("x: {}", d);
+   |                                       - first borrow later used here
