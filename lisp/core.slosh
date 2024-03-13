@@ -174,9 +174,9 @@ the pair.  Always returns a pair with the first value either being :ok or :error
 Section: core
 
 Example:
-(def get-error-t1 (get-error (err \"Some Error\")))
+(def get-error-t1 (get-error (err (mk-err :string (str "Some Error")))))
 (test::assert-equal :error (car get-error-t1))
-(test::assert-equal \"Some Error\" (cdr get-error-t1))
+(test::assert-equal "error [string]: \\"Some Error\\"" (str (cdr get-error-t1)))
 (test::assert-equal '(:ok . \"Some String\") (get-error \"Some String\"))
 (test::assert-equal '(:ok . \"Some Other String\") (get-error (def test-get-error \"Some \") (str test-get-error \"Other String\")))
 %#

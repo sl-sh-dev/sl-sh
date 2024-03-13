@@ -200,7 +200,7 @@ fn get_generic_argument_from_type(ty: &Type) -> Option<(&GenericArgument, &TypeP
 
 fn generate_assertions_code_for_return_type_conversions(return_type: &Type) -> TokenStream2 {
     quote! {
-      static_assertions::assert_impl_all!(#return_type: builtins::types::SlInto<slvm::Value>);
+      static_assertions::assert_impl_all!(#return_type: bridge_adapters::lisp_adapters::SlInto<slvm::Value>);
     }
 }
 
@@ -479,12 +479,12 @@ fn make_orig_fn_call(
             return Ok(slvm::Value::Nil);
         },
         (Some(_), Some(SupportedGenericReturnTypes::VMResult), false) => quote! {
-            use builtins::types::SlInto;
+            use bridge_adapters::lisp_adapters::SlInto;
             return #fn_body.and_then(|x| x.sl_into(environment));
         },
         (Some(_), Some(SupportedGenericReturnTypes::Option), false) => quote! {
             if let Some(val) = #fn_body {
-                use builtins::types::SlFrom;
+                use bridge_adapters::lisp_adapters::SlFrom;
                 let val = slvm::Value::sl_from(val, environment)?;
                 Ok(val)
             } else {
@@ -493,7 +493,7 @@ fn make_orig_fn_call(
         },
         // coerce to Expression
         (Some(_), None, _) => quote! {
-            use builtins::types::SlInto;
+            use bridge_adapters::lisp_adapters::SlInto;
             return #fn_body.sl_into(environment);
         },
         (None, Some(_), _) => {
@@ -582,7 +582,7 @@ fn parse_variadic_args_type(
         RustType::Path(wrapped_ty, _span) => {
             let arg_check = if arg_name_itself_is_iter {
                 quote! {
-                    let #arg_name = if !crate::is_sequence!(#arg_name)
+                    let #arg_name = if matches!(#arg_name, slvm::Value::List(_) | slvm::Value::Vector(_) | slvm::Value::Pair(_))
                     {
                         let err_str = format!("{}: Expected a vector or list for argument at position {}.", #fn_name, #arg_pos);
                         return Err(slvm::VMError::new_vm(err_str));
@@ -610,7 +610,7 @@ fn parse_variadic_args_type(
             Ok(quote! {{
                 #arg_check
 
-                static_assertions::assert_impl_all!(slvm::Value: crate::types::SlFrom<#wrapped_ty>);
+                static_assertions::assert_impl_all!(slvm::Value: bridge_adapters::lisp_adapters::SlFrom<#wrapped_ty>);
                 let #arg_name = #arg_name
                     .iter()
                     .map(|#arg_name| {
@@ -625,7 +625,7 @@ fn parse_variadic_args_type(
                 let arg_pos = get_arg_pos(arg_name)?;
                 let arg_check = if arg_name_itself_is_iter {
                     quote! {
-                        if !crate::is_sequence!(#arg_name)
+                        if !matches!(#arg_name, slvm::Value::List(_) | slvm::Value::Vector(_) | slvm::Value::Pair(_))
                         {
                             let err_str = format!("{}: Expected a vector or list for argument at position {}.", #fn_name, #arg_pos);
                             return Err(slvm::VMError::new_vm(err_str));
@@ -650,14 +650,14 @@ fn parse_variadic_args_type(
                 for (elem, arg_name) in type_tuple.elems.iter().zip(arg_names.iter()) {
                     types.push(elem.clone());
                     type_assertions.push(quote! {
-                        static_assertions::assert_impl_all!(slvm::Value: crate::types::SlFrom<#elem>);
+                        static_assertions::assert_impl_all!(slvm::Value: bridge_adapters::lisp_adapters::SlFrom<#elem>);
                     });
                     args.push(quote! {
                         let #arg_name: #elem = #arg_name.clone().try_into_for(#fn_name)?;
                     })
                 }
                 Ok(quote! {{
-                    use crate::types::SlFrom;
+                    use bridge_adapters::lisp_adapters::SlFrom;
                     use std::convert::TryInto;
                     #(#type_assertions)*
                     #arg_check
@@ -802,17 +802,17 @@ fn parse_direct_type(
 
                 match passing_style {
                     PassingStyle::Value => Ok(quote! {{
-                        use builtins::types::SlInto;
+                        use bridge_adapters::lisp_adapters::SlInto;
                         let #arg_name: #ty = #arg_name.sl_into(environment)?;
                         #inner
                     }}),
                     PassingStyle::Reference => Ok(quote! {{
-                        use builtins::types::SlAsRef;
+                        use bridge_adapters::lisp_adapters::SlAsRef;
                         let #arg_name: #ty = #arg_name.sl_as_ref(environment)?;
                         #inner
                     }}),
                     PassingStyle::MutReference => Ok(quote! {{
-                        use builtins::types::SlAsMut;
+                        use bridge_adapters::lisp_adapters::SlAsMut;
                         let #arg_name: #ty = #arg_name.sl_as_mut(environment)?;
                         #inner
                     }}),
@@ -887,7 +887,7 @@ fn parse_type(
             fn_name.0,
             arg_name,
             inner,
-            quote! { crate::VarArgs },
+            quote! { bridge_types::VarArgs },
         )?,
     };
     Ok(outer_parse(arg_name, tokens, param, required_args, idx))
@@ -989,7 +989,7 @@ fn generate_intern_fn(
     quote! {
         fn #intern_name(env: &mut compile_state::state::SloshVm) {
             let #fn_name_ident = #fn_name;
-            builtins::add_builtin(env, #fn_name_ident, #parse_name, #doc_comments);
+            bridge_adapters::add_builtin(env, #fn_name_ident, #parse_name, #doc_comments);
         }
     }
 }
@@ -1293,10 +1293,10 @@ fn parse_type_tuple(
     };
     let arg_pos = get_arg_pos(arg_name)?;
     let tokens = quote! {{
-        if !crate::is_sequence!(#arg_name)
+        if !matches!(#arg_name, slvm::Value::List(_) | slvm::Value::Vector(_) | slvm::Value::Pair(_))
         {
             let err_str = format!("{}: Expected a vector or list for argument at position {}.", #fn_name, #arg_pos);
-            return Err(crate::VMError::new_vm(err_str));
+            return Err(slvm::VMError::new_vm(err_str));
         }
         let #arg_name = #arg_name.iter().collect::<Vec<slvm::Value>>();
         match #arg_name.try_into() {
@@ -1478,7 +1478,7 @@ fn get_documentation_for_fn(original_item_fn: &ItemFn) -> MacroResult<String> {
             if &path_segment.ident.to_string() == "doc" {
                 if let Ok(Meta::NameValue(pair)) = attr.parse_meta() {
                     if let Lit::Str(partial_name) = &pair.lit {
-                        docs += &*partial_name.value();
+                        docs += &(*partial_name.value()).trim();
                         docs += "\n";
                     }
                 }

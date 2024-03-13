@@ -1,4 +1,4 @@
-use crate::types::{SlAsMut, SlAsRef, SlFrom, SlFromRef, SlIntoRef};
+use crate::lisp_adapters::{SlAsMut, SlAsRef, SlFrom, SlFromRef, SlIntoRef};
 use bridge_types::{ErrorStrings, LooseString, SloshChar};
 use compile_state::state::SloshVm;
 use slvm::value::ValueType;
@@ -82,7 +82,7 @@ impl SlFrom<char> for Value {
 }
 
 impl<'a> SlAsRef<'a, str> for &Value {
-    fn sl_as_ref(&self, vm: &'a mut SloshVm) -> VMResult<&'a str> {
+    fn sl_as_ref(&self, vm: &'a SloshVm) -> VMResult<&'a str> {
         match self {
             Value::String(h) => Ok(vm.get_string(*h)),
             Value::StringConst(i) => Ok(vm.get_interned(*i)),
@@ -189,8 +189,7 @@ impl SlFrom<&Value> for String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::gensym;
-    use crate::types::{SlAsMut, SlAsRef, SlFromRef, SlInto, SlIntoRef};
+    use crate::lisp_adapters::{SlAsMut, SlAsRef, SlFromRef, SlInto, SlIntoRef};
     use compile_state::state::new_slosh_vm;
 
     pub const CODE_POINT: char = 'न';
@@ -222,15 +221,13 @@ mod tests {
     }
 
     pub fn create_symbol(vm: &mut SloshVm) -> Value {
-        let v = vec![];
-        let val = gensym(vm, v.as_slice()).unwrap();
+        let val = Value::Symbol(vm.intern(&format!("create-symbol-test")));
         assert!(matches!(val, Value::Symbol(_)));
         val
     }
 
     pub fn create_keyword(vm: &mut SloshVm) -> Value {
-        let v = vec![];
-        let val = gensym(vm, v.as_slice()).unwrap();
+        let val = Value::Symbol(vm.intern(&format!("create-keywork-test")));
         match val {
             Value::Symbol(i) => {
                 let val = Value::Keyword(i);
@@ -238,7 +235,7 @@ mod tests {
                 val
             }
             _ => {
-                unreachable!("gensym should always return a symbol.")
+                unreachable!("should always return a symbol.")
             }
         }
     }
@@ -310,7 +307,7 @@ mod tests {
         match param.handle {
             bridge_types::TypeHandle::Direct => match args.get(0usize) {
                 None => {
-                    return Err(crate::VMError::new_conversion(&*{
+                    return Err(VMError::new_conversion(&*{
                         let res =
                                 format!("{} not given enough arguments, expected at least {} arguments, got {}.", fn_name, 1usize, args.len());
                         res
@@ -322,7 +319,7 @@ mod tests {
                             || arg_types[PARAMS_LEN - 1].handle
                                 != bridge_types::TypeHandle::VarArgs =>
                     {
-                        return Err(crate::VMError::new_conversion(&*{
+                        return Err(VMError::new_conversion(&*{
                             let res =
                                             format!("{} given too many arguments, expected at least {} arguments, got {}.",
                                                     fn_name, 1usize, args.len());
@@ -337,7 +334,7 @@ mod tests {
                 },
             },
             _ => {
-                return Err(crate::VMError::new_conversion(&*{
+                return Err(VMError::new_conversion(&*{
                     let res = format!("{} failed to parse its arguments, internal error.", fn_name);
                     res
                 }));
@@ -359,7 +356,7 @@ mod tests {
         match param.handle {
             bridge_types::TypeHandle::Direct => match args.get(0usize) {
                 None => {
-                    return Err(crate::VMError::new_conversion(&*{
+                    return Err(VMError::new_conversion(&*{
                         let res =
                                 format!("{} not given enough arguments, expected at least {} arguments, got {}.", fn_name, 1usize, args.len());
                         res
@@ -371,7 +368,7 @@ mod tests {
                             || arg_types[PARAMS_LEN - 1].handle
                                 != bridge_types::TypeHandle::VarArgs =>
                     {
-                        return Err(crate::VMError::new_conversion(&*{
+                        return Err(VMError::new_conversion(&*{
                             let res =
                                             format!("{} given too many arguments, expected at least {} arguments, got {}.",
                                                     fn_name, 1usize, args.len());
@@ -387,7 +384,7 @@ mod tests {
                 },
             },
             _ => {
-                return Err(crate::VMError::new_conversion(&*{
+                return Err(VMError::new_conversion(&*{
                     let res = format!("{} failed to parse its arguments, internal error.", fn_name);
                     res
                 }));
