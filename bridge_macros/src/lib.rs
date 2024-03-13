@@ -371,7 +371,7 @@ fn parse_param(
                 let arg = args.get(#idx);
                 match param.handle {
                     bridge_types::TypeHandle::VarArgs => {
-                        let #arg_name = args[#idx..].iter().map(|x| x.clone()).collect::<Vec<slvm::Value>>();
+                        let #arg_name = &args[#idx..];
                         #inner
                     },
                     _ => {
@@ -601,7 +601,7 @@ fn parse_variadic_args_type(
                 // nil, this is defensive code that should go away in slosh.
                 quote! {
                     let #arg_name = if #arg_name.len() == 1 && #arg_name.get(0).unwrap().is_nil() {
-                        vec![]
+                        &[]
                     } else {
                         #arg_name
                     };
@@ -614,7 +614,8 @@ fn parse_variadic_args_type(
                 let #arg_name = #arg_name
                     .iter()
                     .map(|#arg_name| {
-                        #arg_name.clone().try_into_for(#fn_name)
+                        use bridge_adapters::lisp_adapters::SlInto;
+                        #arg_name.sl_into(environment)
                     })
                     .collect::<slvm::VMResult<#ty>>()?;
                 #inner
@@ -653,19 +654,20 @@ fn parse_variadic_args_type(
                         static_assertions::assert_impl_all!(slvm::Value: bridge_adapters::lisp_adapters::SlFrom<#elem>);
                     });
                     args.push(quote! {
-                        let #arg_name: #elem = #arg_name.clone().try_into_for(#fn_name)?;
+                        use bridge_adapters::lisp_adapters::SlInto;
+                        //TODO put #fn_name back in
+                        let #arg_name: #elem = #arg_name.sl_into(environment)?;
                     })
                 }
                 Ok(quote! {{
-                    use bridge_adapters::lisp_adapters::SlFrom;
-                    use std::convert::TryInto;
+                    use bridge_adapters::lisp_adapters::SlInto;
                     #(#type_assertions)*
                     #arg_check
                     let #arg_name = #arg_name
                         .iter()
                         .map(|#arg_name| {
                             let #arg_name = #arg_name.iter().collect::<Vec<slvm::Value>>();
-                            match #arg_name.try_into() {
+                            match #arg_name.sl_into(environment) {
                                 Ok(#arg_name) => {
                                     let #arg_name: [slvm::Value; #tuple_len] = #arg_name;
                                     let [#(#arg_names),*] = #arg_name;
@@ -1293,13 +1295,14 @@ fn parse_type_tuple(
     };
     let arg_pos = get_arg_pos(arg_name)?;
     let tokens = quote! {{
+        use bridge_adapters::lisp_adapters::SlInto;
         if !matches!(#arg_name, slvm::Value::List(_) | slvm::Value::Vector(_) | slvm::Value::Pair(_))
         {
             let err_str = format!("{}: Expected a vector or list for argument at position {}.", #fn_name, #arg_pos);
             return Err(slvm::VMError::new_vm(err_str));
         }
         let #arg_name = #arg_name.iter().collect::<Vec<slvm::Value>>();
-        match #arg_name.try_into() {
+        match #arg_name.sl_into(environment) {
             Ok(#arg_name) => {
                 let #arg_name: [slvm::Value; #tuple_len] = #arg_name;
                 let [#(#arg_names),*] = #arg_name;
