@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use crate::{
     from_i56, CallFrame, CallFunc, CallFuncSig, Chunk, Globals, Handle, Heap, Interner, VMError,
-    VMErrorObj, VMResult, Value, F56, HALT,
+    VMErrorObj, VMResult, Value, HALT,
 };
 
 mod cons;
@@ -220,11 +220,8 @@ impl<ENV> GVm<ENV> {
                 val = Value::True;
             }
         } else if val1.is_number() && val2.is_number() {
-            if (10f64.powf(F56::DIGITS as f64)
-                * (val1.get_float(self)? - val2.get_float(self)?).abs())
-            .round()
-                == 0f64
-            {
+            let diff = (val1.get_float(self)? - val2.get_float(self)?).abs();
+            if diff == 0.0 {
                 val = Value::True;
             }
         } else {

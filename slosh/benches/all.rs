@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
-use compile_state::state::{new_slosh_vm, CompileState, SloshVm, SloshVmTrait};
+use compile_state::state::{CompileState, SloshVm, SloshVmTrait};
 use sl_compiler::pass1::pass1;
-use sl_compiler::{compile, Reader};
+use sl_compiler::{compile, new_slosh_vm_with_builtins, Reader};
 use slvm::{Chunk, VMError, VMResult, Value, RET};
 use std::sync::Arc;
 
@@ -50,7 +50,7 @@ fn load_one_expression(
     Ok((Arc::new(state.chunk), state.doc_string))
 }
 
-pub fn run_bench(n: usize, m: f32) -> String {
+pub fn run_float_bench(n: usize, m: f32) -> String {
     format!("(eval-pol {} {})", n, m)
 }
 
@@ -83,9 +83,7 @@ pub fn get_float_benchmark() -> PathBuf {
     get_benches_directory().join("float-bench.slosh")
 }
 
-fn run_float_script(n: usize, m: f32, expected: f64) {
-    let vm = &mut new_slosh_vm();
-    let fname = get_float_benchmark();
+fn load_file(fname: PathBuf, vm: &mut SloshVm) {
     match std::fs::File::open(&fname) {
         Ok(file) => {
             let mut reader = Reader::from_file(file, vm, "", 1, 0);
@@ -95,11 +93,17 @@ fn run_float_script(n: usize, m: f32, expected: f64) {
             panic!("Could not open file: {:?}", e);
         }
     }
-    let mut reader = Reader::from_string(run_bench(n, m), vm, "", 1, 0);
+}
+
+fn run_float_script(n: usize, m: f32, expected: f64) {
+    let vm = &mut new_slosh_vm_with_builtins();
+    let fname = get_float_benchmark();
+    load_file(fname, vm);
+    let mut reader = Reader::from_string(run_float_bench(n, m), vm, "", 1, 0);
     let last = run_reader(&mut reader);
     match last {
         Ok(Value::Float(f)) => {
-            assert_eq!(f64::from(f), expected);
+            assert_eq!(expected, f64::from(f));
         }
         _ => {
             panic!("Not a float");
@@ -107,26 +111,116 @@ fn run_float_script(n: usize, m: f32, expected: f64) {
     }
 }
 
+pub fn get_search_benchmark() -> PathBuf {
+    get_benches_directory().join("vec-search-bench.slosh")
+}
+
+pub fn run_recursive_search_bench(n: usize) -> String {
+    format!("(run-recursive {})", n)
+}
+
+pub fn run_continuation_search_bench(n: usize) -> String {
+    format!("(run-continuation {})", n)
+}
+
+fn run_bench_assert_true(n: usize, f: fn(n: usize) -> String, vm: &mut SloshVm) {
+    let mut reader = Reader::from_string(f(n), vm, "", 1, 0);
+    let last = run_reader(&mut reader);
+    match last {
+        Ok(v) => {
+            assert_eq!(Value::True, v);
+        }
+        _ => {
+            panic!("Not true");
+        }
+    }
+}
+
+fn run_recursive_search_script(n: usize) {
+    let vm = &mut new_slosh_vm_with_builtins();
+    let fname = get_search_benchmark();
+    load_file(fname, vm);
+
+    run_bench_assert_true(n, run_recursive_search_bench, vm);
+}
+
+fn run_continuation_search_script(n: usize) {
+    let vm = &mut new_slosh_vm_with_builtins();
+    let fname = get_search_benchmark();
+    load_file(fname, vm);
+
+    run_bench_assert_true(n, run_continuation_search_bench, vm);
+}
+
 #[cfg(target_arch = "x86_64")]
 mod instruction_count {
     use super::*;
-    use iai::{black_box, main};
+    use iai_callgrind::{library_benchmark, library_benchmark_group, main, LibraryBenchmarkConfig};
+    use std::hint::black_box;
 
-    fn float_one_hundred() {
-        black_box(run_float_script(100, 0.5, 399.99999999958527));
+    #[library_benchmark]
+    fn bench_float_one_hundred() {
+        black_box(run_float_script(100, 0.5, 400.0));
     }
 
-    fn float_one_thousand() {
-        black_box(run_float_script(1000, 0.05, 2105.2631578924484));
+    #[library_benchmark]
+    fn bench_float_one_thousand() {
+        black_box(run_float_script(1000, 0.05, 2105.26315904));
     }
 
-    fn float_ten_thousand() {
-        black_box(run_float_script(10_000, 0.2, 24999.999999998603));
+    #[library_benchmark]
+    fn bench_float_ten_thousand() {
+        black_box(run_float_script(10000, 0.2, 25000.0));
     }
 
-    main!(float_one_hundred, float_one_thousand, float_ten_thousand,);
+    #[library_benchmark]
+    fn recursive_vec_search_one_hundred() {
+        black_box(run_recursive_search_script(100));
+    }
 
-    pub fn run() {
+    #[library_benchmark]
+    fn recursive_vec_search_one_thousand() {
+        black_box(run_recursive_search_script(0100));
+    }
+
+    #[library_benchmark]
+    fn recursive_vec_search_ten_thousand() {
+        black_box(run_recursive_search_script(10_000));
+    }
+
+    #[library_benchmark]
+    fn continuation_vec_search_one_hundred() {
+        black_box(run_continuation_search_script(100));
+    }
+
+    #[library_benchmark]
+    fn continuation_vec_search_one_thousand() {
+        black_box(run_continuation_search_script(1000));
+    }
+
+    #[library_benchmark]
+    fn continuation_vec_search_ten_thousand() {
+        black_box(run_continuation_search_script(10_000));
+    }
+
+    library_benchmark_group!(
+        name = bench_slosh_group;
+        config = LibraryBenchmarkConfig::default()
+            .raw_callgrind_args(["--cache-sim=yes"]);
+        benchmarks = bench_float_one_hundred,
+        bench_float_one_thousand,
+        bench_float_ten_thousand,
+        recursive_vec_search_one_hundred,
+        recursive_vec_search_one_thousand,
+        recursive_vec_search_ten_thousand,
+        continuation_vec_search_one_hundred,
+        continuation_vec_search_one_thousand,
+        continuation_vec_search_ten_thousand,
+    );
+
+    main!(library_benchmark_groups = bench_slosh_group);
+
+    pub fn run_public() {
         main();
     }
 }
@@ -138,19 +232,55 @@ mod wall_clock {
 
     fn float_one_hundred(c: &mut Criterion) {
         c.bench_function("float_ten", |bench| {
-            bench.iter(|| std::hint::black_box(run_float_script(100, 0.5, 399.99999999958527)));
+            bench.iter(|| std::hint::black_box(run_float_script(100, 0.5, 400.0)));
         });
     }
 
     fn float_one_thousand(c: &mut Criterion) {
         c.bench_function("float_one_thousand", |bench| {
-            bench.iter(|| std::hint::black_box(run_float_script(1000, 0.05, 2105.2631578924484)));
+            bench.iter(|| std::hint::black_box(run_float_script(1000, 0.05, 2105.26315904)));
         });
     }
 
     fn float_ten_thousand(c: &mut Criterion) {
         c.bench_function("float_one_hundred", |bench| {
-            bench.iter(|| std::hint::black_box(run_float_script(10_000, 0.2, 24999.999999998603)));
+            bench.iter(|| std::hint::black_box(run_float_script(10_000, 0.2, 25000.0)));
+        });
+    }
+
+    fn recursive_vec_search_one_hundred(c: &mut Criterion) {
+        c.bench_function("recursive_vec_search_one_hundred", |bench| {
+            bench.iter(|| std::hint::black_box(run_recursive_search_script(100)));
+        });
+    }
+
+    fn recursive_vec_search_one_thousand(c: &mut Criterion) {
+        c.bench_function("recursive_vec_search_one_thousand", |bench| {
+            bench.iter(|| std::hint::black_box(run_recursive_search_script(1000)));
+        });
+    }
+
+    fn recursive_vec_search_ten_thousand(c: &mut Criterion) {
+        c.bench_function("recursive_vec_search_ten_thousand", |bench| {
+            bench.iter(|| std::hint::black_box(run_recursive_search_script(10_000)));
+        });
+    }
+
+    fn continuation_vec_search_one_hundred(c: &mut Criterion) {
+        c.bench_function("continuation_vec_search_one_hundred", |bench| {
+            bench.iter(|| std::hint::black_box(run_continuation_search_script(100)));
+        });
+    }
+
+    fn continuation_vec_search_one_thousand(c: &mut Criterion) {
+        c.bench_function("continuation_vec_search_one_thousand", |bench| {
+            bench.iter(|| std::hint::black_box(run_continuation_search_script(1000)));
+        });
+    }
+
+    fn continuation_vec_search_ten_thousand(c: &mut Criterion) {
+        c.bench_function("continuation_vec_search_ten_thousand", |bench| {
+            bench.iter(|| std::hint::black_box(run_continuation_search_script(10_000)));
         });
     }
 
@@ -159,6 +289,12 @@ mod wall_clock {
         float_one_hundred,
         float_one_thousand,
         float_ten_thousand,
+        continuation_vec_search_one_hundred,
+        recursive_vec_search_one_hundred,
+        continuation_vec_search_one_thousand,
+        recursive_vec_search_one_thousand,
+        continuation_vec_search_ten_thousand,
+        recursive_vec_search_ten_thousand,
     );
 
     criterion_main!(benches);
@@ -170,7 +306,7 @@ mod wall_clock {
 
 fn main() {
     #[cfg(target_arch = "x86_64")]
-    instruction_count::run();
+    instruction_count::run_public();
 
     #[cfg(not(target_arch = "x86_64"))]
     wall_clock::run();

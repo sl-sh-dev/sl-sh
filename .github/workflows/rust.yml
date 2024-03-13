@@ -34,7 +34,7 @@ jobs:
     - name: Run rust tests
       run: cargo test --verbose
     - name: Run lisp integration tests
-      run: cargo test --features lisp-test
+      run: cargo test --workspace --features lisp-test
 
 
   build-macos:
@@ -51,7 +51,7 @@ jobs:
     - name: Run rust tests
       run: cargo test --verbose
     - name: Run lisp integration tests
-      run: cargo test --features lisp-test
+      run: cargo test --workspace --features lisp-test
 
 # if this gets too slow consider
 # https://github.com/Swatinem/rust-cache

@@ -209,7 +209,8 @@ impl DocStringSection {
             })
             // return default empty string and have parse_doc_string handle error if no doc provided.
             .unwrap_or_default();
-        Self::parse_doc_string(Cow::Owned(sym_str), raw_doc_string)
+        let backup_usage = crate::usage(vm, slot, &sym);
+        Self::parse_doc_string(Cow::Owned(sym_str), raw_doc_string, backup_usage)
     }
 
     /// Given the rules for parsing slosh docstrings, parse one! See [`DOC_REGEX`]
@@ -217,6 +218,7 @@ impl DocStringSection {
     pub fn parse_doc_string(
         symbol: Cow<'_, String>,
         raw_doc_string: String,
+        backup_usage: String,
     ) -> DocResult<DocStringSection> {
         let cap = DOC_REGEX.captures(raw_doc_string.as_str()).ok_or_else(|| {
             if EXEMPTIONS.contains(symbol.as_str()) {
@@ -229,7 +231,10 @@ impl DocStringSection {
                 }
             }
         })?;
-        let usage = cap.get(2).map(|x| x.as_str().trim().to_string());
+        let mut usage = cap.get(2).map(|x| x.as_str().trim().to_string());
+        if usage.is_none() && !backup_usage.trim().is_empty() {
+            usage = Some(backup_usage);
+        }
         let description = cap
             .get(3)
             .ok_or_else(|| DocError::DocStringMissingSection {
@@ -478,7 +483,7 @@ pub fn add_builtins(env: &mut SloshVm) {
 Returns documentation for given symbol as map. Keyword is a documentation fragment
 (usage, section, description, example) and value is text describing given fragment.
 
-Section: global
+Section: core
 
 Example:
 #t
@@ -781,7 +786,11 @@ est of the string from start to\n string end.\n\n Section: string\n\n Example:\n
     fn test_doc_string_regex() {
         for ((result, label), test_case) in REGEX_TEST_CASES.iter() {
             let fake_symbol = Cow::Owned("fake-symbol".to_string());
-            match DocStringSection::parse_doc_string(fake_symbol, test_case.to_string()) {
+            match DocStringSection::parse_doc_string(
+                fake_symbol,
+                test_case.to_string(),
+                "".to_string(),
+            ) {
                 ok @ Ok(_) => {
                     assert_eq!(
                         ok.is_ok(),

@@ -16,12 +16,8 @@ use compile_state::state::*;
 use sl_compiler::compile::*;
 use sl_compiler::reader::*;
 
-use builtins::collections::setup_collection_builtins;
-use builtins::conversions::add_conv_builtins;
-use builtins::io::add_io_builtins;
-use builtins::print::{add_print_builtins, display_value};
-use builtins::string::add_str_builtins;
-use builtins::{add_global_value, add_misc_builtins};
+use builtins::add_global_value;
+use builtins::print::display_value;
 use sl_liner::vi::AlphanumericAndVariableKeywordRule;
 use sl_liner::{keymap, ColorClosure, Context, Prompt};
 
@@ -31,20 +27,20 @@ pub mod debug;
 #[cfg(any(test, feature = "lisp-test"))]
 pub mod docs;
 mod liner_rules;
-mod load_eval;
-pub use crate::load_eval::load_one_expression;
-pub use crate::load_eval::run_reader;
+
+pub use sl_compiler::load_eval::load_one_expression;
+pub use sl_compiler::load_eval::run_reader;
 mod shell_builtins;
 
 use crate::completions::ShellCompleter;
 use crate::liner_rules::make_editor_rules;
-use crate::load_eval::{add_load_builtins, load_internal, SLSHRC};
 use crate::shell_builtins::add_shell_builtins;
 use config::*;
 use debug::*;
 use shell::platform::{Platform, Sys, STDIN_FILENO};
+use sl_compiler::load_eval::{load_internal, SLSHRC};
 use sl_compiler::pass1::pass1;
-use slvm::{Value, INT_BITS, INT_MAX, INT_MIN};
+use slvm::{VMError, VMResult, Value};
 
 thread_local! {
     /// Env (job control status, etc) for the shell.
@@ -271,16 +267,88 @@ fn get_color_closure() -> Option<ColorClosure> {
     })
 }
 
+fn get_usage(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    if registers.len() > 1 {
+        Err(VMError::new_compile(
+            "usage: too many args, requires one symbol as an argument",
+        ))
+    } else {
+        match registers.iter().next() {
+            None => Err(VMError::new_compile(
+                "usage: no args provides, requires one symbol as an argument",
+            )),
+            Some(sym) => match sym {
+                Value::Symbol(i) => match vm.global_intern_slot(*i) {
+                    None => Err(VMError::new_compile(
+                        "usage: symbol provided is not defined.",
+                    )),
+                    Some(slot) => {
+                        let mut usage = usage(vm, slot, sym);
+                        if usage.trim().is_empty() {
+                            let docstring_key = vm.intern_static("doc-string");
+                            let raw_doc_string = vm
+                                .get_global_property(slot, docstring_key)
+                                .and_then(|x| match x {
+                                    Value::String(h) => Some(vm.get_string(h).to_string()),
+                                    Value::StringConst(i) => Some(vm.get_interned(i).to_string()),
+                                    _ => None,
+                                })
+                                // return default empty string and have parse_doc_string handle error if no doc provided.
+                                .unwrap_or_default();
+                            if let Some(test) = raw_doc_string.trim().lines().next() {
+                                if test.starts_with("Usage:") {
+                                    usage = test.to_string();
+                                }
+                            }
+                        } else {
+                            usage = format!("Usage: {}", usage);
+                        }
+                        Ok(vm.alloc_string(usage))
+                    }
+                },
+                _ => Err(VMError::new_compile(
+                    "usage: requires one symbol as an argument",
+                )),
+            },
+        }
+    }
+}
+
+fn usage(vm: &mut SloshVm, slot: u32, sym: &Value) -> String {
+    let name = sym.display_value(vm);
+    let mut doc_str = String::new();
+    let sym = vm.get_global(slot);
+    let args = match sym {
+        Value::Lambda(h) => {
+            let l = vm.get_lambda(h);
+            l.dbg_args.clone()
+        }
+        Value::Closure(h) => {
+            let (l, _h) = vm.get_closure(h);
+            l.dbg_args.clone()
+        }
+        _ => {
+            return doc_str;
+        }
+    };
+    if let Some(args) = args {
+        doc_str.push('(');
+        doc_str.push_str(&name);
+        for a in args {
+            let arg = vm.get_interned(a);
+            doc_str.push(' ');
+            doc_str.push_str(arg);
+        }
+        doc_str.push(')');
+    }
+    doc_str
+}
+
 pub fn set_builtins(env: &mut SloshVm) {
+    sl_compiler::set_builtins(env);
     add_shell_builtins(env);
-    setup_collection_builtins(env);
-    add_print_builtins(env);
-    add_load_builtins(env);
-    add_str_builtins(env);
-    add_misc_builtins(env);
-    add_io_builtins(env);
-    add_conv_builtins(env);
     env.set_global_builtin("dump-regs", builtin_dump_regs);
+
     let uid = Sys::current_uid();
     let euid = Sys::effective_uid();
     env::set_var("UID", format!("{uid}"));
@@ -288,19 +356,15 @@ pub fn set_builtins(env: &mut SloshVm) {
     env.set_named_global("*uid*", uid.into());
     env.set_named_global("*euid*", euid.into());
     env.set_named_global("*last-status*", 0.into());
-    env.set_named_global("*int-bits*", (INT_BITS as i64).into());
-    env.set_named_global("*int-max*", INT_MAX.into());
-    env.set_named_global("*int-min*", INT_MIN.into());
     // Initialize the HOST variable
     let host: OsString = Sys::gethostname().unwrap_or_else(|| "Operating system hostname is not a string capable of being parsed by native platform???".into());
     env::set_var("HOST", host);
     if let Ok(dir) = env::current_dir() {
         env::set_var("PWD", dir);
     }
+
     #[cfg(any(test, feature = "lisp-test"))]
-    {
-        docs::add_builtins(env);
-    }
+    docs::add_builtins(env);
 }
 
 fn main() {

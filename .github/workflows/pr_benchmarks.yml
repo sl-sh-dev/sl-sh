@@ -4,6 +4,9 @@ on:
   pull_request:
     types: [opened, reopened, synchronize, closed]
 
+env:
+  RUST_BACKTRACE: 1
+
 jobs:
   benchmark_pr_with_bencher:
     if: github.event.pull_request.merged == true || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
@@ -14,12 +17,13 @@ jobs:
     env:
       BENCHER_PROJECT: sl-sh
       BENCHER_TESTBED: ubuntu-latest
-      BENCHER_ADAPTER: rust_iai
+      BENCHER_ADAPTER: rust_iai_callgrind
     steps:
       - run: sudo apt-get update
       - run: sudo apt install -y valgrind
       - uses: actions/checkout@v4
       - uses: bencherdev/bencher@main
+      - run: cargo install iai-callgrind-runner --version 0.10.2
       - name: Track Benchmarks with Bencher
         run: |
           bencher run \
