@@ -33,4 +33,4 @@ jobs:
           --github-actions "${{ secrets.GITHUB_TOKEN }}" \
           --token "${{ secrets.BENCHER_API_TOKEN }}" \
           --err \
-          "cargo bench"
+          "cargo bench --all"
