@@ -12,9 +12,8 @@ members = [
     "bridge_macros",
     "bridge_types",
     "bridge_adapters",
+    "legacy",
 ]
-
-exclude = [ "legacy" ]
 
 [profile.release]
 lto = true

@@ -16,3 +16,5 @@
           (set! su (+ pol.~j (* su x))))
             (set! pu (+ pu su)))
     pu)))
+
+    (prn (eval-pol 1000000 0.2))
