@@ -34,7 +34,6 @@ iai-callgrind = "0.10.2"
 [build-dependencies]
 chrono = "0.4.7"
 
-# do not want to benchmark against whatever version of slosh this static branch is on
-# [[bench]]
-# name = "all"
-# harness = false
+[[bench]]
+name = "all"
+harness = false
