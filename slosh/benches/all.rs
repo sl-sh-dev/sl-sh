@@ -230,20 +230,20 @@ mod wall_clock {
     use super::*;
     use criterion::{criterion_group, criterion_main, Criterion};
 
-    fn float_one_hundred(c: &mut Criterion) {
-        c.bench_function("float_ten", |bench| {
+    fn slosh_float_one_hundred(c: &mut Criterion) {
+        c.bench_function("slosh_float_ten", |bench| {
             bench.iter(|| std::hint::black_box(run_float_script(100, 0.5, 400.0)));
         });
     }
 
-    fn float_one_thousand(c: &mut Criterion) {
-        c.bench_function("float_one_thousand", |bench| {
+    fn slosh_float_one_thousand(c: &mut Criterion) {
+        c.bench_function("slosh_float_one_thousand", |bench| {
             bench.iter(|| std::hint::black_box(run_float_script(1000, 0.05, 2105.26315904)));
         });
     }
 
-    fn float_ten_thousand(c: &mut Criterion) {
-        c.bench_function("float_one_hundred", |bench| {
+    fn slosh_float_ten_thousand(c: &mut Criterion) {
+        c.bench_function("slosh_float_ten_thousand", |bench| {
             bench.iter(|| std::hint::black_box(run_float_script(10_000, 0.2, 25000.0)));
         });
     }
@@ -286,9 +286,9 @@ mod wall_clock {
 
     criterion_group!(
         benches,
-        float_one_hundred,
-        float_one_thousand,
-        float_ten_thousand,
+        slosh_float_one_hundred,
+        slosh_float_one_thousand,
+        slosh_float_ten_thousand,
         continuation_vec_search_one_hundred,
         recursive_vec_search_one_hundred,
         continuation_vec_search_one_thousand,

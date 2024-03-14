@@ -17,4 +17,4 @@
             (set! pu (+ pu su)))
     pu)))
 
-    (prn (eval-pol 1000000 0.2))
+    (prn (eval-pol 10000 0.2))

@@ -38,11 +38,15 @@ panic = "abort"
 [dev-dependencies]
 criterion = "0.3"
 
-[[bench]]
-name = "start_benchmark"
-harness = false
+# [[bench]]
+# name = "start_benchmark"
+# harness = false
+#
+# [[bench]]
+# name = "start_script"
+# harness = false
 
 [[bench]]
-name = "start_script"
+name = "all"
 harness = false
 

@@ -1,4 +1,4 @@
-#!/usr/bin/env sl-sh
+(ns-import 'test)
 
 (defn eval-pol (n x)
   (let ((su 0.0)
@@ -16,4 +16,4 @@
             (set! pu (+ pu su))))
     pu))
 
-(print (eval-pol 10000 0.2))
+    (test::assert-equal 25000.0 (eval-pol 10000 0.2))

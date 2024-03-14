@@ -371,7 +371,7 @@ pub fn get_namespace(environment: &Environment, name: &str) -> Option<Rc<RefCell
 }
 
 pub fn mark_job_stopped(environment: &Environment, pid: u32) {
-    'outer: for mut j in environment.jobs.borrow_mut().iter_mut() {
+    'outer: for j in environment.jobs.borrow_mut().iter_mut() {
         for p in &j.pids {
             if *p == pid {
                 j.status = JobStatus::Stopped;
@@ -382,7 +382,7 @@ pub fn mark_job_stopped(environment: &Environment, pid: u32) {
 }
 
 pub fn mark_job_running(environment: &Environment, pid: u32) {
-    'outer: for mut j in environment.jobs.borrow_mut().iter_mut() {
+    'outer: for j in environment.jobs.borrow_mut().iter_mut() {
         for p in &j.pids {
             if *p == pid {
                 j.status = JobStatus::Running;
