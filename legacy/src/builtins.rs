@@ -1379,6 +1379,7 @@ macro_rules! ensure_tonicity {
             .ok_or(LispError::new("expected at least one value"))?;
         let rest = &$values[1..];
         fn f(prev: $type, xs: &[$type_two]) -> bool {
+            #[allow(clippy::redundant_closure_call)]
             match xs.first() {
                 Some(x) => $check_fn(prev, x) && f(x, &xs[1..]),
                 None => true,
@@ -2001,7 +2002,7 @@ Example:
             builtin_expand_macro_all,
             "Usage: (expand-macro-all expression)
 
-Expands a macro expression like expand-macro but also expand any embedded macros.  
+Expands a macro expression like expand-macro but also expand any embedded macros.
 
 Just returns the expression if not a macro.
 
@@ -2121,8 +2122,8 @@ Section: core
 
 Example:
 (def get-error-t1 (get-error (err \"Some Error\")))
-(test::assert-equal :error (car get-error-t1)) 
-(test::assert-equal \"Some Error\" (cadr get-error-t1)) 
+(test::assert-equal :error (car get-error-t1))
+(test::assert-equal \"Some Error\" (cadr get-error-t1))
 (test::assert-true (vec? (caddr get-error-t1)))
 (test::assert-equal '(:ok . \"Some String\") (get-error \"Some String\"))
 (test::assert-equal '(:ok . \"Some Other String\") (get-error (def test-get-error \"Some \") (str test-get-error \"Other String\")))
