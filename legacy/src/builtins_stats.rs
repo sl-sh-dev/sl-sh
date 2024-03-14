@@ -157,7 +157,7 @@ impl<'a> SummaryStats<'a> {
                     let (float_as_int, count) = freq;
                     let float: f64 = f64::from_bits(*float_as_int);
                     let count: i32 = *count;
-                    counts.entry(count).or_insert_with(Vec::new).push(float);
+                    counts.entry(count).or_default().push(float);
                     if count > max_count {
                         max_count = count;
                     }

@@ -1112,7 +1112,7 @@ pub struct TypedWrapper<'a, T: ?Sized, U>(&'a U, PhantomData<T>);
 
 impl<'a, T: ?Sized, U> TypedWrapper<'a, T, U> {
     pub fn new(src: &'a U) -> TypedWrapper<T, U> {
-        TypedWrapper(src, PhantomData::default())
+        TypedWrapper(src, PhantomData)
     }
 }
 

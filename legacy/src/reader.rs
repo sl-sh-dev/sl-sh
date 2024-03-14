@@ -922,7 +922,7 @@ fn is_unquote_splice(exp: &Expression) -> bool {
     match &exp_d.data {
         ExpEnum::Pair(car, _) => is_splice(car),
         ExpEnum::Vector(v) => {
-            if let Some(car) = v.get(0) {
+            if let Some(car) = v.first() {
                 is_splice(car)
             } else {
                 false

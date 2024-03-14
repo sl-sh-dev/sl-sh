@@ -90,7 +90,7 @@ fn change_fn(exp: Expression, new_fn: &'static str) -> Result<Expression, LispEr
     let exp_d = exp.get();
     match &exp_d.data {
         ExpEnum::Vector(v) => {
-            if let Some(v0) = v.get(0) {
+            if let Some(v0) = v.first() {
                 v0.get_mut().data = ExpEnum::Symbol(new_fn, SymLoc::None);
                 drop(exp_d);
                 Ok(exp)
