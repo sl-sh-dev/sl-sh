@@ -25,12 +25,12 @@ mod instruction_count {
 
     #[library_benchmark]
     fn sl_sh_float_one_thousand() {
-        black_box(run_float_script_100());
+        black_box(run_float_script_1000());
     }
 
     #[library_benchmark]
     fn sl_sh_float_ten_thousand() {
-        black_box(run_float_script_100());
+        black_box(run_float_script_10000());
     }
 
     library_benchmark_group!(
@@ -39,7 +39,7 @@ mod instruction_count {
             .raw_callgrind_args(["--cache-sim=yes"]);
         benchmarks = sl_sh_float_one_hundred,
         sl_sh_float_one_thousand,
-        sl_sh_float_ten_hundred,
+        sl_sh_float_ten_thousand,
     );
 
     main!(library_benchmark_groups = bench_sl_sh_group);
@@ -76,7 +76,7 @@ mod wall_clock {
         benches,
         sl_sh_float_one_hundred,
         sl_sh_float_one_thousand,
-        sl_sh_float_ten_hundred,
+        sl_sh_float_ten_thousand,
     );
 
     criterion_main!(benches);

@@ -47,6 +47,6 @@ criterion = "0.3"
 # harness = false
 
 [[bench]]
-name = "all"
+name = "sl_sh_float_bench"
 harness = false
 
