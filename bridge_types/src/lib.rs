@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::fmt::Display;
 
 /// Public type used by rust native -> slosh bridge macro to represent
 /// arguments in slosh that correspond to variadic functions in rust
@@ -39,6 +40,18 @@ pub type LooseString<'a> = Cow<'a, str>;
 pub enum SloshChar<'a> {
     Char(char),
     String(Cow<'a, str>),
+}
+
+impl Display for SloshChar<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            SloshChar::Char(c) => {
+                format!("{}", c)
+            }
+            SloshChar::String(c) => c.to_string(),
+        };
+        write!(f, "{}", str)
+    }
 }
 
 /// Used by sl_sh_fn macro to embed information at runtime about the parameters of
