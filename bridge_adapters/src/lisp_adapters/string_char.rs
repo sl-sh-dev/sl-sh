@@ -157,22 +157,8 @@ where
     }
 }
 
-impl<'a> SlFromRef<'a, Value> for String {
-    fn sl_from_ref(value: Value, vm: &'a SloshVm) -> VMResult<Self> {
-        match value {
-            Value::String(h) => Ok(vm.get_string(h).to_string()),
-            _ => Err(VMError::new_conversion(
-                ErrorStrings::fix_me_mismatched_type(
-                    <&'static str>::from(ValueType::String),
-                    value.display_type(vm),
-                ),
-            )),
-        }
-    }
-}
-
-impl SlFrom<&Value> for String {
-    fn sl_from(value: &Value, vm: &mut SloshVm) -> VMResult<Self> {
+impl<'a> SlFromRef<'a, &'a Value> for String {
+    fn sl_from_ref(value: &'a Value, vm: &'a SloshVm) -> VMResult<Self> {
         match value {
             Value::String(h) => Ok(vm.get_string(*h).to_string()),
             _ => Err(VMError::new_conversion(
@@ -376,7 +362,7 @@ mod tests {
                     }
                     _ => {
                         return {
-                            let arg: String = arg_0.sl_into(vm)?;
+                            let arg: String = arg_0.sl_into_ref(vm)?;
                             arg.trim().to_string().sl_into(vm)
                         }
                     }
@@ -402,11 +388,11 @@ mod tests {
         assert!(matches!(val, Value::String(_)));
 
         let _s: String = (&val)
-            .sl_into(vm)
+            .sl_into_ref(vm)
             .expect("&Value::String can be converted to String");
         let kwd_val = create_keyword(vm);
 
-        let e: VMResult<String> = (&kwd_val).sl_into(vm);
+        let e: VMResult<String> = (&kwd_val).sl_into_ref(vm);
         e.expect_err("Can not convert keyword to String");
 
         let _s: &str = (&val)

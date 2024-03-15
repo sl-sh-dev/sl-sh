@@ -1,0 +1,133 @@
+warning: unused import: `SlAsRef`
+ --> trybuild/tests/ensure_sl_from_value_trait_implement_fail.rs:1:38
+  |
+1 | use bridge_adapters::lisp_adapters::{SlAsRef, SlInto};
+  |                                      ^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+error[E0277]: the trait bound `String: SlFrom<&slvm::value::Value>` is not satisfied
+  --> trybuild/tests/ensure_sl_from_value_trait_implement_fail.rs:10:29
+   |
+10 |     let x: String = (&dest).sl_into(&mut vm).unwrap();
+   |                             ^^^^^^^ the trait `SlFrom<&slvm::value::Value>` is not implemented for `String`
+   |
+   = help: the following other types implement trait `SlFrom<T>`:
+             <slvm::value::Value as SlFrom<bool>>
+             <slvm::value::Value as SlFrom<char>>
+             <slvm::value::Value as SlFrom<i32>>
+             <slvm::value::Value as SlFrom<u32>>
+             <slvm::value::Value as SlFrom<f64>>
+             <slvm::value::Value as SlFrom<bridge_types::SloshChar<'a>>>
+             <slvm::value::Value as SlFrom<Cow<'a, str>>>
+             <slvm::value::Value as SlFrom<slvm::value::Value>>
+           and $N others
+   = note: required for `&slvm::value::Value` to implement `SlInto<String>`
+
+error[E0277]: the trait bound `f64: SlFrom<&slvm::value::Value>` is not satisfied
+  --> trybuild/tests/ensure_sl_from_value_trait_implement_fail.rs:11:26
+   |
+11 |     let x: f64 = (&dest).sl_into(&mut vm).unwrap();
+   |                          ^^^^^^^ the trait `SlFrom<&slvm::value::Value>` is not implemented for `f64`
+   |
+   = help: the following other types implement trait `SlFrom<T>`:
+             <slvm::value::Value as SlFrom<bool>>
+             <slvm::value::Value as SlFrom<char>>
+             <slvm::value::Value as SlFrom<i32>>
+             <slvm::value::Value as SlFrom<u32>>
+             <slvm::value::Value as SlFrom<f64>>
+             <slvm::value::Value as SlFrom<bridge_types::SloshChar<'a>>>
+             <slvm::value::Value as SlFrom<Cow<'a, str>>>
+             <slvm::value::Value as SlFrom<slvm::value::Value>>
+           and $N others
+   = note: required for `&slvm::value::Value` to implement `SlInto<f64>`
+
+error[E0277]: the trait bound `i64: SlFrom<&slvm::value::Value>` is not satisfied
+  --> trybuild/tests/ensure_sl_from_value_trait_implement_fail.rs:12:26
+   |
+12 |     let x: i64 = (&dest).sl_into(&mut vm).unwrap();
+   |                          ^^^^^^^ the trait `SlFrom<&slvm::value::Value>` is not implemented for `i64`
+   |
+   = help: the following other types implement trait `SlFrom<T>`:
+             <slvm::value::Value as SlFrom<bool>>
+             <slvm::value::Value as SlFrom<char>>
+             <slvm::value::Value as SlFrom<i32>>
+             <slvm::value::Value as SlFrom<u32>>
+             <slvm::value::Value as SlFrom<f64>>
+             <slvm::value::Value as SlFrom<bridge_types::SloshChar<'a>>>
+             <slvm::value::Value as SlFrom<Cow<'a, str>>>
+             <slvm::value::Value as SlFrom<slvm::value::Value>>
+           and $N others
+   = note: required for `&slvm::value::Value` to implement `SlInto<i64>`
+
+error[E0277]: the trait bound `usize: SlFrom<&slvm::value::Value>` is not satisfied
+  --> trybuild/tests/ensure_sl_from_value_trait_implement_fail.rs:13:28
+   |
+13 |     let x: usize = (&dest).sl_into(&mut vm).unwrap();
+   |                            ^^^^^^^ the trait `SlFrom<&slvm::value::Value>` is not implemented for `usize`
+   |
+   = help: the following other types implement trait `SlFrom<T>`:
+             <slvm::value::Value as SlFrom<bool>>
+             <slvm::value::Value as SlFrom<char>>
+             <slvm::value::Value as SlFrom<i32>>
+             <slvm::value::Value as SlFrom<u32>>
+             <slvm::value::Value as SlFrom<f64>>
+             <slvm::value::Value as SlFrom<bridge_types::SloshChar<'a>>>
+             <slvm::value::Value as SlFrom<Cow<'a, str>>>
+             <slvm::value::Value as SlFrom<slvm::value::Value>>
+           and $N others
+   = note: required for `&slvm::value::Value` to implement `SlInto<usize>`
+
+error[E0277]: the trait bound `f32: SlFrom<&slvm::value::Value>` is not satisfied
+  --> trybuild/tests/ensure_sl_from_value_trait_implement_fail.rs:14:26
+   |
+14 |     let x: f32 = (&dest).sl_into(&mut vm).unwrap();
+   |                          ^^^^^^^ the trait `SlFrom<&slvm::value::Value>` is not implemented for `f32`
+   |
+   = help: the following other types implement trait `SlFrom<T>`:
+             <slvm::value::Value as SlFrom<bool>>
+             <slvm::value::Value as SlFrom<char>>
+             <slvm::value::Value as SlFrom<i32>>
+             <slvm::value::Value as SlFrom<u32>>
+             <slvm::value::Value as SlFrom<f64>>
+             <slvm::value::Value as SlFrom<bridge_types::SloshChar<'a>>>
+             <slvm::value::Value as SlFrom<Cow<'a, str>>>
+             <slvm::value::Value as SlFrom<slvm::value::Value>>
+           and $N others
+   = note: required for `&slvm::value::Value` to implement `SlInto<f32>`
+
+error[E0277]: the trait bound `&str: SlFrom<&slvm::value::Value>` is not satisfied
+  --> trybuild/tests/ensure_sl_from_value_trait_implement_fail.rs:15:27
+   |
+15 |     let x: &str = (&dest).sl_into(&mut vm).unwrap();
+   |                           ^^^^^^^ the trait `SlFrom<&slvm::value::Value>` is not implemented for `&str`
+   |
+   = help: the following other types implement trait `SlFrom<T>`:
+             <slvm::value::Value as SlFrom<bool>>
+             <slvm::value::Value as SlFrom<char>>
+             <slvm::value::Value as SlFrom<i32>>
+             <slvm::value::Value as SlFrom<u32>>
+             <slvm::value::Value as SlFrom<f64>>
+             <slvm::value::Value as SlFrom<bridge_types::SloshChar<'a>>>
+             <slvm::value::Value as SlFrom<Cow<'a, str>>>
+             <slvm::value::Value as SlFrom<slvm::value::Value>>
+           and $N others
+   = note: required for `&slvm::value::Value` to implement `SlInto<&str>`
+
+error[E0277]: the trait bound `bool: SlFrom<&slvm::value::Value>` is not satisfied
+  --> trybuild/tests/ensure_sl_from_value_trait_implement_fail.rs:16:27
+   |
+16 |     let x: bool = (&dest).sl_into(&mut vm).unwrap();
+   |                           ^^^^^^^ the trait `SlFrom<&slvm::value::Value>` is not implemented for `bool`
+   |
+   = help: the following other types implement trait `SlFrom<T>`:
+             <slvm::value::Value as SlFrom<bool>>
+             <slvm::value::Value as SlFrom<char>>
+             <slvm::value::Value as SlFrom<i32>>
+             <slvm::value::Value as SlFrom<u32>>
+             <slvm::value::Value as SlFrom<f64>>
+             <slvm::value::Value as SlFrom<bridge_types::SloshChar<'a>>>
+             <slvm::value::Value as SlFrom<Cow<'a, str>>>
+             <slvm::value::Value as SlFrom<slvm::value::Value>>
+           and $N others
+   = note: required for `&slvm::value::Value` to implement `SlInto<bool>`
