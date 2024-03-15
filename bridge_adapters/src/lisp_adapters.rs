@@ -190,6 +190,27 @@ where
     }
 }
 
+//TODO consider removing me to flush out which values shouldn't
+// need to implement SlFrom and where the macro is doing that.
+// even worth keeping around to check at compile time that
+// nothing implements SlFrom<&Value> for T.
+// could I?
+// /// PANICS do not implement!
+// ///
+// impl<T> SlFrom<&Value> for T {
+//     fn sl_from(_value: &Value, _vm: &mut SloshVm) -> VMResult<Self> {
+//         unimplemented!()
+//     }
+// }
+// impl<T> SlFrom<&Value> for T
+// where
+//     T: for<'a> SlFromRef<'a, &'a Value>,
+// {
+//     fn sl_from(value: &Value, vm: &mut SloshVm) -> VMResult<Self> {
+//         Self::sl_from_ref(value, vm)
+//     }
+// }
+
 pub trait SlAsMut<'a, T: ?Sized> {
     /// Converts this type into a mutable reference of the (usually inferred) input type.
     fn sl_as_mut(&mut self, vm: &'a mut SloshVm) -> VMResult<&'a mut T>;

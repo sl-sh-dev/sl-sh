@@ -51,22 +51,6 @@ impl<'a> SlFromRef<'a, &Value> for LooseString<'a> {
     }
 }
 
-// TODO DELETE ME
-impl SlFrom<&Value> for char {
-    fn sl_from(value: &Value, vm: &mut SloshVm) -> VMResult<Self> {
-        match value {
-            Value::CodePoint(char) => Ok(*char),
-            _ => Err(VMError::new_conversion(
-                ErrorStrings::fix_me_mismatched_type_with_context(
-                    String::from(ValueTypes::from([ValueType::CodePoint])),
-                    value.display_type(vm),
-                    "Provided value can not be more than one byte, e.g. a char.",
-                ),
-            )),
-        }
-    }
-}
-
 impl<'a> SlFromRef<'a, &'a Value> for char {
     fn sl_from_ref(value: &'a Value, vm: &'a SloshVm) -> VMResult<Self> {
         match value {
@@ -173,10 +157,10 @@ where
     }
 }
 
-impl<'a> SlFromRef<'a, &'a Value> for String {
-    fn sl_from_ref(value: &'a Value, vm: &'a SloshVm) -> VMResult<Self> {
+impl<'a> SlFromRef<'a, Value> for String {
+    fn sl_from_ref(value: Value, vm: &'a SloshVm) -> VMResult<Self> {
         match value {
-            Value::String(h) => Ok(vm.get_string(*h).to_string()),
+            Value::String(h) => Ok(vm.get_string(h).to_string()),
             _ => Err(VMError::new_conversion(
                 ErrorStrings::fix_me_mismatched_type(
                     <&'static str>::from(ValueType::String),
@@ -282,7 +266,7 @@ mod tests {
     fn try_conversion_error() {
         let mut vm = new_slosh_vm();
         let value = create_string(&mut vm);
-        let c: VMResult<char> = (&value).sl_into(&mut vm);
+        let c: VMResult<char> = (&value).sl_into_ref(&mut vm);
         assert!(c.is_err());
         let err = VMError::new_conversion(ErrorStrings::fix_me_mismatched_type_with_context(
             String::from(ValueTypes::from([ValueType::CodePoint])),
@@ -477,7 +461,7 @@ mod tests {
 
         let val = create_code_point();
         let _c: char = (&val)
-            .sl_into(vm)
+            .sl_into_ref(vm)
             .expect("&Value::CodePoint can be converted to char");
     }
 
