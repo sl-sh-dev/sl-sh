@@ -807,8 +807,8 @@ fn parse_direct_type(
                         #inner
                     }}),
                     PassingStyle::Reference => Ok(quote! {{
-                        use bridge_adapters::lisp_adapters::SlAsRef;
-                        let #arg_name: #ty = #arg_name.sl_as_ref(environment)?;
+                        use bridge_adapters::lisp_adapters::SlIntoRef;
+                        let #arg_name: #ty = #arg_name.sl_into_ref(environment)?;
                         #inner
                     }}),
                     PassingStyle::MutReference => Ok(quote! {{

@@ -51,8 +51,24 @@ impl<'a> SlFromRef<'a, &Value> for LooseString<'a> {
     }
 }
 
+// TODO DELETE ME
 impl SlFrom<&Value> for char {
     fn sl_from(value: &Value, vm: &mut SloshVm) -> VMResult<Self> {
+        match value {
+            Value::CodePoint(char) => Ok(*char),
+            _ => Err(VMError::new_conversion(
+                ErrorStrings::fix_me_mismatched_type_with_context(
+                    String::from(ValueTypes::from([ValueType::CodePoint])),
+                    value.display_type(vm),
+                    "Provided value can not be more than one byte, e.g. a char.",
+                ),
+            )),
+        }
+    }
+}
+
+impl<'a> SlFromRef<'a, &'a Value> for char {
+    fn sl_from_ref(value: &'a Value, vm: &'a SloshVm) -> VMResult<Self> {
         match value {
             Value::CodePoint(char) => Ok(*char),
             _ => Err(VMError::new_conversion(
@@ -87,6 +103,12 @@ impl<'a> SlAsRef<'a, str> for &Value {
                 ),
             )),
         }
+    }
+}
+
+impl<'a> SlFromRef<'a, &'a Value> for &'a str {
+    fn sl_from_ref(value: &'a Value, vm: &'a SloshVm) -> VMResult<Self> {
+        value.sl_as_ref(vm)
     }
 }
 
@@ -148,6 +170,20 @@ where
 {
     fn sl_from(value: &mut T, vm: &mut SloshVm) -> VMResult<Self> {
         Ok(vm.alloc_string(value.to_string()))
+    }
+}
+
+impl<'a> SlFromRef<'a, &'a Value> for String {
+    fn sl_from_ref(value: &'a Value, vm: &'a SloshVm) -> VMResult<Self> {
+        match value {
+            Value::String(h) => Ok(vm.get_string(*h).to_string()),
+            _ => Err(VMError::new_conversion(
+                ErrorStrings::fix_me_mismatched_type(
+                    <&'static str>::from(ValueType::String),
+                    value.display_type(vm),
+                ),
+            )),
+        }
     }
 }
 

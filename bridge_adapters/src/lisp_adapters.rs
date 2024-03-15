@@ -107,6 +107,17 @@ pub mod numbers;
 pub mod primitives;
 pub mod string_char;
 
+//TODO should this only ever be implemented for Value?
+//  e.g. impl SlFrom<RustType> for Value per RustType?
+// that way when we take a mutable reference it's when
+// we're going back to slosh when we might need a mutable
+// reference to allocate memory for stuff in the call.
+// this is in contrast to SlFromRef<'a, &'a Value> for RustType
+// where we want to be able to have an immutable reference to
+// the vm to borrow n things from the vm (really the heap immutably).
+
+// TODO use marker trait here T: BridgedType, to make it clear
+// which rust types have been implemented for slosh.
 pub trait SlFrom<T>: Sized {
     /// Converts to this type from the input type.
     fn sl_from(value: T, vm: &mut SloshVm) -> VMResult<Self>;
