@@ -272,6 +272,10 @@ mod instruction_count {
     fn float_ten_thousand() {
         black_box(run_float_script(10000, 0.2, 25000.0));
     }
+    #[library_benchmark]
+    fn optimized_float_fifty_thousand() {
+        black_box(eval_pol(50000, 0.2, 125000.0));
+    }
 
     #[library_benchmark]
     fn optimized_float_one_hundred() {
@@ -340,6 +344,7 @@ mod instruction_count {
         optimized_float_one_hundred,
         optimized_float_one_thousand,
         optimized_float_ten_thousand,
+        optimized_float_fifty_thousand,
     );
 
     main!(
@@ -355,99 +360,101 @@ mod instruction_count {
 #[cfg(not(target_arch = "x86_64"))]
 mod wall_clock {
     use super::*;
-    use ::criterion::{criterion_group, criterion_main};
+    use criterion::{criterion_group, criterion_main, Criterion};
 
-    mod criterion {
-        use super::*;
-        use ::criterion::Criterion;
+    fn criterion_optimized_float_one_hundred(c: &mut Criterion) {
+        c.bench_function("optimized_float_one_hundred", |bench| {
+            bench.iter(|| std::hint::black_box(eval_pol(100, 0.5, 400.0)));
+        });
+    }
 
-        pub fn optimized_float_one_hundred(c: &mut Criterion) {
-            c.bench_function("optimized_float_one_hundred", |bench| {
-                bench.iter(|| std::hint::black_box(eval_pol(100, 0.5, 400.0)));
-            });
-        }
+    fn criterion_optimized_float_one_thousand(c: &mut Criterion) {
+        c.bench_function("optimized_float_one_thousand", |bench| {
+            bench.iter(|| std::hint::black_box(eval_pol(1000, 0.05, 2105.26315904)));
+        });
+    }
 
-        pub fn optimized_float_one_thousand(c: &mut Criterion) {
-            c.bench_function("optimized_float_one_thousand", |bench| {
-                bench.iter(|| std::hint::black_box(eval_pol(1000, 0.05, 2105.26315904)));
-            });
-        }
+    fn criterion_optimized_float_ten_thousand(c: &mut Criterion) {
+        c.bench_function("optimized_float_ten_thousand", |bench| {
+            bench.iter(|| std::hint::black_box(eval_pol(10_000, 0.2, 25000.0)));
+        });
+    }
 
-        pub fn optimized_float_ten_thousand(c: &mut Criterion) {
-            c.bench_function("optimized_float_ten_thousand", |bench| {
-                bench.iter(|| std::hint::black_box(eval_pol(10_000, 0.2, 25000.0)));
-            });
-        }
+    fn criterion_optimized_float_fifty_thousand(c: &mut Criterion) {
+        c.bench_function("optimized_float_fifty_thousand", |bench| {
+            bench.iter(|| std::hint::black_box(eval_pol(50_000, 0.2, 125000.0)));
+        });
+    }
 
-        pub fn float_one_hundred(c: &mut Criterion) {
-            c.bench_function("float_one_hundred", |bench| {
-                bench.iter(|| std::hint::black_box(run_float_script(100, 0.5, 400.0)));
-            });
-        }
+    fn criterion_float_one_hundred(c: &mut Criterion) {
+        c.bench_function("float_one_hundred", |bench| {
+            bench.iter(|| std::hint::black_box(run_float_script(100, 0.5, 400.0)));
+        });
+    }
 
-        pub fn float_one_thousand(c: &mut Criterion) {
-            c.bench_function("float_one_thousand", |bench| {
-                bench.iter(|| std::hint::black_box(run_float_script(1000, 0.05, 2105.26315904)));
-            });
-        }
+    fn criterion_float_one_thousand(c: &mut Criterion) {
+        c.bench_function("float_one_thousand", |bench| {
+            bench.iter(|| std::hint::black_box(run_float_script(1000, 0.05, 2105.26315904)));
+        });
+    }
 
-        pub fn float_ten_thousand(c: &mut Criterion) {
-            c.bench_function("float_ten_thousand", |bench| {
-                bench.iter(|| std::hint::black_box(run_float_script(10_000, 0.2, 25000.0)));
-            });
-        }
+    fn criterion_float_ten_thousand(c: &mut Criterion) {
+        c.bench_function("float_ten_thousand", |bench| {
+            bench.iter(|| std::hint::black_box(run_float_script(10_000, 0.2, 25000.0)));
+        });
+    }
 
-        pub fn recursive_vec_search_one_hundred(c: &mut Criterion) {
-            c.bench_function("recursive_vec_search_one_hundred", |bench| {
-                bench.iter(|| std::hint::black_box(run_recursive_search_script(100)));
-            });
-        }
+    fn criterion_recursive_vec_search_one_hundred(c: &mut Criterion) {
+        c.bench_function("recursive_vec_search_one_hundred", |bench| {
+            bench.iter(|| std::hint::black_box(run_recursive_search_script(100)));
+        });
+    }
 
-        pub fn recursive_vec_search_one_thousand(c: &mut Criterion) {
-            c.bench_function("recursive_vec_search_one_thousand", |bench| {
-                bench.iter(|| std::hint::black_box(run_recursive_search_script(1000)));
-            });
-        }
+    fn criterion_recursive_vec_search_one_thousand(c: &mut Criterion) {
+        c.bench_function("recursive_vec_search_one_thousand", |bench| {
+            bench.iter(|| std::hint::black_box(run_recursive_search_script(1000)));
+        });
+    }
 
-        pub fn recursive_vec_search_ten_thousand(c: &mut Criterion) {
-            c.bench_function("recursive_vec_search_ten_thousand", |bench| {
-                bench.iter(|| std::hint::black_box(run_recursive_search_script(10_000)));
-            });
-        }
+    fn criterion_recursive_vec_search_ten_thousand(c: &mut Criterion) {
+        c.bench_function("recursive_vec_search_ten_thousand", |bench| {
+            bench.iter(|| std::hint::black_box(run_recursive_search_script(10_000)));
+        });
+    }
 
-        pub fn continuation_vec_search_one_hundred(c: &mut Criterion) {
-            c.bench_function("continuation_vec_search_one_hundred", |bench| {
-                bench.iter(|| std::hint::black_box(run_continuation_search_script(100)));
-            });
-        }
+    fn criterion_continuation_vec_search_one_hundred(c: &mut Criterion) {
+        c.bench_function("continuation_vec_search_one_hundred", |bench| {
+            bench.iter(|| std::hint::black_box(run_continuation_search_script(100)));
+        });
+    }
 
-        pub fn continuation_vec_search_one_thousand(c: &mut Criterion) {
-            c.bench_function("continuation_vec_search_one_thousand", |bench| {
-                bench.iter(|| std::hint::black_box(run_continuation_search_script(1000)));
-            });
-        }
+    fn criterion_continuation_vec_search_one_thousand(c: &mut Criterion) {
+        c.bench_function("continuation_vec_search_one_thousand", |bench| {
+            bench.iter(|| std::hint::black_box(run_continuation_search_script(1000)));
+        });
+    }
 
-        pub fn continuation_vec_search_ten_thousand(c: &mut Criterion) {
-            c.bench_function("continuation_vec_search_ten_thousand", |bench| {
-                bench.iter(|| std::hint::black_box(run_continuation_search_script(10_000)));
-            });
-        }
+    fn criterion_continuation_vec_search_ten_thousand(c: &mut Criterion) {
+        c.bench_function("continuation_vec_search_ten_thousand", |bench| {
+            bench.iter(|| std::hint::black_box(run_continuation_search_script(10_000)));
+        });
     }
 
     criterion_group!(
         benches,
-        criterion::optimized_float_one_hundred,
-        criterion::optimized_float_one_thousand,
-        criterion::optimized_float_ten_thousand,
-        criterion::float_one_hundred,
-        criterion::float_one_thousand,
-        criterion::float_ten_thousand,
-        criterion::continuation_vec_search_one_hundred,
-        criterion::recursive_vec_search_one_hundred,
-        criterion::continuation_vec_search_one_thousand,
-        criterion::recursive_vec_search_one_thousand,
-        criterion::continuation_vec_search_ten_thousand,
-        criterion::recursive_vec_search_ten_thousand,
+        criterion_optimized_float_one_hundred,
+        criterion_optimized_float_one_thousand,
+        criterion_optimized_float_ten_thousand,
+        criterion_optimized_float_fifty_thousand,
+        criterion_float_one_hundred,
+        criterion_float_one_thousand,
+        criterion_float_ten_thousand,
+        criterion_continuation_vec_search_one_hundred,
+        criterion_recursive_vec_search_one_hundred,
+        criterion_continuation_vec_search_one_thousand,
+        criterion_recursive_vec_search_one_thousand,
+        criterion_continuation_vec_search_ten_thousand,
+        criterion_recursive_vec_search_ten_thousand,
     );
 
     criterion_main!(benches);
