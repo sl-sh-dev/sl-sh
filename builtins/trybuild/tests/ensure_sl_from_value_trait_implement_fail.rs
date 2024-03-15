@@ -15,5 +15,8 @@ fn do_not_implement_sl_from_to_convert_from_value_types_to_rust_types() {
     let x: f32 = (&dest).sl_into(&mut vm).unwrap();
     let x: &str = (&dest).sl_into(&mut vm).unwrap();
     let x: bool = (&dest).sl_into(&mut vm).unwrap();
+    let z: String = (&dest2).sl_into_ref(&mut vm).unwrap();
     println!("y: {:?}", y);
+    println!("z: {:?}", z);
+    println!("x: {:?}", x);
 }
