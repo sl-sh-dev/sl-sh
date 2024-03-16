@@ -152,7 +152,7 @@ fn run_continuation_search_script(n: usize) {
     run_bench_assert_true(n, run_continuation_search_bench, vm);
 }
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(not(target_arch = "x86_64"))]
 mod instruction_count {
     use super::*;
     use iai_callgrind::{library_benchmark, library_benchmark_group, main, LibraryBenchmarkConfig};
@@ -225,7 +225,7 @@ mod instruction_count {
     }
 }
 
-#[cfg(not(target_arch = "x86_64"))]
+#[cfg(target_arch = "x86_64")]
 mod wall_clock {
     use super::*;
     use criterion::{criterion_group, criterion_main, Criterion};
@@ -305,9 +305,9 @@ mod wall_clock {
 }
 
 fn main() {
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(not(target_arch = "x86_64"))]
     instruction_count::run_public();
 
-    #[cfg(not(target_arch = "x86_64"))]
+    #[cfg(target_arch = "x86_64")]
     wall_clock::run();
 }
