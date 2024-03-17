@@ -225,7 +225,6 @@ mod instruction_count {
     }
 }
 
-#[cfg(target_os = "macos")]
 mod wall_clock {
     use super::*;
     use criterion::{criterion_group, criterion_main, Criterion};
@@ -308,6 +307,5 @@ fn main() {
     #[cfg(target_os = "linux")]
     instruction_count::run_public();
 
-    #[cfg(target_os = "macos")]
     wall_clock::run();
 }
