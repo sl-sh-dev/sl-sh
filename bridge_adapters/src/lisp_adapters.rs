@@ -108,17 +108,7 @@ pub mod numbers;
 pub mod primitives;
 pub mod string_char;
 
-//TODO should this only ever be implemented for Value?
-//  e.g. impl SlFrom<RustType> for Value per RustType?
-// that way when we take a mutable reference it's when
-// we're going back to slosh when we might need a mutable
-// reference to allocate memory for stuff in the call.
-// this is in contrast to SlFromRef<'a, &'a Value> for RustType
-// where we want to be able to have an immutable reference to
-// the vm to borrow n things from the vm (really the heap immutably).
-
-// TODO use marker trait here T: BridgedType, to make it clear
-// which rust types have been implemented for slosh.
+/// Use mutable [`SloshVm`] to take a rust value and convert it to a [`BridgedType`].
 pub trait SlFrom<T>: Sized
 where
     Self: BridgedType,
@@ -127,6 +117,7 @@ where
     fn sl_from(value: T, vm: &mut SloshVm) -> VMResult<Self>;
 }
 
+/// Inverse of [`SlFrom`]
 pub trait SlInto<T>: Sized
 where
     T: BridgedType,
@@ -144,9 +135,9 @@ where
     }
 }
 
-pub trait SlFromRef<'a, T>: Sized
+pub trait SlFromRef<'a, T: BridgedType>
 where
-    Self: 'a,
+    Self: Sized,
 {
     /// Converts to this type from the input type.
     fn sl_from_ref(value: T, vm: &'a SloshVm) -> VMResult<Self>;
@@ -162,6 +153,7 @@ where
 
 impl<'a, T, U> SlIntoRef<'a, U> for T
 where
+    T: BridgedType,
     U: SlFromRef<'a, T>,
     U: 'a,
 {
@@ -170,7 +162,9 @@ where
     }
 }
 
+/// Converts a [`BridgedType`] to some rust type
 pub trait SlAsRef<'a, T: ?Sized> {
+    // where Self: BridgedType,
     /// Converts this type into a shared reference of the (usually inferred) input type.
     fn sl_as_ref(&self, vm: &'a SloshVm) -> VMResult<&'a T>;
 }
@@ -196,27 +190,6 @@ where
         <T as SlAsRef<'a, U>>::sl_as_ref(*self, vm)
     }
 }
-
-//TODO consider removing me to flush out which values shouldn't
-// need to implement SlFrom and where the macro is doing that.
-// even worth keeping around to check at compile time that
-// nothing implements SlFrom<&Value> for T.
-// could I?
-// /// PANICS do not implement!
-// ///
-// impl<T> SlFrom<&Value> for T {
-//     fn sl_from(_value: &Value, _vm: &mut SloshVm) -> VMResult<Self> {
-//         unimplemented!()
-//     }
-// }
-// impl<T> SlFrom<&Value> for T
-// where
-//     T: for<'a> SlFromRef<'a, &'a Value>,
-// {
-//     fn sl_from(value: &Value, vm: &mut SloshVm) -> VMResult<Self> {
-//         Self::sl_from_ref(value, vm)
-//     }
-// }
 
 pub trait SlAsMut<'a, T: ?Sized> {
     /// Converts this type into a mutable reference of the (usually inferred) input type.

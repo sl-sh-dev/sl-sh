@@ -176,6 +176,8 @@ impl From<u32> for Value {
 }
 
 impl BridgedType for Value {}
+impl BridgedType for &Value {}
+impl BridgedType for &mut Value {}
 
 impl Value {
     pub fn new() -> Self {
