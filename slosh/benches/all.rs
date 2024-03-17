@@ -305,7 +305,7 @@ mod wall_clock {
 }
 
 fn main() {
-    #[cfg(target_os = "macos")]
+    #[cfg(target_os = "linux")]
     instruction_count::run_public();
 
     #[cfg(target_os = "macos")]
