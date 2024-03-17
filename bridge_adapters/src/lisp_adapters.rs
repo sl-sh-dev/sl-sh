@@ -97,6 +97,7 @@
 //!  [`Value`]::CallFrame(Handle),
 //!  [`Value`]::Error(Handle),
 
+use bridge_types::SloshValueRepr;
 #[cfg(doc)]
 use bridge_types::{LooseString, SloshChar};
 
@@ -118,12 +119,18 @@ pub mod string_char;
 
 // TODO use marker trait here T: BridgedType, to make it clear
 // which rust types have been implemented for slosh.
-pub trait SlFrom<T>: Sized {
+pub trait SlFrom<T>: Sized
+where
+    Self: SloshValueRepr,
+{
     /// Converts to this type from the input type.
     fn sl_from(value: T, vm: &mut SloshVm) -> VMResult<Self>;
 }
 
-pub trait SlInto<T>: Sized {
+pub trait SlInto<T>: Sized
+where
+    T: SloshValueRepr,
+{
     /// Converts this type into the (usually inferred) input type.
     fn sl_into(self, vm: &mut SloshVm) -> VMResult<T>;
 }

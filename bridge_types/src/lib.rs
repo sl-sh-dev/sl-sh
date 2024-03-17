@@ -1,5 +1,28 @@
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::fmt::Display;
+
+/// Marker traits
+
+/// A slosh [`Value`] that can potentially be represented as a rust value.
+pub trait SloshValueRepr {}
+
+/// An [`Option`] value that contains a [`SloshValueRepr`] can be represented as a rust value.
+impl<T> SloshValueRepr for Option<T> where T: SloshValueRepr {}
+
+/// A [`Result`] value that contains a [`SloshValueRepr`] can be represented as a rust value.
+impl<T, U> SloshValueRepr for Result<T, U> where T: SloshValueRepr {}
+
+/// A [`HashMap`] that contains a [`SloshValueRepr`] can be represented as a rust value.
+impl<T, U> SloshValueRepr for HashMap<T, U>
+where
+    T: SloshValueRepr,
+    U: SloshValueRepr,
+{
+}
+
+/// A [`Vec`] that contains a [`SloshValueRepr`] can be represented as a rust value.
+impl<T> SloshValueRepr for Vec<T> where T: SloshValueRepr {}
 
 /// Public type used by rust native -> slosh bridge macro to represent
 /// arguments in slosh that correspond to variadic functions in rust
