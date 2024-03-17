@@ -24,6 +24,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: bencherdev/bencher@main
       - run: cargo install iai-callgrind-runner --version 0.10.2
+      - name: Run benches in debug mode to verify they'll pass
+        run: cargo test --benches
       - name: Track Benchmarks with Bencher
         run: |
           bencher run \
