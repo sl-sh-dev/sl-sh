@@ -1,20 +1,22 @@
-error[E0277]: the trait bound `String: bridge_types::SloshValueRepr` is not satisfied
+error[E0277]: the trait bound `String: bridge_types::BridgedType` is not satisfied
   --> trybuild/tests/ensure_sl_from_value_trait_implement_fail.rs:11:29
    |
 11 |     let x: String = (&dest).sl_into(&mut vm).unwrap();
-   |                             ^^^^^^^ the trait `bridge_types::SloshValueRepr` is not implemented for `String`
+   |                             ^^^^^^^ the trait `bridge_types::BridgedType` is not implemented for `String`
    |
-   = help: the following other types implement trait `bridge_types::SloshValueRepr`:
+   = help: the following other types implement trait `bridge_types::BridgedType`:
              HashMap<T, U>
              slvm::value::Value
              Vec<T>
              Option<T>
              Result<T, U>
+             &slvm::value::Value
+             &mut slvm::value::Value
 note: required by a bound in `sl_into`
   --> $WORKSPACE/bridge_adapters/src/lisp_adapters.rs
    |
-   |     T: SloshValueRepr,
-   |        ^^^^^^^^^^^^^^ required by this bound in `SlInto::sl_into`
+   |     T: BridgedType,
+   |        ^^^^^^^^^^^ required by this bound in `SlInto::sl_into`
 ...
    |     fn sl_into(self, vm: &mut SloshVm) -> VMResult<T>;
    |        ------- required by a bound in this associated function
@@ -37,23 +39,25 @@ error[E0277]: the trait bound `String: SlFrom<&slvm::value::Value>` is not satis
            and $N others
    = note: required for `&slvm::value::Value` to implement `SlInto<String>`
 
-error[E0277]: the trait bound `f64: bridge_types::SloshValueRepr` is not satisfied
+error[E0277]: the trait bound `f64: bridge_types::BridgedType` is not satisfied
   --> trybuild/tests/ensure_sl_from_value_trait_implement_fail.rs:12:26
    |
 12 |     let x: f64 = (&dest).sl_into(&mut vm).unwrap();
-   |                          ^^^^^^^ the trait `bridge_types::SloshValueRepr` is not implemented for `f64`
+   |                          ^^^^^^^ the trait `bridge_types::BridgedType` is not implemented for `f64`
    |
-   = help: the following other types implement trait `bridge_types::SloshValueRepr`:
+   = help: the following other types implement trait `bridge_types::BridgedType`:
              HashMap<T, U>
              slvm::value::Value
              Vec<T>
              Option<T>
              Result<T, U>
+             &slvm::value::Value
+             &mut slvm::value::Value
 note: required by a bound in `sl_into`
   --> $WORKSPACE/bridge_adapters/src/lisp_adapters.rs
    |
-   |     T: SloshValueRepr,
-   |        ^^^^^^^^^^^^^^ required by this bound in `SlInto::sl_into`
+   |     T: BridgedType,
+   |        ^^^^^^^^^^^ required by this bound in `SlInto::sl_into`
 ...
    |     fn sl_into(self, vm: &mut SloshVm) -> VMResult<T>;
    |        ------- required by a bound in this associated function
@@ -76,23 +80,25 @@ error[E0277]: the trait bound `f64: SlFrom<&slvm::value::Value>` is not satisfie
            and $N others
    = note: required for `&slvm::value::Value` to implement `SlInto<f64>`
 
-error[E0277]: the trait bound `i64: bridge_types::SloshValueRepr` is not satisfied
+error[E0277]: the trait bound `i64: bridge_types::BridgedType` is not satisfied
   --> trybuild/tests/ensure_sl_from_value_trait_implement_fail.rs:13:26
    |
 13 |     let x: i64 = (&dest).sl_into(&mut vm).unwrap();
-   |                          ^^^^^^^ the trait `bridge_types::SloshValueRepr` is not implemented for `i64`
+   |                          ^^^^^^^ the trait `bridge_types::BridgedType` is not implemented for `i64`
    |
-   = help: the following other types implement trait `bridge_types::SloshValueRepr`:
+   = help: the following other types implement trait `bridge_types::BridgedType`:
              HashMap<T, U>
              slvm::value::Value
              Vec<T>
              Option<T>
              Result<T, U>
+             &slvm::value::Value
+             &mut slvm::value::Value
 note: required by a bound in `sl_into`
   --> $WORKSPACE/bridge_adapters/src/lisp_adapters.rs
    |
-   |     T: SloshValueRepr,
-   |        ^^^^^^^^^^^^^^ required by this bound in `SlInto::sl_into`
+   |     T: BridgedType,
+   |        ^^^^^^^^^^^ required by this bound in `SlInto::sl_into`
 ...
    |     fn sl_into(self, vm: &mut SloshVm) -> VMResult<T>;
    |        ------- required by a bound in this associated function
@@ -115,23 +121,25 @@ error[E0277]: the trait bound `i64: SlFrom<&slvm::value::Value>` is not satisfie
            and $N others
    = note: required for `&slvm::value::Value` to implement `SlInto<i64>`
 
-error[E0277]: the trait bound `usize: bridge_types::SloshValueRepr` is not satisfied
+error[E0277]: the trait bound `usize: bridge_types::BridgedType` is not satisfied
   --> trybuild/tests/ensure_sl_from_value_trait_implement_fail.rs:14:28
    |
 14 |     let x: usize = (&dest).sl_into(&mut vm).unwrap();
-   |                            ^^^^^^^ the trait `bridge_types::SloshValueRepr` is not implemented for `usize`
+   |                            ^^^^^^^ the trait `bridge_types::BridgedType` is not implemented for `usize`
    |
-   = help: the following other types implement trait `bridge_types::SloshValueRepr`:
+   = help: the following other types implement trait `bridge_types::BridgedType`:
              HashMap<T, U>
              slvm::value::Value
              Vec<T>
              Option<T>
              Result<T, U>
+             &slvm::value::Value
+             &mut slvm::value::Value
 note: required by a bound in `sl_into`
   --> $WORKSPACE/bridge_adapters/src/lisp_adapters.rs
    |
-   |     T: SloshValueRepr,
-   |        ^^^^^^^^^^^^^^ required by this bound in `SlInto::sl_into`
+   |     T: BridgedType,
+   |        ^^^^^^^^^^^ required by this bound in `SlInto::sl_into`
 ...
    |     fn sl_into(self, vm: &mut SloshVm) -> VMResult<T>;
    |        ------- required by a bound in this associated function
@@ -154,23 +162,25 @@ error[E0277]: the trait bound `usize: SlFrom<&slvm::value::Value>` is not satisf
            and $N others
    = note: required for `&slvm::value::Value` to implement `SlInto<usize>`
 
-error[E0277]: the trait bound `f32: bridge_types::SloshValueRepr` is not satisfied
+error[E0277]: the trait bound `f32: bridge_types::BridgedType` is not satisfied
   --> trybuild/tests/ensure_sl_from_value_trait_implement_fail.rs:15:26
    |
 15 |     let x: f32 = (&dest).sl_into(&mut vm).unwrap();
-   |                          ^^^^^^^ the trait `bridge_types::SloshValueRepr` is not implemented for `f32`
+   |                          ^^^^^^^ the trait `bridge_types::BridgedType` is not implemented for `f32`
    |
-   = help: the following other types implement trait `bridge_types::SloshValueRepr`:
+   = help: the following other types implement trait `bridge_types::BridgedType`:
              HashMap<T, U>
              slvm::value::Value
              Vec<T>
              Option<T>
              Result<T, U>
+             &slvm::value::Value
+             &mut slvm::value::Value
 note: required by a bound in `sl_into`
   --> $WORKSPACE/bridge_adapters/src/lisp_adapters.rs
    |
-   |     T: SloshValueRepr,
-   |        ^^^^^^^^^^^^^^ required by this bound in `SlInto::sl_into`
+   |     T: BridgedType,
+   |        ^^^^^^^^^^^ required by this bound in `SlInto::sl_into`
 ...
    |     fn sl_into(self, vm: &mut SloshVm) -> VMResult<T>;
    |        ------- required by a bound in this associated function
@@ -193,23 +203,25 @@ error[E0277]: the trait bound `f32: SlFrom<&slvm::value::Value>` is not satisfie
            and $N others
    = note: required for `&slvm::value::Value` to implement `SlInto<f32>`
 
-error[E0277]: the trait bound `&str: bridge_types::SloshValueRepr` is not satisfied
+error[E0277]: the trait bound `&str: bridge_types::BridgedType` is not satisfied
   --> trybuild/tests/ensure_sl_from_value_trait_implement_fail.rs:16:27
    |
 16 |     let x: &str = (&dest).sl_into(&mut vm).unwrap();
-   |                           ^^^^^^^ the trait `bridge_types::SloshValueRepr` is not implemented for `&str`
+   |                           ^^^^^^^ the trait `bridge_types::BridgedType` is not implemented for `&str`
    |
-   = help: the following other types implement trait `bridge_types::SloshValueRepr`:
+   = help: the following other types implement trait `bridge_types::BridgedType`:
              HashMap<T, U>
              slvm::value::Value
              Vec<T>
              Option<T>
              Result<T, U>
+             &slvm::value::Value
+             &mut slvm::value::Value
 note: required by a bound in `sl_into`
   --> $WORKSPACE/bridge_adapters/src/lisp_adapters.rs
    |
-   |     T: SloshValueRepr,
-   |        ^^^^^^^^^^^^^^ required by this bound in `SlInto::sl_into`
+   |     T: BridgedType,
+   |        ^^^^^^^^^^^ required by this bound in `SlInto::sl_into`
 ...
    |     fn sl_into(self, vm: &mut SloshVm) -> VMResult<T>;
    |        ------- required by a bound in this associated function
@@ -232,23 +244,25 @@ error[E0277]: the trait bound `&str: SlFrom<&slvm::value::Value>` is not satisfi
            and $N others
    = note: required for `&slvm::value::Value` to implement `SlInto<&str>`
 
-error[E0277]: the trait bound `bool: bridge_types::SloshValueRepr` is not satisfied
+error[E0277]: the trait bound `bool: bridge_types::BridgedType` is not satisfied
   --> trybuild/tests/ensure_sl_from_value_trait_implement_fail.rs:17:27
    |
 17 |     let x: bool = (&dest).sl_into(&mut vm).unwrap();
-   |                           ^^^^^^^ the trait `bridge_types::SloshValueRepr` is not implemented for `bool`
+   |                           ^^^^^^^ the trait `bridge_types::BridgedType` is not implemented for `bool`
    |
-   = help: the following other types implement trait `bridge_types::SloshValueRepr`:
+   = help: the following other types implement trait `bridge_types::BridgedType`:
              HashMap<T, U>
              slvm::value::Value
              Vec<T>
              Option<T>
              Result<T, U>
+             &slvm::value::Value
+             &mut slvm::value::Value
 note: required by a bound in `sl_into`
   --> $WORKSPACE/bridge_adapters/src/lisp_adapters.rs
    |
-   |     T: SloshValueRepr,
-   |        ^^^^^^^^^^^^^^ required by this bound in `SlInto::sl_into`
+   |     T: BridgedType,
+   |        ^^^^^^^^^^^ required by this bound in `SlInto::sl_into`
 ...
    |     fn sl_into(self, vm: &mut SloshVm) -> VMResult<T>;
    |        ------- required by a bound in this associated function

@@ -5,24 +5,24 @@ use std::fmt::Display;
 /// Marker traits
 
 /// A slosh [`Value`] that can potentially be represented as a rust value.
-pub trait SloshValueRepr {}
+pub trait BridgedType {}
 
-/// An [`Option`] value that contains a [`SloshValueRepr`] can be represented as a rust value.
-impl<T> SloshValueRepr for Option<T> where T: SloshValueRepr {}
+/// An [`Option`] value that contains a [`BridgedType`] can be represented as a rust value.
+impl<T> BridgedType for Option<T> where T: BridgedType {}
 
-/// A [`Result`] value that contains a [`SloshValueRepr`] can be represented as a rust value.
-impl<T, U> SloshValueRepr for Result<T, U> where T: SloshValueRepr {}
+/// A [`Result`] value that contains a [`BridgedType`] can be represented as a rust value.
+impl<T, U> BridgedType for Result<T, U> where T: BridgedType {}
 
-/// A [`HashMap`] that contains a [`SloshValueRepr`] can be represented as a rust value.
-impl<T, U> SloshValueRepr for HashMap<T, U>
+/// A [`HashMap`] that contains a [`BridgedType`] can be represented as a rust value.
+impl<T, U> BridgedType for HashMap<T, U>
 where
-    T: SloshValueRepr,
-    U: SloshValueRepr,
+    T: BridgedType,
+    U: BridgedType,
 {
 }
 
-/// A [`Vec`] that contains a [`SloshValueRepr`] can be represented as a rust value.
-impl<T> SloshValueRepr for Vec<T> where T: SloshValueRepr {}
+/// A [`Vec`] that contains a [`BridgedType`] can be represented as a rust value.
+impl<T> BridgedType for Vec<T> where T: BridgedType {}
 
 /// Public type used by rust native -> slosh bridge macro to represent
 /// arguments in slosh that correspond to variadic functions in rust

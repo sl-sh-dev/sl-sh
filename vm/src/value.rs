@@ -1,5 +1,5 @@
 use crate::{Handle, Heap, Interned, VMError, VMResult, F56};
-use bridge_types::SloshValueRepr;
+use bridge_types::BridgedType;
 use std::collections::{BTreeSet, HashMap};
 use std::fmt;
 use std::fmt::{Display, Formatter};
@@ -175,7 +175,7 @@ impl From<u32> for Value {
     }
 }
 
-impl SloshValueRepr for Value {}
+impl BridgedType for Value {}
 
 impl Value {
     pub fn new() -> Self {
