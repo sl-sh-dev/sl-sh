@@ -153,7 +153,6 @@ fn run_continuation_search_script(n: usize) {
     run_bench_assert_true(n, run_continuation_search_bench, vm);
 }
 
-#[cfg(target_os = "linux")]
 fn eval_pol(n: i32, x: f32, expected: f32) -> VMResult<()> {
     // algorithm from http://dan.corlan.net/bench.html
     // Do a lot of loops and simple math.
@@ -268,22 +267,22 @@ mod instruction_count {
     }
     #[library_benchmark]
     fn optimized_float_fifty_thousand() {
-        black_box(eval_pol(50000, 0.2, 125000.0));
+        black_box(eval_pol(50000, 0.2, 125000.0).unwrap());
     }
 
     #[library_benchmark]
     fn optimized_float_one_hundred() {
-        black_box(eval_pol(100, 0.5, 400.0));
+        black_box(eval_pol(100, 0.5, 400.0).unwrap());
     }
 
     #[library_benchmark]
     fn optimized_float_one_thousand() {
-        black_box(eval_pol(1000, 0.05, 2105.26315904));
+        black_box(eval_pol(1000, 0.05, 2105.26315904).unwrap());
     }
 
     #[library_benchmark]
     fn optimized_float_ten_thousand() {
-        black_box(eval_pol(10000, 0.2, 25000.0));
+        black_box(eval_pol(10000, 0.2, 25000.0).unwrap());
     }
 
     #[library_benchmark]
@@ -357,25 +356,25 @@ mod wall_clock {
 
     fn criterion_optimized_float_one_hundred(c: &mut Criterion) {
         c.bench_function("optimized_float_one_hundred", |bench| {
-            bench.iter(|| std::hint::black_box(eval_pol(100, 0.5, 400.0)));
+            bench.iter(|| std::hint::black_box(eval_pol(100, 0.5, 400.0).unwrap()));
         });
     }
 
     fn criterion_optimized_float_one_thousand(c: &mut Criterion) {
         c.bench_function("optimized_float_one_thousand", |bench| {
-            bench.iter(|| std::hint::black_box(eval_pol(1000, 0.05, 2105.26315904)));
+            bench.iter(|| std::hint::black_box(eval_pol(1000, 0.05, 2105.26315904).unwrap()));
         });
     }
 
     fn criterion_optimized_float_ten_thousand(c: &mut Criterion) {
         c.bench_function("optimized_float_ten_thousand", |bench| {
-            bench.iter(|| std::hint::black_box(eval_pol(10_000, 0.2, 25000.0)));
+            bench.iter(|| std::hint::black_box(eval_pol(10_000, 0.2, 25000.0).unwrap()));
         });
     }
 
     fn criterion_optimized_float_fifty_thousand(c: &mut Criterion) {
         c.bench_function("optimized_float_fifty_thousand", |bench| {
-            bench.iter(|| std::hint::black_box(eval_pol(50_000, 0.2, 125000.0)));
+            bench.iter(|| std::hint::black_box(eval_pol(50_000, 0.2, 125000.0).unwrap()));
         });
     }
 
