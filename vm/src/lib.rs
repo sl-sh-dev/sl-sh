@@ -22,5 +22,4 @@ pub use crate::interner::*;
 pub mod fxhasher;
 pub use crate::fxhasher::*;
 
-pub mod float_56;
-pub use crate::float_56::*;
+pub mod float;

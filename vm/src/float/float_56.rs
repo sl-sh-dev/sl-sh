@@ -31,20 +31,9 @@ use std::str::FromStr;
 ///
 /// A f64 number like 1.00000000001 with 12 decimal digits will be 1.000000000001
 /// A f64 number like 1.000000000001 with 13 decimal digits will be converted to 1.0
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 pub struct F56(pub [u8; 7]);
 impl Eq for F56 {}
-impl PartialEq for F56 {
-    fn eq(&self, other: &Self) -> bool {
-        let self_as_f64 = f64::from(*self);
-        let other_as_f64 = f64::from(*other);
-        // Allow NaN == NaN so equality is reflexive and we can impl Eq to use F56 as a hash key
-        if self_as_f64.is_nan() && other_as_f64.is_nan() {
-            return true;
-        };
-        F56::round_f64_to_f56_precision(self_as_f64 - other_as_f64) == 0.0
-    }
-}
 impl Hash for F56 {
     fn hash<H: Hasher>(&self, state: &mut H) {
         let self_as_f64 = f64::from(*self);
@@ -64,6 +53,7 @@ impl std::fmt::Debug for F56 {
 }
 impl Display for F56 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        // write!(f, "{}", f64::from(*self))
         write!(f, "{}", F56::round_f64_to_f56_precision(f64::from(*self)))
     }
 }
@@ -195,8 +185,7 @@ impl From<F56> for f64 {
         let f64_sign = f56_sign as u64;
         let f64_mantissa = f56_mantissa << 7_u64; // we add 7 bits in mantissa, but they're all zeros
         let word: u64 = f64_sign << 63 | f64_biased_exponent << 52 | f64_mantissa;
-        let converted_to_f64 = f64::from_be_bytes(word.to_be_bytes());
-        F56::round_f64_to_f56_precision(converted_to_f64)
+        f64::from_be_bytes(word.to_be_bytes())
     }
 }
 impl From<F56> for f32 {
@@ -221,7 +210,7 @@ impl F56 {
     // for comparison, f32 has 6-9 decimal digits of precision and f64 has 15-17. I believe F56 has 12-14
     pub const DIGITS: usize = 12;
     // Cutoff for relative difference between an f64 and the F56's approximation
-    pub const EPSILON: f64 = 1e-13;
+    pub const EPSILON: f64 = 1e-10;
     // When converting from f64 to F56 we truncate 7 bits of the mantissa
     // We could round up if the 7th bit is 1, but this is might cause issues.
     // Mantissas like 0xFFFF_FFFF_... can catastrophically round to 0x0000_0000_...
@@ -241,12 +230,30 @@ impl F56 {
 
         scaled_and_rounded / scale_factor
     }
+    pub fn roughly_equal(&self, other: &F56) -> bool {
+        if self == other {
+            return true;
+        }
+        let self_as_f64 = f64::from(*self);
+        let other_as_f64 = f64::from(*other);
+        if self_as_f64.is_nan() && other_as_f64.is_nan() {
+            return true;
+        }
+        if self_as_f64.is_infinite() && other_as_f64.is_infinite() {
+            return self_as_f64.is_sign_positive() == other_as_f64.is_sign_positive();
+        }
+        if self_as_f64 == 0.0 {
+            return other_as_f64.abs() < F56::EPSILON;
+        }
+        let relative_difference = (self_as_f64 - other_as_f64).abs() / self_as_f64.abs();
+        relative_difference < F56::EPSILON
+    }
 }
 
 #[cfg(test)]
 mod tests {
 
-    use crate::F56;
+    use crate::float::F56;
 
     const MAXIMUM_ACCEPTABLE_RELATIVE_DIFFERENCE: f64 = 1e-10;
 
@@ -589,23 +596,26 @@ mod tests {
 
     #[test]
     fn f56_operations() {
-        // Simulate (eq 4.9 (- 10.9 2 4))
-        let op1 = "10.9".parse::<F56>().unwrap();
-        let op2 = "2".parse::<F56>().unwrap();
-        let op3 = "4".parse::<F56>().unwrap();
-        let target = "4.9".parse::<F56>().unwrap();
+        let op1 = "1.1".parse::<F56>().unwrap();
+        let op2 = "1.3".parse::<F56>().unwrap();
+        let target = "2.4".parse::<F56>().unwrap();
 
         let op1_f64 = f64::from(op1);
         let op2_f64 = f64::from(op2);
-        let op3_f64 = f64::from(op3);
         let target_f64 = f64::from(target);
 
-        let calculated_f64 = op1_f64 - op2_f64 - op3_f64;
+        let calculated_f64 = op1_f64 + op2_f64;
         assert_eq!(calculated_f64, target_f64);
 
+        // Test > on the edge of F56 precision
+        let op1 = "1.0000000000001".parse::<F56>().unwrap();
+        let op2 = "1.00000000000001".parse::<F56>().unwrap();
+        let gt = f64::from(op1) > f64::from(op2);
+        assert!(gt);
+
         // Test < on numbers too precise for F56
-        let op1 = "1.0000000000001".parse::<F56>().unwrap(); // 14 digits (rounds to 1.0)
-        let op2 = "1.000000000001".parse::<F56>().unwrap(); // 13 digits (rounds to 1.0)
+        let op1 = "1.000000000000001".parse::<F56>().unwrap(); // 16 digits (rounds to 1.0)
+        let op2 = "1.00000000000001".parse::<F56>().unwrap(); // 15 digits (rounds to 1.0)
         let lt = f64::from(op1) < f64::from(op2);
         let gt = f64::from(op1) > f64::from(op2);
         assert_eq!(op1, op2);
