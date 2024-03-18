@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use compile_state::state::{CompileState, SloshVm, SloshVmTrait};
 use sl_compiler::pass1::pass1;
 use sl_compiler::{compile, new_slosh_vm_with_builtins, Reader};
-use slvm::{Chunk, VMError, VMResult, Value, RET};
+use slvm::{Chunk, VMError, VMResult, Value, F56, RET};
 use std::sync::Arc;
 
 // TODO PC would be nice to not have to copy load_one_expression and run_reader.
@@ -103,7 +103,10 @@ fn run_float_script(n: usize, m: f32, expected: f64) {
     let last = run_reader(&mut reader);
     match last {
         Ok(Value::Float(f)) => {
-            assert_eq!(expected, f64::from(f));
+            if F56::roughly_equal(&F56::from(expected), &f) {
+            } else {
+                panic!("Expected: {}, got: {}", expected, f);
+            }
         }
         _ => {
             panic!("Not a float");
@@ -165,7 +168,7 @@ mod instruction_count {
 
     #[library_benchmark]
     fn bench_float_one_thousand() {
-        black_box(run_float_script(1000, 0.05, 2105.26315904));
+        black_box(run_float_script(1000, 0.05, 2105.263157892));
     }
 
     #[library_benchmark]
@@ -238,7 +241,7 @@ mod wall_clock {
 
     fn float_one_thousand(c: &mut Criterion) {
         c.bench_function("float_one_thousand", |bench| {
-            bench.iter(|| std::hint::black_box(run_float_script(1000, 0.05, 2105.26315904)));
+            bench.iter(|| std::hint::black_box(run_float_script(1000, 0.05, 2105.263157892)));
         });
     }
 
@@ -310,4 +313,29 @@ fn main() {
 
     #[cfg(target_arch = "x86_64")]
     wall_clock::run();
+}
+
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    fn test_run_float_script() {
+        run_float_script(100, 0.5, 400.0);
+        run_float_script(1000, 0.05, 2105.263157892);
+        run_float_script(10000, 0.2, 25000.0);
+    }
+
+    #[test]
+    fn test_run_recursive_search_script() {
+        run_recursive_search_script(100);
+        run_recursive_search_script(1000);
+        run_recursive_search_script(10_000);
+    }
+
+    #[test]
+    fn test_run_continuation_search_script() {
+        run_continuation_search_script(100);
+        run_continuation_search_script(1000);
+        run_continuation_search_script(10_000);
+    }
 }
