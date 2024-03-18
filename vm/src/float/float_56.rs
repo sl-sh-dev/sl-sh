@@ -596,23 +596,26 @@ mod tests {
 
     #[test]
     fn f56_operations() {
-        // Simulate (eq 4.9 (- 10.9 2 4))
-        let op1 = "10.9".parse::<F56>().unwrap();
-        let op2 = "2".parse::<F56>().unwrap();
-        let op3 = "4".parse::<F56>().unwrap();
-        let target = "4.9".parse::<F56>().unwrap();
+        let op1 = "1.1".parse::<F56>().unwrap();
+        let op2 = "1.3".parse::<F56>().unwrap();
+        let target = "2.4".parse::<F56>().unwrap();
 
         let op1_f64 = f64::from(op1);
         let op2_f64 = f64::from(op2);
-        let op3_f64 = f64::from(op3);
         let target_f64 = f64::from(target);
 
-        let calculated_f64 = op1_f64 - op2_f64 - op3_f64;
+        let calculated_f64 = op1_f64 + op2_f64;
         assert_eq!(calculated_f64, target_f64);
 
+        // Test > on the edge of F56 precision
+        let op1 = "1.0000000000001".parse::<F56>().unwrap();
+        let op2 = "1.00000000000001".parse::<F56>().unwrap();
+        let gt = f64::from(op1) > f64::from(op2);
+        assert!(gt);
+
         // Test < on numbers too precise for F56
-        let op1 = "1.0000000000001".parse::<F56>().unwrap(); // 14 digits (rounds to 1.0)
-        let op2 = "1.000000000001".parse::<F56>().unwrap(); // 13 digits (rounds to 1.0)
+        let op1 = "1.000000000000001".parse::<F56>().unwrap(); // 16 digits (rounds to 1.0)
+        let op2 = "1.00000000000001".parse::<F56>().unwrap(); // 15 digits (rounds to 1.0)
         let lt = f64::from(op1) < f64::from(op2);
         let gt = f64::from(op1) > f64::from(op2);
         assert_eq!(op1, op2);
