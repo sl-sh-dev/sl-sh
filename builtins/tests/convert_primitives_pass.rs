@@ -1,23 +1,23 @@
 use bridge_macros::sl_sh_fn;
 use compile_state::state::new_slosh_vm;
-use slvm::{VMResult, Value, F56};
+use slvm::{VMResult, Value};
 
 pub fn main() {
     let mut vm = new_slosh_vm();
     let args = vec![];
 
     assert_eq!(
-        Value::Float(F56::from(42_f64)),
+        Value::from(42_f64),
         parse_return_option_float(&mut vm, args.as_slice()).unwrap()
     );
     assert_eq!(42f64, return_option_float().unwrap());
     assert_eq!(
-        Value::Float(F56::from(42_f64)),
+        Value::from(42_f64),
         parse_return_result_float(&mut vm, args.as_slice()).unwrap()
     );
     assert_eq!(42f64, return_result_float().unwrap());
     assert_eq!(
-        Value::Float(F56::from(42_f64)),
+        Value::from(42_f64),
         parse_return_result_float(&mut vm, args.as_slice()).unwrap()
     );
     assert_eq!(42f64, return_float());
@@ -40,7 +40,7 @@ pub fn main() {
         parse_return_char(&mut vm, args.as_slice()).unwrap()
     );
 
-    let args = vec![Value::Float(F56::from(42_f64))];
+    let args = vec![Value::from(42_f64)];
     assert_eq!(
         Value::Nil,
         parse_accept_float(&mut vm, args.as_slice()).unwrap()
@@ -55,19 +55,16 @@ pub fn main() {
         err.to_string()
     );
 
-    let args = vec![
-        Value::Float(F56::from(42_f64)),
-        Value::Float(F56::from(42_f64)),
-    ];
+    let args = vec![Value::from(42_f64), Value::from(42_f64)];
     let err = parse_accept_float(&mut vm, args.as_slice()).unwrap_err();
     assert_eq!(
         "[rt]: accept_float given too many arguments, expected at least 1 arguments, got 2.",
         err.to_string()
     );
 
-    let args = vec![Value::Float(F56::from(42_f64))];
+    let args = vec![Value::from(42_f64)];
     assert_eq!(
-        Value::Float(F56::from(42_f64)),
+        Value::from(42_f64),
         parse_accept_and_return_float(&mut vm, args.as_slice()).unwrap()
     );
     assert_eq!(42_f64, accept_and_return_float(42_f64));

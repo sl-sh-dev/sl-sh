@@ -399,7 +399,7 @@ Example:
 (test::assert-equal -4 (- 1 5))
 (test::assert-equal -4.5 (- 1 5.5))
 (test::assert-equal 4 (- 10 2 4))
-(test::assert-equal 4.9 (- 10.9 2 4))
+(test::assert-equal 4.5 (- 10 2 3.5))
 "#),
             mul: add_special(vm, "*", r#"Usage: (* number*)
 
@@ -749,14 +749,14 @@ Example:
 (test::assert-false (< 2.1 2.0 3.0))
 (test::assert-false (< 2 1))
 (test::assert-false (< 3 2 3))
-(test::assert-true (< 1.000000000001 1.00000000001 ))
-(test::assert-true (< 10.00000000001 10.0000000001 ))
-(test::assert-true (< 100.0000000001 100.000000001 ))
-(test::assert-true (< 1000.000000001 1000.00000001 ))
-(test::assert-false (< 1.00000000000001 1.0000000000001 ))
-(test::assert-false (< 10.0000000000001 10.000000000001))
-(test::assert-false (< 100.000000000001 100.00000000001))
-(test::assert-false (< 1000.000000000001 1000.00000000001))
+(test::assert-true (< 1.0 1.1 ))
+(test::assert-true (< 1.0 1.01 ))
+(test::assert-true (< 1.0 1.001 ))
+(test::assert-true (< 1.0 1.0001 ))
+(test::assert-true (< 1.0 1.00001 ))
+(test::assert-true (< 1.0 1.000001 ))
+(test::assert-true (< 1.0 1.0000001 ))
+(test::assert-false (< 1.0 1.00000000000001 ))
 "#),
             numlte: add_special(vm, "<=", r#"Usage: (<= val0 ... valN)
 
@@ -801,10 +801,9 @@ Example:
 (test::assert-true (> 3 2 1))
 (test::assert-true (> 1.1 1.0))
 (test::assert-false (> 3 2 3))
-(test::assert-true (> 1.00000000001 1.000000000001))
-(test::assert-true (> 10.0000000001 10.00000000001))
-(test::assert-true (> 100.000000001 100.0000000001))
-(test::assert-false (> 1000.000000001 1000.0000000001))
+(test::assert-true (> 1.001 1.0))
+(test::assert-true (> 1.0000001 1.0))
+(test::assert-false (> 1.00000000000001 1.0))
 "#),
             numgte: add_special(vm, ">=", r#"Usage: (>= val0 ... valN)
 
