@@ -185,9 +185,7 @@ impl From<F56> for f64 {
         let f64_sign = f56_sign as u64;
         let f64_mantissa = f56_mantissa << 7_u64; // we add 7 bits in mantissa, but they're all zeros
         let word: u64 = f64_sign << 63 | f64_biased_exponent << 52 | f64_mantissa;
-        let converted_to_f64 = f64::from_be_bytes(word.to_be_bytes());
-        // F56::round_f64_to_f56_precision(converted_to_f64)
-        converted_to_f64
+        f64::from_be_bytes(word.to_be_bytes())
     }
 }
 impl From<F56> for f32 {
