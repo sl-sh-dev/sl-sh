@@ -255,7 +255,7 @@ impl F56 {
 #[cfg(test)]
 mod tests {
 
-    use crate::F56;
+    use crate::float::F56;
 
     const MAXIMUM_ACCEPTABLE_RELATIVE_DIFFERENCE: f64 = 1e-10;
 

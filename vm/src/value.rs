@@ -1,4 +1,4 @@
-use crate::{Handle, Heap, Interned, VMError, VMResult, F56};
+use crate::{float, Handle, Heap, Interned, VMError, VMResult};
 use std::collections::{BTreeSet, HashMap};
 use std::fmt;
 use std::fmt::{Display, Formatter};
@@ -109,8 +109,8 @@ pub fn to_i56(i: i64) -> Value {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum Value {
     Byte(u8),
-    Int([u8; 7]), // Store a 7 byte int (i56...).
-    Float(F56),
+    Int([u8; 7]),      // Store a 7 byte int (i56...).
+    Float(float::F56), // Replace with float::F32Wrap if desired
     CodePoint(char),
     CharCluster(u8, [u8; 6]),
     CharClusterLong(Handle), // Handle points to a String on the heap.
@@ -146,13 +146,13 @@ impl Default for Value {
 
 impl From<f32> for Value {
     fn from(value: f32) -> Self {
-        Self::Float(F56::from(value))
+        Self::Float(value.into())
     }
 }
 
 impl From<f64> for Value {
     fn from(value: f64) -> Self {
-        Self::Float(F56::from(value))
+        Self::Float(value.into())
     }
 }
 
@@ -247,11 +247,11 @@ impl Value {
         }
     }
 
-    pub fn get_float<ENV>(&self, _vm: &GVm<ENV>) -> VMResult<f64> {
+    pub fn get_float<ENV>(&self, _vm: &GVm<ENV>) -> VMResult<f32> {
         match &self {
-            Value::Byte(b) => Ok(*b as f64),
-            Value::Int(i) => Ok(from_i56(i) as f64),
-            Value::Float(f) => Ok(f64::from(*f)),
+            Value::Byte(b) => Ok(*b as f32),
+            Value::Int(i) => Ok(from_i56(i) as f32),
+            Value::Float(f) => Ok(f32::from(*f)),
             _ => Err(VMError::new_value(format!("Not a float: {self:?}"))),
         }
     }
