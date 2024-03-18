@@ -1,16 +1,16 @@
-//! TODO PC ISSUE #8 need explanation for the emulation for TryFrom/TryInto/AsRef/AsMut
 //! My notes:
-//! #. To convert a slosh &Value to an owned type implement `impl SlFrom<&Value> for OwnedType`,
+//! #. To convert a rust value to an slosh type `impl SlFrom<T> for Value`,
+//! #. To convert a slosh &Value to an owned type implement `impl SlFromRef<'a, &Value> for RustType`,
 //!     this allows rust native functions annotated with the bridge macro to receive normal
 //!     rust types.
-//! #. To convert a slosh &Value to a reference type implement `impl SlAsRef<&Value> for RefType`.
 //! #. To convert a slosh &Value to a mutable reference type implement `impl SlAsMut<&Value> for MutRefType`.
 //! #. To convert some rust type back to a value that the rust native function
 //!     annotated by the bridge macro returns implement `impl SlFrom<&Value> for RustType`.
-//!     TODO PC ISSUE #8 blanket impl so impl `SlFrom<Value>` works, and taking a ref isn't required?
-//! #. To avoid allocations when converting a slosh &Value back to a rust type that was mutated
-//!     don't return anything. If it is necessary for the API to return some value,
-//!     TODO PC ISSUE #7 annotated or lifetime?
+//! TODO PC ISSUE #7 - returning values via annotated or lifetime?
+//!  To avoid allocations when converting a slosh &Value back to a rust type that was mutated
+//!  don't return anything. If it is necessary for the API to return some value.
+//! ...either use an annotation on an input argument `fn myfun(#[likethis] returnme: &mut String, someotherval: String) -> VMResult<()>`
+//! or a lifetime... might be easier to do the annotation.
 //!
 //!
 //! ## rosetta stone for bridge macros
@@ -18,13 +18,13 @@
 //! ----------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|
 //! [`String`]                  | [Value]`::String`           |
 //!                             |                             | S -> R
-//!                             |                             |     &emsp;- [`SlInto`] [`String`] for `&`[`Value`]
+//!                             |                             |     &emsp;- [`SlIntoRef`] [`String`] for `&`[`Value`]
 //!                             |                             | R -> S
 //!                             |                             |     &emsp;- [`SlFrom`] `&`[`Value`] for [`String`]
 //!                             |                             |
 //! `&`[`String`]               | [`Value`]`::String`         |
 //!                             |                             | S -> R
-//!                             |                             |     &emsp;- [`SlInto`] `&`[`String`] for `&`[`Value`]
+//!                             |                             |     &emsp;- [`SlIntoRef`] `&`[`String`] for `&`[`Value`]
 //!                             |                             | R -> S
 //!                             |                             |     &emsp;- take [`String`]
 //!                             |                             |     &emsp;* uses Clone unless TODO PC ISSUE #7 the extant value problem
@@ -38,7 +38,8 @@
 //!                             |                             |
 //! `&`[`str`]                  | [`Value`]`::String` / [`Value`]`::StringConst` |
 //!                             |                             | S -> R
-//!                             |                             |     &emsp;- [`SlAsRef`] [`str`] for `&`[`Value`]
+//!                             |                             |     &emsp;- [`SlAsRef`] &[`str`] for `&`[`Value`]
+//!                             |                             |     &emsp;- [`SlIntoRef`] &[`str`] for `&`[`Value`]
 //!                             |                             | R -> S
 //!                             |                             |     &emsp;- [`SlFrom`] for [`Value`]
 //!                             |                             |     &emsp;* uses Clone unless TODO PC ISSUE #7 - the extant value problem
@@ -46,7 +47,7 @@
 //!                             |                             |
 //! [`char`]                    | [`Value`]`::CodePoint`      |
 //!                             |                             | S -> R
-//!                             |                             |     &emsp;- [`SlInto`] [`char`] for `&`[`Value`]
+//!                             |                             |     &emsp;- [`SlIntoRef`] [`char`] for `&`[`Value`]
 //!                             |                             | R -> S
 //!                             |                             |     &emsp;- [`SlFrom`] `&`[`Value`] for [`char`]
 //!                             |                             |
@@ -65,7 +66,7 @@
 //!                             |                             |
 //! [`bool`]                    | [`Value`]::True / [`Value`]::False / [`Value`]::Nil |
 //!                             |                             | S -> R
-//!                             |                             |     &emsp;- [`Into`] [`bool`] for `&`[`Value`]
+//!                             |                             |     &emsp;- [`SlIntoRef`] [`bool`] for `&`[`Value`]
 //!                             |                             | R -> S
 //!                             |                             |     &emsp;- [`SlFrom`] `&`[`Value`] for [`primitives`]
 //!                             |                             |
@@ -106,7 +107,7 @@ use compile_state::state::SloshVm;
 use slvm::{VMResult, Value};
 pub mod numbers;
 pub mod primitives;
-pub mod string_char;
+pub mod text;
 
 /// Use mutable [`SloshVm`] to take a rust value and convert it to a [`BridgedType`].
 pub trait SlFrom<T>: Sized
@@ -146,6 +147,7 @@ where
 pub trait SlIntoRef<'a, T>: Sized
 where
     T: 'a,
+    Self: BridgedType,
 {
     /// Converts to this type from the input type.
     fn sl_into_ref(self, vm: &'a SloshVm) -> VMResult<T>;
@@ -163,7 +165,10 @@ where
 }
 
 /// Converts a [`BridgedType`] to some rust type
-pub trait SlAsRef<'a, T: ?Sized> {
+pub trait SlAsRef<'a, T: ?Sized>
+where
+    Self: BridgedType,
+{
     // where Self: BridgedType,
     /// Converts this type into a shared reference of the (usually inferred) input type.
     fn sl_as_ref(&self, vm: &'a SloshVm) -> VMResult<&'a T>;
@@ -173,6 +178,7 @@ pub trait SlAsRef<'a, T: ?Sized> {
 impl<'a, T: ?Sized, U: ?Sized> SlAsRef<'a, U> for &'a T
 where
     T: SlAsRef<'a, U>,
+    &'a T: BridgedType,
 {
     #[inline]
     fn sl_as_ref(&self, vm: &'a SloshVm) -> VMResult<&'a U> {
@@ -183,7 +189,8 @@ where
 // SlAsRef lifts over &mut
 impl<'a, T: ?Sized, U: ?Sized> SlAsRef<'a, U> for &'a mut T
 where
-    T: SlAsRef<'a, U>,
+    T: SlAsRef<'a, U> + BridgedType,
+    &'a mut T: BridgedType,
 {
     #[inline]
     fn sl_as_ref(&self, vm: &'a SloshVm) -> VMResult<&'a U> {
@@ -191,7 +198,10 @@ where
     }
 }
 
-pub trait SlAsMut<'a, T: ?Sized> {
+pub trait SlAsMut<'a, T: ?Sized>
+where
+    Self: BridgedType,
+{
     /// Converts this type into a mutable reference of the (usually inferred) input type.
     fn sl_as_mut(&mut self, vm: &'a mut SloshVm) -> VMResult<&'a mut T>;
 }
@@ -200,6 +210,7 @@ pub trait SlAsMut<'a, T: ?Sized> {
 impl<'a, T: ?Sized, U: ?Sized> SlAsMut<'a, U> for &'a mut T
 where
     T: SlAsMut<'a, U>,
+    &'a mut T: BridgedType,
 {
     #[inline]
     fn sl_as_mut(&mut self, vm: &'a mut SloshVm) -> VMResult<&'a mut U> {
