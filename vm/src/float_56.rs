@@ -212,7 +212,7 @@ impl F56 {
     // for comparison, f32 has 6-9 decimal digits of precision and f64 has 15-17. I believe F56 has 12-14
     pub const DIGITS: usize = 12;
     // Cutoff for relative difference between an f64 and the F56's approximation
-    pub const EPSILON: f64 = 1e-13;
+    pub const EPSILON: f64 = 1e-10;
     // When converting from f64 to F56 we truncate 7 bits of the mantissa
     // We could round up if the 7th bit is 1, but this is might cause issues.
     // Mantissas like 0xFFFF_FFFF_... can catastrophically round to 0x0000_0000_...
