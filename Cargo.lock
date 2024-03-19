@@ -272,6 +272,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "compiler_test_utils"
+version = "0.1.0"
+dependencies = [
+ "compile_state",
+ "sl-compiler",
+ "slvm",
+]
+
+[[package]]
 name = "core-foundation-sys"
 version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -954,6 +963,7 @@ dependencies = [
  "builtins",
  "chrono",
  "compile_state",
+ "compiler_test_utils",
  "slvm",
  "unicode-segmentation",
  "unicode_reader",
@@ -994,6 +1004,7 @@ dependencies = [
  "builtins",
  "chrono",
  "compile_state",
+ "compiler_test_utils",
  "criterion",
  "glob",
  "iai-callgrind",
