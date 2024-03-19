@@ -1,19 +1,10 @@
 [package]
-name = "sl-compiler"
+name = "bench_utils"
 version = "0.1.0"
 edition = "2021"
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-unicode-segmentation = "1.9"
-unicode_reader = "1"
+sl-compiler = { workspace = true }
 slvm = { workspace = true }
-builtins = { path = "../builtins" }
 compile_state = { workspace = true }
-
-[dev-dependencies]
-compiler_test_utils = { workspace = true }
-
-[build-dependencies]
-chrono = "0.4"

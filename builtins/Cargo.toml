@@ -6,8 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-slvm = { path = "../vm" }
-compile_state = { path = "../compile_state" }
+slvm = { workspace = true }
+compile_state = { workspace = true }
 bridge_adapters = { path = "../bridge_adapters" }
 unicode-segmentation = "1.10.1"
 bridge_types = { workspace = true }
