@@ -85,7 +85,7 @@ pub fn get_float_benchmark() -> PathBuf {
 }
 
 pub fn load_file(fname: PathBuf, vm: &mut SloshVm) {
-    match std::fs::File::open(&fname) {
+    match std::fs::File::open(fname) {
         Ok(file) => {
             let mut reader = Reader::from_file(file, vm, "", 1, 0);
             let _ = run_reader(&mut reader);
