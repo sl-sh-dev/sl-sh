@@ -4,6 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-slvm = { path = "../vm" }
-compile_state = { path = "../compile_state" }
+slvm = { workspace = true }
+compile_state = { workspace = true }
 bridge_types = { workspace = true }

@@ -54,6 +54,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bench_utils"
+version = "0.1.0"
+dependencies = [
+ "compile_state",
+ "sl-compiler",
+ "slvm",
+]
+
+[[package]]
 name = "bincode"
 version = "1.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -980,6 +989,7 @@ dependencies = [
 name = "slosh"
 version = "0.10.0"
 dependencies = [
+ "bench_utils",
  "bridge_adapters",
  "builtins",
  "chrono",

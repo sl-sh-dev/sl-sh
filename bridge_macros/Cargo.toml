@@ -12,7 +12,7 @@ syn = { version = "1.0.95", features = ["full"] }
 quote = "1.0.18"
 static_assertions = "1.1.0"
 bridge_types = { workspace = true }
-slvm = { path = "../vm" }
+slvm = { workspace = true }
 
 [dev-dependencies]
 trybuild = "1.0.85"
