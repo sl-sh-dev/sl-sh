@@ -76,6 +76,7 @@ pub fn run_reader(reader: &mut Reader) -> VMResult<Value> {
 /// returns ./slosh/benches/ PathBuf
 pub fn get_benches_directory() -> PathBuf {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    println!("CARGO MANIFEST?: {:?}", path);
     path.push("benches");
     path
 }
