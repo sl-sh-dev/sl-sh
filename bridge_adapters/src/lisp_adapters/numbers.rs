@@ -11,7 +11,7 @@ impl SlFrom<()> for Value {
 }
 
 impl<'a> SlFromRef<'a, &'a Value> for () {
-    fn sl_from_ref(value: &'a Value, _vm: &'a SloshVm) -> VMResult<()> {
+    fn sl_from_ref(value: &Value, _vm: &'a SloshVm) -> VMResult<()> {
         match value {
             Value::Nil => Ok(()),
             _ => Err(VMError::new_conversion(
@@ -36,7 +36,7 @@ impl SlFrom<u32> for Value {
 }
 
 impl<'a> SlFromRef<'a, &'a Value> for i32 {
-    fn sl_from_ref(value: &'a Value, vm: &'a SloshVm) -> VMResult<i32> {
+    fn sl_from_ref(value: &Value, vm: &'a SloshVm) -> VMResult<i32> {
         match value {
             Value::Int(num) => {
                 let num = from_i56(num);
@@ -63,7 +63,7 @@ impl SlFrom<f64> for Value {
 }
 
 impl<'a> SlFromRef<'a, &'a Value> for f64 {
-    fn sl_from_ref(value: &'a Value, vm: &'a SloshVm) -> VMResult<Self> {
+    fn sl_from_ref(value: &Value, vm: &'a SloshVm) -> VMResult<Self> {
         match value {
             Value::Float(f56) => Ok(f64::from(*f56)),
             _ => Err(VMError::new_conversion(
@@ -77,7 +77,7 @@ impl<'a> SlFromRef<'a, &'a Value> for f64 {
 }
 
 impl<'a> SlFromRef<'a, &'a Value> for usize {
-    fn sl_from_ref(value: &'a Value, vm: &'a SloshVm) -> VMResult<Self> {
+    fn sl_from_ref(value: &Value, vm: &'a SloshVm) -> VMResult<Self> {
         match value {
             Value::Int(i) => usize::try_from(from_i56(i)).map_err(|_| {
                 VMError::new_conversion(ErrorStrings::fix_me_mismatched_type(
@@ -96,7 +96,7 @@ impl<'a> SlFromRef<'a, &'a Value> for usize {
 }
 
 impl<'a> SlFromRef<'a, &'a Value> for i64 {
-    fn sl_from_ref(value: &'a Value, vm: &'a SloshVm) -> VMResult<Self> {
+    fn sl_from_ref(value: &Value, vm: &'a SloshVm) -> VMResult<Self> {
         match value {
             Value::Int(i) => Ok(from_i56(i)),
             _ => Err(VMError::new_conversion(

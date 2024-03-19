@@ -614,8 +614,8 @@ fn parse_variadic_args_type(
                 let #arg_name = #arg_name
                     .iter()
                     .map(|#arg_name| {
-                        use bridge_adapters::lisp_adapters::SlInto;
-                        #arg_name.sl_into(environment)
+                        use bridge_adapters::lisp_adapters::SlIntoRef;
+                        #arg_name.sl_into_ref(environment)
                     })
                     .collect::<slvm::VMResult<#ty>>()?;
                 #inner
