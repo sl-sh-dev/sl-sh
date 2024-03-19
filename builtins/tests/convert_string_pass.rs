@@ -33,9 +33,9 @@ pub fn main() {
 
     let expected = "a";
     match parse_return_slosh_char(&mut vm, args.as_slice()).unwrap() {
-        Value::CharCluster(l, c) => {
-            let s = format!("{}", String::from_utf8_lossy(&c[0..l as usize]));
-            assert_eq!(expected, &s);
+        Value::String(h) => {
+            let s = vm.get_string(h);
+            assert_eq!(expected, s);
         }
         _ => {
             panic!("Expected Value::String")

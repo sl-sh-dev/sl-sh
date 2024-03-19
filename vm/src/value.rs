@@ -1,4 +1,5 @@
 use crate::{Handle, Heap, Interned, VMError, VMResult, F56};
+use bridge_types::BridgedType;
 use std::collections::{BTreeSet, HashMap};
 use std::fmt;
 use std::fmt::{Display, Formatter};
@@ -173,6 +174,10 @@ impl From<u32> for Value {
         to_i56(value as i64)
     }
 }
+
+impl BridgedType for Value {}
+impl BridgedType for &Value {}
+impl BridgedType for &mut Value {}
 
 impl Value {
     pub fn new() -> Self {
