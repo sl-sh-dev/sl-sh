@@ -1003,6 +1003,7 @@ dependencies = [
 name = "slvm"
 version = "0.1.0"
 dependencies = [
+ "bridge_types",
  "unicode-segmentation",
 ]
 

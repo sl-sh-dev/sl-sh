@@ -1,4 +1,4 @@
-use crate::lisp_adapters::{SlAsMut, SlAsRef, SlFrom, SlFromRef, SlIntoRef};
+use crate::lisp_adapters::{SlAsMut, SlAsRef, SlFrom, SlFromRef};
 use bridge_types::{ErrorStrings, LooseString, SloshChar};
 use compile_state::state::SloshVm;
 use slvm::value::ValueType;
@@ -7,18 +7,18 @@ use std::borrow::Cow;
 
 impl<'a> SlFrom<Cow<'a, str>> for Value {
     fn sl_from(value: Cow<'a, str>, vm: &mut SloshVm) -> VMResult<Self> {
-        value.sl_into_ref(vm)
+        Value::sl_from(value.to_string(), vm)
     }
 }
 
 impl<'a> SlFrom<SloshChar<'a>> for Value {
     fn sl_from(value: SloshChar<'a>, vm: &mut SloshVm) -> VMResult<Self> {
-        value.sl_into_ref(vm)
+        Value::sl_from(value.to_string(), vm)
     }
 }
 
 impl<'a> SlFromRef<'a, &Value> for LooseString<'a> {
-    fn sl_from_ref(value: &Value, vm: &'a mut SloshVm) -> VMResult<Self> {
+    fn sl_from_ref(value: &Value, vm: &'a SloshVm) -> VMResult<Self> {
         match value {
             Value::String(h) => Ok(LooseString::Borrowed(vm.get_string(*h))),
             Value::CodePoint(char) => Ok(LooseString::Owned(char.to_string())),
@@ -51,17 +51,8 @@ impl<'a> SlFromRef<'a, &Value> for LooseString<'a> {
     }
 }
 
-impl<'a> SlFromRef<'a, LooseString<'a>> for Value {
-    fn sl_from_ref(value: LooseString<'a>, vm: &'a mut SloshVm) -> VMResult<Self> {
-        match value {
-            LooseString::Borrowed(s) => Ok(vm.alloc_string(s.to_string())),
-            LooseString::Owned(s) => Ok(vm.alloc_string(s)),
-        }
-    }
-}
-
-impl SlFrom<&Value> for char {
-    fn sl_from(value: &Value, vm: &mut SloshVm) -> VMResult<Self> {
+impl<'a> SlFromRef<'a, &'a Value> for char {
+    fn sl_from_ref(value: &'a Value, vm: &'a SloshVm) -> VMResult<Self> {
         match value {
             Value::CodePoint(char) => Ok(*char),
             _ => Err(VMError::new_conversion(
@@ -99,8 +90,14 @@ impl<'a> SlAsRef<'a, str> for &Value {
     }
 }
 
+impl<'a> SlFromRef<'a, &'a Value> for &'a str {
+    fn sl_from_ref(value: &'a Value, vm: &'a SloshVm) -> VMResult<Self> {
+        value.sl_as_ref(vm)
+    }
+}
+
 impl<'a> SlFromRef<'a, &Value> for SloshChar<'a> {
-    fn sl_from_ref(value: &Value, vm: &'a mut SloshVm) -> VMResult<Self> {
+    fn sl_from_ref(value: &Value, vm: &'a SloshVm) -> VMResult<Self> {
         match value {
             Value::CodePoint(ch) => Ok(SloshChar::Char(*ch)),
             Value::CharCluster(l, c) => Ok(SloshChar::String(Cow::Owned(format!(
@@ -118,18 +115,6 @@ impl<'a> SlFromRef<'a, &Value> for SloshChar<'a> {
                     value.display_type(vm),
                 ),
             )),
-        }
-    }
-}
-
-impl<'a> SlFromRef<'a, SloshChar<'a>> for Value {
-    fn sl_from_ref(value: SloshChar, vm: &'a mut SloshVm) -> VMResult<Self> {
-        match value {
-            SloshChar::Char(ch) => Ok(Value::CodePoint(ch)),
-            SloshChar::String(cow) => match cow {
-                Cow::Borrowed(s) => Ok(vm.alloc_char(s)),
-                Cow::Owned(s) => Ok(vm.alloc_char(s.as_str())),
-            },
         }
     }
 }
@@ -172,8 +157,8 @@ where
     }
 }
 
-impl SlFrom<&Value> for String {
-    fn sl_from(value: &Value, vm: &mut SloshVm) -> VMResult<Self> {
+impl<'a> SlFromRef<'a, &'a Value> for String {
+    fn sl_from_ref(value: &'a Value, vm: &'a SloshVm) -> VMResult<Self> {
         match value {
             Value::String(h) => Ok(vm.get_string(*h).to_string()),
             _ => Err(VMError::new_conversion(
@@ -189,7 +174,7 @@ impl SlFrom<&Value> for String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::lisp_adapters::{SlAsMut, SlAsRef, SlFromRef, SlInto, SlIntoRef};
+    use crate::lisp_adapters::{SlAsMut, SlAsRef, SlInto, SlIntoRef};
     use compile_state::state::new_slosh_vm;
 
     pub const CODE_POINT: char = 'न';
@@ -267,7 +252,7 @@ mod tests {
     fn try_conversion_error() {
         let mut vm = new_slosh_vm();
         let value = create_string(&mut vm);
-        let c: VMResult<char> = (&value).sl_into(&mut vm);
+        let c: VMResult<char> = (&value).sl_into_ref(&mut vm);
         assert!(c.is_err());
         let err = VMError::new_conversion(ErrorStrings::fix_me_mismatched_type_with_context(
             String::from(ValueTypes::from([ValueType::CodePoint])),
@@ -377,7 +362,7 @@ mod tests {
                     }
                     _ => {
                         return {
-                            let arg: String = arg_0.sl_into(vm)?;
+                            let arg: String = arg_0.sl_into_ref(vm)?;
                             arg.trim().to_string().sl_into(vm)
                         }
                     }
@@ -403,11 +388,11 @@ mod tests {
         assert!(matches!(val, Value::String(_)));
 
         let _s: String = (&val)
-            .sl_into(vm)
+            .sl_into_ref(vm)
             .expect("&Value::String can be converted to String");
         let kwd_val = create_keyword(vm);
 
-        let e: VMResult<String> = (&kwd_val).sl_into(vm);
+        let e: VMResult<String> = (&kwd_val).sl_into_ref(vm);
         e.expect_err("Can not convert keyword to String");
 
         let _s: &str = (&val)
@@ -462,7 +447,7 @@ mod tests {
 
         let val = create_code_point();
         let _c: char = (&val)
-            .sl_into(vm)
+            .sl_into_ref(vm)
             .expect("&Value::CodePoint can be converted to char");
     }
 
@@ -499,14 +484,14 @@ mod tests {
         let vm = &mut vm;
 
         let rust_char_cluster = SloshChar::String(Cow::Owned(CHAR_CLUSTER.to_string()));
-        let val: Value = SlFromRef::sl_from_ref(rust_char_cluster, vm)
-            .expect("&SloshChar can be converted to &Value");
-        assert!(matches!(val, Value::CharCluster(_, _)));
+        let val: Value =
+            Value::sl_from(rust_char_cluster, vm).expect("&SloshChar can be converted to &Value");
+        assert!(matches!(val, Value::String(_)));
 
         let rust_char_cluster = SloshChar::String(Cow::Borrowed(CHAR_CLUSTER_LONG));
-        let val: Value = SlFromRef::sl_from_ref(rust_char_cluster, vm)
-            .expect("&SloshChar can be converted to &Value");
-        assert!(matches!(val, Value::CharClusterLong(_)));
+        let val: Value =
+            Value::sl_from(rust_char_cluster, vm).expect("&SloshChar can be converted to &Value");
+        assert!(matches!(val, Value::String(_)));
     }
 
     pub fn get_values_that_can_be_cast_to_loose_strings(vm: &mut SloshVm) -> Vec<Value> {
@@ -541,8 +526,8 @@ mod tests {
         let vm = &mut vm;
 
         let sample = LooseString::Owned("hello world".to_string());
-        let val: Value = SlFromRef::sl_from_ref(sample, vm)
-            .expect("This LooseString should be convertable to a Value");
+        let val: Value =
+            Value::sl_from(sample, vm).expect("This LooseString should be convertable to a Value");
         assert!(matches!(val, Value::String(_)));
     }
 }
