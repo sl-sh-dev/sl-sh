@@ -28,7 +28,7 @@ jobs:
 
 
   benchmark_pr_with_bencher:
-    needs: target_branch
+    needs: [target_branch, backup_branch]
     permissions:
       pull-requests: write
     name: Continuous Benchmarking with Bencher
@@ -37,8 +37,7 @@ jobs:
       BENCHER_PROJECT: sl-sh
       BENCHER_TESTBED: ubuntu-latest
       BENCHER_ADAPTER: rust_iai_callgrind
-      BRANCH: ${{needs.target_branch.outputs.branch_name}}
-      BACKUP_BRANCH: ${{needs.backup_branch.outputs.branch_name}}
+      BRANCH: ${{ needs.target_branch.outputs.branch_name || needs.backup_branch.outputs.branch_name || github.event.pull_request.base.ref || 'master' }}
     steps:
       - run: sudo apt-get update
       - run: sudo apt install -y valgrind
@@ -50,10 +49,8 @@ jobs:
           echo "Running bencher for branch $BRANCH."
           bencher run \
           --if-branch "$BRANCH" \
-          --else-if-branch "$BACKUP_BRANCH" \
-          --else-if-branch "$GITHUB_BASE_REF" \
+          --else-if-branch "master" \
           --github-actions "${{ secrets.GITHUB_TOKEN }}" \
           --token "${{ secrets.BENCHER_API_TOKEN }}" \
-          -- branch "${{ github.event.pull_request.base.ref }}"
           --err \
-          "cargo bench"
+          "cargo bench --all"
