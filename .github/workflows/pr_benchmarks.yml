@@ -8,8 +8,27 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
+  target_branch:
+    runs-on: ubuntu-latest
+    outputs:
+      branch_name: ${{ steps.get_branch.outputs.branch_name }}
+    steps:
+      - id: get_branch
+        if: github.event.pull_request.merged == true && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        run: echo "branch_name=master" >> "$GITHUB_OUTPUT"
+
+  backup_branch:
+    runs-on: ubuntu-latest
+    outputs:
+      branch_name: ${{ steps.get_branch.outputs.branch_name }}
+    steps:
+      - id: get_branch
+        if: github.event.pull_request.merged == true || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        run: echo "branch_name=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+
+
   benchmark_pr_with_bencher:
-    if: github.event.pull_request.merged == true || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    needs: target_branch
     permissions:
       pull-requests: write
     name: Continuous Benchmarking with Bencher
@@ -18,6 +37,8 @@ jobs:
       BENCHER_PROJECT: sl-sh
       BENCHER_TESTBED: ubuntu-latest
       BENCHER_ADAPTER: rust_iai_callgrind
+      BRANCH: ${{needs.target_branch.outputs.branch_name}}
+      BACKUP_BRANCH: ${{needs.backup_branch.outputs.branch_name}}
     steps:
       - run: sudo apt-get update
       - run: sudo apt install -y valgrind
@@ -26,10 +47,11 @@ jobs:
       - run: cargo install iai-callgrind-runner --version 0.10.2
       - name: Track Benchmarks with Bencher
         run: |
+          echo "Running bencher for branch $BRANCH."
           bencher run \
-          --if-branch "$GITHUB_REF_NAME" \
+          --if-branch "$BRANCH" \
+          --else-if-branch "$BACKUP_BRANCH" \
           --else-if-branch "$GITHUB_BASE_REF" \
-          --else-if-branch main \
           --github-actions "${{ secrets.GITHUB_TOKEN }}" \
           --token "${{ secrets.BENCHER_API_TOKEN }}" \
           -- branch "${{ github.event.pull_request.base.ref }}"
