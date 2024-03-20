@@ -6,21 +6,18 @@ sl-sh proc macro attributes to eliminate need for boilerplate in creating builti
 
 Notes
 -----
+TODO PC relax this requirement. is static assertions really needed?
 - must use the static_assertions crate and have the line
 
 `extern crate static_assertions;`
 
 in the main.rs file.
 
-this package is used to guarantee at compile time that the necessary functions,
-namely Into, TryInto, and TryIntoExpression are implemented for the necessary
-Rust types so the builtin_ version of the function can be type checked properly.
-
-//TODO update this section
-
-- This also means that all types for a function using this proc_macro_attribute
-must implement the traits Into, TryInto, and TryIntoExpression traits defined
-in the sl-sh crate.
+This package is used to guarantee at compile time that the necessary functions,
+namely SlFrom and SlFromRef are implemented for the necessary
+Rust types so the annotations rust function signatures types can be converted
+into slvm::Value types into their corresponding rust types (`impl SlFromRef<Value> for Foo { ... }`) and back again
+as a slvm::Value (`impl SlFrom<Foo> for Value { ... }`) from a rust type.
 
 - All rust functions that use these macros *must* have documentation.
 
@@ -86,31 +83,31 @@ of your function is `&mut Environment`.
 
 Limitations
 -----------
-1. If a function returns a type, T, T must implement `From<T> for Expression`.
-2. All types, T, U, .., in Vec<T>, VarArgs<(T, U, ..)>, and (T, U, ...) must implement `TryIntoExpression<T> for Expression`
+1. If a function returns a type, T, T must implement `Slrom<T> for slvm::Value`.
+2. All types, T, U, .., in Vec<T>, VarArgs<(T, U, ..)>, and (T, U, ...) must implement `SlFrom<Value> for Value`
 3. All types, T, &U, &mut V, input to fn expressions with the sl_sh_fn macro:
     ```
     #[sl_sh_fn(fn_name = "foo")]
-    fn foo(t: T, u: &U, v: &mut V) -> LispResult<Expression> {
+    fn foo(t: T, u: &U, v: &mut V) -> LispResult<slvm::Value> {
         ...
     }
      ```
     must implement
-    `impl<F> RustProcedure<T, F> for TypedWrapper<T, Expression> where F: FnOnce(T) -> LispResult<Expression> + ?Sized`
+    `impl SlFromRef<&Value> for T`
     for T,
-    `impl<F> RustProcedureRef<U, F> for TypedWrapper<U, Expression> where F: FnOnce(&U) -> LispResult<Expression> + ?Sized`
+   `impl SlFromRef<&Value> for F`
     for U, and,
-    `impl<F> RustProcedureRefMut<V, F> for TypedWrapper<V, Expression> where F: FnOnce(&mut V) -> LispResult<Expression> + ?Sized`
+    `impl SlAsMut<&Value> for V`
     for V.
-4. If a `Result` return type is needed (for simplicity) use `LispResult`, as it's supported instead.
+4. If a `Result` return type is needed (for simplicity) use `VMResult`, as it's supported instead.
 5. TypePath for LispResult (and other types recognized by this macro, e.g. VarArgs or Vec) must be bare
-    and can not be qualified with any type path, i.e. `sl_sh::LispResult` is invalid as a return type
-    but `LispResult` is fine.
+    and can not be qualified with any type path, i.e. `slvm::VMResult` is invalid as a return type
+    but `VMResult` is fine.
 6. `VarArgs` support requires use of `crate::VarArgs` which is a type alias for Vec<T>,
     this tells the macro that the function can receive zero to N more arguments.
 7. `VarArgs<T>` must be last argument if used, but using it allows the function to accept N
    more arguments.
-8. `VarArgs<T>` and `Vec<T>` are supported but in both cases `T` must implement `TryIntoExpression`
+8. `VarArgs<T>` and `Vec<T>` are supported but in both cases `T` must implement `SlFromRef`
     because a clone must occur to pass the inner `ExpEnum` in `Expression` to a Vec.
 9. Using a `Vec<T>` as a parameter corresponds to receiving an `Expression` that evaluates to
     `ExpEnum::Nil`/`Pair`/`Vector`.
