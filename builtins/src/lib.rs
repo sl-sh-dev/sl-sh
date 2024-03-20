@@ -3,12 +3,12 @@ extern crate core;
 use compile_state::state::{SloshVm, SloshVmTrait};
 use slvm::{VMError, VMResult, Value};
 
+pub mod bridge_macro_tests;
 pub mod collections;
 pub mod conversions;
 pub mod io;
 pub mod print;
 pub mod string;
-pub mod types;
 
 fn get_globals(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if !registers.is_empty() {

@@ -1,4 +1,28 @@
 use std::borrow::Cow;
+use std::collections::HashMap;
+use std::fmt::Display;
+
+/// Marker traits
+
+/// A slosh [`Value`] that can potentially be represented as a rust value.
+pub trait BridgedType {}
+
+/// An [`Option`] value that contains a [`BridgedType`] can be represented as a rust value.
+impl<T> BridgedType for Option<T> where T: BridgedType {}
+
+/// A [`Result`] value that contains a [`BridgedType`] can be represented as a rust value.
+impl<T, U> BridgedType for Result<T, U> where T: BridgedType {}
+
+/// A [`HashMap`] that contains a [`BridgedType`] can be represented as a rust value.
+impl<T, U> BridgedType for HashMap<T, U>
+where
+    T: BridgedType,
+    U: BridgedType,
+{
+}
+
+/// A [`Vec`] that contains a [`BridgedType`] can be represented as a rust value.
+impl<T> BridgedType for Vec<T> where T: BridgedType {}
 
 /// Public type used by rust native -> slosh bridge macro to represent
 /// arguments in slosh that correspond to variadic functions in rust
@@ -39,6 +63,18 @@ pub type LooseString<'a> = Cow<'a, str>;
 pub enum SloshChar<'a> {
     Char(char),
     String(Cow<'a, str>),
+}
+
+impl Display for SloshChar<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            SloshChar::Char(c) => {
+                format!("{}", c)
+            }
+            SloshChar::String(c) => c.to_string(),
+        };
+        write!(f, "{}", str)
+    }
 }
 
 /// Used by sl_sh_fn macro to embed information at runtime about the parameters of

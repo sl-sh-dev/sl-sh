@@ -1,4 +1,4 @@
-use crate::lisp_adapters::SlFrom;
+use crate::lisp_adapters::{SlFrom, SlFromRef};
 use bridge_types::ErrorStrings;
 use compile_state::state::SloshVm;
 use slvm::value::ValueType;
@@ -10,8 +10,8 @@ impl SlFrom<()> for Value {
     }
 }
 
-impl SlFrom<&Value> for () {
-    fn sl_from(value: &Value, _vm: &mut SloshVm) -> VMResult<()> {
+impl<'a> SlFromRef<'a, &'a Value> for () {
+    fn sl_from_ref(value: &'a Value, _vm: &'a SloshVm) -> VMResult<()> {
         match value {
             Value::Nil => Ok(()),
             _ => Err(VMError::new_conversion(
@@ -35,8 +35,8 @@ impl SlFrom<u32> for Value {
     }
 }
 
-impl SlFrom<&Value> for i32 {
-    fn sl_from(value: &Value, vm: &mut SloshVm) -> VMResult<i32> {
+impl<'a> SlFromRef<'a, &'a Value> for i32 {
+    fn sl_from_ref(value: &'a Value, vm: &'a SloshVm) -> VMResult<i32> {
         match value {
             Value::Int(num) => {
                 let num = from_i56(num);
@@ -62,8 +62,8 @@ impl SlFrom<f64> for Value {
     }
 }
 
-impl SlFrom<&Value> for f64 {
-    fn sl_from(value: &Value, vm: &mut SloshVm) -> VMResult<Self> {
+impl<'a> SlFromRef<'a, &'a Value> for f64 {
+    fn sl_from_ref(value: &'a Value, vm: &'a SloshVm) -> VMResult<Self> {
         match value {
             Value::Float(f56) => Ok(f64::from(*f56)),
             _ => Err(VMError::new_conversion(
@@ -76,8 +76,8 @@ impl SlFrom<&Value> for f64 {
     }
 }
 
-impl SlFrom<&Value> for usize {
-    fn sl_from(value: &Value, vm: &mut SloshVm) -> VMResult<Self> {
+impl<'a> SlFromRef<'a, &'a Value> for usize {
+    fn sl_from_ref(value: &'a Value, vm: &'a SloshVm) -> VMResult<Self> {
         match value {
             Value::Int(i) => usize::try_from(from_i56(i)).map_err(|_| {
                 VMError::new_conversion(ErrorStrings::fix_me_mismatched_type(
@@ -95,8 +95,8 @@ impl SlFrom<&Value> for usize {
     }
 }
 
-impl SlFrom<&Value> for i64 {
-    fn sl_from(value: &Value, vm: &mut SloshVm) -> VMResult<Self> {
+impl<'a> SlFromRef<'a, &'a Value> for i64 {
+    fn sl_from_ref(value: &'a Value, vm: &'a SloshVm) -> VMResult<Self> {
         match value {
             Value::Int(i) => Ok(from_i56(i)),
             _ => Err(VMError::new_conversion(
@@ -111,7 +111,7 @@ impl SlFrom<&Value> for i64 {
 
 #[cfg(test)]
 mod tests {
-    use crate::lisp_adapters::SlFrom;
+    use crate::lisp_adapters::SlFromRef;
     use crate::lisp_adapters::SlInto;
     use compile_state::state::new_slosh_vm;
     use slvm::{to_i56, Value};
@@ -132,6 +132,6 @@ mod tests {
         let mut vm = new_slosh_vm();
         let vm = &mut vm;
         let val = to_i56(7_i32 as i64);
-        let _val: i32 = i32::sl_from(&val, vm).expect("Value can be converted to i32");
+        let _val: i32 = i32::sl_from_ref(&val, vm).expect("Value can be converted to i32");
     }
 }
