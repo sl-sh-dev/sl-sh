@@ -495,6 +495,28 @@ fn char_upper(target: SloshChar) -> VMResult<SloshChar> {
     }
 }
 
+/// Usage: (char-whitespace? char) -> t/nil
+///
+/// Returns true if a character is whitespace, false/nil otherwise.
+///
+/// Section: char
+///
+/// Example:
+/// (test::assert-true (char-whitespace? #\ ))
+/// (test::assert-true (char-whitespace? #\tab))
+/// (test::assert-false (char-whitespace? #\s))
+#[sl_sh_fn(fn_name = "char-whitespace?")]
+fn char_is_whitespace(target: SloshChar) -> VMResult<bool> {
+    match target {
+        SloshChar::Char(ch) => {
+            Ok(ch.is_whitespace())
+        }
+        SloshChar::String(s) => {
+            Ok(s.trim().is_empty())
+        }
+    }
+}
+
 pub fn add_str_builtins(env: &mut SloshVm) {
     intern_str_sub(env);
     intern_str_splitn(env);
@@ -504,6 +526,7 @@ pub fn add_str_builtins(env: &mut SloshVm) {
     intern_str_bytes(env);
     intern_char_lower(env);
     intern_char_upper(env);
+    intern_char_is_whitespace(env);
     add_builtin(
         env,
         "str-replace",
