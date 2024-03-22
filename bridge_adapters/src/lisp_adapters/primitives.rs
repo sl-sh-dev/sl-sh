@@ -3,7 +3,7 @@ use compile_state::state::SloshVm;
 use slvm::{VMResult, Value};
 
 impl<'a> SlFromRef<'a, &'a Value> for bool {
-    fn sl_from_ref(value: &'a Value, _vm: &SloshVm) -> VMResult<Self> {
+    fn sl_from_ref(value: &Value, _vm: &SloshVm) -> VMResult<Self> {
         match value {
             Value::True => Ok(true),
             Value::False => Ok(false),

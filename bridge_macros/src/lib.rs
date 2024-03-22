@@ -13,6 +13,10 @@
 //!     that marked in the annotation... OTHERWISE data may be copied!
 //!     OR allow for simple lifetimes?
 //! 9. VMError should not be new_vm
+//! 10. Optional duplicates code. With the ownership model from SlFromRef, being *the* primary mechanism
+//!     for crossing the boundary, it's possible having Some and None blocks multiple times is not necessary.
+//! 11. Support for slices? to avoid Vec allocation? Is it a big deal to only be able to accept Vec?
+//!     The decision should at least be documented.
 
 use bridge_types::Param;
 use bridge_types::PassingStyle;
@@ -350,10 +354,9 @@ fn parse_param(
         TypeHandle::Optional => {
             quote! {
                 let param = arg_types[#idx];
-                let arg = args.get(#idx);
+                let #arg_name = args.get(#idx);
                 match param.handle {
                     bridge_types::TypeHandle::Optional => {
-                        let #arg_name = arg;
                         #inner
                     },
                     _ => {
@@ -371,7 +374,11 @@ fn parse_param(
                 let arg = args.get(#idx);
                 match param.handle {
                     bridge_types::TypeHandle::VarArgs => {
-                        let #arg_name = args[#idx..].iter().map(|x| x.clone()).collect::<Vec<slvm::Value>>();
+                        let #arg_name: &[slvm::Value] = if arg.is_none() {
+                            &[]
+                        } else {
+                            &args[#idx..]
+                        };
                         #inner
                     },
                     _ => {
@@ -579,53 +586,49 @@ fn parse_variadic_args_type(
     let rust_type = get_type_or_wrapped_type(ty, POSSIBLE_ARG_TYPES.as_slice());
     let arg_pos = get_arg_pos(arg_name)?;
     match rust_type {
-        RustType::Path(wrapped_ty, _span) => {
-            let arg_check = if arg_name_itself_is_iter {
-                quote! {
-                    let #arg_name = if matches!(#arg_name, slvm::Value::List(_) | slvm::Value::Vector(_) | slvm::Value::Pair(_))
+        RustType::Path(_wrapped_ty, _span) => {
+            if arg_name_itself_is_iter {
+                // This means the target type is a Vec<T> this means the passed in Value
+                // must be a list or vector or pair.
+                // use .iter(environment) if type is correct and coerce all elements
+                // to target type.
+                Ok(quote! {
+                    let #arg_name = if matches!(#arg_name, slvm::Value::List(_, _) | slvm::Value::Vector(_) | slvm::Value::Pair(_))
                     {
+                        let #arg_name = #arg_name
+                            .iter(environment)
+                            .map(|ref #arg_name| {
+                                use bridge_adapters::lisp_adapters::SlIntoRef;
+                                #arg_name.sl_into_ref(environment)
+                            })
+                            .collect::<slvm::VMResult<#ty>>()?;
+                        #inner
+                    } else {
                         let err_str = format!("{}: Expected a vector or list for argument at position {}.", #fn_name, #arg_pos);
                         return Err(slvm::VMError::new_vm(err_str));
-                    } else {
-                        #arg_name
                     };
-                }
+                })
             } else {
-                // HACK: this should not be needed but sometimes in current sl-sh 0.9.69 implementation
-                // VarArgs (which are being passed in when arg_name_itself_is_iter  is false) can be
-                // passed an array that contains nil, which is different than nil itself, either way
-                // this can be dealt with easily at the macro level. Removing this code causes
-                // the try_into_for in the final quote! block to fail because it can't convert
-                // nil into its desired type. This happens because it is iterating over a list
-                // that is nil. In reality, it shouldn't but the Expression object is a vector of
-                // nil, this is defensive code that should go away in slosh.
-                quote! {
-                    let #arg_name = if #arg_name.len() == 1 && #arg_name.get(0).unwrap().is_nil() {
-                        vec![]
-                    } else {
-                        #arg_name
-                    };
-                }
-            };
-            Ok(quote! {{
-                #arg_check
-
-                static_assertions::assert_impl_all!(slvm::Value: bridge_adapters::lisp_adapters::SlFrom<#wrapped_ty>);
-                let #arg_name = #arg_name
-                    .iter()
-                    .map(|#arg_name| {
-                        #arg_name.clone().try_into_for(#fn_name)
-                    })
-                    .collect::<slvm::VMResult<#ty>>()?;
-                #inner
-            }})
+                // varargs needsj
+                Ok(quote! {
+                    let #arg_name = #arg_name.iter()
+                        .map(|#arg_name| #arg_name.iter_all(environment))
+                        .flatten()
+                        .map(|ref #arg_name| {
+                            use bridge_adapters::lisp_adapters::SlIntoRef;
+                            #arg_name.sl_into_ref(environment)
+                        })
+                        .collect::<slvm::VMResult<#ty>>()?;
+                    #inner
+                })
+            }
         }
         RustType::Tuple(type_tuple, _span) => {
             if !type_tuple.elems.is_empty() {
                 let arg_pos = get_arg_pos(arg_name)?;
                 let arg_check = if arg_name_itself_is_iter {
                     quote! {
-                        if !matches!(#arg_name, slvm::Value::List(_) | slvm::Value::Vector(_) | slvm::Value::Pair(_))
+                        if !matches!(#arg_name, slvm::Value::List(_, _) | slvm::Value::Vector(_) | slvm::Value::Pair(_))
                         {
                             let err_str = format!("{}: Expected a vector or list for argument at position {}.", #fn_name, #arg_pos);
                             return Err(slvm::VMError::new_vm(err_str));
@@ -653,19 +656,21 @@ fn parse_variadic_args_type(
                         static_assertions::assert_impl_all!(slvm::Value: bridge_adapters::lisp_adapters::SlFrom<#elem>);
                     });
                     args.push(quote! {
-                        let #arg_name: #elem = #arg_name.clone().try_into_for(#fn_name)?;
+                        use bridge_adapters::lisp_adapters::SlInto;
+                        //TODO put #fn_name back in
+                        let #arg_name: #elem = #arg_name.sl_into(environment)?;
                     })
                 }
                 Ok(quote! {{
-                    use bridge_adapters::lisp_adapters::SlFrom;
-                    use std::convert::TryInto;
+                    //TODO PC SlIntoRef?
+                    use bridge_adapters::lisp_adapters::SlInto;
                     #(#type_assertions)*
                     #arg_check
                     let #arg_name = #arg_name
                         .iter()
                         .map(|#arg_name| {
                             let #arg_name = #arg_name.iter().collect::<Vec<slvm::Value>>();
-                            match #arg_name.try_into() {
+                            match #arg_name.sl_into(environment) {
                                 Ok(#arg_name) => {
                                     let #arg_name: [slvm::Value; #tuple_len] = #arg_name;
                                     let [#(#arg_names),*] = #arg_name;
@@ -1293,13 +1298,14 @@ fn parse_type_tuple(
     };
     let arg_pos = get_arg_pos(arg_name)?;
     let tokens = quote! {{
-        if !matches!(#arg_name, slvm::Value::List(_) | slvm::Value::Vector(_) | slvm::Value::Pair(_))
+        use bridge_adapters::lisp_adapters::SlInto;
+        if !matches!(#arg_name, slvm::Value::List(_, _) | slvm::Value::Vector(_) | slvm::Value::Pair(_))
         {
             let err_str = format!("{}: Expected a vector or list for argument at position {}.", #fn_name, #arg_pos);
             return Err(slvm::VMError::new_vm(err_str));
         }
         let #arg_name = #arg_name.iter().collect::<Vec<slvm::Value>>();
-        match #arg_name.try_into() {
+        match #arg_name.sl_into(environment) {
             Ok(#arg_name) => {
                 let #arg_name: [slvm::Value; #tuple_len] = #arg_name;
                 let [#(#arg_names),*] = #arg_name;

@@ -52,7 +52,7 @@ impl<'a> SlFromRef<'a, &Value> for LooseString<'a> {
 }
 
 impl<'a> SlFromRef<'a, &'a Value> for char {
-    fn sl_from_ref(value: &'a Value, vm: &'a SloshVm) -> VMResult<Self> {
+    fn sl_from_ref(value: &Value, vm: &'a SloshVm) -> VMResult<Self> {
         match value {
             Value::CodePoint(char) => Ok(*char),
             _ => Err(VMError::new_conversion(
@@ -72,6 +72,12 @@ impl SlFrom<char> for Value {
     }
 }
 
+impl<'a> SlFromRef<'a, &Value> for &'a str {
+    fn sl_from_ref(value: &Value, vm: &'a SloshVm) -> VMResult<Self> {
+        value.sl_as_ref(vm)
+    }
+}
+
 impl<'a> SlAsRef<'a, str> for &Value {
     fn sl_as_ref(&self, vm: &'a SloshVm) -> VMResult<&'a str> {
         match self {
@@ -87,12 +93,6 @@ impl<'a> SlAsRef<'a, str> for &Value {
                 ),
             )),
         }
-    }
-}
-
-impl<'a> SlFromRef<'a, &'a Value> for &'a str {
-    fn sl_from_ref(value: &'a Value, vm: &'a SloshVm) -> VMResult<Self> {
-        value.sl_as_ref(vm)
     }
 }
 
@@ -158,7 +158,7 @@ where
 }
 
 impl<'a> SlFromRef<'a, &'a Value> for String {
-    fn sl_from_ref(value: &'a Value, vm: &'a SloshVm) -> VMResult<Self> {
+    fn sl_from_ref(value: &Value, vm: &'a SloshVm) -> VMResult<Self> {
         match value {
             Value::String(h) => Ok(vm.get_string(*h).to_string()),
             _ => Err(VMError::new_conversion(
