@@ -1,6 +1,8 @@
+use std::borrow::Cow;
 use crate::SloshVm;
 use bridge_adapters::add_builtin;
 use bridge_macros::sl_sh_fn;
+use bridge_types::{SloshChar, LooseString};
 use slvm::{Handle, VMError, VMResult, Value};
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -375,14 +377,14 @@ fn str_splitn(n: usize, pat: &str, text: &str) -> VMResult<Vec<String>> {
 /// (test::assert-equal "stringyyysome" (str-cat-list "" ["string" "yyy" "some"]))
 #[sl_sh_fn(fn_name = "str-cat-list")]
 fn str_cat_list(
-    join_str: &str,
+    join_str: LooseString,
     list: Vec<&str>,
 ) -> VMResult<String> {
     let mut new_str = String::new();
     let mut first = true;
     for exp in list {
         if !first {
-            new_str.push_str(join_str);
+            new_str.push_str(&join_str);
         }
         new_str.push_str(&exp);
         first = false;
@@ -442,6 +444,57 @@ fn str_bytes(string: &str) -> usize {
     string.len()
 }
 
+/// Usage: (char-lower char) -> char
+///
+/// Get lower case (utf) string for a character.
+///
+/// Section: char
+///
+/// Example:
+/// (test::assert-equal "a" (char-lower \A))
+/// (test::assert-equal "a" (char-lower \a))
+/// (test::assert-not-equal "a" (char-lower \Z))
+/// (test::assert-equal "λ" (char-lower \Λ))
+/// (test::assert-equal "λ" (char-lower \λ))
+/// (test::assert-equal "ß" (char-lower \ß))
+#[sl_sh_fn(fn_name = "char-lower")]
+fn char_lower(target: SloshChar) -> VMResult<SloshChar> {
+    match target {
+        SloshChar::Char(ch) => {
+            Ok(SloshChar::String(Cow::Owned(format!("{}", ch.to_lowercase()))))
+        }
+        SloshChar::String(s) => {
+            Ok(SloshChar::String(Cow::Owned(s.to_lowercase())))
+        }
+    }
+}
+
+/// Usage: (char-upper char) -> char
+///
+/// Get upper case (utf) string for a character.
+///
+/// Section: char
+///
+/// Example:
+/// (test::assert-equal "A" (char-upper \A))
+/// (test::assert-equal "A" (char-upper \a))
+/// (test::assert-not-equal "A" (char-upper \Z))
+/// (test::assert-equal "Λ" (char-upper \λ))
+/// (test::assert-equal "Λ" (char-upper \Λ))
+/// ;; "the" exception and a reason for returning a string
+/// (test::assert-equal "SS" (char-upper \ß))
+#[sl_sh_fn(fn_name = "char-upper")]
+fn char_upper(target: SloshChar) -> VMResult<SloshChar> {
+    match target {
+        SloshChar::Char(ch) => {
+            Ok(SloshChar::String(Cow::Owned(format!("{}", ch.to_uppercase()))))
+        }
+        SloshChar::String(s) => {
+            Ok(SloshChar::String(Cow::Owned(s.to_uppercase())))
+        }
+    }
+}
+
 pub fn add_str_builtins(env: &mut SloshVm) {
     intern_str_sub(env);
     intern_str_splitn(env);
@@ -449,6 +502,8 @@ pub fn add_str_builtins(env: &mut SloshVm) {
     intern_str_upper(env);
     intern_str_lower(env);
     intern_str_bytes(env);
+    intern_char_lower(env);
+    intern_char_upper(env);
     add_builtin(
         env,
         "str-replace",
