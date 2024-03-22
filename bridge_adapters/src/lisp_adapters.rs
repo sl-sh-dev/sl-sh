@@ -118,6 +118,16 @@ where
     fn sl_from(value: T, vm: &mut SloshVm) -> VMResult<Self>;
 }
 
+impl<T> SlFrom<Vec<T>> for Value where T: SlInto<Value> {
+    fn sl_from(value: Vec<T>, vm: &mut SloshVm) -> VMResult<Self> {
+        let mut u = Vec::with_capacity(value.len());
+        for v in value {
+            u.push(v.sl_into(vm)?);
+        }
+        Ok(vm.alloc_vector(u))
+    }
+}
+
 /// Inverse of [`SlFrom`]
 pub trait SlInto<T>: Sized
 where

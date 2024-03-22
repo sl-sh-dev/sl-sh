@@ -609,11 +609,11 @@ fn parse_variadic_args_type(
                     };
                 })
             } else {
-                // varargs needsj
+                // varargs needs all items to be flattened into a single vector.
+                // call iter_all so no value save nil is skipped.
                 Ok(quote! {
                     let #arg_name = #arg_name.iter()
-                        .map(|#arg_name| #arg_name.iter_all(environment))
-                        .flatten()
+                        .flat_map(|#arg_name| #arg_name.iter_all(environment))
                         .map(|ref #arg_name| {
                             use bridge_adapters::lisp_adapters::SlIntoRef;
                             #arg_name.sl_into_ref(environment)

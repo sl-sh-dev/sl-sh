@@ -342,9 +342,30 @@ fn str_sub(s: &str, start: usize, length: Option<usize>) -> VMResult<String> {
         Err(VMError::new_vm("str-sub index out of range"))
     }
 }
+/// Usage: (str-splitn n split-pattern string) -> vector
+///
+/// Use a pattern to split a string with at most n items.
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-equal ["some" "yyy" "string"] (str-splitn 3 "xxx" "somexxxyyyxxxstring"))
+/// (test::assert-equal ["some" "yyy" "string"] (str-splitn 4 "xxx" "somexxxyyyxxxstring"))
+/// (test::assert-equal ["some" "yyy" "stringxxxother"] (str-splitn 3 "xxx" "somexxxyyyxxxstringxxxother"))
+/// (test::assert-equal ["somexxxyyyxxxstringxxxother"] (str-splitn 1 "xxx" "somexxxyyyxxxstringxxxother"))
+/// (test::assert-equal [] (str-splitn 0 "xxx" "somexxxyyyxxxstringxxxzero"))
+#[sl_sh_fn(fn_name = "str-splitn")]
+fn str_splitn(n: usize, pat: &str, text: &str) -> VMResult<Vec<String>> {
+    let mut split_list = Vec::new();
+    for s in text.splitn(n, &pat) {
+        split_list.push(s.to_string());
+    }
+    Ok(split_list)
+}
 
 pub fn add_str_builtins(env: &mut SloshVm) {
     intern_str_sub(env);
+    intern_str_splitn(env);
     add_builtin(
         env,
         "str-replace",
