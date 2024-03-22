@@ -13,6 +13,10 @@
 //!     that marked in the annotation... OTHERWISE data may be copied!
 //!     OR allow for simple lifetimes?
 //! 9. VMError should not be new_vm
+//! 10. Optional duplicates code. With the ownership model from SlFromRef, being *the* primary mechanism
+//!     for crossing the boundary, it's possible having Some and None blocks multiple times is not necessary.
+//! 11. Support for slices? to avoid Vec allocation? Is it a big deal to only be able to accept Vec?
+//!     The decision should at least be documented.
 
 use bridge_types::Param;
 use bridge_types::PassingStyle;
@@ -350,10 +354,9 @@ fn parse_param(
         TypeHandle::Optional => {
             quote! {
                 let param = arg_types[#idx];
-                let arg = args.get(#idx);
+                let #arg_name = args.get(#idx);
                 match param.handle {
                     bridge_types::TypeHandle::Optional => {
-                        let #arg_name = arg;
                         #inner
                     },
                     _ => {
@@ -371,7 +374,11 @@ fn parse_param(
                 let arg = args.get(#idx);
                 match param.handle {
                     bridge_types::TypeHandle::VarArgs => {
-                        let #arg_name = &args[#idx..];
+                        let #arg_name: &[slvm::Value] = if arg.is_none() {
+                            &[]
+                        } else {
+                            &args[#idx..]
+                        };
                         #inner
                     },
                     _ => {
@@ -579,54 +586,84 @@ fn parse_variadic_args_type(
     let rust_type = get_type_or_wrapped_type(ty, POSSIBLE_ARG_TYPES.as_slice());
     let arg_pos = get_arg_pos(arg_name)?;
     match rust_type {
-        RustType::Path(wrapped_ty, _span) => {
-            let arg_check = if arg_name_itself_is_iter {
-                quote! {
-                    let #arg_name = if matches!(#arg_name, slvm::Value::List(_) | slvm::Value::Vector(_) | slvm::Value::Pair(_))
+        RustType::Path(_wrapped_ty, _span) => {
+            //TODO PC this logic seems wrong.
+            // 1. you have some stuff stashed.
+            // 2. the arg_name_itselef_is_iter  true matching on the argument doesn't make sense.
+            // ideally since we are parsing Vec<T> and VarArgs<T> here we need to be ablet
+            // to a. Vec<T>.iter(environment) to unwrap the Ts. And we should be able to
+            // iterate over the slice (#arg_name is a slice now due to a previous change where
+            // we were accidentally indexing 1 past the last args slice, VarArgs doesn't need to be
+            // passed in!) and turn any Vec/List/Pair into an iterator.
+            // ```
+            // Something like
+            // #arg_name.iter().map(|#arg_name| {
+            //     #arg_name.iter()
+            // })
+            // .flatten()
+            // or
+            // .collect::<slvm::Value>(); if we can't iterate over a flatten the way we'd like.
+            // ```
+            // then once we have this collection of Values (could it be a slice?) we could then
+            // iterate over that to turn it into a VarArgs<T>.
+            //
+            // *I believe* if we are operating on a Vec<T> is much simpler than the current arg_name_itself_is_iter check (the first one). It really feels like
+            // this below logic is wrong. or maybe never used? or the if else switch is swapped. If the value IS
+            // one of the
+
+            // OH NO, if arg_name_itself_is_vec then I *do not think* #arg_name has been turned into a slice...
+            // I think that is only if arg_name_itself_is_iter is false... that's the problem!
+            // so this logic was probably right the way it was.
+
+            // here we concerned with properly handing VarArgs:
+            // it is either an empty slice, a slice of a single element that is a list, vector, or pair
+            // (if arg_name_itself_is_iter) or a slice of multiple elements that are lists, vectors, or pairs, and any other type.
+            // since we are a VarArgs type we are supposed to accept anything but since this rust is a typed
+            // bridge target all those things must be coercible to the same time. So if a user passed in
+            // a list of values that were a mixed list of T and vectors || lists || pairs of T,
+            // it would probably be on us to flatten them.
+            //
+            // let arg_0: &[slvm::Value] = if arg.is_none() { &[] } else { &args[0usize..] };
+            // arg_0 is a slice of Values
+            // if arg_name_is_itself_is_iter then we are using this slice to process
+            // the input into a Vec<char>
+            if arg_name_itself_is_iter {
+                Ok(quote! {
+                    let #arg_name = if matches!(#arg_name, slvm::Value::List(_, _) | slvm::Value::Vector(_) | slvm::Value::Pair(_))
                     {
+                        let #arg_name = #arg_name
+                            .iter(environment)
+                            .map(|ref #arg_name| {
+                                use bridge_adapters::lisp_adapters::SlIntoRef;
+                                #arg_name.sl_into_ref(environment)
+                            })
+                            .collect::<slvm::VMResult<#ty>>()?;
+                        #inner
+                    } else {
                         let err_str = format!("{}: Expected a vector or list for argument at position {}.", #fn_name, #arg_pos);
                         return Err(slvm::VMError::new_vm(err_str));
-                    } else {
-                        #arg_name
                     };
-                }
+                })
             } else {
-                // HACK: this should not be needed but sometimes in current sl-sh 0.9.69 implementation
-                // VarArgs (which are being passed in when arg_name_itself_is_iter  is false) can be
-                // passed an array that contains nil, which is different than nil itself, either way
-                // this can be dealt with easily at the macro level. Removing this code causes
-                // the try_into_for in the final quote! block to fail because it can't convert
-                // nil into its desired type. This happens because it is iterating over a list
-                // that is nil. In reality, it shouldn't but the Expression object is a vector of
-                // nil, this is defensive code that should go away in slosh.
-                quote! {
-                    let #arg_name = if #arg_name.len() == 1 && #arg_name.get(0).unwrap().is_nil() {
-                        &[]
-                    } else {
-                        #arg_name
-                    };
-                }
-            };
-            Ok(quote! {{
-                #arg_check
-
-                static_assertions::assert_impl_all!(slvm::Value: bridge_adapters::lisp_adapters::SlFrom<#wrapped_ty>);
-                let #arg_name = #arg_name
-                    .iter()
-                    .map(|#arg_name| {
-                        use bridge_adapters::lisp_adapters::SlIntoRef;
-                        #arg_name.sl_into_ref(environment)
-                    })
-                    .collect::<slvm::VMResult<#ty>>()?;
-                #inner
-            }})
+                Ok(quote! {
+                    let #arg_name = #arg_name.iter()
+                        .map(|#arg_name| #arg_name.iter(environment))
+                        .flatten()
+                        .map(|ref #arg_name| {
+                            use bridge_adapters::lisp_adapters::SlIntoRef;
+                            #arg_name.sl_into_ref(environment)
+                        })
+                        .collect::<slvm::VMResult<#ty>>()?;
+                    #inner
+                })
+            }
         }
         RustType::Tuple(type_tuple, _span) => {
             if !type_tuple.elems.is_empty() {
                 let arg_pos = get_arg_pos(arg_name)?;
                 let arg_check = if arg_name_itself_is_iter {
                     quote! {
-                        if !matches!(#arg_name, slvm::Value::List(_) | slvm::Value::Vector(_) | slvm::Value::Pair(_))
+                        if !matches!(#arg_name, slvm::Value::List(_, _) | slvm::Value::Vector(_) | slvm::Value::Pair(_))
                         {
                             let err_str = format!("{}: Expected a vector or list for argument at position {}.", #fn_name, #arg_pos);
                             return Err(slvm::VMError::new_vm(err_str));
@@ -660,6 +697,7 @@ fn parse_variadic_args_type(
                     })
                 }
                 Ok(quote! {{
+                    //TODO PC SlIntoRef?
                     use bridge_adapters::lisp_adapters::SlInto;
                     #(#type_assertions)*
                     #arg_check
@@ -1296,7 +1334,7 @@ fn parse_type_tuple(
     let arg_pos = get_arg_pos(arg_name)?;
     let tokens = quote! {{
         use bridge_adapters::lisp_adapters::SlInto;
-        if !matches!(#arg_name, slvm::Value::List(_) | slvm::Value::Vector(_) | slvm::Value::Pair(_))
+        if !matches!(#arg_name, slvm::Value::List(_, _) | slvm::Value::Vector(_) | slvm::Value::Pair(_))
         {
             let err_str = format!("{}: Expected a vector or list for argument at position {}.", #fn_name, #arg_pos);
             return Err(slvm::VMError::new_vm(err_str));

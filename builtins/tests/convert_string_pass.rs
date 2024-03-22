@@ -73,7 +73,7 @@ pub fn accept_str(_s: &str) {}
 #[sl_sh_fn(fn_name = "accept_str_mut")]
 pub fn accept_str_mut(_s: &mut String) {}
 
-//TODO PC return &mut String?
+//TODO PC ISSUE #7 return &mut String?
 // require attribute?
 
 ///// obligatory doc

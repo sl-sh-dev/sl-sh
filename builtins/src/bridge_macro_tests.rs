@@ -3,7 +3,7 @@ mod tests {
     #[test]
     fn macro_passing_tests() {
         let t = trybuild::TestCases::new();
-        t.pass("tests/*pass.rs");
+        t.pass("tests/*.rs");
     }
 
     #[test]
