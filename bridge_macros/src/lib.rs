@@ -17,6 +17,7 @@
 //!     for crossing the boundary, it's possible having Some and None blocks multiple times is not necessary.
 //! 11. Support for slices? to avoid Vec allocation? Is it a big deal to only be able to accept Vec?
 //!     The decision should at least be documented.
+//! 12. SINCE WHEN is it a requirement like that it *has* to return VMResult or Option
 
 use bridge_types::Param;
 use bridge_types::PassingStyle;

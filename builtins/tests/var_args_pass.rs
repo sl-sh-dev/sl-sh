@@ -114,3 +114,9 @@ pub fn accept_vec_opt(_args: Vec<char>, _opt: Option<char>) -> VMResult<()> {
 pub fn accept_opt_varargs(_opt: Option<char>, _args: VarArgs<char>) -> VMResult<()> {
     Ok(())
 }
+
+/// obligatory doc
+#[sl_sh_fn(fn_name = "return_vec")]
+pub fn return_vec() -> VMResult<Vec<String>> {
+    Ok(vec!["a".to_string(), "b".to_string(), "c".to_string()])
+}

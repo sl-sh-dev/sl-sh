@@ -363,6 +363,33 @@ fn str_splitn(n: usize, pat: &str, text: &str) -> VMResult<Vec<String>> {
     Ok(split_list)
 }
 
+/// Usage: (str-cat-list join-str sequence) -> string
+///
+/// Build a string by concatenating a sequence of strings by join-str.
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-equal "stringxxxyyyxxxsome" (str-cat-list "xxx" '("string" "yyy" "some")))
+/// (test::assert-equal "string yyy some" (str-cat-list " " '("string" "yyy" "some")))
+/// (test::assert-equal "stringyyysome" (str-cat-list "" '("string" "yyy" "some")))
+#[sl_sh_fn(fn_name = "str-cat-list")]
+fn str_cat_list(
+    join_str: &str,
+    list: Vec<String>,
+) -> VMResult<String> {
+    let mut new_str = String::new();
+    let mut first = true;
+    for exp in list {
+        if !first {
+            new_str.push_str(&join_str);
+        }
+        new_str.push_str(&exp);
+        first = false;
+    }
+    Ok(new_str)
+}
+
 pub fn add_str_builtins(env: &mut SloshVm) {
     intern_str_sub(env);
     intern_str_splitn(env);
