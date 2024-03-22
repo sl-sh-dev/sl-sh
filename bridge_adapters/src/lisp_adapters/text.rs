@@ -118,7 +118,7 @@ impl<'a> SlFromRef<'a, Value> for SloshChar<'a> {
     }
 }
 
-impl <'a> SlFromRefMut<'a, Value> for &'a mut String {
+impl<'a> SlFromRefMut<'a, Value> for &'a mut String {
     fn sl_from_ref_mut(value: Value, vm: &'a mut SloshVm) -> VMResult<Self> {
         (&value).sl_as_mut(vm)
     }

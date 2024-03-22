@@ -1,9 +1,9 @@
-use std::borrow::Cow;
 use crate::SloshVm;
 use bridge_adapters::add_builtin;
 use bridge_macros::sl_sh_fn;
-use bridge_types::{SloshChar, LooseString};
+use bridge_types::{LooseString, SloshChar};
 use slvm::{Handle, VMError, VMResult, Value};
+use std::borrow::Cow;
 use unicode_segmentation::UnicodeSegmentation;
 
 fn str_trim(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
@@ -376,17 +376,14 @@ fn str_splitn(n: usize, pat: &str, text: &str) -> VMResult<Vec<String>> {
 /// (test::assert-equal "string yyy some" (str-cat-list " " ["string" "yyy" "some"]))
 /// (test::assert-equal "stringyyysome" (str-cat-list "" ["string" "yyy" "some"]))
 #[sl_sh_fn(fn_name = "str-cat-list")]
-fn str_cat_list(
-    join_str: LooseString,
-    list: Vec<&str>,
-) -> VMResult<String> {
+fn str_cat_list(join_str: LooseString, list: Vec<&str>) -> VMResult<String> {
     let mut new_str = String::new();
     let mut first = true;
     for exp in list {
         if !first {
             new_str.push_str(&join_str);
         }
-        new_str.push_str(&exp);
+        new_str.push_str(exp);
         first = false;
     }
     Ok(new_str)
@@ -460,12 +457,11 @@ fn str_bytes(string: &str) -> usize {
 #[sl_sh_fn(fn_name = "char-lower")]
 fn char_lower(target: SloshChar) -> VMResult<SloshChar> {
     match target {
-        SloshChar::Char(ch) => {
-            Ok(SloshChar::String(Cow::Owned(format!("{}", ch.to_lowercase()))))
-        }
-        SloshChar::String(s) => {
-            Ok(SloshChar::String(Cow::Owned(s.to_lowercase())))
-        }
+        SloshChar::Char(ch) => Ok(SloshChar::String(Cow::Owned(format!(
+            "{}",
+            ch.to_lowercase()
+        )))),
+        SloshChar::String(s) => Ok(SloshChar::String(Cow::Owned(s.to_lowercase()))),
     }
 }
 
@@ -486,12 +482,11 @@ fn char_lower(target: SloshChar) -> VMResult<SloshChar> {
 #[sl_sh_fn(fn_name = "char-upper")]
 fn char_upper(target: SloshChar) -> VMResult<SloshChar> {
     match target {
-        SloshChar::Char(ch) => {
-            Ok(SloshChar::String(Cow::Owned(format!("{}", ch.to_uppercase()))))
-        }
-        SloshChar::String(s) => {
-            Ok(SloshChar::String(Cow::Owned(s.to_uppercase())))
-        }
+        SloshChar::Char(ch) => Ok(SloshChar::String(Cow::Owned(format!(
+            "{}",
+            ch.to_uppercase()
+        )))),
+        SloshChar::String(s) => Ok(SloshChar::String(Cow::Owned(s.to_uppercase()))),
     }
 }
 
@@ -508,12 +503,8 @@ fn char_upper(target: SloshChar) -> VMResult<SloshChar> {
 #[sl_sh_fn(fn_name = "char-whitespace?")]
 fn char_is_whitespace(target: SloshChar) -> VMResult<bool> {
     match target {
-        SloshChar::Char(ch) => {
-            Ok(ch.is_whitespace())
-        }
-        SloshChar::String(s) => {
-            Ok(s.trim().is_empty())
-        }
+        SloshChar::Char(ch) => Ok(ch.is_whitespace()),
+        SloshChar::String(s) => Ok(s.trim().is_empty()),
     }
 }
 
