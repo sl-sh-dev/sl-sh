@@ -313,18 +313,6 @@ fn parse_param(
     required_args: usize,
     idx: usize,
 ) -> TokenStream {
-    let some_match = match param.passing_style {
-        PassingStyle::Value | PassingStyle::Reference => {
-            quote! {
-                #arg_name
-            }
-        }
-        PassingStyle::MutReference => {
-            quote! {
-                ref mut #arg_name
-            }
-        }
-    };
     match param.handle {
         TypeHandle::Direct => {
             quote! {
@@ -339,7 +327,8 @@ fn parse_param(
                                 args.len()
                             )));
                         }
-                        Some(#some_match) => {
+                        Some(#arg_name) => {
+                            let #arg_name = *#arg_name;
                             #inner
                         },
                     },
@@ -598,7 +587,7 @@ fn parse_variadic_args_type(
                     {
                         let #arg_name = #arg_name
                             .iter(environment)
-                            .map(|ref #arg_name| {
+                            .map(|#arg_name| {
                                 use bridge_adapters::lisp_adapters::SlIntoRef;
                                 #arg_name.sl_into_ref(environment)
                             })
@@ -615,7 +604,7 @@ fn parse_variadic_args_type(
                 Ok(quote! {
                     let #arg_name = #arg_name.iter()
                         .flat_map(|#arg_name| #arg_name.iter_all(environment))
-                        .map(|ref #arg_name| {
+                        .map(|#arg_name| {
                             use bridge_adapters::lisp_adapters::SlIntoRef;
                             #arg_name.sl_into_ref(environment)
                         })
@@ -745,6 +734,7 @@ fn parse_optional_type(
                 #inner
             }
             Some(#arg_name) => {
+               let #arg_name = *#arg_name;
                #some_arg_value_type_parsing_code
             }
         }
@@ -818,8 +808,8 @@ fn parse_direct_type(
                         #inner
                     }}),
                     PassingStyle::MutReference => Ok(quote! {{
-                        use bridge_adapters::lisp_adapters::SlAsMut;
-                        let #arg_name: #ty = #arg_name.sl_as_mut(environment)?;
+                        use bridge_adapters::lisp_adapters::SlIntoRefMut;
+                        let #arg_name: #ty = #arg_name.sl_into_ref_mut(environment)?;
                         #inner
                     }}),
                 }

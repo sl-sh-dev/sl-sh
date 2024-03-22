@@ -2,8 +2,8 @@ use crate::lisp_adapters::{SlFrom, SlFromRef};
 use compile_state::state::SloshVm;
 use slvm::{VMResult, Value};
 
-impl<'a> SlFromRef<'a, &'a Value> for bool {
-    fn sl_from_ref(value: &Value, _vm: &SloshVm) -> VMResult<Self> {
+impl<'a> SlFromRef<'a, Value> for bool {
+    fn sl_from_ref(value: Value, _vm: &SloshVm) -> VMResult<Self> {
         match value {
             Value::True => Ok(true),
             Value::False => Ok(false),
@@ -39,11 +39,11 @@ where
     }
 }
 
-impl<'a, T> SlFromRef<'a, &'a Value> for Option<T>
+impl<'a, T> SlFromRef<'a, Value> for Option<T>
 where
-    T: SlFromRef<'a, &'a Value>,
+    T: SlFromRef<'a, Value>,
 {
-    fn sl_from_ref(value: &'a Value, vm: &'a SloshVm) -> VMResult<Self> {
+    fn sl_from_ref(value: Value, vm: &'a SloshVm) -> VMResult<Self> {
         if value.is_nil() {
             Ok(None)
         } else {
@@ -77,19 +77,19 @@ mod tests {
         let mut vm = new_slosh_vm();
         let vm = &mut vm;
         let n = Value::Nil;
-        let n: bool = (&n)
+        let n: bool = n
             .sl_into_ref(vm)
             .expect("Value::Nil can be converted to bool");
         assert_eq!(n, false);
 
         let f = Value::False;
-        let f: bool = (&f)
+        let f: bool = f
             .sl_into_ref(vm)
             .expect("Value::False can be converted to bool");
         assert_eq!(f, false);
 
         let t = Value::True;
-        let t: bool = (&t)
+        let t: bool = t
             .sl_into_ref(vm)
             .expect("Value::True can be converted to bool");
         assert_eq!(t, true);
