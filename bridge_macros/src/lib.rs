@@ -1021,21 +1021,32 @@ fn generate_parse_fn(
     let arg_vec_literal = embed_params_vec(params);
 
     let const_params_len = get_const_params_len_ident();
-    let parse_name = if let Some(generics) = generics {
-        quote! { #parse_name #generics }
-    } else {
-        quote! { #parse_name }
-    };
-    quote! {
-        fn #parse_name(
-            environment: &mut compile_state::state::SloshVm,
-            args: &[slvm::Value],
-        ) -> slvm::VMResult<slvm::Value> {
-            let #fn_name_ident = #fn_name;
-            const #const_params_len: usize = #args_len;
-            #arg_vec_literal
+    if let Some(generics) = generics {
+        let params = generics.params.clone();
+        quote! {
+            fn #parse_name #generics(
+                environment: &#params mut compile_state::state::SloshVm,
+                args: &#params [slvm::Value],
+            ) -> slvm::VMResult<slvm::Value> {
+                let #fn_name_ident = #fn_name;
+                const #const_params_len: usize = #args_len;
+                #arg_vec_literal
 
-            #inner
+                #inner
+            }
+        }
+    } else {
+        quote! {
+            fn #parse_name(
+                environment: &mut compile_state::state::SloshVm,
+                args: &[slvm::Value],
+            ) -> slvm::VMResult<slvm::Value> {
+                let #fn_name_ident = #fn_name;
+                const #const_params_len: usize = #args_len;
+                #arg_vec_literal
+
+                #inner
+            }
         }
     }
 }

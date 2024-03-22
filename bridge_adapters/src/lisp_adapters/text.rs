@@ -77,7 +77,6 @@ impl<'a> SlFromRef<'a, &Value> for &'a str {
         value.sl_as_ref(vm)
     }
 }
-
 impl<'a> SlAsRef<'a, str> for &Value {
     fn sl_as_ref(&self, vm: &'a SloshVm) -> VMResult<&'a str> {
         match self {

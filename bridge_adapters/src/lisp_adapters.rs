@@ -128,6 +128,26 @@ impl<T> SlFrom<Vec<T>> for Value where T: SlInto<Value> {
     }
 }
 
+
+impl<'a> SlFromRef<'a, &slvm::Value> for Vec<&'a str> {
+    fn sl_from_ref(value: &slvm::Value, vm: &'a SloshVm) -> VMResult<Self> {
+        value.iter(vm).map(|x| <&str>::sl_from_ref(&x, vm)).collect()
+    }
+}
+
+
+impl<'a, T> SlFromRef<'a, slvm::Value> for Vec<T> where T: SlFromRef<'a, Value> + 'a {
+    fn sl_from_ref(value: slvm::Value, vm: &'a SloshVm) -> VMResult<Self> {
+        let mut res = vec![];
+        for val in value.iter(vm) {
+            let v = val.clone();
+            let t: T = v.sl_into_ref(vm)?;
+            res.push(t);
+        }
+        Ok(res)
+    }
+}
+
 /// Inverse of [`SlFrom`]
 pub trait SlInto<T>: Sized
 where
