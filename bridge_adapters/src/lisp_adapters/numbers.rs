@@ -76,6 +76,12 @@ impl<'a> SlFromRef<'a, Value> for f64 {
     }
 }
 
+impl SlFrom<usize> for Value {
+    fn sl_from(value: usize, _vm: &mut SloshVm) -> VMResult<Self> {
+        Ok(to_i56(value as i64))
+    }
+}
+
 impl<'a> SlFromRef<'a, Value> for usize {
     fn sl_from_ref(value: Value, vm: &'a SloshVm) -> VMResult<Self> {
         match value {

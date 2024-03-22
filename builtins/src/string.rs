@@ -390,10 +390,65 @@ fn str_cat_list(
     Ok(new_str)
 }
 
+/// Usage: (str-lower string) -> string
+///
+/// Get all lower case string from a string.
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-equal "stau" (str-lower "STAU"))
+/// (test::assert-equal "stau" (str-lower "stau"))
+/// (test::assert-equal "stau" (str-lower "Stau"))
+/// (test::assert-equal "stau" (str-lower "StaU"))
+/// (test::assert-equal "stau" (str-lower "sTaU"))
+#[sl_sh_fn(fn_name = "str-lower")]
+fn str_lower(string: &str) -> String {
+    string.to_lowercase()
+}
+
+/// Usage: (str-upper string) -> string
+///
+/// Get all upper case string from a string.
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-equal "STAU" (str-upper "STAU"))
+/// (test::assert-equal "STAU" (str-upper "stau"))
+/// (test::assert-equal "STAU" (str-upper "Stau"))
+/// (test::assert-equal "STAU" (str-upper "StaU"))
+/// (test::assert-equal "STAU" (str-upper "sTaU"))
+#[sl_sh_fn(fn_name = "str-upper")]
+fn str_upper(string: &str) -> String {
+    string.to_uppercase()
+}
+
+/// Usage: (str-bytes string) -> int
+///
+/// Return number of bytes in a string (may be more then length).
+///
+/// Strings are utf8 so it chars and bytes may not be a one to one match.
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-equal 4 (str-bytes "Stau"))
+/// (test::assert-equal 0 (str-bytes ""))
+/// ; Note 5 chars and 6 bytes because of the final char.
+/// (test::assert-equal 6 (str-bytes "StauΣ"))
+#[sl_sh_fn(fn_name = "str-bytes")]
+fn str_bytes(string: &str) -> usize {
+    string.len()
+}
+
 pub fn add_str_builtins(env: &mut SloshVm) {
     intern_str_sub(env);
     intern_str_splitn(env);
     intern_str_cat_list(env);
+    intern_str_upper(env);
+    intern_str_lower(env);
+    intern_str_bytes(env);
     add_builtin(
         env,
         "str-replace",
