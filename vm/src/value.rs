@@ -328,6 +328,8 @@ impl Value {
         }
     }
 
+    /// Returns an iterator over all values in the list, vector, pair.
+    /// If the item is not one of the above it returns an empty iterator.
     pub fn iter<'vm, ENV>(&self, vm: &'vm GVm<ENV>) -> Box<dyn Iterator<Item = Value> + 'vm> {
         match &self.unref(vm) {
             Value::Pair(_) => Box::new(PairIter::new(vm, *self)),
@@ -336,6 +338,26 @@ impl Value {
             }
             Value::Vector(handle) => Box::new(vm.get_vector(*handle).iter().copied()),
             _ => Box::new(iter::empty()),
+        }
+    }
+
+    /// Returns an iterator over all values in the list, vector, pair.
+    /// Returns an empty iterator if the value is nil.
+    /// If the item is not one of the above it returns a once iter of the value.
+    ///
+    /// Particularly useful  if iterating over a Vec<Value> that contains a heterogeneous
+    /// mix of List(s), Vector(s), Pair(s), and potentially other values, rather than
+    /// returning an empty list for any non iterable thing, return a once iter so
+    /// the item is not missed.
+    pub fn iter_all<'vm, ENV>(&self, vm: &'vm GVm<ENV>) -> Box<dyn Iterator<Item = Value> + 'vm> {
+        match &self.unref(vm) {
+            Value::Pair(_) => Box::new(PairIter::new(vm, *self)),
+            Value::List(handle, start) => {
+                Box::new(vm.get_vector(*handle)[*start as usize..].iter().copied())
+            }
+            Value::Vector(handle) => Box::new(vm.get_vector(*handle).iter().copied()),
+            Value::Nil => Box::new(iter::empty()),
+            v => Box::new(iter::once(*v)),
         }
     }
 
