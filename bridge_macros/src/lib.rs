@@ -17,6 +17,7 @@
 //!     for crossing the boundary, it's possible having Some and None blocks multiple times is not necessary.
 //! 11. Support for slices? to avoid Vec allocation? Is it a big deal to only be able to accept Vec?
 //!     The decision should at least be documented.
+//! 12. SINCE WHEN is it a requirement like that it *has* to return VMResult or Option
 
 use bridge_types::Param;
 use bridge_types::PassingStyle;
@@ -312,18 +313,6 @@ fn parse_param(
     required_args: usize,
     idx: usize,
 ) -> TokenStream {
-    let some_match = match param.passing_style {
-        PassingStyle::Value | PassingStyle::Reference => {
-            quote! {
-                #arg_name
-            }
-        }
-        PassingStyle::MutReference => {
-            quote! {
-                ref mut #arg_name
-            }
-        }
-    };
     match param.handle {
         TypeHandle::Direct => {
             quote! {
@@ -338,7 +327,8 @@ fn parse_param(
                                 args.len()
                             )));
                         }
-                        Some(#some_match) => {
+                        Some(#arg_name) => {
+                            let #arg_name = *#arg_name;
                             #inner
                         },
                     },
@@ -597,7 +587,7 @@ fn parse_variadic_args_type(
                     {
                         let #arg_name = #arg_name
                             .iter(environment)
-                            .map(|ref #arg_name| {
+                            .map(|#arg_name| {
                                 use bridge_adapters::lisp_adapters::SlIntoRef;
                                 #arg_name.sl_into_ref(environment)
                             })
@@ -609,12 +599,12 @@ fn parse_variadic_args_type(
                     };
                 })
             } else {
-                // varargs needsj
+                // varargs needs all items to be flattened into a single vector.
+                // call iter_all so no value save nil is skipped.
                 Ok(quote! {
                     let #arg_name = #arg_name.iter()
-                        .map(|#arg_name| #arg_name.iter_all(environment))
-                        .flatten()
-                        .map(|ref #arg_name| {
+                        .flat_map(|#arg_name| #arg_name.iter_all(environment))
+                        .map(|#arg_name| {
                             use bridge_adapters::lisp_adapters::SlIntoRef;
                             #arg_name.sl_into_ref(environment)
                         })
@@ -744,6 +734,7 @@ fn parse_optional_type(
                 #inner
             }
             Some(#arg_name) => {
+               let #arg_name = *#arg_name;
                #some_arg_value_type_parsing_code
             }
         }
@@ -817,8 +808,8 @@ fn parse_direct_type(
                         #inner
                     }}),
                     PassingStyle::MutReference => Ok(quote! {{
-                        use bridge_adapters::lisp_adapters::SlAsMut;
-                        let #arg_name: #ty = #arg_name.sl_as_mut(environment)?;
+                        use bridge_adapters::lisp_adapters::SlIntoRefMut;
+                        let #arg_name: #ty = #arg_name.sl_into_ref_mut(environment)?;
                         #inner
                     }}),
                 }
@@ -1020,21 +1011,32 @@ fn generate_parse_fn(
     let arg_vec_literal = embed_params_vec(params);
 
     let const_params_len = get_const_params_len_ident();
-    let parse_name = if let Some(generics) = generics {
-        quote! { #parse_name #generics }
-    } else {
-        quote! { #parse_name }
-    };
-    quote! {
-        fn #parse_name(
-            environment: &mut compile_state::state::SloshVm,
-            args: &[slvm::Value],
-        ) -> slvm::VMResult<slvm::Value> {
-            let #fn_name_ident = #fn_name;
-            const #const_params_len: usize = #args_len;
-            #arg_vec_literal
+    if let Some(generics) = generics {
+        let params = generics.params.clone();
+        quote! {
+            fn #parse_name #generics(
+                environment: &#params mut compile_state::state::SloshVm,
+                args: &#params [slvm::Value],
+            ) -> slvm::VMResult<slvm::Value> {
+                let #fn_name_ident = #fn_name;
+                const #const_params_len: usize = #args_len;
+                #arg_vec_literal
 
-            #inner
+                #inner
+            }
+        }
+    } else {
+        quote! {
+            fn #parse_name(
+                environment: &mut compile_state::state::SloshVm,
+                args: &[slvm::Value],
+            ) -> slvm::VMResult<slvm::Value> {
+                let #fn_name_ident = #fn_name;
+                const #const_params_len: usize = #args_len;
+                #arg_vec_literal
+
+                #inner
+            }
         }
     }
 }

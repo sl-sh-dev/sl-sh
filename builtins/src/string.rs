@@ -1,7 +1,9 @@
 use crate::SloshVm;
 use bridge_adapters::add_builtin;
 use bridge_macros::sl_sh_fn;
+use bridge_types::{LooseString, SloshChar};
 use slvm::{Handle, VMError, VMResult, Value};
+use std::borrow::Cow;
 use unicode_segmentation::UnicodeSegmentation;
 
 fn str_trim(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
@@ -342,9 +344,180 @@ fn str_sub(s: &str, start: usize, length: Option<usize>) -> VMResult<String> {
         Err(VMError::new_vm("str-sub index out of range"))
     }
 }
+/// Usage: (str-splitn n split-pattern string) -> vector
+///
+/// Use a pattern to split a string with at most n items.
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-equal ["some" "yyy" "string"] (str-splitn 3 "xxx" "somexxxyyyxxxstring"))
+/// (test::assert-equal ["some" "yyy" "string"] (str-splitn 4 "xxx" "somexxxyyyxxxstring"))
+/// (test::assert-equal ["some" "yyy" "stringxxxother"] (str-splitn 3 "xxx" "somexxxyyyxxxstringxxxother"))
+/// (test::assert-equal ["somexxxyyyxxxstringxxxother"] (str-splitn 1 "xxx" "somexxxyyyxxxstringxxxother"))
+/// (test::assert-equal [] (str-splitn 0 "xxx" "somexxxyyyxxxstringxxxzero"))
+#[sl_sh_fn(fn_name = "str-splitn")]
+fn str_splitn(n: usize, pat: &str, text: &str) -> VMResult<Vec<String>> {
+    let mut split_list = Vec::new();
+    for s in text.splitn(n, &pat) {
+        split_list.push(s.to_string());
+    }
+    Ok(split_list)
+}
+
+/// Usage: (str-cat-list join-str sequence) -> string
+///
+/// Build a string by concatenating a sequence of strings by join-str.
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-equal "stringxxxyyyxxxsome" (str-cat-list "xxx" ["string" "yyy" "some"]))
+/// (test::assert-equal "string yyy some" (str-cat-list " " ["string" "yyy" "some"]))
+/// (test::assert-equal "stringyyysome" (str-cat-list "" ["string" "yyy" "some"]))
+#[sl_sh_fn(fn_name = "str-cat-list")]
+fn str_cat_list(join_str: LooseString, list: Vec<&str>) -> VMResult<String> {
+    let mut new_str = String::new();
+    let mut first = true;
+    for exp in list {
+        if !first {
+            new_str.push_str(&join_str);
+        }
+        new_str.push_str(exp);
+        first = false;
+    }
+    Ok(new_str)
+}
+
+/// Usage: (str-lower string) -> string
+///
+/// Get all lower case string from a string.
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-equal "stau" (str-lower "STAU"))
+/// (test::assert-equal "stau" (str-lower "stau"))
+/// (test::assert-equal "stau" (str-lower "Stau"))
+/// (test::assert-equal "stau" (str-lower "StaU"))
+/// (test::assert-equal "stau" (str-lower "sTaU"))
+#[sl_sh_fn(fn_name = "str-lower")]
+fn str_lower(string: &str) -> String {
+    string.to_lowercase()
+}
+
+/// Usage: (str-upper string) -> string
+///
+/// Get all upper case string from a string.
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-equal "STAU" (str-upper "STAU"))
+/// (test::assert-equal "STAU" (str-upper "stau"))
+/// (test::assert-equal "STAU" (str-upper "Stau"))
+/// (test::assert-equal "STAU" (str-upper "StaU"))
+/// (test::assert-equal "STAU" (str-upper "sTaU"))
+#[sl_sh_fn(fn_name = "str-upper")]
+fn str_upper(string: &str) -> String {
+    string.to_uppercase()
+}
+
+/// Usage: (str-bytes string) -> int
+///
+/// Return number of bytes in a string (may be more then length).
+///
+/// Strings are utf8 so it chars and bytes may not be a one to one match.
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-equal 4 (str-bytes "Stau"))
+/// (test::assert-equal 0 (str-bytes ""))
+/// ; Note 5 chars and 6 bytes because of the final char.
+/// (test::assert-equal 6 (str-bytes "StauΣ"))
+#[sl_sh_fn(fn_name = "str-bytes")]
+fn str_bytes(string: &str) -> usize {
+    string.len()
+}
+
+/// Usage: (char-lower char) -> char
+///
+/// Get lower case (utf) string for a character.
+///
+/// Section: char
+///
+/// Example:
+/// (test::assert-equal "a" (char-lower \A))
+/// (test::assert-equal "a" (char-lower \a))
+/// (test::assert-not-equal "a" (char-lower \Z))
+/// (test::assert-equal "λ" (char-lower \Λ))
+/// (test::assert-equal "λ" (char-lower \λ))
+/// (test::assert-equal "ß" (char-lower \ß))
+#[sl_sh_fn(fn_name = "char-lower")]
+fn char_lower(target: SloshChar) -> VMResult<SloshChar> {
+    match target {
+        SloshChar::Char(ch) => Ok(SloshChar::String(Cow::Owned(format!(
+            "{}",
+            ch.to_lowercase()
+        )))),
+        SloshChar::String(s) => Ok(SloshChar::String(Cow::Owned(s.to_lowercase()))),
+    }
+}
+
+/// Usage: (char-upper char) -> char
+///
+/// Get upper case (utf) string for a character.
+///
+/// Section: char
+///
+/// Example:
+/// (test::assert-equal "A" (char-upper \A))
+/// (test::assert-equal "A" (char-upper \a))
+/// (test::assert-not-equal "A" (char-upper \Z))
+/// (test::assert-equal "Λ" (char-upper \λ))
+/// (test::assert-equal "Λ" (char-upper \Λ))
+/// ;; "the" exception and a reason for returning a string
+/// (test::assert-equal "SS" (char-upper \ß))
+#[sl_sh_fn(fn_name = "char-upper")]
+fn char_upper(target: SloshChar) -> VMResult<SloshChar> {
+    match target {
+        SloshChar::Char(ch) => Ok(SloshChar::String(Cow::Owned(format!(
+            "{}",
+            ch.to_uppercase()
+        )))),
+        SloshChar::String(s) => Ok(SloshChar::String(Cow::Owned(s.to_uppercase()))),
+    }
+}
+
+/// Usage: (char-whitespace? char) -> t/nil
+///
+/// Returns true if a character is whitespace, false/nil otherwise.
+///
+/// Section: char
+///
+/// Example:
+/// (test::assert-true (char-whitespace? #\ ))
+/// (test::assert-true (char-whitespace? #\tab))
+/// (test::assert-false (char-whitespace? #\s))
+#[sl_sh_fn(fn_name = "char-whitespace?")]
+fn char_is_whitespace(target: SloshChar) -> VMResult<bool> {
+    match target {
+        SloshChar::Char(ch) => Ok(ch.is_whitespace()),
+        SloshChar::String(s) => Ok(s.trim().is_empty()),
+    }
+}
 
 pub fn add_str_builtins(env: &mut SloshVm) {
     intern_str_sub(env);
+    intern_str_splitn(env);
+    intern_str_cat_list(env);
+    intern_str_upper(env);
+    intern_str_lower(env);
+    intern_str_bytes(env);
+    intern_char_lower(env);
+    intern_char_upper(env);
+    intern_char_is_whitespace(env);
     add_builtin(
         env,
         "str-replace",

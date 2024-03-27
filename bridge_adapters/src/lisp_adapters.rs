@@ -118,6 +118,33 @@ where
     fn sl_from(value: T, vm: &mut SloshVm) -> VMResult<Self>;
 }
 
+impl<T> SlFrom<Vec<T>> for Value
+where
+    T: SlInto<Value>,
+{
+    fn sl_from(value: Vec<T>, vm: &mut SloshVm) -> VMResult<Self> {
+        let mut u = Vec::with_capacity(value.len());
+        for v in value {
+            u.push(v.sl_into(vm)?);
+        }
+        Ok(vm.alloc_vector(u))
+    }
+}
+
+impl<'a, T> SlFromRef<'a, slvm::Value> for Vec<T>
+where
+    T: SlFromRef<'a, Value> + 'a + ?Sized,
+{
+    fn sl_from_ref(value: slvm::Value, vm: &'a SloshVm) -> VMResult<Self> {
+        let mut res = vec![];
+        for val in value.iter(vm) {
+            let t: T = val.sl_into_ref(vm)?;
+            res.push(t);
+        }
+        Ok(res)
+    }
+}
+
 /// Inverse of [`SlFrom`]
 pub trait SlInto<T>: Sized
 where
@@ -161,6 +188,34 @@ where
 {
     fn sl_into_ref(self, vm: &'a SloshVm) -> VMResult<U> {
         U::sl_from_ref(self, vm)
+    }
+}
+
+pub trait SlFromRefMut<'a, T: BridgedType>
+where
+    Self: Sized,
+{
+    /// Converts to this type from the input type.
+    fn sl_from_ref_mut(value: T, vm: &'a mut SloshVm) -> VMResult<Self>;
+}
+
+pub trait SlIntoRefMut<'a, T>: Sized
+where
+    T: 'a,
+    Self: BridgedType,
+{
+    /// Converts to this type from the input type.
+    fn sl_into_ref_mut(self, vm: &'a mut SloshVm) -> VMResult<T>;
+}
+
+impl<'a, T, U> SlIntoRefMut<'a, U> for T
+where
+    T: BridgedType,
+    U: SlFromRefMut<'a, T>,
+    U: 'a,
+{
+    fn sl_into_ref_mut(self, vm: &'a mut SloshVm) -> VMResult<U> {
+        U::sl_from_ref_mut(self, vm)
     }
 }
 
