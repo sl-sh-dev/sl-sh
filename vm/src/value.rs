@@ -247,11 +247,11 @@ impl Value {
         }
     }
 
-    pub fn get_float<ENV>(&self, _vm: &GVm<ENV>) -> VMResult<f32> {
+    pub fn get_float<ENV>(&self, _vm: &GVm<ENV>) -> VMResult<f64> {
         match &self {
-            Value::Byte(b) => Ok(*b as f32),
-            Value::Int(i) => Ok(from_i56(i) as f32),
-            Value::Float(f) => Ok(f32::from(*f)),
+            Value::Byte(b) => Ok(*b as f64),
+            Value::Int(i) => Ok(from_i56(i) as f64),
+            Value::Float(f) => Ok(f64::from(*f)),
             _ => Err(VMError::new_value(format!("Not a float: {self:?}"))),
         }
     }
