@@ -235,7 +235,7 @@ impl Platform for Sys {
                 Err(e) => {
                     panic!("the CLOEXEC pipe failed: {:?}", e)
                 }
-                Ok(..) => {
+                Ok(_n) => {
                     // pipe I/O up to PIPE_BUF bytes should be atomic
                     panic!("short read on the CLOEXEC pipe")
                 }
