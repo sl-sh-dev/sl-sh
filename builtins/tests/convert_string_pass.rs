@@ -33,9 +33,9 @@ pub fn main() {
 
     let expected = "a";
     match parse_return_slosh_char(&mut vm, args.as_slice()).unwrap() {
-        Value::CharCluster(l, c) => {
-            let s = format!("{}", String::from_utf8_lossy(&c[0..l as usize]));
-            assert_eq!(expected, &s);
+        Value::String(h) => {
+            let s = vm.get_string(h);
+            assert_eq!(expected, s);
         }
         _ => {
             panic!("Expected Value::String")
@@ -73,7 +73,7 @@ pub fn accept_str(_s: &str) {}
 #[sl_sh_fn(fn_name = "accept_str_mut")]
 pub fn accept_str_mut(_s: &mut String) {}
 
-//TODO PC return &mut String?
+//TODO PC ISSUE #7 return &mut String?
 // require attribute?
 
 ///// obligatory doc

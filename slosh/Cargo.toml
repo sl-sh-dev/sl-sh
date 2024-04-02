@@ -9,12 +9,12 @@ lisp-test = ["dep:regex", "dep:lazy_static"]
 
 [dependencies]
 unicode_reader = "1"
-sl-compiler = { path = "../compiler" }
+sl-compiler = { workspace = true }
 bridge_adapters = { path = "../bridge_adapters" }
 sl-liner = { git = "https://github.com/sl-sh-dev/sl-liner.git" }
-slvm = { path = "../vm" }
+slvm = { workspace = true }
 builtins = { path = "../builtins" }
-compile_state = { path = "../compile_state" }
+compile_state = { workspace = true }
 shell = { path = "../shell" }
 unicode-width = "0.1"
 glob = "0.3"
@@ -30,10 +30,16 @@ regex = { workspace = true }
 lazy_static = { workspace = true }
 criterion = "0.5"
 iai-callgrind = "0.10.2"
+bench_utils = { path = "bench_utils" }
+compiler_test_utils = { workspace = true }
 
 [build-dependencies]
 chrono = "0.4.7"
 
 [[bench]]
-name = "all"
+name = "criterion"
+harness = false
+
+[[bench]]
+name = "iai"
 harness = false

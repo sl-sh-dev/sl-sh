@@ -611,22 +611,13 @@ mod tests {
     use super::*;
 
     use crate::{set_initial_load_path, ENV};
+    use compiler_test_utils::exec;
+    use slvm::{from_i56, Value};
     use std::fs::{create_dir_all, File};
     use std::io::Write;
     use std::ops::DerefMut;
     use temp_env;
     use tempdir::TempDir;
-
-    use crate::tests::utils::exec;
-    use compile_state::state::{CompileState, SloshVm, SloshVmTrait};
-    use sl_compiler::pass1::pass1;
-    use sl_compiler::{compile, ReadError, Reader};
-    use slvm::{from_i56, Value, RET};
-
-    // I didn't really know this was possible but for test utilities just use
-    // the path attribute!
-    #[path = "../../../compiler/src/test_utils/utils.rs"]
-    pub mod utils;
 
     #[test]
     fn test_load_path_no_home() {
