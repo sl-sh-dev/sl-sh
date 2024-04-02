@@ -31,24 +31,43 @@ use std::str::FromStr;
 ///
 /// A f64 number like 1.00000000001 with 12 decimal digits will be 1.000000000001
 /// A f64 number like 1.000000000001 with 13 decimal digits will be converted to 1.0
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone)]
 pub struct F56(pub [u8; 7]);
 impl Eq for F56 {}
+impl PartialEq for F56 {
+    fn eq(&self, other: &Self) -> bool {
+        self.strictly_equal_but_nan_and_0(other)
+    }
+}
 impl Hash for F56 {
+    // In order to use F56 as a key in a hash map, we need to ensure:
+    // If a == b then hash(a) == hash(b)
     fn hash<H: Hasher>(&self, state: &mut H) {
-        let self_as_f64 = f64::from(*self);
-        // Make sure NaN hashes to the same value
-        if self_as_f64.is_nan() {
-            state.write_u64(0x7FF8000000000000u64);
+        // Generally, our approach will be to convert to f64 and use the bit pattern as the hash
+        // However, we need to carefully handle cases where two values are equal but have different bit patterns
+        // Special Case 1: 0.0 and -0.0 are equal but have different bit patterns
+        // Special Case 2: There are trillions of different bit patterns that represent NaN
+
+        let f56_word = u64::from_be_bytes([
+            0, self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5], self.0[6],
+        ]);
+        // Special Case 1: Convert any 0 to the same bit pattern
+        if f56_word == 0x0080000000000000u64 {
+            state.write_u64(0x0000000000000000u64);
             return;
         }
-        let rounded = F56::round_f64_to_f56_precision(self_as_f64);
-        state.write_u64(rounded.to_bits())
+        // Special Case 2: Convert any NaN to the same bit pattern
+        if self.is_nan() {
+            state.write_u64(0x7FF8000000000001u64);
+            return;
+        }
+        // Normal Case:
+        state.write_u64(f56_word)
     }
 }
 impl std::fmt::Debug for F56 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "F56({:?})", f64::from(*self))
+        write!(f, "F56({:?})", self.0)
     }
 }
 impl Display for F56 {
@@ -218,6 +237,16 @@ impl F56 {
 }
 
 impl F56 {
+    pub fn round_f64_to_7_sig_figs(raw_f64: f64) -> f64 {
+        if raw_f64.is_nan() || raw_f64.is_infinite() || raw_f64 == 0.0 {
+            return raw_f64;
+        }
+        let orig_exponent_value = raw_f64.abs().log10().floor() as i32; // the number after 'e' in scientific notation
+        let target_exponent_value = 2; // exponent that we will shift this number to
+        let scale_factor = 10f64.powi(target_exponent_value - orig_exponent_value);
+        let scaled_and_rounded = (raw_f64 * scale_factor).round();
+        scaled_and_rounded / scale_factor
+    }
     pub fn round_f64_to_f56_precision(raw_f64: f64) -> f64 {
         if raw_f64.is_nan() || raw_f64.is_infinite() || raw_f64 == 0.0 {
             return raw_f64;
@@ -230,7 +259,26 @@ impl F56 {
 
         scaled_and_rounded / scale_factor
     }
-    pub fn roughly_equal(&self, other: &F56) -> bool {
+    /// Returns true if the two F56s's decimal forms are equal to 7 significant figures
+    /// This is a lenient type of equality suitable for human use
+    /// It preserves transitivity, reflexivity, and symmetry
+    /// It meets the requirements of the Eq trait
+    pub fn roughly_equal_using_rounding_sig_figs(&self, other: &F56) -> bool {
+        println!("Rounding two numbers to 7 sig figs, {} and {}", self, other);
+        let self_as_f64 = f64::from(*self);
+        let other_as_f64 = f64::from(*other);
+        // NaNs are considered equal, deviating from IEEE 754 floats, but allowing us to use this as a hash key
+        if self_as_f64.is_nan() && other_as_f64.is_nan() {
+            return true;
+        }
+        F56::round_f64_to_7_sig_figs(self_as_f64) == F56::round_f64_to_7_sig_figs(other_as_f64)
+    }
+    /// Returns true if the relative difference between the two F56s is less than F56::EPSILON
+    /// This is a lenient type of equality suitable for human use
+    /// It preserves reflexivity, and symmetry but not transitivity
+    /// It does not meet the requirements of the Eq trait
+    /// The relative difference is the absolute difference divided by the larger of the two numbers
+    pub fn roughly_equal_using_relative_difference(&self, other: &F56) -> bool {
         if self == other {
             return true;
         }
@@ -242,11 +290,49 @@ impl F56 {
         if self_as_f64.is_infinite() && other_as_f64.is_infinite() {
             return self_as_f64.is_sign_positive() == other_as_f64.is_sign_positive();
         }
-        if self_as_f64 == 0.0 {
-            return other_as_f64.abs() < F56::EPSILON;
+        let larger = self_as_f64.abs().max(other_as_f64.abs());
+        if larger == 0.0 {
+            return true;
         }
-        let relative_difference = (self_as_f64 - other_as_f64).abs() / self_as_f64.abs();
+        let relative_difference = (self_as_f64 - other_as_f64).abs() / larger;
         relative_difference < F56::EPSILON
+    }
+    /// Returns true if the two F56s are bitwise identical
+    pub fn strictest_equal(&self, other: &F56) -> bool {
+        self.0 == other.0
+    }
+    /// Returns true if the two F56s are bitwise identical OR if they are both NaN or both 0
+    pub fn strictly_equal_but_nan_and_0(&self, other: &F56) -> bool {
+        // if the bit patterns are identical, then they are equal
+        if self.0 == other.0 {
+            return true;
+        }
+        // if both are 0 or -0 return true
+        if self.0 == [0, 0, 0, 0, 0, 0, 0] && other.0 == [0x80, 0, 0, 0, 0, 0, 0] {
+            return true;
+        }
+        if self.0 == [0x80, 0, 0, 0, 0, 0, 0] && other.0 == [0, 0, 0, 0, 0, 0, 0] {
+            return true;
+        }
+
+        // if both are NaN return true
+        if self.is_nan() && other.is_nan() {
+            return true;
+        }
+
+        false
+    }
+
+    /// Returns true if the F56 is NaN. Note that there are many bit patterns that represent NaN
+    pub fn is_nan(&self) -> bool {
+        let bytes7 = self.0;
+        let f56_word = u64::from_be_bytes([
+            0, bytes7[0], bytes7[1], bytes7[2], bytes7[3], bytes7[4], bytes7[5], bytes7[6],
+        ]);
+        let f56_biased_exponent: u16 = (f56_word >> 45) as u16 & 0x3FF; // first 10 bits after the sign bit
+        let f56_mantissa: u64 = f56_word & 0x1FFF_FFFF_FFFF; // the rightmost 45 bits
+                                                             // all 1s in the exponent and a nonzero mantissa means NaN
+        f56_biased_exponent == 0b11_1111_1111 && f56_mantissa > 0u64
     }
 }
 
