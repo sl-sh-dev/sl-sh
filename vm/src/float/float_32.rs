@@ -31,7 +31,7 @@ impl From<F32Wrap> for f64 {
 }
 impl PartialEq for F32Wrap {
     fn eq(&self, other: &Self) -> bool {
-        f32::from(self.0) == f32::from(other.0)
+        self.0 == other.0
     }
 }
 
