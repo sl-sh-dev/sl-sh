@@ -707,29 +707,50 @@ Example:
 (assert-equal 5 tot)",
             ),
             this_fn: add_special(vm, "this-fn", ""),
-            numeq: add_special(vm, "=", r#"Usage: (= val0 ... valN)
+            numeq: add_special(vm, "==", r#"Usage: (== val0 ... valN)
 
-Equals.  Works for int, float or string.
+Equals.  Works for numeric types (int, float).
 
 Section: conditional
 
 Example:
-(test::assert-false (= 1 2))
-(test::assert-true (= 2 2))
-(test::assert-true (= 2 2 2))
-(test::assert-false (= 3 2 2))
-(test::assert-false (= 3.0 2.0))
-(test::assert-true (= 2.0 2.0))
-(test::assert-true (= 2.0 2.0 2.0))
-(test::assert-false (= 3.0 2.0 2.0))
-(test::assert-false (= 2.1 2.0 3.0))
-(test::assert-false (= 2 1))
-(test::assert-false (= 3 2 1))
-(test::assert-false (= 1.1 1.0))
-(test::assert-true (= 1.1 1.1))
-(test::assert-false (= 3 2 3))
+(test::assert-false (== 1 2))
+(test::assert-true (== 2 2))
+(test::assert-true (== 2 2 2))
+(test::assert-false (== 3 2 2))
+(test::assert-false (== 3.0 2.0))
+(test::assert-true (== 2.0 2.0))
+(test::assert-true (== 2.0 2.0 2.0))
+(test::assert-false (== 3.0 2.0 2.0))
+(test::assert-false (== 2.1 2.0 3.0))
+(test::assert-false (== 2 1))
+(test::assert-false (== 3 2 1))
+(test::assert-false (== 1.1 1.0))
+(test::assert-true (== 1.1 1.1))
+(test::assert-false (== 3 2 3))
 "#),
-            numneq: add_special(vm, "/=", ""),
+            numneq: add_special(vm, "not=", r#"Usage: (not= val0 ... valN)
+
+Not Equals.  Works for numeric types (int, float).
+
+Section: conditional
+
+Example:
+(test::assert-true (not= 1 2))
+(test::assert-false (not= 2 2))
+(test::assert-false (not= 2 2 2))
+(test::assert-true (not= 3 2 2))
+(test::assert-true (not= 3.0 2.0))
+(test::assert-false (not= 2.0 2.0))
+(test::assert-false (not= 2.0 2.0 2.0))
+(test::assert-true (not= 3.0 2.0 2.0))
+(test::assert-true (not= 2.1 2.0 3.0))
+(test::assert-true (not= 2 1))
+(test::assert-true (not= 3 2 1))
+(test::assert-true (not= 1.1 1.0))
+(test::assert-false (not= 1.1 1.1))
+(test::assert-true (not= 3 2 3))
+"#),
             numlt: add_special(vm, "<", r#"Usage: (< val0 ... valN)
 
 Less than.  Works for int, float or string.
@@ -829,21 +850,21 @@ Example:
 (test::assert-true (>= 100.00000000001 100.000000000001))
 (test::assert-true (>= 1000.00000000001 1000.000000000001))
 "#),
-            eq: add_special(vm, "eq?", ""),
-            equal: add_special(vm, "equal?", r#"Usage: (equal? val0 val1)
+            eq: add_special(vm, "identical?", ""),
+            equal: add_special(vm, "=", r#"Usage: (= val0 val1)
 
-Like '=' but works for most value types where it makes sense, not just primitives.
+Test equality, works for most value types where it makes sense, not just primitives.
 
 Section: core
 
 Example:
-(test::assert-false (equal? "aab" "aaa"))
-(test::assert-true (equal? "aaa" "aaa"))
-(test::assert-true (equal? "aaa" "aaa" "aaa"))
-(test::assert-false (equal? "aaa" "aaaa" "aaa"))
-(test::assert-false (equal? "ccc" "aab" "aaa"))
-(test::assert-false (equal? "aaa" "aab"))
-(assert-true (equal? (get-error (/ 1 0)) (get-error (/ 1 0))))
+(test::assert-false (= "aab" "aaa"))
+(test::assert-true (= "aaa" "aaa"))
+(test::assert-true (= "aaa" "aaa" "aaa"))
+(test::assert-false (= "aaa" "aaaa" "aaa"))
+(test::assert-false (= "ccc" "aab" "aaa"))
+(test::assert-false (= "aaa" "aab"))
+(test::assert-true (= (get-error (/ 1 0)) (get-error (/ 1 0))))
 "#),
             type_: add_special(vm, "type", ""),
             not: add_special(vm, "not", "Usage: (not expression)

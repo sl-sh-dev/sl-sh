@@ -30,8 +30,8 @@
 
 (defn get-rgb-seq (R G B color-type)
   (let (make-color (fn (color-code) (str "\x1b[" color-code ";2;" R ";" G ";" B "m")))
-    (if (eq? color-type :font) (make-color 38)
-        (eq? color-type :bkrd) (make-color 48)
+    (if (identical? color-type :font) (make-color 38)
+        (identical? color-type :bkrd) (make-color 48)
         (make-color 38))))
 
 #%
@@ -82,7 +82,7 @@ Example:
 (assert-false (sys-command? "rst-not-a-comand-strsnt"))
 %#
 (defn sys-command? (com)
-    (if (or (str-empty? com)(eq? com.0 \/)(eq? com.0 \.))
+    (if (or (str-empty? com)(identical? com.0 \/)(identical? com.0 \.))
             (fs-exists? com)
         (str-contains com "/")(fs-exists? (str "./" com))
         (str-starts-with com "~/") (fs-exists? (str-replace com "~/" (env "HOME")))
@@ -117,7 +117,7 @@ Section: shell
 
         my-sys-command?
            (fn (command)
-               (if (eq? (sys-syms command :missing) :missing) (set! sys-syms.~command (sys-command? command)))
+               (if (identical? (sys-syms command :missing) :missing) (set! sys-syms.~command (sys-command? command)))
                (sys-syms command #f))
 
         sys-command-color
@@ -184,17 +184,17 @@ Section: shell
                 (if in-quote
                     (do
                       (str-push! token ch)
-                      (if (and (not (eq? last-ch \\))(eq? ch \"))
+                      (if (and (not (identical? last-ch \\))(identical? ch \"))
                           (do
                             (set! in-quote #f)
                             (str-push! token *fg-default*)
                             (prrawtoken))
                           ""))
-                    (if (and (not (eq? last-ch \\))(eq? ch \"))
+                    (if (and (not (identical? last-ch \\))(identical? ch \"))
                         (do (str-push! token (str tok-string-color ch))(set! in-quote #t) "")
-                        (if (eq? ch \()
+                        (if (identical? ch \()
                             (paren-open)
-                            (if (eq? ch \))
+                            (if (identical? ch \))
                                 (paren-close)
                                 (if (char-whitespace? ch)
                                     (whitespace ch)
@@ -218,7 +218,7 @@ Section: shell
 
     (defn __line_handler (line) (line-handler line))
       ;(let (result (get-error (line-handler line)))
-      ;  (if (eq? :error (car result)) (do (prn result) line) (cdr result))))
+      ;  (if (identical? :error (car result)) (do (prn result) line) (cdr result))))
 
     nil))
 
