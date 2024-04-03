@@ -49,6 +49,8 @@ enum SupportedGenericReturnTypes {
 }
 
 enum RustType {
+    // TypeBareFn is a syn type that is useful to leave attached for debugging purposes.
+    #[allow(dead_code)]
     BareFn(TypeBareFn, Span),
     Path(TypePath, Span),
     Tuple(TypeTuple, Span),
