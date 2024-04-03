@@ -17,6 +17,7 @@ shell = { path = "../shell" }
 unicode-width = "0.1"
 glob = "0.3"
 
+
 [dev-dependencies]
 tempdir = "0.3.7"
 temp-env = "0.3.6"
@@ -24,6 +25,7 @@ criterion = "0.5"
 iai-callgrind = "0.10.2"
 bench_utils = { path = "bench_utils" }
 compiler_test_utils = { workspace = true }
+mdbook = { workspace = true }
 
 
 [build-dependencies]

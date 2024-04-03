@@ -2028,6 +2028,7 @@ dependencies = [
  "criterion",
  "glob",
  "iai-callgrind",
+ "mdbook",
  "shell",
  "sl-compiler",
  "sl-liner",
