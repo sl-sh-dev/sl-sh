@@ -36,4 +36,5 @@ compiler_test_utils = { path = "compiler/test_utils" }
 slvm = { path = "vm" }
 regex = "1"
 lazy_static = "1"
+mdbook = "0.4.37"
 
