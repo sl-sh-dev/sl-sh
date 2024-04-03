@@ -115,7 +115,7 @@ macro_rules! compare_int {
             {
                 // The macro expansion trips this.
                 #[allow(clippy::redundant_closure_call)]
-                $comp_fn(
+                $compf_fn(
                     get_float!($vm, op1).map_err(|e| (e, $chunk.clone()))?,
                     get_float!($vm, op2).map_err(|e| (e, $chunk.clone()))?,
                 )

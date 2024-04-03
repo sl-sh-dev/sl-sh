@@ -2,7 +2,7 @@ use crate::lisp_adapters::{SlFrom, SlFromRef};
 use bridge_types::ErrorStrings;
 use compile_state::state::SloshVm;
 use slvm::value::ValueType;
-use slvm::{from_i56, to_i56, VMError, VMResult, Value, ValueTypes, F56};
+use slvm::{from_i56, to_i56, VMError, VMResult, Value, ValueTypes};
 
 impl SlFrom<()> for Value {
     fn sl_from(_value: (), _vm: &mut SloshVm) -> VMResult<Self> {
@@ -58,14 +58,14 @@ impl<'a> SlFromRef<'a, Value> for i32 {
 
 impl SlFrom<f64> for Value {
     fn sl_from(value: f64, _vm: &mut SloshVm) -> VMResult<Self> {
-        Ok(Value::Float(F56::from(value)))
+        Ok(Value::Float(value.into()))
     }
 }
 
 impl<'a> SlFromRef<'a, Value> for f64 {
     fn sl_from_ref(value: Value, vm: &'a SloshVm) -> VMResult<Self> {
         match value {
-            Value::Float(f56) => Ok(f64::from(f56)),
+            Value::Float(float) => Ok(f64::from(float)),
             _ => Err(VMError::new_conversion(
                 ErrorStrings::fix_me_mismatched_type(
                     <&'static str>::from(ValueType::Float),

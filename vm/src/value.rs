@@ -1,4 +1,4 @@
-use crate::{Handle, Heap, Interned, VMError, VMResult, F56};
+use crate::{float, Handle, Heap, Interned, VMError, VMResult};
 use bridge_types::BridgedType;
 use std::collections::{BTreeSet, HashMap};
 use std::fmt;
@@ -110,8 +110,8 @@ pub fn to_i56(i: i64) -> Value {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum Value {
     Byte(u8),
-    Int([u8; 7]), // Store a 7 byte int (i56...).
-    Float(F56),
+    Int([u8; 7]),      // Store a 7 byte int (i56...).
+    Float(float::F56), // Replace with float::F32Wrap if desired
     CodePoint(char),
     CharCluster(u8, [u8; 6]),
     CharClusterLong(Handle), // Handle points to a String on the heap.
@@ -147,13 +147,13 @@ impl Default for Value {
 
 impl From<f32> for Value {
     fn from(value: f32) -> Self {
-        Self::Float(F56::from(value))
+        Self::Float(value.into())
     }
 }
 
 impl From<f64> for Value {
     fn from(value: f64) -> Self {
-        Self::Float(F56::from(value))
+        Self::Float(value.into())
     }
 }
 
