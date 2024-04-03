@@ -2,6 +2,7 @@ use bridge_adapters::add_builtin;
 use bridge_adapters::lisp_adapters::SlFrom;
 use compile_state::state::{SloshVm, SloshVmTrait};
 use lazy_static::lazy_static;
+use mdbook::MDBook;
 use regex::{Regex, RegexBuilder};
 use slvm::VMErrorObj::Message;
 use slvm::{Interned, VMError, VMResult, Value};
@@ -10,6 +11,7 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
+use std::path::PathBuf;
 use std::string::ToString;
 
 const USAGE: &str = "usage";
@@ -457,6 +459,27 @@ fn doc_map(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
+fn build_doc(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    let mut i = registers.iter();
+    let path = match i.next() {
+        None => Err(VMError::new_vm("takes one argument (filepath)".to_string())),
+        Some(v) => match v {
+            Value::String(s) => Ok(vm.get_string(*s)),
+            Value::StringConst(i) => Ok(vm.get_interned(*i)),
+            _ => Err(VMError::new_vm(
+                "argument must be a string to a valid filepath".to_string(),
+            )),
+        },
+    }?;
+    let buf: PathBuf = path.into();
+    let mut md = MDBook::load(buf).expect("Unable to load the book");
+    for m in md.book.iter() {
+        println!("book item: {:?}", m);
+    }
+    md.build().expect("Building failed");
+    Ok(Value::Nil)
+}
+
 fn get_globals_sorted(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if !registers.is_empty() {
         return Err(VMError::new_vm(
@@ -483,7 +506,22 @@ pub fn add_builtins(env: &mut SloshVm) {
 Returns documentation for given symbol as map. Keyword is a documentation fragment
 (usage, section, description, example) and value is text describing given fragment.
 
-Section: core
+Section: doc
+
+Example:
+#t
+",
+    );
+
+    add_builtin(
+        env,
+        "build-doc",
+        build_doc,
+        "Usage: (build-doc valid-filepath)
+
+Uses mdbook to build the documentation for the given book.
+
+Section: doc
 
 Example:
 #t
@@ -498,7 +536,7 @@ Example:
 
 Return a vector containing all the symbols currently defined globally in sorted order (alphanumerically).
 
-Section: core
+Section: doc
 ",
     );
 }
