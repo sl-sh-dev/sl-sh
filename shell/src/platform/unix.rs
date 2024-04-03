@@ -1,5 +1,4 @@
 use std::collections::HashSet;
-use std::convert::TryInto;
 use std::ffi::{c_char, CString, OsStr, OsString};
 use std::fmt::{Display, Formatter};
 use std::fs::File;
@@ -235,7 +234,7 @@ impl Platform for Sys {
                 Err(e) => {
                     panic!("the CLOEXEC pipe failed: {:?}", e)
                 }
-                Ok(..) => {
+                Ok(_n) => {
                     // pipe I/O up to PIPE_BUF bytes should be atomic
                     panic!("short read on the CLOEXEC pipe")
                 }
