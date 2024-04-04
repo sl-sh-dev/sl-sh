@@ -27,7 +27,7 @@ jobs:
         # change to documentation directory
         cd doc
         # run custom commands before mdbook build process starts
-        ./pre_mdbook.sh
+        ./mk-site.sh
         mdbook build
         git worktree add gh-pages
         git config user.name "Deploy from CI"
