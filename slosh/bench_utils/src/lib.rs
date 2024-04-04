@@ -105,7 +105,7 @@ pub fn run_float_script(n: usize, m: f32, expected: f64) {
     let last = run_reader(&mut reader);
     match last {
         Ok(Value::Float(f)) => {
-            assert_eq!(expected, F56::round_f64_to_f56_precision(f64::from(f)));
+            assert_eq!(expected as f32, f32::from(f));
         }
         _ => {
             panic!("Not a float");
