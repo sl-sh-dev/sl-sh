@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use compile_state::state::{CompileState, SloshVm, SloshVmTrait};
 use sl_compiler::pass1::pass1;
 use sl_compiler::{compile, new_slosh_vm_with_builtins, Reader};
+use slvm::float::F56;
 use slvm::{
     Chunk, VMError, VMResult, Value, Vm, ADD, CONST, DIV, GET, INC, JMPLT, MUL, RET, SETCOL, VECMKD,
 };
@@ -104,7 +105,7 @@ pub fn run_float_script(n: usize, m: f32, expected: f64) {
     let last = run_reader(&mut reader);
     match last {
         Ok(Value::Float(f)) => {
-            assert_eq!(expected, f64::from(f));
+            assert_eq!(expected, F56::round_f64_to_f56_precision(f64::from(f)));
         }
         _ => {
             panic!("Not a float");
