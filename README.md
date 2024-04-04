@@ -1,4 +1,4 @@
-<img src="https://sl-sh-dev.github.io/sl-sh/images/sl-sh-ascii-logo.png" alt="sl-sh logo" style="max-width:100%;">
+<img src="https://sl-sh-dev.github.io/sl-sh/legacy/images/sl-sh-ascii-logo.png" alt="sl-sh logo" style="max-width:100%;">
 
 # Simple Lisp Shell (pronounced slosh)
 
@@ -6,7 +6,7 @@
 
 ## Note this is a new expermental version, see ./legacy/ for the original version (slush).
 
-Simple Lisp SHell (sl-sh) is a lisp based shell written in Rust. It is not POSIX
+Simple Lisp SHell (slosh) is a lisp based shell written in Rust. It is not POSIX
 compliant and makes no effort to be. Sl-sh should run on any *nix platform as
 well as macOS (CI currently only tests against ubuntu and macOS).It is a Lisp-1
 that is heavily inspired by Clojure and Common Lisp. It is a shell, it is a
@@ -70,7 +70,7 @@ chsh -s /usr/local/bin/slosh
 ## Compiler
 These are a subset of sl-sh forms and most work exactly the same.  See the
 sl-sh docs at:
-https://sl-sh-dev.github.io/sl-sh/mydoc_api.html
+https://sl-sh-dev.github.io/sl-sh/
 
 ### Primitive types
 - True
@@ -181,3 +181,20 @@ These forms (written in Rust but callable from Lisp) are supported.
  - To run benchmarks locally: `cargo bench`
  - To upload benchmarks to bencher.dev: `bencher run "cargo bench"`
  - Consider using iai in cloud: https://bencher.dev/learn/benchmarking/rust/iai/
+
+### Generated documentation
+The [documentation site](https://sl-sh-dev.github.io/sl-sh/) is served from the `doc` directory
+based on the `doc/mk-site.sh` script referenced in the github action `.github/workflows/gh_pages.yml`.
+
+To create new documentation files add them in markdown format to the `doc/src/` directory and
+then reference them in `doc/src/SUMMARY.md` when slosh builds the documentation it will create
+an html file in the format specified in the SUMMARY.md table of contents at the provided relative URL.
+
+For more information about how the docs are generated see [mdBook](https://rust-lang.github.io/mdBook/index.html)
+crate and related documentation.
+
+Must be compiled in lisp-test mode for appropriate documenation functions to be present (`cargo build --feature list-test`).
+
+
+ TODO PC need md files in a specific folder named after a section to be inlined within the section documetnation
+

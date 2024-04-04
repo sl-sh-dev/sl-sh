@@ -2,7 +2,8 @@ use bridge_adapters::add_builtin;
 use bridge_adapters::lisp_adapters::SlFrom;
 use compile_state::state::{SloshVm, SloshVmTrait};
 use lazy_static::lazy_static;
-use mdbook::MDBook;
+use mdbook::book::Chapter;
+use mdbook::{BookItem, MDBook};
 use regex::{Regex, RegexBuilder};
 use slvm::VMErrorObj::Message;
 use slvm::{Interned, VMError, VMResult, Value};
@@ -11,6 +12,9 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
+use std::fs::File;
+use std::io;
+use std::io::Write;
 use std::path::PathBuf;
 use std::string::ToString;
 
@@ -139,7 +143,7 @@ impl Display for Namespace {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "lisp-test"))]
 impl Namespace {
     fn add_docs(&self, docs: &mut Vec<SloshDoc>, vm: &mut SloshVm) -> DocResult<()> {
         match self {
@@ -262,7 +266,7 @@ impl DocStringSection {
     }
 }
 
-#[derive(Eq, Debug)]
+#[derive(Eq, Debug, Clone)]
 struct SloshDoc {
     symbol: String,
     symbol_type: String,
@@ -471,13 +475,123 @@ fn build_doc(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
             )),
         },
     }?;
-    let buf: PathBuf = path.into();
-    let mut md = MDBook::load(buf).expect("Unable to load the book");
-    for m in md.book.iter() {
-        println!("book item: {:?}", m);
+    let path_buf: PathBuf = path.into();
+    let mut md = MDBook::load(path_buf.clone()).expect("Unable to load the book");
+
+    md.book.push_item(BookItem::Separator);
+    md.book
+        .push_item(BookItem::PartTitle("Slosh Forms".to_string()));
+
+    let mut docs_by_section: BTreeMap<String, Vec<SloshDoc>> = BTreeMap::new();
+    let mut docs: Vec<SloshDoc> = vec![];
+    Namespace::Global.add_docs(&mut docs, vm).unwrap();
+    docs.sort();
+    for d in docs {
+        let d = d.clone();
+        let section = d.doc_string.section.clone();
+        docs_by_section
+            .entry(section)
+            .or_insert_with(|| vec![])
+            .push(d);
     }
+
+    let mut sections_as_html: BTreeMap<String, String> = BTreeMap::new();
+
+    let sections_len = docs_by_section.keys().len();
+    let mut all_content = "# Slosh Forms\n\n".to_string();
+
+    let mut list = "List of sections: \n".to_string();
+    for (i, section) in docs_by_section.keys().enumerate() {
+        list = list + &format!("[{}](#section-{})", section, section);
+        if i + 1 != sections_len {
+            list = list + ", ";
+        }
+    }
+    list = list + "\n\n";
+    all_content = all_content + &list;
+
+    for (i, section) in docs_by_section.keys().enumerate() {
+        let mut content = format!("## Section: {}\n\n", section);
+        let v = docs_by_section.get(section).unwrap();
+        let mut list = "List of symbols: \n".to_string();
+        let len = v.len();
+        for (i, docs) in v.iter().enumerate() {
+            let s = docs.symbol.clone();
+            let t: String = s
+                .chars()
+                .filter(|c| c.is_alphabetic() || *c == '-')
+                .collect();
+            list = list + &format!("[{}](#{})", s, t);
+            if i + 1 != len {
+                list = list + ", ";
+            }
+        }
+        list = list + "\n\n";
+        content = content + &list;
+
+        for docs in v {
+            content = content + &format!(" ### {}\n", docs.symbol);
+            content = content + &format!("          type: {}\n", docs.symbol_type);
+            content = content + &format!("          namespace: {}\n", docs.namespace);
+            if let Some(usage) = docs.doc_string.usage.clone() {
+                content = content + &format!("          usage: {}\n", usage);
+            }
+            content = content + &format!("          section: {}\n", docs.doc_string.section);
+            content =
+                content + &format!("          description: {}\n", docs.doc_string.description);
+            if let Some(example) = docs.doc_string.example.clone() {
+                content = content + &format!("          example: \n ``` \n{}\n ``` \n", example);
+            } else {
+                content = content + "No Examples\n";
+            }
+        }
+        content = content + "\n";
+
+        sections_as_html.insert(section.to_string(), content.clone());
+        all_content = all_content + &content;
+    }
+
+    let p = make_file("all", &all_content)
+        .map_err(|e| VMError::new_vm(&format!("Failed to write to file: {e}.")))?;
+
+    md.book.push_item(BookItem::Chapter(Chapter::new(
+        "All",
+        all_content,
+        p,
+        vec![],
+    )));
+
+    for section in sections_as_html.keys() {
+        let content = sections_as_html.get(section).unwrap();
+        let p = make_file(section, &content)
+            .map_err(|e| VMError::new_vm(&format!("Failed to write to file: {e}.")))?;
+        let capped = capitalize_first(section);
+        let c = Chapter::new(&capped, content.clone(), p, vec![]);
+        let book_item = BookItem::Chapter(c);
+        md.book.push_item(book_item);
+    }
+
     md.build().expect("Building failed");
     Ok(Value::Nil)
+}
+
+fn make_file(name: &str, content: &str) -> io::Result<PathBuf> {
+    //TODO I do not understand why have to both pass the file contents and have a md file
+    // and if I do not have the md file i get a no parents error?
+    let filename = format!("{}.md", name);
+    let p: PathBuf = filename.into();
+    let mut file_0 = File::create(p.clone())?;
+    writeln!(file_0, "{}", content)?;
+    File::flush(&mut file_0)?;
+    Ok(p)
+}
+
+fn capitalize_first(s: &str) -> String {
+    let mut c = s.chars();
+    match c.next() {
+        None => String::new(),
+        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+    }
 }
 
 fn get_globals_sorted(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
