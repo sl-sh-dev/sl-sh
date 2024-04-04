@@ -510,7 +510,7 @@ fn build_doc(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     list = list + "\n\n";
     all_content = all_content + &list;
 
-    for (i, section) in docs_by_section.keys().enumerate() {
+    for section in docs_by_section.keys() {
         let mut content = format!("## Section: {}\n\n", section);
         let v = docs_by_section.get(section).unwrap();
         let mut list = "List of symbols: \n".to_string();
