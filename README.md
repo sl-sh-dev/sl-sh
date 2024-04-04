@@ -1,4 +1,4 @@
-<img src="https://sl-sh-dev.github.io/sl-sh/legacy/images/sl-sh-ascii-logo.png" alt="sl-sh logo" style="max-width:100%;">
+<img src="https://raw.githubusercontent.com/sl-sh-dev/sl-sh/gh-pages-legacy/images/sl-sh-ascii-logo.png" alt="sl-sh logo" style="max-width:100%;">
 
 # Simple Lisp Shell (pronounced slosh)
 
