@@ -15,20 +15,12 @@ jobs:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
-    - name: Install latest mdbook
-      run: |
-        tag=$(curl 'https://api.github.com/repos/rust-lang/mdbook/releases/latest' | jq -r '.tag_name')
-        url="https://github.com/rust-lang/mdbook/releases/download/${tag}/mdbook-${tag}-x86_64-unknown-linux-gnu.tar.gz"
-        mkdir mdbook
-        curl -sSL $url | tar -xz --directory=./mdbook
-        echo `pwd`/mdbook >> $GITHUB_PATH
     - name: Deploy GitHub Pages
       run: |
         # change to documentation directory
         cd doc
-        # run custom commands before mdbook build process starts
+        # mk-site.sh writes the static site to the book directory
         ./mk-site.sh
-        mdbook build
         git worktree add gh-pages
         git config user.name "Deploy from CI"
         git config user.email ""
