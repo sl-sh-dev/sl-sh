@@ -531,16 +531,17 @@ fn build_doc(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
 
         for docs in v {
             content = content + &format!(" ### {}\n", docs.symbol);
-            content = content + &format!("          type: {}\n", docs.symbol_type);
-            content = content + &format!("          namespace: {}\n", docs.namespace);
+            //content = content + &format!("- type: {}\n", docs.symbol_type);
+            //content = content + &format!("- namespace: {}\n", docs.namespace);
             if let Some(usage) = docs.doc_string.usage.clone() {
-                content = content + &format!("          usage: {}\n", usage);
+                content = content + &format!("**Usage:** {}\n\n", usage);
             }
-            content = content + &format!("          section: {}\n", docs.doc_string.section);
-            content =
-                content + &format!("          description: {}\n", docs.doc_string.description);
+            //content = content + &format!("section: {}\n", docs.doc_string.section);
+            content = content + &format!("{}\n", docs.doc_string.description);
             if let Some(example) = docs.doc_string.example.clone() {
-                content = content + &format!("          example: \n ``` \n{}\n ``` \n", example);
+                content = content + &format!("Example: \n ```");
+                content = content + &format!("{}", example);
+                content = content + &format!("\n``` \n");
             } else {
                 content = content + "No Examples\n";
             }

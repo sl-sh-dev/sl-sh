@@ -3,8 +3,4 @@ authors = ["gpwclark", "sstanfield"]
 language = "en"
 multilingual = false
 src = "src"
-title = "slosh-docs"
-
-
-# [preprocessor.legacy]
-# renderers = ["html"]  # example preprocessor only runs with the HTML renderer
+title = "Slosh Documentation"
