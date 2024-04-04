@@ -193,7 +193,7 @@ an html file in the format specified in the SUMMARY.md table of contents at the 
 For more information about how the docs are generated see [mdBook](https://rust-lang.github.io/mdBook/index.html)
 crate and related documentation.
 
-Must be compiled in lisp-test mode for appropriate documenation functions to be present (`cargo build --feature list-test`).
+Must be compiled in lisp-test mode for appropriate documenation functions to be present (`cargo build --features list-test`).
 
 
  TODO PC need md files in a specific folder named after a section to be inlined within the section documetnation

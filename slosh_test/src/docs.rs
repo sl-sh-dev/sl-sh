@@ -500,7 +500,7 @@ fn build_doc(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let sections_len = docs_by_section.keys().len();
     let mut all_content = "# Slosh Forms\n\n".to_string();
 
-    let mut list = "List of sections: \n".to_string();
+    let mut list = "List of sections: \n\n".to_string();
     for (i, section) in docs_by_section.keys().enumerate() {
         list = list + &format!("[{}](#section-{})", section, section);
         if i + 1 != sections_len {
@@ -511,9 +511,10 @@ fn build_doc(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     all_content = all_content + &list;
 
     for section in docs_by_section.keys() {
-        let mut content = format!("## Section: {}\n\n", section);
+        let mut content = format!("## {}\n\n", section);
         let v = docs_by_section.get(section).unwrap();
-        let mut list = "List of symbols: \n".to_string();
+        let mut symbols_list_on_section_page = "List of symbols: \n".to_string();
+        let mut symbols_list_on_all_page = format!("## Section: {} \n\n", section);
         let len = v.len();
         for (i, docs) in v.iter().enumerate() {
             let s = docs.symbol.clone();
@@ -521,13 +522,18 @@ fn build_doc(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
                 .chars()
                 .filter(|c| c.is_alphabetic() || *c == '-')
                 .collect();
-            list = list + &format!("[{}](#{})", s, t);
+            symbols_list_on_section_page =
+                symbols_list_on_section_page + &format!("[{}](#{})", s, t);
+            symbols_list_on_all_page =
+                symbols_list_on_all_page + &format!("[{}]({section}.html#{})", s, t);
             if i + 1 != len {
-                list = list + ", ";
+                symbols_list_on_section_page = symbols_list_on_section_page + ", ";
+                symbols_list_on_all_page = symbols_list_on_all_page + ", ";
             }
         }
-        list = list + "\n\n";
-        content = content + &list;
+        symbols_list_on_section_page = symbols_list_on_section_page + "\n\n";
+        symbols_list_on_all_page = symbols_list_on_all_page + "\n";
+        content = content + &symbols_list_on_section_page;
 
         for docs in v {
             content = content + &format!(" ### {}\n", docs.symbol);
@@ -549,7 +555,7 @@ fn build_doc(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         content = content + "\n";
 
         sections_as_html.insert(section.to_string(), content.clone());
-        all_content = all_content + &content;
+        all_content = all_content + &symbols_list_on_all_page;
     }
 
     let p = make_file("all", &all_content)
