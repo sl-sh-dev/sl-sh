@@ -9,7 +9,7 @@ git clone -b gh-pages-legacy-html https://github.com/sl-sh-dev/sl-sh src/legacy/
 rm -rf src/legacy/.git
 mkdir src/rust-docs
 
-cargo doc --target-dir src/rust-docs
+cargo doc --features lisp-test --target-dir src/rust-docs
 
 # make the symlinks work
 pushd "mdbook-slosh-eval"

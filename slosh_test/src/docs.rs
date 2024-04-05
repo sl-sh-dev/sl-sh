@@ -15,6 +15,7 @@ use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 use std::fs::{self, File};
 use std::io::{self, Write};
+use std::path::Path;
 use std::path::PathBuf;
 use std::string::ToString;
 
@@ -663,6 +664,12 @@ fn build_doc(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
 
     for section in docs_by_section.keys() {
         let mut content = format!("## {}\n\n", section);
+
+        let file = format!("src/section-docs/{}.md", section);
+        // If there is a section file header include it for preprocessing.
+        if fs::metadata(&file).is_ok() {
+            content = content + &format!("{{{{ #include section-docs/{}.md }}}}\n\n\n", section);
+        }
         let v = docs_by_section.get(section).unwrap();
         let mut symbols_list_on_section_page = "List of symbols: \n".to_string();
         let mut symbols_list_on_all_page = format!("## Section: {} \n\n", section);
@@ -719,29 +726,26 @@ fn build_doc(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         vec![],
     )));
 
-    for section in sections_as_html.keys() {
-        let content = sections_as_html.get(section).unwrap();
-        let p = make_file(section, &content)
+    for (section, content) in sections_as_html.iter() {
+        let path = make_file(section, &content)
             .map_err(|e| VMError::new_vm(&format!("Failed to write to file: {e}.")))?;
         let capped = capitalize_first(section);
-        let c = Chapter::new(&capped, content.clone(), p, vec![]);
-        let book_item = BookItem::Chapter(c);
-        md.book.push_item(book_item);
+        let section_chapter = Chapter::new(&capped, content.clone(), &path, vec![]);
+        md.book.push_item(BookItem::Chapter(section_chapter));
     }
 
     md.build().expect("Building failed");
     Ok(Value::Nil)
 }
 
-fn make_file(name: &str, content: &str) -> io::Result<PathBuf> {
+fn make_file(name: impl AsRef<Path>, content: &str) -> io::Result<PathBuf> {
     //TODO I do not understand why have to both pass the file contents and have a md file
     // and if I do not have the md file i get a no parents error?
-    let filename = format!("{}.md", name);
-    let p: PathBuf = filename.into();
-    let mut file_0 = File::create(p.clone())?;
+    let filename = format!("{}.md", name.as_ref().display()).into();
+    let mut file_0 = File::create(&filename)?;
     writeln!(file_0, "{}", content)?;
     File::flush(&mut file_0)?;
-    Ok(p)
+    Ok(filename)
 }
 
 fn capitalize_first(s: &str) -> String {
