@@ -50,7 +50,7 @@ pub fn mk_state(
                     total_args += 1;
                 }
             }
-            Value::Keyword(i) if i == env.specials().numeq => {
+            Value::Keyword(i) if i == env.specials().equal => {
                 if !opt {
                     return Err(VMError::new_compile(
                         "invalid args, := must come after % (optional)",
@@ -89,7 +89,13 @@ pub fn mk_state(
                 total_args += 1;
                 destructures.push(DestructType::Map(handle, total_args));
             }
-            _ => return Err(VMError::new_compile("invalid args, must be symbols")),
+            _ => {
+                return Err(VMError::new_compile(format!(
+                    "invalid args, must be symbols got {}/{}",
+                    a.display_type(env),
+                    a.display_value(env)
+                )))
+            }
         }
     }
     new_state.chunk.rest = rest;
