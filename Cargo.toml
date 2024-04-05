@@ -4,6 +4,7 @@ resolver = "2"
 
 members = [
     "slosh",
+    "slosh_lib",
     "compiler",
     "vm",
     "builtins",

@@ -1013,6 +1013,31 @@ dependencies = [
  "shell",
  "sl-compiler",
  "sl-liner",
+ "slosh_lib",
+ "slvm",
+ "temp-env",
+ "tempdir",
+ "unicode-width",
+ "unicode_reader",
+]
+
+[[package]]
+name = "slosh_lib"
+version = "0.10.0"
+dependencies = [
+ "bridge_adapters",
+ "builtins",
+ "chrono",
+ "compile_state",
+ "compiler_test_utils",
+ "criterion",
+ "glob",
+ "iai-callgrind",
+ "lazy_static",
+ "regex",
+ "shell",
+ "sl-compiler",
+ "sl-liner",
  "slvm",
  "temp-env",
  "tempdir",

@@ -209,7 +209,7 @@ impl DocStringSection {
             })
             // return default empty string and have parse_doc_string handle error if no doc provided.
             .unwrap_or_default();
-        let backup_usage = crate::usage(vm, slot, &sym);
+        let backup_usage = slosh_lib::usage(vm, slot, &sym);
         Self::parse_doc_string(Cow::Owned(sym_str), raw_doc_string, backup_usage)
     }
 
@@ -506,9 +506,9 @@ Section: core
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{run_reader, set_builtins, set_initial_load_path, ENV};
     use compile_state::state::new_slosh_vm;
     use sl_compiler::Reader;
+    use slosh_lib::{run_reader, set_builtins, set_initial_load_path, ENV};
     use std::collections::BTreeMap;
     use std::ops::DerefMut;
     use tempdir::TempDir;
