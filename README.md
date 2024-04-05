@@ -18,14 +18,14 @@ Some of the more prominent features:
     ```bash
     cat file | tr -s " " | cut -d " " -f 2,4
     ```
-    "just work"
+  "just work"
 * Support for an rc file, ```~/.config/slosh/init.slosh```, to set up environment and fully customize your prompt.
 * Common Lisp style macro system with support for quote and backquote (with clojure style ~ and ~@ expansion).
 * Dynamically Typed
 * Note lacks many features from legacy sl-sh but catching up (std lib is currently tiny).
 
-
 Contains these crates:
+
 - slosh: a REPL with debugger and extensions that use compiler, includes shell functionality.
 - compiler: the core compiler code
 - compile_state: helper crate with state contained by a VM for use with compiler
@@ -37,11 +37,13 @@ Contains these crates:
 - legacy (excluded): original sl-sh version, more complete but slower and worse core shell support
 
 ## Running
+
 cargo run -p slosh
 
-## Installation 
+## Installation
 
 ### 1. Get sl-sh
+
 - [Install git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git)
     ```
     git clone https://github.com/sl-sh-dev/sl-sh
@@ -49,6 +51,7 @@ cargo run -p slosh
     ```
 
 ### 2. Build sl-sh
+
 - [Install Rust](https://www.rust-lang.org/tools/install) and build from source:
     ```
 
@@ -57,22 +60,28 @@ cargo run -p slosh
     ```
 
 ### 3. Use sl-sh as primary shell
+
 - install binary
+
 ```
 sudo install -D -m 755 target/release/slosh /usr/local/bin/
 ```
+
 - add slosh to /etc/shells and change login shell to slosh
+
 ```
 echo /usr/local/bin/slosh | sudo tee -a /etc/shells
 chsh -s /usr/local/bin/slosh
 ```
 
 ## Compiler
-These are a subset of sl-sh forms and most work exactly the same.  See the
+
+These are a subset of sl-sh forms and most work exactly the same. See the
 sl-sh docs at:
 https://sl-sh-dev.github.io/sl-sh/
 
 ### Primitive types
+
 - True
 - False
 - Nil
@@ -85,13 +94,16 @@ https://sl-sh-dev.github.io/sl-sh/
 - Byte
 
 ### Heap allocated objects (complex types)
+
 - Pair/ConsCell
 - Vector
 - HashMap
 - String
 
 ### Special Forms
+
 The following special forms are currently in the compiler:
+
 - def
 - set!
 - do
@@ -110,8 +122,10 @@ The following special forms are currently in the compiler:
 - while
 
 ### Compiled Forms
+
 Normal forms follow normal calling evaluation.
 Note: These are all compiled to bytecode and once compiled are not dynamic anymore.
+
 - not
 - recur
 - this-fn
@@ -144,6 +158,7 @@ Note: These are all compiled to bytecode and once compiled are not dynamic anymo
 - equal?
 
 ### Features
+
 - Lisp reader (no reader macros yet)
 - Lisp lists (pair/concell based)
 - Vectors
@@ -155,10 +170,13 @@ Note: These are all compiled to bytecode and once compiled are not dynamic anymo
 - Macros
 
 ## slosh
+
 Slosh is the shell and scripting language REPL using the compiler, vm and shell crates.
 
 ### Built-in Forms
+
 These forms (written in Rust but callable from Lisp) are supported.
+
 - pr (print)
 - prn (println)
 - dasm (disassemble a lambda or closure)
@@ -170,31 +188,21 @@ These forms (written in Rust but callable from Lisp) are supported.
 - eval (eval an expression)
 
 ### Features
+
 - Line editor with history
 - Debug on error, currently useful for probing VM state only
 
 ## Links
+
 - sl-sh legacy shell: https://github.com/sl-sh-dev/sl-sh/legacy
 
 ### Benchmarking
- - Install [bencher](https://bencher.dev/docs/tutorial/quick-start/)
- - To run benchmarks locally: `cargo bench`
- - To upload benchmarks to bencher.dev: `bencher run "cargo bench"`
- - Consider using iai in cloud: https://bencher.dev/learn/benchmarking/rust/iai/
+
+- Install [bencher](https://bencher.dev/docs/tutorial/quick-start/)
+- To run benchmarks locally: `cargo bench`
+- To upload benchmarks to bencher.dev: `bencher run "cargo bench"`
+- Consider using iai in cloud: https://bencher.dev/learn/benchmarking/rust/iai/
 
 ### Generated documentation
-The [documentation site](https://sl-sh-dev.github.io/sl-sh/) is served from the `doc` directory
-based on the `doc/mk-site.sh` script referenced in the github action `.github/workflows/gh_pages.yml`.
 
-To create new documentation files add them in markdown format to the `doc/src/` directory and
-then reference them in `doc/src/SUMMARY.md` when slosh builds the documentation it will create
-an html file in the format specified in the SUMMARY.md table of contents at the provided relative URL.
-
-For more information about how the docs are generated see [mdBook](https://rust-lang.github.io/mdBook/index.html)
-crate and related documentation.
-
-Must be compiled in lisp-test mode for appropriate documenation functions to be present (`cargo build --features list-test`).
-
-
- TODO PC need md files in a specific folder named after a section to be inlined within the section documetnation
-
+See the `doc` directory README.md for more information on how to modify and generate the documentation.
