@@ -267,6 +267,31 @@ impl DocStringSection {
     }
 }
 
+pub trait AsMd {
+    fn as_md(&self) -> String;
+}
+
+impl AsMd for SloshDoc {
+    fn as_md(&self) -> String {
+        let mut content = format!(" ### {}\n", self.symbol);
+        //content = content + &format!("- type: {}\n", docs.symbol_type);
+        //content = content + &format!("- namespace: {}\n", docs.namespace);
+        if let Some(usage) = &self.doc_string.usage {
+            content = content + &format!("**Usage:** {}\n\n", usage);
+        }
+        //content = content + &format!("section: {}\n", docs.doc_string.section);
+        content = content + &format!("{}\n", self.doc_string.description);
+        if let Some(example) = &self.doc_string.example {
+            content = content + &format!("Example: \n ```");
+            content = content + &format!("{}", example);
+            content = content + &format!("\n``` \n");
+        } else {
+            content = content + "No Examples\n";
+        }
+        content
+    }
+}
+
 #[derive(Eq, Debug, Clone)]
 struct SloshDoc {
     symbol: String,
@@ -464,6 +489,131 @@ fn doc_map(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
+/// Each doc has a tag in its `Section:` definition by convention that logically groups functions.
+/// Using a HashMap store the section tags as keys and add all slosh docs from to a vector as a value
+/// corresponding to its section.
+fn get_docs_by_section(vm: &mut SloshVm) -> HashMap<String, Vec<SloshDoc>> {
+    let mut docs_by_section: HashMap<String, Vec<SloshDoc>> = HashMap::new();
+    let mut docs: Vec<SloshDoc> = vec![];
+    Namespace::Global.add_docs(&mut docs, vm).unwrap();
+    docs.sort();
+    for d in docs {
+        let d = d.clone();
+        let section = d.doc_string.section.clone();
+        docs_by_section
+            .entry(section)
+            .or_insert_with(|| vec![])
+            .push(d);
+    }
+    docs_by_section
+}
+
+fn build_symbols_list(
+    docs_by_section: &BTreeMap<String, Vec<SloshDoc>>,
+    namer: fn(&String, &SloshDoc) -> String,
+) -> BTreeMap<String, String> {
+    let mut map = BTreeMap::new();
+    for (section, v) in docs_by_section.iter() {
+        let mut list = "".to_string();
+        let len = v.len();
+        for (i, docs) in v.iter().enumerate() {
+            let name = namer(section, docs);
+            list = list + &name;
+
+            if i + 1 != len {
+                list = list + ", ";
+            }
+        }
+        list = list + "\n";
+        map.insert(section.to_string(), list);
+    }
+    map
+}
+
+fn symbol_and_capitalized_symbol(doc: &SloshDoc) -> (String, String) {
+    let sym = doc.symbol.clone();
+    let cap: String = sym
+        .chars()
+        .filter(|c| c.is_alphabetic() || *c == '-')
+        .collect();
+    (sym, cap)
+}
+
+fn name_for_all_page(section: &String, doc: &SloshDoc) -> String {
+    let (s, t) = symbol_and_capitalized_symbol(doc);
+    format!("[{}]({section}.html#{})", s, t)
+}
+
+fn name_for_section_page(_section: &String, doc: &SloshDoc) -> String {
+    let (s, t) = symbol_and_capitalized_symbol(doc);
+    format!("[{}](#{})", s, t)
+}
+
+fn build_all_slosh_forms_listing_chapter(
+    docs_by_section: &BTreeMap<String, Vec<SloshDoc>>,
+) -> VMResult<Chapter> {
+    let mut all_content = "# Slosh Forms\n\n".to_string();
+
+    let sections_len = docs_by_section.keys().len();
+    let mut list = "List of sections: \n\n".to_string();
+    for (i, section) in docs_by_section.keys().enumerate() {
+        list = list + &format!("[{}](#section-{})", section, section);
+        if i + 1 != sections_len {
+            list = list + ", ";
+        }
+    }
+    list = list + "\n\n";
+    all_content = all_content + &list;
+
+    let list = build_symbols_list(docs_by_section, name_for_all_page);
+    for (section, content) in list {
+        let header = format!("## Section: {} \n\n", section);
+        all_content = all_content + &header + &content;
+    }
+
+    let p = make_file("all", &all_content)
+        .map_err(|e| VMError::new_vm(&format!("Failed to write to file: {e}.")))?;
+
+    Ok(Chapter::new("All", all_content, p, vec![]))
+}
+
+fn build_each_docs_section_chapter(
+    docs_by_section: &BTreeMap<String, Vec<SloshDoc>>,
+) -> VMResult<Vec<Chapter>> {
+    let mut sections_as_md_text: BTreeMap<String, String> = BTreeMap::new();
+    let lists = build_symbols_list(docs_by_section, name_for_section_page);
+    for (section, v) in docs_by_section {
+        let mut content = lists.get(section).unwrap().to_owned() + "\n";
+        for docs in v {
+            content = content + &docs.as_md();
+        }
+        content = content + "\n";
+
+        sections_as_md_text.insert(section.to_string(), content.clone());
+    }
+
+    let mut chapters = vec![];
+    for (section, list) in sections_as_md_text.iter() {
+        let mut content = format!("## {}\n\n", section);
+
+        let file = format!("src/section-docs/{}.md", section);
+        // If there is a section file header include it for preprocessing.
+        if fs::metadata(&file).is_ok() {
+            content = content + &format!("{{{{ #include section-docs/{}.md }}}}\n\n\n", section);
+        }
+
+        let header = "List of symbols: \n".to_string();
+        content = content + &header + &list;
+
+        let path = make_file(section, &content)
+            .map_err(|e| VMError::new_vm(&format!("Failed to write to file: {e}.")))?;
+        let capped = capitalize_first(section);
+        let section_chapter = Chapter::new(&capped, content.clone(), &path, vec![]);
+        chapters.push(section_chapter);
+    }
+    Ok(chapters)
+}
+
 fn build_doc(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();
     let path = match i.next() {
@@ -479,108 +629,29 @@ fn build_doc(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let path_buf: PathBuf = path.into();
     let mut md = MDBook::load(path_buf.clone()).expect("Unable to load the book");
 
+    // Add a separator and a title for the new autogenerated section.
     md.book.push_item(BookItem::Separator);
     md.book
         .push_item(BookItem::PartTitle("Slosh Forms".to_string()));
 
-    let mut docs_by_section: BTreeMap<String, Vec<SloshDoc>> = BTreeMap::new();
-    let mut docs: Vec<SloshDoc> = vec![];
-    Namespace::Global.add_docs(&mut docs, vm).unwrap();
-    docs.sort();
-    for d in docs {
-        let d = d.clone();
-        let section = d.doc_string.section.clone();
-        docs_by_section
-            .entry(section)
-            .or_insert_with(|| vec![])
-            .push(d);
+    // get docs by section and then make sure the docs are in alphabetical order
+    let docs_by_section_unsorted = get_docs_by_section(vm);
+    // use a BTreeMap so the sections are in alphabetical order as well as the SloshDoc vec.
+    let mut docs_by_section = BTreeMap::new();
+    for (s, mut v) in docs_by_section_unsorted {
+        v.sort();
+        docs_by_section.insert(s, v);
     }
 
-    let mut sections_as_html: BTreeMap<String, String> = BTreeMap::new();
+    // First chapter introduces each section and lists all the symbols in that section.
+    let all_chapter = build_all_slosh_forms_listing_chapter(&docs_by_section)?;
+    md.book.push_item(BookItem::Chapter(all_chapter));
 
-    let sections_len = docs_by_section.keys().len();
-    let mut all_content = "# Slosh Forms\n\n".to_string();
-
-    let mut list = "List of sections: \n\n".to_string();
-    for (i, section) in docs_by_section.keys().enumerate() {
-        list = list + &format!("[{}](#section-{})", section, section);
-        if i + 1 != sections_len {
-            list = list + ", ";
-        }
-    }
-    list = list + "\n\n";
-    all_content = all_content + &list;
-
-    for section in docs_by_section.keys() {
-        let mut content = format!("## {}\n\n", section);
-
-        let file = format!("src/section-docs/{}.md", section);
-        // If there is a section file header include it for preprocessing.
-        if fs::metadata(&file).is_ok() {
-            content = content + &format!("{{{{ #include section-docs/{}.md }}}}\n\n\n", section);
-        }
-        let v = docs_by_section.get(section).unwrap();
-        let mut symbols_list_on_section_page = "List of symbols: \n".to_string();
-        let mut symbols_list_on_all_page = format!("## Section: {} \n\n", section);
-        let len = v.len();
-        for (i, docs) in v.iter().enumerate() {
-            let s = docs.symbol.clone();
-            let t: String = s
-                .chars()
-                .filter(|c| c.is_alphabetic() || *c == '-')
-                .collect();
-            symbols_list_on_section_page =
-                symbols_list_on_section_page + &format!("[{}](#{})", s, t);
-            symbols_list_on_all_page =
-                symbols_list_on_all_page + &format!("[{}]({section}.html#{})", s, t);
-            if i + 1 != len {
-                symbols_list_on_section_page = symbols_list_on_section_page + ", ";
-                symbols_list_on_all_page = symbols_list_on_all_page + ", ";
-            }
-        }
-        symbols_list_on_section_page = symbols_list_on_section_page + "\n\n";
-        symbols_list_on_all_page = symbols_list_on_all_page + "\n";
-        content = content + &symbols_list_on_section_page;
-
-        for docs in v {
-            content = content + &format!(" ### {}\n", docs.symbol);
-            //content = content + &format!("- type: {}\n", docs.symbol_type);
-            //content = content + &format!("- namespace: {}\n", docs.namespace);
-            if let Some(usage) = docs.doc_string.usage.clone() {
-                content = content + &format!("**Usage:** {}\n\n", usage);
-            }
-            //content = content + &format!("section: {}\n", docs.doc_string.section);
-            content = content + &format!("{}\n", docs.doc_string.description);
-            if let Some(example) = docs.doc_string.example.clone() {
-                content = content + &format!("Example: \n ```");
-                content = content + &format!("{}", example);
-                content = content + &format!("\n``` \n");
-            } else {
-                content = content + "No Examples\n";
-            }
-        }
-        content = content + "\n";
-
-        sections_as_html.insert(section.to_string(), content.clone());
-        all_content = all_content + &symbols_list_on_all_page;
-    }
-
-    let p = make_file("all", &all_content)
-        .map_err(|e| VMError::new_vm(&format!("Failed to write to file: {e}.")))?;
-
-    md.book.push_item(BookItem::Chapter(Chapter::new(
-        "All",
-        all_content,
-        p,
-        vec![],
-    )));
-
-    for (section, content) in sections_as_html.iter() {
-        let path = make_file(section, &content)
-            .map_err(|e| VMError::new_vm(&format!("Failed to write to file: {e}.")))?;
-        let capped = capitalize_first(section);
-        let section_chapter = Chapter::new(&capped, content.clone(), &path, vec![]);
-        md.book.push_item(BookItem::Chapter(section_chapter));
+    // Each subsequent chapter is a section with a list of all of the symbols in that section
+    // followed by a complete list of the documentation for each symbol in that section.
+    let chapters = build_each_docs_section_chapter(&docs_by_section)?;
+    for chapter in chapters {
+        md.book.push_item(BookItem::Chapter(chapter));
     }
 
     md.build().expect("Building failed");
