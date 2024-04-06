@@ -146,7 +146,6 @@ impl Display for Namespace {
     }
 }
 
-#[cfg(any(test, feature = "lisp-test"))]
 impl Namespace {
     fn add_docs(&self, docs: &mut Vec<SloshDoc>, vm: &mut SloshVm) -> DocResult<()> {
         match self {

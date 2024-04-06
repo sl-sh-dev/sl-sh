@@ -10,7 +10,9 @@ regex = { workspace = true }
 lazy_static = { workspace = true }
 bridge_adapters = { path = "../bridge_adapters" }
 slvm = { workspace = true }
+sl-compiler = { workspace = true }
 compile_state = { workspace = true }
+mdbook = "0.4"
 
 [dev-dependencies]
 tempdir = "0.3.7"
