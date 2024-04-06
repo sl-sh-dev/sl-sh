@@ -280,16 +280,16 @@ impl AsMd for SloshDoc {
         //content = content + &format!("- type: {}\n", docs.symbol_type);
         //content = content + &format!("- namespace: {}\n", docs.namespace);
         if let Some(usage) = &self.doc_string.usage {
-            content = content + &format!("**Usage:** {}\n\n", usage);
+            content += &format!("**Usage:** {}\n\n", usage);
         }
         //content = content + &format!("section: {}\n", docs.doc_string.section);
         content = content + &format!("{}\n", self.doc_string.description);
         if let Some(example) = &self.doc_string.example {
-            content = content + &format!("Example: \n ```");
-            content = content + &format!("{}", example);
-            content = content + &format!("\n``` \n");
+            content += &format!("Example:\n```\n");
+            content += &format!("{}", example);
+            content += &format!("\n``` \n");
         } else {
-            content = content + "No Examples\n";
+            content += "No Examples\n";
         }
         content
     }
