@@ -13,6 +13,7 @@ members = [
     "bridge_macros",
     "bridge_types",
     "bridge_adapters",
+    "lisp_test",
 ]
 
 exclude = [ "legacy" ]

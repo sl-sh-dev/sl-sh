@@ -22,7 +22,6 @@ use sl_liner::vi::AlphanumericAndVariableKeywordRule;
 use sl_liner::{keymap, ColorClosure, Context, Prompt};
 
 mod completions;
-mod config;
 pub mod debug;
 mod liner_rules;
 
@@ -33,8 +32,8 @@ mod shell_builtins;
 use crate::completions::ShellCompleter;
 use crate::liner_rules::make_editor_rules;
 use crate::shell_builtins::add_shell_builtins;
-use config::*;
 use debug::*;
+use shell::config::get_config;
 use shell::platform::{Platform, Sys, STDIN_FILENO};
 use sl_compiler::load_eval::{load_internal, SLSHRC};
 use sl_compiler::pass1::pass1;

@@ -552,6 +552,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "01cda141df6706de531b6c46c3a33ecca755538219bd484262fa09410c13539c"
 
 [[package]]
+name = "lisp_test"
+version = "0.10.0"
+dependencies = [
+ "bridge_adapters",
+ "compile_state",
+ "compiler_test_utils",
+ "lazy_static",
+ "regex",
+ "sl-compiler",
+ "slosh_lib",
+ "slvm",
+ "temp-env",
+ "tempdir",
+]
+
+[[package]]
 name = "lock_api"
 version = "0.4.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"

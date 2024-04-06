@@ -1,11 +1,6 @@
+use shell::config::Config;
 use std::env;
 use std::ffi::OsString;
-
-pub struct Config {
-    pub command: Option<String>,
-    pub script: Option<String>,
-    pub args: Vec<String>,
-}
 
 pub const VERSION_STRING: &str = env!("VERSION_STRING");
 

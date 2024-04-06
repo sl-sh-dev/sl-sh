@@ -1,13 +1,13 @@
 use std::env;
 use std::ffi::OsString;
 
+pub const VERSION_STRING: &str = env!("VERSION_STRING");
+
 pub struct Config {
     pub command: Option<String>,
     pub script: Option<String>,
     pub args: Vec<String>,
 }
-
-pub const VERSION_STRING: &str = env!("VERSION_STRING");
 
 const HELP: &str = r#"sl-sh - Simple Lisp Shell
 Start the sl-sh shell.
@@ -29,10 +29,6 @@ fn help(_name: &str) {
     println!("{}", HELP);
 }
 
-fn version() {
-    println!("{}", VERSION_STRING);
-}
-
 fn get_arg(exe_name: &str, args: &mut Vec<OsString>) -> Option<String> {
     if let Some(argument) = args.pop() {
         if let Ok(arg) = argument.into_string() {
@@ -41,6 +37,10 @@ fn get_arg(exe_name: &str, args: &mut Vec<OsString>) -> Option<String> {
     }
     help(exe_name);
     None
+}
+
+fn version() {
+    println!("{}", VERSION_STRING);
 }
 
 pub fn get_config() -> Option<Config> {
