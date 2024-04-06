@@ -562,6 +562,24 @@ Example:
          `(if ~@(make-cond (first (first branches)) (rest (first branches)) (rest branches)))))))
 
 #%
+Usage: (when provided-condition if-true)
+
+when is a convenience function used to check a form, provided-condition,
+and run some form, if-true, if provided-condition evaluates to true.
+
+Section: conditional
+
+Example:
+(assert-true (when #t #t))
+(assert-false (when #t nil))
+(assert-false (when nil nil))
+%#
+
+(defmacro when
+    (provided-condition if-true)
+    `(if ~provided-condition ~if-true))
+
+#%
 Does nothing for now, namespaces aren't yet implemented.
 
 Section: core
