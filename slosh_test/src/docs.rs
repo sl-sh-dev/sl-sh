@@ -623,11 +623,9 @@ fn build_doc(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         Some(v) => match v {
             Value::String(s) => Ok(vm.get_string(*s)),
             Value::StringConst(i) => Ok(vm.get_interned(*i)),
-            v =>
-                Err(VMError::new_vm(
-                    "argument must be a string to a valid filepath".to_string(),
-                ))
-
+            _ => Err(VMError::new_vm(
+                "argument must be a string to a valid filepath".to_string(),
+            )),
         },
     }?;
 
