@@ -1,4 +1,4 @@
-#!/usr/bin/env lisp_test
+#!/usr/bin/env slosh_test
 
 (load "core.slosh")
 
