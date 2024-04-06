@@ -3,7 +3,7 @@ use std::process::Command;
 use tempdir::TempDir;
 
 pub fn get_slosh_exe() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_slosh"))
+    PathBuf::from(env!("CARGO_BIN_EXE_slosh_test"))
 }
 
 // To run all tests in this executable
@@ -17,7 +17,7 @@ pub fn get_slosh_exe() -> PathBuf {
 /// look at all these amazing [environment variables](https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates)!
 /// EXE only works [with integration tests](https://doc.rust-lang.org/rust-by-example/testing/integration_testing.html)
 /// To Execute:
-///     cargo test --package slosh --test slosh-tests run_slosh_tests -- --exact
+///     cargo test --package slosh_test --test slosh-tests run_slosh_tests -- --exact
 ///
 fn run_slosh_tests() {
     let test_script = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("run-tests.slosh");
