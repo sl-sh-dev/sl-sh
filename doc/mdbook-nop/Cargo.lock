@@ -495,6 +495,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "getopts"
+version = "0.2.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "14dbbfd5c71d70241ecf9e6f13737f7b5ce823821063188d7e46c41d371eebd5"
+dependencies = [
+ "unicode-width",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.2.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -894,6 +903,8 @@ dependencies = [
  "env_logger",
  "log",
  "mdbook",
+ "pulldown-cmark",
+ "pulldown-cmark-to-cmark",
  "semver",
  "serde_json",
 ]
@@ -1209,6 +1220,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f0530d13d87d1f549b66a3e8d0c688952abe5994e204ed62615baaf25dc029c"
 dependencies = [
  "bitflags 2.5.0",
+ "getopts",
  "memchr",
  "pulldown-cmark-escape",
  "unicase",
@@ -1219,6 +1231,15 @@ name = "pulldown-cmark-escape"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d5d8f9aa0e3cbcfaf8bf00300004ee3b72f74770f9cbac93f6928771f613276b"
+
+[[package]]
+name = "pulldown-cmark-to-cmark"
+version = "13.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f609795c8d835f79dcfcf768415b9fb57ef1b74891e99f86e73f43a7a257163b"
+dependencies = [
+ "pulldown-cmark",
+]
 
 [[package]]
 name = "quote"
@@ -1734,6 +1755,12 @@ checksum = "a56d1686db2308d901306f92a263857ef59ea39678a5458e7cb17f01415101f5"
 dependencies = [
  "tinyvec",
 ]
+
+[[package]]
+name = "unicode-width"
+version = "0.1.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e51733f11c9c4f72aa0c160008246859e340b00807569a0da0e7a1079b27ba85"
 
 [[package]]
 name = "url"
