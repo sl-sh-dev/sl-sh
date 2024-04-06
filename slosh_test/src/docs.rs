@@ -199,10 +199,10 @@ impl Display for DocStringSection {
 impl DocStringSection {
     pub fn from_symbol(slot: u32, sym: Value, vm: &mut SloshVm) -> DocResult<DocStringSection> {
         let docstring_key = vm.intern_static("doc-string");
-        let sym_str = sym.display_value(&vm);
+        let sym_str = sym.display_value(vm);
         let raw_doc_string = vm
             .get_global_property(slot, docstring_key)
-            .map_or(None, |x| match x {
+            .and_then(|x| match x {
                 Value::String(h) => Some(vm.get_string(h).to_string()),
                 Value::StringConst(i) => Some(vm.get_interned(i).to_string()),
                 _ => None,
@@ -220,14 +220,15 @@ impl DocStringSection {
         raw_doc_string: String,
         backup_usage: String,
     ) -> DocResult<DocStringSection> {
+        let sym_text = symbol.as_str().to_string();
         let cap = DOC_REGEX.captures(raw_doc_string.as_str()).ok_or_else(|| {
             if EXEMPTIONS.contains(symbol.as_str()) {
                 DocError::ExemptFromProperDocString {
-                    symbol: symbol.to_owned().to_string(),
+                    symbol: sym_text.clone(),
                 }
             } else {
                 DocError::NoDocString {
-                    symbol: symbol.to_owned().to_string(),
+                    symbol: sym_text.clone(),
                 }
             }
         })?;
@@ -238,14 +239,14 @@ impl DocStringSection {
         let description = cap
             .get(3)
             .ok_or_else(|| DocError::DocStringMissingSection {
-                symbol: symbol.to_owned().to_string(),
+                symbol: sym_text.clone(),
                 section: "Description".to_string(),
             })
             .map(|x| x.as_str().to_string())?;
         let section = cap
             .get(4)
             .ok_or_else(|| DocError::DocStringMissingSection {
-                symbol: symbol.to_owned().to_string(),
+                symbol: sym_text,
                 section: "Section".to_string(),
             })
             .map(|x| x.as_str().trim().to_string())?;
@@ -290,8 +291,7 @@ impl PartialEq for SloshDoc {
 
 impl PartialOrd for SloshDoc {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.fully_qualified_name()
-            .partial_cmp(&other.fully_qualified_name())
+        Some(self.cmp(other))
     }
 }
 
@@ -308,8 +308,8 @@ impl SloshDoc {
         let slot = vm.global_intern_slot(g);
         if let Some(slot) = slot {
             let doc_string = DocStringSection::from_symbol(slot, sym, vm)?;
-            let symbol = sym.display_value(&vm);
-            let symbol_type = sym.display_type(&vm).to_string();
+            let symbol = sym.display_value(vm);
+            let symbol_type = sym.display_type(vm).to_string();
             Ok(SloshDoc {
                 symbol,
                 symbol_type,
@@ -437,7 +437,7 @@ impl SlFrom<SloshDoc> for HashMap<Value, Value> {
 
 impl SlFrom<SloshDoc> for Value {
     fn sl_from(value: SloshDoc, vm: &mut SloshVm) -> VMResult<Self> {
-        let map = HashMap::sl_from(value, vm)?.into();
+        let map = HashMap::sl_from(value, vm)?;
         Ok(vm.alloc_map(map))
     }
 }

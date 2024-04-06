@@ -10,6 +10,8 @@ pub struct Config {
     pub globals_post: bool,
 }
 
+pub const VERSION_STRING: &str = env!("VERSION_STRING");
+
 const HELP: &str = r#"sl-compiler - Simple Lisp Compiler
 Run sl-compiler.
 
@@ -33,6 +35,10 @@ fn help(_name: &str) {
     println!("{HELP}");
 }
 
+fn version() {
+    println!("{VERSION_STRING}");
+}
+
 fn get_arg(exe_name: &str, args: &mut Vec<OsString>) -> Option<String> {
     if let Some(argument) = args.pop() {
         if let Ok(arg) = argument.into_string() {
@@ -43,7 +49,7 @@ fn get_arg(exe_name: &str, args: &mut Vec<OsString>) -> Option<String> {
     None
 }
 
-pub fn get_config(version: String) -> Option<Config> {
+pub fn get_config() -> Option<Config> {
     let mut script: Option<String> = None;
     let mut command_args: Vec<String> = Vec::new();
 
@@ -71,7 +77,7 @@ pub fn get_config(version: String) -> Option<Config> {
                         run = true;
                     }
                     "-v" | "--version" => {
-                        println!("{}", version);
+                        version();
                         return None;
                     }
                     "-h" | "--help" => {
