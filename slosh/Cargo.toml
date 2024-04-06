@@ -5,7 +5,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-lisp-test = ["dep:regex", "dep:lazy_static", "dep:mdbook"]
+lisp-test = ["dep:regex", "dep:lazy_static", "dep:mdbook", "dep:env_logger"]
 
 [dependencies]
 unicode_reader = "1"
@@ -23,6 +23,7 @@ glob = "0.3"
 regex = { workspace = true, optional = true }
 lazy_static = { workspace = true, optional = true }
 mdbook = { workspace = true, optional = true }
+env_logger = { version = "0.11.3", optional = true }
 
 [dev-dependencies]
 tempdir = "0.3.7"
