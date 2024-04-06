@@ -12,5 +12,7 @@ anyhow = "*"
 serde_json = "*"
 env_logger = "*"
 log = "*"
+pulldown-cmark = "0.10.2"
+pulldown-cmark-to-cmark = "13.0.0"
 
 [workspace]

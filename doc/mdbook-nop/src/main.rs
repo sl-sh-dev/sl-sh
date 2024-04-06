@@ -1,6 +1,13 @@
+extern crate pulldown_cmark;
+extern crate pulldown_cmark_to_cmark;
+
+use pulldown_cmark::{Event, Parser, Tag, TagEnd};
+use pulldown_cmark_to_cmark::cmark;
+
 use crate::nop_lib::Nop;
+use anyhow::Context;
 use clap::{Arg, ArgMatches, Command};
-use mdbook::book::Book;
+use mdbook::book::{Book, BookItem};
 use mdbook::errors::Error;
 use mdbook::preprocess::{CmdPreprocessor, Preprocessor, PreprocessorContext};
 use semver::{Version, VersionReq};
@@ -72,6 +79,7 @@ fn handle_supports(pre: &dyn Preprocessor, sub_args: &ArgMatches) -> ! {
 /// in your main `lib.rs` file.
 mod nop_lib {
     use super::*;
+    use pulldown_cmark::CodeBlockKind;
 
     /// A no-op preprocessor.
     pub struct Nop;
@@ -87,7 +95,7 @@ mod nop_lib {
             "nop-preprocessor"
         }
 
-        fn run(&self, ctx: &PreprocessorContext, book: Book) -> Result<Book, Error> {
+        fn run(&self, ctx: &PreprocessorContext, mut book: Book) -> Result<Book, Error> {
             // In testing we want to tell the preprocessor to blow up by setting a
             // particular config value
             if let Some(nop_cfg) = ctx.config.get_preprocessor(self.name()) {
@@ -95,9 +103,45 @@ mod nop_lib {
                     anyhow::bail!("Boom!!1!");
                 }
             }
-            log::debug!("Nop!");
 
-            // we *are* a no-op preprocessor after all
+            book.for_each_mut(|bi: &mut BookItem| match bi {
+                BookItem::Separator | BookItem::PartTitle(_) => {}
+                BookItem::Chapter(chapter) => {
+                    let mut tracking = false;
+                    let mut buf = String::new();
+                    let mut events = vec![];
+                    for event in Parser::new(&chapter.content) {
+                        //log::debug!("{:?}", event);
+                        match event {
+                            Event::Start(Tag::CodeBlock(ref kind)) => match kind {
+                                CodeBlockKind::Fenced(name) if !tracking => {
+                                    if name.starts_with("slosh") && !name.contains("no-execute") {
+                                        log::debug!("SLOSHIT!: {}", chapter.name);
+                                        tracking = true;
+                                    }
+                                }
+                                CodeBlockKind::Fenced(_) | CodeBlockKind::Indented => {}
+                            },
+                            Event::Text(ref c) if tracking => {
+                                buf += c.as_ref();
+                            }
+                            Event::End(TagEnd::CodeBlock) if tracking => {
+                                let eval = "eval!";
+                                buf += "\n=> ";
+                                buf += eval;
+                                buf += "\n";
+                                tracking = false;
+                                log::debug!("Found buf: {}", buf);
+                                events.push(Event::Text(buf.clone().into()));
+                                buf.clear();
+                            }
+                            _ => {}
+                        }
+                        events.push(event);
+                    }
+                }
+            });
+
             Ok(book)
         }
 

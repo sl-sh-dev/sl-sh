@@ -9,3 +9,7 @@ title = "Slosh Documentation"
 #after = ["links"]
 
 [preprocessor.nop]
+after = ["links"]
+
+[nop]
+blow-up = "blow-up"

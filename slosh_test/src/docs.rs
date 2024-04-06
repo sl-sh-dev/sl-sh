@@ -5,9 +5,9 @@ use lazy_static::lazy_static;
 use mdbook::book::Chapter;
 use mdbook::{BookItem, MDBook};
 use regex::{Regex, RegexBuilder};
-use slvm::vm_hashmap::VMHashMap;
 use sl_compiler::load_eval::run_reader;
 use sl_compiler::Reader;
+use slvm::vm_hashmap::VMHashMap;
 use slvm::VMErrorObj::Message;
 use slvm::{Interned, VMError, VMResult, Value};
 use std::borrow::Cow;
@@ -145,7 +145,6 @@ impl Display for Namespace {
     }
 }
 
-#[cfg(any(test, feature = "lisp-test"))]
 impl Namespace {
     fn add_docs(&self, docs: &mut Vec<SloshDoc>, vm: &mut SloshVm) -> DocResult<()> {
         match self {
