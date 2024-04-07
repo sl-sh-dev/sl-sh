@@ -9,6 +9,7 @@ the `doc/book` subdirectory it makes can be blown away after each invocation of 
 # in `./doc` subdirectory
 rm -rf ./book/*
 ./mk-site.sh
+# generated site entrypoint at `./book/index.html`
 ```
 
 
@@ -20,7 +21,8 @@ an html file in the format specified in the SUMMARY.md table of contents at the 
 2. Docs from functions are automatically added to the chapter corresponding to their section.
 3. md files in `./src/section-docs/` named after a given section are automatically included in the paragraph
 immediately below the section's header for that chapter when docs are generated.
-4. All code blocks marked in html with  the slosh will be evaluated by the slosh preprocessor
+4. All code blocks marked in html with  the `slosh` tag (three backticks indicating code block start
+immediately followed by the string `slosh`) will be evaluated by the slosh preprocessor
 and the return value will be added to the bottom of the code block, e.g.
 some-file.md
 ```slosh
