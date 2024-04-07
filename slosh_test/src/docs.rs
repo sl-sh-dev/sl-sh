@@ -284,9 +284,9 @@ impl AsMd for SloshDoc {
         //content = content + &format!("section: {}\n", docs.doc_string.section);
         content = content + &format!("{}\n", self.doc_string.description);
         if let Some(example) = &self.doc_string.example {
-            content += &format!("Example:\n```\n");
-            content += &format!("{}", example);
-            content += &format!("\n``` \n");
+            content += "Example:\n```\n";
+            content += example;
+            content += "\n``` \n";
         } else {
             content += "No Examples\n";
         }
@@ -501,31 +501,28 @@ fn get_docs_by_section(vm: &mut SloshVm) -> HashMap<String, Vec<SloshDoc>> {
     for d in docs {
         let d = d.clone();
         let section = d.doc_string.section.clone();
-        docs_by_section
-            .entry(section)
-            .or_insert_with(|| vec![])
-            .push(d);
+        docs_by_section.entry(section).or_default().push(d);
     }
     docs_by_section
 }
 
 fn build_symbols_list(
     docs_by_section: &BTreeMap<String, Vec<SloshDoc>>,
-    namer: fn(&String, &SloshDoc) -> String,
+    namer: fn(&str, &SloshDoc) -> String,
 ) -> BTreeMap<String, String> {
     let mut map = BTreeMap::new();
     for (section, v) in docs_by_section.iter() {
         let mut list = "".to_string();
         let len = v.len();
         for (i, docs) in v.iter().enumerate() {
-            let name = namer(section, docs);
-            list = list + &name;
+            let name = namer(section.as_ref(), docs);
+            list += &name;
 
             if i + 1 != len {
-                list = list + ", ";
+                list += ", ";
             }
         }
-        list = list + "\n";
+        list += "\n";
         map.insert(section.to_string(), list);
     }
     map
@@ -540,12 +537,12 @@ fn symbol_and_capitalized_symbol(doc: &SloshDoc) -> (String, String) {
     (sym, cap)
 }
 
-fn name_for_all_page(section: &String, doc: &SloshDoc) -> String {
+fn name_for_all_page(section: &str, doc: &SloshDoc) -> String {
     let (s, t) = symbol_and_capitalized_symbol(doc);
     format!("[{}]({section}.html#{})", s, t)
 }
 
-fn name_for_section_page(_section: &String, doc: &SloshDoc) -> String {
+fn name_for_section_page(_section: &str, doc: &SloshDoc) -> String {
     let (s, t) = symbol_and_capitalized_symbol(doc);
     format!("[{}](#{})", s, t)
 }
@@ -560,20 +557,20 @@ fn build_all_slosh_forms_listing_chapter(
     for (i, section) in docs_by_section.keys().enumerate() {
         list = list + &format!("[{}](#section-{})", section, section);
         if i + 1 != sections_len {
-            list = list + ", ";
+            list += ", ";
         }
     }
-    list = list + "\n\n";
-    all_content = all_content + &list;
+    list += "\n\n";
+    all_content += &list;
 
     let list = build_symbols_list(docs_by_section, name_for_all_page);
     for (section, content) in list {
         let header = format!("## Section: {} \n\n", section);
-        all_content = all_content + &header + &content;
+        all_content += &(header + &content);
     }
 
     let p = make_file("all", &all_content)
-        .map_err(|e| VMError::new_vm(&format!("Failed to write to file: {e}.")))?;
+        .map_err(|e| VMError::new_vm(format!("Failed to write to file: {e}.")))?;
 
     Ok(Chapter::new("All", all_content, p, vec![]))
 }
@@ -588,7 +585,7 @@ fn build_each_docs_section_chapter(
         for docs in v {
             content = content + &docs.as_md();
         }
-        content = content + "\n";
+        content += "\n";
 
         sections_as_md_text.insert(section.to_string(), content.clone());
     }
@@ -607,7 +604,7 @@ fn build_each_docs_section_chapter(
         content = content + &header + &list;
 
         let path = make_file(section, &content)
-            .map_err(|e| VMError::new_vm(&format!("Failed to write to file: {e}.")))?;
+            .map_err(|e| VMError::new_vm(format!("Failed to write to file: {e}.")))?;
         let capped = capitalize_first(section);
         let section_chapter = Chapter::new(&capped, content.clone(), &path, vec![]);
         chapters.push(section_chapter);
