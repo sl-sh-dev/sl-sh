@@ -129,9 +129,18 @@ mod slosh_eval_lib {
                             }
                             Event::End(TagEnd::CodeBlock) if tracking => {
                                 let eval = exec_code(buf.clone());
-                                buf += "\n=> ";
-                                buf += &eval;
+                                let mut first = true;
                                 buf += "\n";
+                                for line in eval.lines() {
+                                    if first {
+                                        buf += ";; => ";
+                                        first = false;
+                                    } else {
+                                        buf += ";;    ";
+                                    }
+                                    buf += line;
+                                    buf += "\n";
+                                }
                                 tracking = false;
                                 log::debug!("New Code Block: {}", buf);
                                 events.push(Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(
