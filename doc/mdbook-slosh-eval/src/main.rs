@@ -1,7 +1,7 @@
 extern crate pulldown_cmark;
 extern crate pulldown_cmark_to_cmark;
 
-use crate::nop_lib::Nop;
+use crate::slosh_eval_lib::EvalSlosh;
 use clap::{Arg, ArgMatches, Command};
 use mdbook::book::{Book, BookItem};
 use mdbook::errors::Error;
@@ -13,7 +13,7 @@ use std::io;
 use std::process;
 
 pub fn make_app() -> Command {
-    Command::new("mdbook-nop")
+    Command::new("mdbook-slosh-eval")
         .about("A mdbook preprocessor which does precisely nothing")
         .subcommand(
             Command::new("supports")
@@ -27,7 +27,7 @@ fn main() {
     let matches = make_app().get_matches();
 
     // Users will want to construct their own preprocessor here
-    let preprocessor = Nop::new();
+    let preprocessor = EvalSlosh::new();
 
     if let Some(sub_args) = matches.subcommand_matches("supports") {
         handle_supports(&preprocessor, sub_args);
@@ -73,33 +73,43 @@ fn handle_supports(pre: &dyn Preprocessor, sub_args: &ArgMatches) -> ! {
     }
 }
 
-/// The actual implementation of the `Nop` preprocessor. This would usually go
+/// The actual implementation of the `EvalSlosh` preprocessor. This would usually go
 /// in your main `lib.rs` file.
-mod nop_lib {
+mod slosh_eval_lib {
     use super::*;
     use pulldown_cmark::CodeBlockKind;
     use slosh_lib::{new_slosh_vm_with_builtins, run_reader, Reader};
 
     /// A no-op preprocessor.
-    pub struct Nop;
+    pub struct EvalSlosh;
 
-    impl Nop {
-        pub fn new() -> Nop {
-            Nop
+    impl EvalSlosh {
+        pub fn new() -> EvalSlosh {
+            EvalSlosh
         }
     }
 
-    impl Preprocessor for Nop {
+    impl Preprocessor for EvalSlosh {
         fn name(&self) -> &str {
-            "nop-preprocessor"
+            "slosh-eval"
         }
 
         fn run(&self, ctx: &PreprocessorContext, mut book: Book) -> Result<Book, Error> {
             // In testing we want to tell the preprocessor to blow up by setting a
             // particular config value
-            if let Some(nop_cfg) = ctx.config.get_preprocessor(self.name()) {
-                if nop_cfg.contains_key("blow-up") {
+            let mut capture_prn = false;
+            if let Some(slosh_eval_cfg) = ctx.config.get_preprocessor(self.name()) {
+                if slosh_eval_cfg.contains_key("blow-up") {
                     anyhow::bail!("Boom!!1!");
+                } else if slosh_eval_cfg.contains_key("capture-prn") {
+                    if let Some(val) = slosh_eval_cfg.get("capture_prn") {
+                        match val {
+                            toml::value::Value::Boolean(b) => {
+                                capture_prn = *b;
+                            }
+                            _ => {}
+                        }
+                    }
                 }
             }
 
@@ -127,7 +137,7 @@ mod nop_lib {
                                 buf += c.as_ref();
                             }
                             Event::End(TagEnd::CodeBlock) if tracking => {
-                                let eval = exec_code(buf.clone());
+                                let eval = exec_code(buf.clone(), capture_prn);
                                 buf += "\n=> ";
                                 buf += &eval;
                                 buf += "\n";
@@ -150,8 +160,18 @@ mod nop_lib {
                         }
                     }
                     let mut buf = String::new();
-                    cmark(events.iter(), &mut buf).unwrap();
-                    chapter.content = buf;
+                    let ret = cmark(events.iter(), &mut buf);
+                    match ret {
+                        Ok(_) => {
+                            chapter.content = buf;
+                        }
+                        Err(e) => {
+                            chapter.content = format!(
+                                "# Error in slosh eval pre processor {}.\n\n{}",
+                                e, &chapter.content
+                            );
+                        }
+                    }
                 }
             });
 
@@ -163,18 +183,20 @@ mod nop_lib {
         }
     }
 
-    fn exec_code(code: String) -> String {
+    fn exec_code(code: String, capture_prn: bool) -> String {
         let mut vm = new_slosh_vm_with_builtins();
 
-        //TODO use dyn to make prn do something else?
-        // write to a buffer or something?
         let mut reader =
             Reader::from_string(r#"(load "core.slosh")"#.to_string(), &mut vm, "", 1, 0);
-        let code = format!(
-            r#"(def *prn* "")
+        let code = if capture_prn {
+            format!(
+                r#"(def *prn* "")
                (dyn prn (fn (&rest) (set! *prn* (str *prn* &rest))) (do {}))"#,
-            code
-        );
+                code
+            )
+        } else {
+            format!("(do {})", code)
+        };
         _ = run_reader(&mut reader).unwrap();
         let mut reader = Reader::from_string(code, &mut vm, "", 1, 0);
         let s = run_reader(&mut reader)
@@ -182,60 +204,6 @@ mod nop_lib {
             .map_err(|e| format!("Encountered error: {}", e));
         match s {
             Ok(s) | Err(s) => s,
-        }
-    }
-
-    #[cfg(test)]
-    mod test {
-        use super::*;
-
-        #[test]
-        fn nop_preprocessor_run() {
-            let input_json = r##"[
-                {
-                    "root": "/path/to/book",
-                    "config": {
-                        "book": {
-                            "authors": ["AUTHOR"],
-                            "language": "en",
-                            "multilingual": false,
-                            "src": "src",
-                            "title": "TITLE"
-                        },
-                        "preprocessor": {
-                            "nop": {}
-                        }
-                    },
-                    "renderer": "html",
-                    "mdbook_version": "0.4.21"
-                },
-                {
-                    "sections": [
-                        {
-                            "Chapter": {
-                                "name": "Chapter 1",
-                                "content": "# Chapter 1\n",
-                                "number": [1],
-                                "sub_items": [],
-                                "path": "chapter_1.md",
-                                "source_path": "chapter_1.md",
-                                "parent_names": []
-                            }
-                        }
-                    ],
-                    "__non_exhaustive": null
-                }
-            ]"##;
-            let input_json = input_json.as_bytes();
-
-            let (ctx, book) = mdbook::preprocess::CmdPreprocessor::parse_input(input_json).unwrap();
-            let expected_book = book.clone();
-            let result = Nop::new().run(&ctx, book);
-            assert!(result.is_ok());
-
-            // The nop-preprocessor should not have made any changes to the book content.
-            let actual_book = result.unwrap();
-            assert_eq!(actual_book, expected_book);
         }
     }
 }

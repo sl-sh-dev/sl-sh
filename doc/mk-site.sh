@@ -12,12 +12,12 @@ mkdir src/rust-docs
 cargo doc --target-dir src/rust-docs
 
 # make the symlinks work
-pushd "mdbook-nop"
+pushd "mdbook-slosh-eval"
 cargo build
 popd
 
 cargo build --workspace
 
-export PATH="$PATH:./mdbook-nop/target/debug"
+export PATH="$PATH:./mdbook-slosh-eval/target/debug"
 
 ../target/debug/slosh_test -c "(build-doc \"${PWD}\")"

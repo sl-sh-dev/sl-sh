@@ -8,12 +8,9 @@ Consider invocations like
 `(assert-equal 1 2)`
 these are translated to different opcodes and equality implementations as listed below
 
-```rust
-let x = 42i64;
-```
-
 ```slosh
-((fn () 42))
+(def x 42)
+((fn () x))
 ```
 
 -   `equal?`
