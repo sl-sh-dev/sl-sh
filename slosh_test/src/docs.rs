@@ -286,7 +286,7 @@ impl AsMd for SloshDoc {
             content += example;
             content += "\n``` \n";
         } else {
-            content += "No Examples\n";
+            content += "\n\nNo Examples\n";
         }
         content
     }
