@@ -1,15 +1,13 @@
 extern crate pulldown_cmark;
 extern crate pulldown_cmark_to_cmark;
 
-use pulldown_cmark::{Event, Parser, Tag, TagEnd};
-use pulldown_cmark_to_cmark::cmark;
-
 use crate::nop_lib::Nop;
-use anyhow::Context;
 use clap::{Arg, ArgMatches, Command};
 use mdbook::book::{Book, BookItem};
 use mdbook::errors::Error;
 use mdbook::preprocess::{CmdPreprocessor, Preprocessor, PreprocessorContext};
+use pulldown_cmark::{Event, Parser, Tag, TagEnd};
+use pulldown_cmark_to_cmark::cmark;
 use semver::{Version, VersionReq};
 use std::io;
 use std::process;
@@ -80,6 +78,7 @@ fn handle_supports(pre: &dyn Preprocessor, sub_args: &ArgMatches) -> ! {
 mod nop_lib {
     use super::*;
     use pulldown_cmark::CodeBlockKind;
+    use slosh_lib::{new_slosh_vm_with_builtins, run_reader, Reader};
 
     /// A no-op preprocessor.
     pub struct Nop;
@@ -111,12 +110,14 @@ mod nop_lib {
                     let mut buf = String::new();
                     let mut events = vec![];
                     for event in Parser::new(&chapter.content) {
-                        //log::debug!("{:?}", event);
                         match event {
                             Event::Start(Tag::CodeBlock(ref kind)) => match kind {
                                 CodeBlockKind::Fenced(name) if !tracking => {
                                     if name.starts_with("slosh") && !name.contains("no-execute") {
-                                        log::debug!("SLOSHIT!: {}", chapter.name);
+                                        log::debug!(
+                                            "Evaluate slosh code in chapter: {}",
+                                            chapter.name
+                                        );
                                         tracking = true;
                                     }
                                 }
@@ -126,19 +127,31 @@ mod nop_lib {
                                 buf += c.as_ref();
                             }
                             Event::End(TagEnd::CodeBlock) if tracking => {
-                                let eval = "eval!";
+                                let eval = exec_code(buf.clone());
                                 buf += "\n=> ";
-                                buf += eval;
+                                buf += &eval;
                                 buf += "\n";
                                 tracking = false;
-                                log::debug!("Found buf: {}", buf);
+                                log::debug!("New Code Block: {}", buf);
+                                events.push(Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(
+                                    "slosh".into(),
+                                ))));
                                 events.push(Event::Text(buf.clone().into()));
+                                events.push(Event::End(TagEnd::CodeBlock));
                                 buf.clear();
                             }
                             _ => {}
                         }
-                        events.push(event);
+                        // If we are tracking some slosh code block we do not want to add the original
+                        // code block to the event stream because we are going copy that code block and
+                        // append its output to the end and write that to events.
+                        if !tracking {
+                            events.push(event);
+                        }
                     }
+                    let mut buf = String::new();
+                    cmark(events.iter(), &mut buf).unwrap();
+                    chapter.content = buf;
                 }
             });
 
@@ -147,6 +160,28 @@ mod nop_lib {
 
         fn supports_renderer(&self, renderer: &str) -> bool {
             renderer != "not-supported"
+        }
+    }
+
+    fn exec_code(code: String) -> String {
+        let mut vm = new_slosh_vm_with_builtins();
+
+        //TODO use dyn to make prn do something else?
+        // write to a buffer or something?
+        let mut reader =
+            Reader::from_string(r#"(load "core.slosh")"#.to_string(), &mut vm, "", 1, 0);
+        let code = format!(
+            r#"(def *prn* "")
+               (dyn prn (fn (&rest) (set! *prn* (str *prn* &rest))) (do {}))"#,
+            code
+        );
+        _ = run_reader(&mut reader).unwrap();
+        let mut reader = Reader::from_string(code, &mut vm, "", 1, 0);
+        let s = run_reader(&mut reader)
+            .map(|x| x.display_value(&mut vm))
+            .map_err(|e| format!("Encountered error: {}", e));
+        match s {
+            Ok(s) | Err(s) => s,
         }
     }
 

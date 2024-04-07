@@ -10,10 +10,11 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::{env, fs};
 
+pub use sl_compiler::{compile, new_slosh_vm, new_slosh_vm_with_builtins, Reader};
+
 use slvm::opcodes::*;
 
 use compile_state::state::*;
-use sl_compiler::compile::*;
 use sl_compiler::reader::*;
 
 use builtins::add_global_value;

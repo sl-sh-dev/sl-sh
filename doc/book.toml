@@ -8,5 +8,5 @@ title = "Slosh Documentation"
 [preprocessor.nop]
 after = ["links"]
 
-[nop]
-blow-up = "blow-up"
+#[nop]
+#blow-up = "blow-up"
