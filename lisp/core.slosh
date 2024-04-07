@@ -4,7 +4,7 @@ True if the expression is nil, false otherwise
 
 Section: type
 %#
-(def nil? (fn (v) (eq? (type v) :Nil)))
+(def nil? (fn (v) (identical? (type v) :Nil)))
 
 #%
 Usage: (pair? expression)
@@ -21,7 +21,7 @@ Example:
 (test::assert-false (pair? [1 2 3]))
 (test::assert-false (pair? (vec)))
 %#
-(def pair? (fn (v) (eq? (type v) :Pair)))
+(def pair? (fn (v) (identical? (type v) :Pair)))
 
 #%
 Usage: (string? expression)
@@ -34,7 +34,7 @@ Example:
 (test::assert-true (string? "string"))
 (test::assert-false (string? 1))
 %#
-(def string? (fn (v) (eq? (type v) :String)))
+(def string? (fn (v) (identical? (type v) :String)))
 
 #%
 Usage: (symbol? expression)
@@ -47,7 +47,7 @@ Example:
 (test::assert-true (symbol? 'symbol))
 (test::assert-false (symbol? 1))
 %#
-(def symbol? (fn (v) (eq? (type v) :Symbol)))
+(def symbol? (fn (v) (identical? (type v) :Symbol)))
 
 #%
 Usage: (vec? expression)
@@ -64,7 +64,7 @@ Example:
 (test::assert-false (vec? '(1 2 3)))
 (test::assert-false (vec? (list)))
 %#
-(def vec? (fn (v) (eq? (type v) :Vector)))
+(def vec? (fn (v) (identical? (type v) :Vector)))
 
 #%
 Usage: (list? expression)
@@ -134,13 +134,13 @@ Section: type
 
 True if the to-test can be called as the first argument in an expression.
 %#
-(def callable? (fn (v) (let (t (type v))(or (eq? t :Lambda)
-                                             (eq? t :Continuation)
-                                             (eq? t :Special)
-                                             (eq? t :Builtin)
-                                             (eq? t :Map)
-                                             (eq? t :Vector)
-                                             (eq? t :Pair)))))
+(def callable? (fn (v) (let (t (type v))(or (identical? t :Lambda)
+                                             (identical? t :Continuation)
+                                             (identical? t :Special)
+                                             (identical? t :Builtin)
+                                             (identical? t :Map)
+                                             (identical? t :Vector)
+                                             (identical? t :Pair)))))
 
 #%
 Usage: (defmacro name doc_string? argument_list body)
@@ -465,7 +465,7 @@ Example:
 %#
 (defmacro seq-for
   (bind in items & body)
-  (if (not (eq? in 'in)) (err "Invalid seq-for: (for [i] in [sequence] (body))"))
+  (if (not (identical? in 'in)) (err "Invalid seq-for: (for [i] in [sequence] (body))"))
     (let (lst (gensym))
     `(let-while (~lst ~items) (~bind (first ~lst), done (empty? ~lst), ~lst (rest ~lst)) (not done) ~@body)))
 
@@ -511,7 +511,7 @@ Example:
              make-cond (fn (condition val action others)
                             (if (nil? val) (make-action action)
                                 (if (empty? others) `((= ~condition ~val) ~(make-action action))
-                                    `((equal? ~condition ~val) ~(make-action action) ~@(make-cond condition (first (first others)) (rest (first others)) (rest others))))))
+                                    `((= ~condition ~val) ~(make-action action) ~@(make-cond condition (first (first others)) (rest (first others)) (rest others))))))
              cond-name condition)
          `(if ~@(make-cond cond-name (first (first branches)) (rest (first branches)) (rest branches)))))))
 
@@ -574,7 +574,7 @@ Asserts the two values are identical.
 Section: core
 %#
 (defmacro assert-equal (expected-val right-val & body)
-    `(if (equal? ~expected-val ~right-val)
+    `(if (= ~expected-val ~right-val)
         #t
         (let (ev (type ~expected-val)
               rv (type ~right-val)
@@ -596,7 +596,7 @@ Asserts the two values are not identical.
 Section: core
 %#
 (defmacro assert-not-equal (expected-val right-val & body)
-    `(if (not (equal? ~expected-val ~right-val))
+    `(if (not (= ~expected-val ~right-val))
         #t
         (let (ev (type ~expected-val)
               rv (type ~right-val)

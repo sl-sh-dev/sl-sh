@@ -232,7 +232,7 @@ impl DestructState {
                         len -= 1;
                         opt = true;
                     }
-                    Value::Keyword(i) if *i == env.specials().numeq => {
+                    Value::Keyword(i) if *i == env.specials().equal => {
                         if opt {
                             len -= 1;
                             opt_set_next = true;

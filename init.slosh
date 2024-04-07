@@ -7,7 +7,7 @@
 (load "core.slosh")
 
 (defn parse-git-branch () (let (branch ($sh "git rev-parse --abbrev-ref HEAD 2>/dev/null"))
-	(if (equal? branch "")
+	(if (= branch "")
 		(str "")
 		(str "(" branch ")"))))
 

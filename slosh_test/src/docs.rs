@@ -45,9 +45,7 @@ lazy_static! {
         exemption_set.insert("this-fn");
         exemption_set.insert("cons");
         exemption_set.insert("list-append");
-        exemption_set.insert("/=");
-        exemption_set.insert("eq?");
-        exemption_set.insert("equal?");
+        exemption_set.insert("identical?");
         exemption_set.insert("type");
         exemption_set.insert("err");
         exemption_set.insert("call/cc");
