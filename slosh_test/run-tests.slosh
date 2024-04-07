@@ -9,7 +9,6 @@
     (while (< i globals-len)
         (prn "Symbol: " globals.~i)
         (prn "===")
-        (prn "doc: " (doc globals.~i))
         (def doc (doc-map globals.~i))
         (prn "Usage: " (str doc.:usage))
         (prn "Description: " (str doc.:description))

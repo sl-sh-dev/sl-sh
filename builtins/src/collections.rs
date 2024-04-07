@@ -116,115 +116,43 @@ pub fn hash_keys(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-pub fn list_append(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
-    let mut i = registers.iter();
-    if let Some(ret @ Value::List(target, _)) = i.next() {
-        match i.next() {
-            Some(Value::Vector(to_add)) => {
-                let mut with_vec = vm.get_vector(*to_add).to_vec();
-                let mut append_to = vm.get_vector(*target).to_vec();
-                append_to.append(&mut with_vec);
-                Ok(*ret)
-            }
-            Some(Value::Pair(to_add)) => {
-                let p = vm.get_pair(*to_add);
-                let mut append_to = vm.get_vector(*target).to_vec();
-                append_to.push(p.0);
-                list_append(vm, &[*ret, p.1])
-            }
-            Some(Value::List(to_add, _)) => {
-                let mut with_vec = vm.get_vector(*to_add).to_vec();
-                let mut append_to = vm.get_vector(*target).to_vec();
-                append_to.append(&mut with_vec);
-                Ok(*ret)
-            }
-            Some(Value::Nil) => Ok(*ret),
-            val => {
-                let l = val.map(|x| x.display_type(vm));
-                Err(VMError::new_vm(format!(
-                    "list-append: Second argument must be a sequence: {:?}",
-                    l
-                )))
-            }
+pub fn flatten(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    let mut flat = Vec::with_capacity(registers.len());
+    for i in registers.iter() {
+        let mut val = None;
+        if i.iter(vm).next().is_some() {
+            // is iter
+            let vs = i.iter(vm).collect::<Vec<Value>>();
+            let v = flatten(vm, vs.as_slice())?;
+            val = Some(v);
+        } else {
+            flat.push(*i)
         }
-    } else {
-        Err(VMError::new_vm(
-            "list-append: First argument must be a list".to_string(),
-        ))
-    }
-}
-
-pub fn vec_append(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
-    let mut i = registers.iter();
-    if let Some(ret @ Value::Vector(target)) = i.next() {
-        match i.next() {
-            Some(Value::Vector(to_add)) => {
-                let mut with_vec = vm.get_vector(*to_add).to_vec();
-                let mut append_to = vm.get_vector(*target).to_vec();
-                append_to.append(&mut with_vec);
-                Ok(*ret)
-            }
-            Some(Value::Pair(to_add)) => {
-                let p = vm.get_pair(*to_add);
-                let mut append_to = vm.get_vector(*target).to_vec();
-                append_to.push(p.0);
-                vec_append(vm, &[*ret, p.1])
-            }
-            Some(Value::List(to_add, _)) => {
-                let mut with_vec = vm.get_vector(*to_add).to_vec();
-                let mut append_to = vm.get_vector(*target).to_vec();
-                append_to.append(&mut with_vec);
-                Ok(*ret)
-            }
-            Some(Value::Nil) => Ok(*ret),
-            val => {
-                let l = val.map(|x| x.display_type(vm));
-                Err(VMError::new_vm(format!(
-                    "vec-append: Second argument must be a sequence: {:?}",
-                    l
-                )))
-            }
+        if let Some(val) = val {
+            let mut vs = val.iter_all(vm).collect::<Vec<Value>>();
+            flat.append(&mut vs);
         }
-    } else {
-        Err(VMError::new_vm(
-            "vec-append: First argument must be a vector".to_string(),
-        ))
     }
+    Ok(vm.alloc_vector(flat))
 }
 
 pub fn setup_collection_builtins(env: &mut SloshVm) {
     add_builtin(
         env,
-        "list-append",
-        list_append,
-        "Usage: (list-append target_list append_to_target)
+        "flatten",
+        flatten,
+        "Usage: (flatten & rest)
 
-Return a new vector with all items from append_to_target added to back of target_vector.
+Takes a sequence composed of individual values or sequences of values and turns
+it into one vector of values.
 
-Section: pair
-
-Example:
-(test::assert-equal '(1 2 3 4 5 6 4 6) (list-append '(1 2 3 4 5 6) [4 6]))
-(test::assert-equal '(1 2 3 4 5 6 0 3) (list-append '(1 2 3 4 5 6) (list 0 3)))
-(test::assert-equal '(1 2 3 4 5 6 2 5) (list-append '(1 2 3 4 5 6) '(2 5)))
-(test::assert-equal '(1 2 3 4 5 6 2) (list-append '(1 2 3 4 5 6) [2]))
-",
-    );
-    add_builtin(
-        env,
-        "vec-append",
-        vec_append,
-        "Usage: (vec-append target_vector append_to_target)
-
-Return a new vector with all items from append_to_target added to back of target_vector.
-
-Section: vector
+Section: core
 
 Example:
-(test::assert-equal [1 2 3 4 5 6 4 6] (vec-append [1 2 3 4 5 6] [4 6]))
-(test::assert-equal [1 2 3 4 5 6 0 3] (vec-append [1 2 3 4 5 6] (list 0 3)))
-(test::assert-equal [1 2 3 4 5 6 2 5] (vec-append [1 2 3 4 5 6] (2 . 5)))
-(test::assert-equal [1 2 3 4 5 6 2] (vec-append [1 2 3 4 5 6] [2]))
+(assert-equal [1 2 3 1 2 3] (flatten 1 2 3 (list 1 2 3)))
+(assert-equal [1 2 3 1 2 3] (flatten 1 2 3 [1 2 3]))
+(assert-equal [1 2 3 1 2] (flatten 1 2 3 (list 1 2)))
+(assert-equal [1 2 3 1 2 3 1 2] (flatten 1 2 3 (list 1 2 3 (list 1 2))))
 ",
     );
     add_builtin(
