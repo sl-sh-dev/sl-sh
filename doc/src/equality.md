@@ -2,16 +2,19 @@
 
 When testing for equality in Slosh, there are several functions that can be used.
 Consider invocations like
-`(= 1 2)`,
-`(eq? 1 2)`,
-`(equal? 1 2)`, and
-`(assert-equal 1 2)`
-these are translated to different opcodes and equality implementations as listed below
-
 ```slosh
-(def x 42)
-(prn ((fn () x)))
+(= 1 2)
 ```
+```slosh
+(eq? 1 2)
+```
+```slosh
+(equal? 1 2)
+```
+```slosh
+(assert-equal 1 2)
+```
+these are translated to different opcodes and equality implementations as listed below
 
 -   `equal?`
 

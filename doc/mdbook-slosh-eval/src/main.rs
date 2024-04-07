@@ -94,19 +94,10 @@ mod slosh_eval_lib {
         }
 
         fn run(&self, ctx: &PreprocessorContext, mut book: Book) -> Result<Book, Error> {
-            let mut capture_prn = false;
             if let Some(slosh_eval_cfg) = ctx.config.get_preprocessor(self.name()) {
+                // custom config exists even if it's not being used right now.
                 if slosh_eval_cfg.contains_key("blow-up") {
                     anyhow::bail!("Boom!!1!");
-                } else if slosh_eval_cfg.contains_key("capture-prn") {
-                    if let Some(val) = slosh_eval_cfg.get("capture-prn") {
-                        match val {
-                            toml::value::Value::Boolean(b) => {
-                                capture_prn = *b;
-                            }
-                            _ => {}
-                        }
-                    }
                 }
             }
 
@@ -134,7 +125,7 @@ mod slosh_eval_lib {
                                 buf += c.as_ref();
                             }
                             Event::End(TagEnd::CodeBlock) if tracking => {
-                                let eval = exec_code(buf.clone(), capture_prn);
+                                let eval = exec_code(buf.clone());
                                 buf += "\n=> ";
                                 buf += &eval;
                                 buf += "\n";
@@ -181,22 +172,17 @@ mod slosh_eval_lib {
         }
     }
 
-    fn exec_code(code: String, capture_prn: bool) -> String {
+    fn exec_code(code: String) -> String {
         let mut vm = new_slosh_vm_with_builtins();
 
         let mut reader =
             Reader::from_string(r#"(load "core.slosh")"#.to_string(), &mut vm, "", 1, 0);
-        log::debug!("capture_prn: {}", capture_prn);
-        let code = if capture_prn {
-            format!(
-                r#"(def *prn* "")
+        _ = run_reader(&mut reader);
+        let code = format!(
+            r#"(def *prn* "")
                (dyn prn (fn (&rest) (set! *prn* (str *prn* &rest))) (do {}))"#,
-                code
-            )
-        } else {
-            format!("(do {})", code)
-        };
-        _ = run_reader(&mut reader).unwrap();
+            code
+        );
         let mut reader = Reader::from_string(code, &mut vm, "", 1, 0);
         let s = run_reader(&mut reader)
             .map(|x| x.display_value(&mut vm))
