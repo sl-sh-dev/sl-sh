@@ -47,3 +47,7 @@ crate and related documentation.
     - https://rust-lang.github.io/mdBook/for_developers/preprocessors.html
     - https://github.com/rust-lang/mdBook/blob/master/examples/nop-preprocessor.rs
     - https://github.com/Byron/termbook/blob/8af7230ec7b9d5e72f43214dfa7540f90a2e6da9/lib/pulldown-cmark-to-cmark/examples/stupicat.rs
+4. You CANNOT log to stdout during the mdbook-slosh-eval preprocessing phase. Use
+the log macros instead (e.g. log::warn!) as they do not log to stdout directly
+and won't confuse the mdbook build process by writing to stdout. The `mk-site.sh`
+script sets the RUST_LOG environment variable to debug by default.

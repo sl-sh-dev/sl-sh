@@ -24,7 +24,6 @@ criterion = "0.5"
 iai-callgrind = "0.10.2"
 bench_utils = { path = "bench_utils" }
 compiler_test_utils = { workspace = true }
-mdbook = { workspace = true }
 
 
 [build-dependencies]
