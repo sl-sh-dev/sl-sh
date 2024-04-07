@@ -10,7 +10,7 @@ these are translated to different opcodes and equality implementations as listed
 
 ```slosh
 (def x 42)
-((fn () x))
+(prn ((fn () x)))
 ```
 
 -   `equal?`

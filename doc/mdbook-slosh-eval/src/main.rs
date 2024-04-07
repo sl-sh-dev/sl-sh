@@ -14,7 +14,9 @@ use std::process;
 
 pub fn make_app() -> Command {
     Command::new("mdbook-slosh-eval")
-        .about("A mdbook preprocessor which does precisely nothing")
+        .about(
+            "A mdbook preprocessor which evaluates blocks of code in md fenced as ```slosh blocks",
+        )
         .subcommand(
             Command::new("supports")
                 .arg(Arg::new("renderer").required(true))
@@ -26,7 +28,6 @@ fn main() {
     env_logger::init();
     let matches = make_app().get_matches();
 
-    // Users will want to construct their own preprocessor here
     let preprocessor = EvalSlosh::new();
 
     if let Some(sub_args) = matches.subcommand_matches("supports") {
@@ -73,14 +74,12 @@ fn handle_supports(pre: &dyn Preprocessor, sub_args: &ArgMatches) -> ! {
     }
 }
 
-/// The actual implementation of the `EvalSlosh` preprocessor. This would usually go
-/// in your main `lib.rs` file.
 mod slosh_eval_lib {
     use super::*;
     use pulldown_cmark::CodeBlockKind;
     use slosh_lib::{new_slosh_vm_with_builtins, run_reader, Reader};
 
-    /// A no-op preprocessor.
+    /// Preprocessor to evaluate slosh code
     pub struct EvalSlosh;
 
     impl EvalSlosh {
@@ -95,14 +94,12 @@ mod slosh_eval_lib {
         }
 
         fn run(&self, ctx: &PreprocessorContext, mut book: Book) -> Result<Book, Error> {
-            // In testing we want to tell the preprocessor to blow up by setting a
-            // particular config value
             let mut capture_prn = false;
             if let Some(slosh_eval_cfg) = ctx.config.get_preprocessor(self.name()) {
                 if slosh_eval_cfg.contains_key("blow-up") {
                     anyhow::bail!("Boom!!1!");
                 } else if slosh_eval_cfg.contains_key("capture-prn") {
-                    if let Some(val) = slosh_eval_cfg.get("capture_prn") {
+                    if let Some(val) = slosh_eval_cfg.get("capture-prn") {
                         match val {
                             toml::value::Value::Boolean(b) => {
                                 capture_prn = *b;
@@ -161,6 +158,7 @@ mod slosh_eval_lib {
                     }
                     let mut buf = String::new();
                     let ret = cmark(events.iter(), &mut buf);
+                    // write new content back to chapter content.
                     match ret {
                         Ok(_) => {
                             chapter.content = buf;
@@ -188,6 +186,7 @@ mod slosh_eval_lib {
 
         let mut reader =
             Reader::from_string(r#"(load "core.slosh")"#.to_string(), &mut vm, "", 1, 0);
+        log::debug!("capture_prn: {}", capture_prn);
         let code = if capture_prn {
             format!(
                 r#"(def *prn* "")
