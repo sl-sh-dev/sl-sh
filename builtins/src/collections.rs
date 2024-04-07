@@ -116,7 +116,117 @@ pub fn hash_keys(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
+pub fn list_append(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    let mut i = registers.iter();
+    if let Some(ret @ Value::List(target, _)) = i.next() {
+        match i.next() {
+            Some(Value::Vector(to_add)) => {
+                let mut with_vec = vm.get_vector(*to_add).to_vec();
+                let mut append_to = vm.get_vector(*target).to_vec();
+                append_to.append(&mut with_vec);
+                Ok(*ret)
+            }
+            Some(Value::Pair(to_add)) => {
+                let p = vm.get_pair(*to_add);
+                let mut append_to = vm.get_vector(*target).to_vec();
+                append_to.push(p.0);
+                list_append(vm, &[*ret, p.1])
+            }
+            Some(Value::List(to_add, _)) => {
+                let mut with_vec = vm.get_vector(*to_add).to_vec();
+                let mut append_to = vm.get_vector(*target).to_vec();
+                append_to.append(&mut with_vec);
+                Ok(*ret)
+            }
+            Some(Value::Nil) => Ok(*ret),
+            val => {
+                let l = val.map(|x| x.display_type(vm));
+                Err(VMError::new_vm(format!(
+                    "list-append: Second argument must be a sequence: {:?}",
+                    l
+                )))
+            }
+        }
+    } else {
+        Err(VMError::new_vm(
+            "list-append: First argument must be a list".to_string(),
+        ))
+    }
+}
+
+pub fn vec_append(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    let mut i = registers.iter();
+    if let Some(ret @ Value::Vector(target)) = i.next() {
+        match i.next() {
+            Some(Value::Vector(to_add)) => {
+                let mut with_vec = vm.get_vector(*to_add).to_vec();
+                let mut append_to = vm.get_vector(*target).to_vec();
+                append_to.append(&mut with_vec);
+                Ok(*ret)
+            }
+            Some(Value::Pair(to_add)) => {
+                let p = vm.get_pair(*to_add);
+                let mut append_to = vm.get_vector(*target).to_vec();
+                append_to.push(p.0);
+                vec_append(vm, &[*ret, p.1])
+            }
+            Some(Value::List(to_add, _)) => {
+                let mut with_vec = vm.get_vector(*to_add).to_vec();
+                let mut append_to = vm.get_vector(*target).to_vec();
+                append_to.append(&mut with_vec);
+                Ok(*ret)
+            }
+            Some(Value::Nil) => Ok(*ret),
+            val => {
+                let l = val.map(|x| x.display_type(vm));
+                Err(VMError::new_vm(format!(
+                    "vec-append: Second argument must be a sequence: {:?}",
+                    l
+                )))
+            }
+        }
+    } else {
+        Err(VMError::new_vm(
+            "vec-append: First argument must be a vector".to_string(),
+        ))
+    }
+}
+
 pub fn setup_collection_builtins(env: &mut SloshVm) {
+    add_builtin(
+        env,
+        "list-append",
+        list_append,
+        "Usage: (list-append target_list append_to_target)
+
+Return a new vector with all items from append_to_target added to back of target_vector.
+
+Section: pair
+
+Example:
+(test::assert-equal '(1 2 3 4 5 6 4 6) (list-append '(1 2 3 4 5 6) [4 6]))
+(test::assert-equal '(1 2 3 4 5 6 0 3) (list-append '(1 2 3 4 5 6) (list 0 3)))
+(test::assert-equal '(1 2 3 4 5 6 2 5) (list-append '(1 2 3 4 5 6) '(2 5)))
+(test::assert-equal '(1 2 3 4 5 6 2) (list-append '(1 2 3 4 5 6) [2]))
+",
+    );
+    add_builtin(
+        env,
+        "vec-append",
+        vec_append,
+        "Usage: (vec-append target_vector append_to_target)
+
+Return a new vector with all items from append_to_target added to back of target_vector.
+
+Section: vector
+
+Example:
+(test::assert-equal [1 2 3 4 5 6 4 6] (vec-append [1 2 3 4 5 6] [4 6]))
+(test::assert-equal [1 2 3 4 5 6 0 3] (vec-append [1 2 3 4 5 6] (list 0 3)))
+(test::assert-equal [1 2 3 4 5 6 2 5] (vec-append [1 2 3 4 5 6] (2 . 5)))
+(test::assert-equal [1 2 3 4 5 6 2] (vec-append [1 2 3 4 5 6] [2]))
+",
+    );
     add_builtin(
         env,
         "vec-slice",

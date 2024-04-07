@@ -678,8 +678,31 @@ Section: core
 (defmacro test::assert-error (& body) `(assert-error ~@body))
 
 #%
+Takes a sequence composed of individual values or sequences of values and turns
+it into one vector of values.
+
+Section: core
+
+Example:
+(assert-equal [1 2 3 1 2 3] (flatten 1 2 3 (list 1 2 3)))
+(assert-equal [1 2 3 1 2 3] (flatten 1 2 3 [1 2 3]))
+(assert-equal [1 2 3 1 2] (flatten 1 2 3 (list 1 2)))
+%#
+(defn flatten (& body)
+    (loop (accum nxt rst) ((make-vec) (car body) (cdr body))
+        (if (or (nil? nxt) (empty? nxt))
+            accum
+            (if (seq? nxt)
+                (recur (vec-push! accum (get nxt 0)) (car nxt) (list-append (cdr nxt) (cdr rst)))
+                (recur (vec-push! accum nxt) (car rst) (cdr rst))))))
+
+
+
+ #%
 apply
+Takes a sequence composed of individual values or sequences of values and turns
+it into one vector of values.
 
 Section: core
 %#
-(defmacro apply (a-fn & body) `(~a-fn ~@body))
+(defmacro apply (a-fn & body) `(~a-fn (flatten ~@body)))
