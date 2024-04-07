@@ -17,9 +17,6 @@ mdbook = "0.4"
 [dev-dependencies]
 tempdir = "0.3.7"
 temp-env = "0.3.6"
-regex = { workspace = true }
-lazy_static = { workspace = true }
-sl-compiler = { workspace = true }
 compiler_test_utils = { workspace = true }
 
 [build-dependencies]
