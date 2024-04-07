@@ -3,7 +3,7 @@ on:
   push:
     branches:
       - master
-      - doc-update
+      - custom-preprocessor2
 
 jobs:
   deploy:
