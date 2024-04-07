@@ -88,7 +88,7 @@ Produces (1 2 3).
 Produces (1 2 nil nil).
 
 ```slosh
-(let ({a :one, b 'two, c \"three\" [d e] :vec} {:one 1, two 2, \"three\" 3, :vec (4 5)}) (list a b c d e))
+(let ({a :one, b 'two, c "three" [d e] :vec} {:one 1, 'two 2, "three" 3, :vec [4 5]}) (list a b c d e))
 ```
 
 Produces (1 2 3 4 5).

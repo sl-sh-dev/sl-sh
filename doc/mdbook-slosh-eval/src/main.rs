@@ -107,14 +107,17 @@ mod slosh_eval_lib {
                     let mut tracking = false;
                     let mut buf = String::new();
                     let mut events = vec![];
+                    let mut slosh_code_block_num = 0;
                     for event in Parser::new(&chapter.content) {
                         match event {
                             Event::Start(Tag::CodeBlock(ref kind)) => match kind {
                                 CodeBlockKind::Fenced(name) if !tracking => {
                                     if name.starts_with("slosh") && !name.contains("no-execute") {
+                                        slosh_code_block_num += 1;
                                         log::debug!(
-                                            "Evaluate slosh code in chapter: {}",
-                                            chapter.name
+                                            "Evaluate slosh code block #{} in chapter: {}",
+                                            slosh_code_block_num,
+                                            chapter.name,
                                         );
                                         tracking = true;
                                     }
