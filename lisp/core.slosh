@@ -676,3 +676,10 @@ Asserts the value is an error
 Section: core
 %#
 (defmacro test::assert-error (& body) `(assert-error ~@body))
+
+#%
+apply
+
+Section: core
+%#
+(defmacro apply (a-fn & body) `(~a-fn ~@body))
