@@ -6,10 +6,10 @@ Consider invocations like
 (= 1 2)
 ```
 ```slosh
-(eq? 1 2)
+(== 1 2)
 ```
 ```slosh
-(equal? 1 2)
+(identical? 1 2)
 ```
 ```slosh
 (assert-equal 1 2)
