@@ -1,4 +1,3 @@
-use crate::config::VERSION_STRING;
 use crate::SHELL_ENV;
 use bridge_adapters::add_builtin;
 use compile_state::state::SloshVm;
@@ -107,13 +106,6 @@ fn env_var(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-fn version(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
-    if !registers.is_empty() {
-        return Err(VMError::new_compile("version: requires no argument"));
-    }
-    Ok(vm.alloc_string(VERSION_STRING.to_string()))
-}
-
 pub fn add_shell_builtins(env: &mut SloshVm) {
     add_builtin(
         env,
@@ -140,10 +132,4 @@ Section: core"#,
         "Runs a shell command and returns it's status.",
     );
     add_builtin(env, "env", env_var, "Retrieves and environment variable.");
-    add_builtin(
-        env,
-        "version",
-        version,
-        "Return the software version string.",
-    );
 }

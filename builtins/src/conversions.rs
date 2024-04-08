@@ -89,7 +89,7 @@ pub fn add_conv_builtins(env: &mut SloshVm) {
 
 Converts exp to a symbol.
 
-Section: conv
+Section: conversion
 "#,
     );
     add_builtin(
@@ -100,7 +100,7 @@ Section: conv
 
 Converts exp to a keyword.
 
-Section: conv
+Section: conversion
 "#,
     );
     add_builtin(
@@ -111,7 +111,7 @@ Section: conv
 
 If symbol is defined then return the thing it references.
 
-Section: conv
+Section: conversion
 "#,
     );
     add_builtin(
@@ -122,7 +122,7 @@ Section: conv
 
 If symbol is defined then return true else false.
 
-Section: conv
+Section: conversion
 "#,
     );
 }

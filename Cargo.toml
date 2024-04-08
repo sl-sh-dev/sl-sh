@@ -4,6 +4,7 @@ resolver = "2"
 
 members = [
     "slosh",
+    "slosh_lib",
     "compiler",
     "vm",
     "builtins",
@@ -12,6 +13,7 @@ members = [
     "bridge_macros",
     "bridge_types",
     "bridge_adapters",
+    "slosh_test",
 ]
 
 exclude = [ "legacy" ]
@@ -34,4 +36,5 @@ compiler_test_utils = { path = "compiler/test_utils" }
 slvm = { path = "vm" }
 regex = "1"
 lazy_static = "1"
+mdbook = "0.4.37"
 

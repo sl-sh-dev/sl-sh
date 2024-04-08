@@ -1,26 +1,29 @@
-pub mod config;
+pub mod docs;
 
-use crate::config::VERSION_STRING;
 use bridge_adapters::add_builtin;
 use compile_state::state::SloshVm;
 use slosh_lib::run;
 use slvm::{VMError, VMResult, Value};
 use std::process;
 
-fn modify_vm(vm: &mut SloshVm) {
-    add_builtin(
-        vm,
-        "version",
-        version,
-        "Return the software version string.",
-    );
-}
+pub const VERSION_STRING: &str = env!("VERSION_STRING");
 
 fn version(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if !registers.is_empty() {
         return Err(VMError::new_compile("version: requires no argument"));
     }
     Ok(vm.alloc_string(VERSION_STRING.to_string()))
+}
+
+fn modify_vm(vm: &mut SloshVm) {
+    docs::add_builtins(vm);
+
+    add_builtin(
+        vm,
+        "version",
+        version,
+        "Return the software version string.",
+    );
 }
 
 fn main() {

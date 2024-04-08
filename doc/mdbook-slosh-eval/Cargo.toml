@@ -1,0 +1,20 @@
+[package]
+name = "mdbook-slosh-eval"
+version = "0.1.0"
+edition = "2021"
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = "*"
+semver = "*"
+mdbook = "*"
+anyhow = "*"
+serde_json = "*"
+env_logger = "*"
+log = "*"
+pulldown-cmark = "0.10.2"
+pulldown-cmark-to-cmark = "13.0.0"
+slosh_lib = { path = "../../slosh_lib" }
+toml = "*"
+
+[workspace]

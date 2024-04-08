@@ -2,7 +2,11 @@ use bridge_adapters::add_builtin;
 use bridge_adapters::lisp_adapters::SlFrom;
 use compile_state::state::{SloshVm, SloshVmTrait};
 use lazy_static::lazy_static;
+use mdbook::book::Chapter;
+use mdbook::{BookItem, MDBook};
 use regex::{Regex, RegexBuilder};
+use sl_compiler::load_eval::run_reader;
+use sl_compiler::Reader;
 use slvm::VMErrorObj::Message;
 use slvm::{Interned, VMError, VMResult, Value};
 use std::borrow::Cow;
@@ -10,7 +14,12 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
+use std::fs::File;
+use std::io::Write;
+use std::path::Path;
+use std::path::PathBuf;
 use std::string::ToString;
+use std::{fs, io};
 
 const USAGE: &str = "usage";
 const DESCRIPTION: &str = "description";
@@ -135,7 +144,6 @@ impl Display for Namespace {
     }
 }
 
-#[cfg(test)]
 impl Namespace {
     fn add_docs(&self, docs: &mut Vec<SloshDoc>, vm: &mut SloshVm) -> DocResult<()> {
         match self {
@@ -197,17 +205,17 @@ impl Display for DocStringSection {
 impl DocStringSection {
     pub fn from_symbol(slot: u32, sym: Value, vm: &mut SloshVm) -> DocResult<DocStringSection> {
         let docstring_key = vm.intern_static("doc-string");
-        let sym_str = sym.display_value(&vm);
+        let sym_str = sym.display_value(vm);
         let raw_doc_string = vm
             .get_global_property(slot, docstring_key)
-            .map_or(None, |x| match x {
+            .and_then(|x| match x {
                 Value::String(h) => Some(vm.get_string(h).to_string()),
                 Value::StringConst(i) => Some(vm.get_interned(i).to_string()),
                 _ => None,
             })
             // return default empty string and have parse_doc_string handle error if no doc provided.
             .unwrap_or_default();
-        let backup_usage = crate::usage(vm, slot, &sym);
+        let backup_usage = slosh_lib::usage(vm, slot, &sym);
         Self::parse_doc_string(Cow::Owned(sym_str), raw_doc_string, backup_usage)
     }
 
@@ -218,14 +226,15 @@ impl DocStringSection {
         raw_doc_string: String,
         backup_usage: String,
     ) -> DocResult<DocStringSection> {
+        let sym_text = symbol.as_str().to_string();
         let cap = DOC_REGEX.captures(raw_doc_string.as_str()).ok_or_else(|| {
             if EXEMPTIONS.contains(symbol.as_str()) {
                 DocError::ExemptFromProperDocString {
-                    symbol: symbol.to_owned().to_string(),
+                    symbol: sym_text.clone(),
                 }
             } else {
                 DocError::NoDocString {
-                    symbol: symbol.to_owned().to_string(),
+                    symbol: sym_text.clone(),
                 }
             }
         })?;
@@ -236,14 +245,14 @@ impl DocStringSection {
         let description = cap
             .get(3)
             .ok_or_else(|| DocError::DocStringMissingSection {
-                symbol: symbol.to_owned().to_string(),
+                symbol: sym_text.clone(),
                 section: "Description".to_string(),
             })
             .map(|x| x.as_str().to_string())?;
         let section = cap
             .get(4)
             .ok_or_else(|| DocError::DocStringMissingSection {
-                symbol: symbol.to_owned().to_string(),
+                symbol: sym_text,
                 section: "Section".to_string(),
             })
             .map(|x| x.as_str().trim().to_string())?;
@@ -258,7 +267,32 @@ impl DocStringSection {
     }
 }
 
-#[derive(Eq, Debug)]
+pub trait AsMd {
+    fn as_md(&self) -> String;
+}
+
+impl AsMd for SloshDoc {
+    fn as_md(&self) -> String {
+        let mut content = format!(" ### {}\n", self.symbol);
+        //content = content + &format!("- type: {}\n", docs.symbol_type);
+        //content = content + &format!("- namespace: {}\n", docs.namespace);
+        if let Some(usage) = &self.doc_string.usage {
+            content += &format!("**Usage:** {}\n\n", usage);
+        }
+        //content = content + &format!("section: {}\n", docs.doc_string.section);
+        content = content + &format!("{}\n", self.doc_string.description);
+        if let Some(example) = &self.doc_string.example {
+            content += "Example:\n```\n";
+            content += example;
+            content += "\n``` \n";
+        } else {
+            content += "\n\nNo Examples\n";
+        }
+        content
+    }
+}
+
+#[derive(Eq, Debug, Clone)]
 struct SloshDoc {
     symbol: String,
     symbol_type: String,
@@ -288,8 +322,7 @@ impl PartialEq for SloshDoc {
 
 impl PartialOrd for SloshDoc {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.fully_qualified_name()
-            .partial_cmp(&other.fully_qualified_name())
+        Some(self.cmp(other))
     }
 }
 
@@ -306,8 +339,8 @@ impl SloshDoc {
         let slot = vm.global_intern_slot(g);
         if let Some(slot) = slot {
             let doc_string = DocStringSection::from_symbol(slot, sym, vm)?;
-            let symbol = sym.display_value(&vm);
-            let symbol_type = sym.display_type(&vm).to_string();
+            let symbol = sym.display_value(vm);
+            let symbol_type = sym.display_type(vm).to_string();
             Ok(SloshDoc {
                 symbol,
                 symbol_type,
@@ -435,7 +468,7 @@ impl SlFrom<SloshDoc> for HashMap<Value, Value> {
 
 impl SlFrom<SloshDoc> for Value {
     fn sl_from(value: SloshDoc, vm: &mut SloshVm) -> VMResult<Self> {
-        let map = HashMap::sl_from(value, vm)?.into();
+        let map = HashMap::sl_from(value, vm)?;
         Ok(vm.alloc_map(map))
     }
 }
@@ -452,6 +485,195 @@ fn doc_map(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
             Err(e) => Err(VMError::from(e)),
         },
         _ => Err(VMError::new_vm("takes one argument (symbol)".to_string())),
+    }
+}
+
+/// Each doc has a tag in its `Section:` definition by convention that logically groups functions.
+/// Using a HashMap store the section tags as keys and add all slosh docs from to a vector as a value
+/// corresponding to its section.
+fn get_docs_by_section(vm: &mut SloshVm) -> HashMap<String, Vec<SloshDoc>> {
+    let mut docs_by_section: HashMap<String, Vec<SloshDoc>> = HashMap::new();
+    let mut docs: Vec<SloshDoc> = vec![];
+    Namespace::Global.add_docs(&mut docs, vm).unwrap();
+    docs.sort();
+    for d in docs {
+        let d = d.clone();
+        let section = d.doc_string.section.clone();
+        docs_by_section.entry(section).or_default().push(d);
+    }
+    docs_by_section
+}
+
+fn build_symbols_list(
+    docs_by_section: &BTreeMap<String, Vec<SloshDoc>>,
+    namer: fn(&str, &SloshDoc) -> String,
+) -> BTreeMap<String, String> {
+    let mut map = BTreeMap::new();
+    for (section, v) in docs_by_section.iter() {
+        let mut list = "".to_string();
+        let len = v.len();
+        for (i, docs) in v.iter().enumerate() {
+            let name = namer(section.as_ref(), docs);
+            list += &name;
+
+            if i + 1 != len {
+                list += ", ";
+            }
+        }
+        list += "\n";
+        map.insert(section.to_string(), list);
+    }
+    map
+}
+
+fn symbol_and_capitalized_symbol(doc: &SloshDoc) -> (String, String) {
+    let sym = doc.symbol.clone();
+    let cap: String = sym
+        .chars()
+        .filter(|c| c.is_alphabetic() || *c == '-')
+        .collect();
+    (sym, cap)
+}
+
+fn name_for_all_page(section: &str, doc: &SloshDoc) -> String {
+    let (s, t) = symbol_and_capitalized_symbol(doc);
+    format!("[{}]({section}.html#{})", s, t)
+}
+
+fn name_for_section_page(_section: &str, doc: &SloshDoc) -> String {
+    let (s, t) = symbol_and_capitalized_symbol(doc);
+    format!("[{}](#{})", s, t)
+}
+
+fn build_all_slosh_forms_listing_chapter(
+    docs_by_section: &BTreeMap<String, Vec<SloshDoc>>,
+) -> VMResult<Chapter> {
+    let mut all_content = "# Slosh Forms\n\n".to_string();
+
+    let sections_len = docs_by_section.keys().len();
+    let mut list = "List of sections: \n\n".to_string();
+    for (i, section) in docs_by_section.keys().enumerate() {
+        list = list + &format!("[{}](#section-{})", section, section);
+        if i + 1 != sections_len {
+            list += ", ";
+        }
+    }
+    list += "\n\n";
+    all_content += &list;
+
+    let list = build_symbols_list(docs_by_section, name_for_all_page);
+    for (section, content) in list {
+        let header = format!("## Section: {} \n\n", section);
+        all_content += &(header + &content);
+    }
+
+    let p = make_file("all", &all_content)
+        .map_err(|e| VMError::new_vm(format!("Failed to write to file: {e}.")))?;
+
+    Ok(Chapter::new("All", all_content, p, vec![]))
+}
+
+fn build_each_docs_section_chapter(
+    docs_by_section: &BTreeMap<String, Vec<SloshDoc>>,
+) -> VMResult<Vec<Chapter>> {
+    let mut sections_as_md_text: BTreeMap<String, String> = BTreeMap::new();
+    let lists = build_symbols_list(docs_by_section, name_for_section_page);
+    for (section, v) in docs_by_section {
+        let mut content = lists.get(section).unwrap().to_owned() + "\n";
+        for docs in v {
+            content = content + &docs.as_md();
+        }
+        content += "\n";
+
+        sections_as_md_text.insert(section.to_string(), content.clone());
+    }
+
+    let mut chapters = vec![];
+    for (section, list) in sections_as_md_text.iter() {
+        let mut content = format!("## {}\n\n", section);
+
+        let file = format!("src/section-docs/{}.md", section);
+        // If there is a section file header include it for preprocessing.
+        if fs::metadata(&file).is_ok() {
+            content = content + &format!("{{{{ #include section-docs/{}.md }}}}\n\n\n", section);
+        }
+
+        let header = "List of symbols: \n".to_string();
+        content = content + &header + &list;
+
+        let path = make_file(section, &content)
+            .map_err(|e| VMError::new_vm(format!("Failed to write to file: {e}.")))?;
+        let capped = capitalize_first(section);
+        let section_chapter = Chapter::new(&capped, content.clone(), &path, vec![]);
+        chapters.push(section_chapter);
+    }
+    Ok(chapters)
+}
+
+fn build_doc(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    let mut i = registers.iter();
+    let next = i.next();
+    let path = match next {
+        None => Err(VMError::new_vm("takes one argument (filepath)".to_string())),
+        Some(v) => match v {
+            Value::String(s) => Ok(vm.get_string(*s)),
+            Value::StringConst(i) => Ok(vm.get_interned(*i)),
+            _ => Err(VMError::new_vm(
+                "argument must be a string to a valid filepath".to_string(),
+            )),
+        },
+    }?;
+
+    let path_buf: PathBuf = path.into();
+    let mut md = MDBook::load(path_buf.clone()).expect("Unable to load the book");
+
+    let mut reader = Reader::from_string(r#"(load "core.slosh")"#.to_string(), vm, "", 1, 0);
+    _ = run_reader(&mut reader).unwrap();
+
+    // Add a separator and a title for the new autogenerated section.
+    md.book.push_item(BookItem::Separator);
+    md.book
+        .push_item(BookItem::PartTitle("Slosh Forms".to_string()));
+
+    // get docs by section and then make sure the docs are in alphabetical order
+    let docs_by_section_unsorted = get_docs_by_section(vm);
+    // use a BTreeMap so the sections are in alphabetical order as well as the SloshDoc vec.
+    let mut docs_by_section = BTreeMap::new();
+    for (s, mut v) in docs_by_section_unsorted {
+        v.sort();
+        docs_by_section.insert(s, v);
+    }
+
+    // First chapter introduces each section and lists all the symbols in that section.
+    let all_chapter = build_all_slosh_forms_listing_chapter(&docs_by_section)?;
+    md.book.push_item(BookItem::Chapter(all_chapter));
+
+    // Each subsequent chapter is a section with a list of all of the symbols in that section
+    // followed by a complete list of the documentation for each symbol in that section.
+    let chapters = build_each_docs_section_chapter(&docs_by_section)?;
+    for chapter in chapters {
+        md.book.push_item(BookItem::Chapter(chapter));
+    }
+
+    md.build().expect("Building failed");
+    Ok(Value::Nil)
+}
+
+fn make_file(name: impl AsRef<Path>, content: &str) -> io::Result<PathBuf> {
+    //TODO I do not understand why have to both pass the file contents and have a md file
+    // and if I do not have the md file i get a no parents error?
+    let filename = format!("{}.md", name.as_ref().display()).into();
+    let mut file_0 = File::create(&filename)?;
+    writeln!(file_0, "{}", content)?;
+    File::flush(&mut file_0)?;
+    Ok(filename)
+}
+
+fn capitalize_first(s: &str) -> String {
+    let mut c = s.chars();
+    match c.next() {
+        None => String::new(),
+        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
     }
 }
 
@@ -481,7 +703,22 @@ pub fn add_builtins(env: &mut SloshVm) {
 Returns documentation for given symbol as map. Keyword is a documentation fragment
 (usage, section, description, example) and value is text describing given fragment.
 
-Section: core
+Section: doc
+
+Example:
+#t
+",
+    );
+
+    add_builtin(
+        env,
+        "build-doc",
+        build_doc,
+        "Usage: (build-doc valid-filepath)
+
+Uses mdbook to build the documentation for the given book.
+
+Section: doc
 
 Example:
 #t
@@ -496,7 +733,7 @@ Example:
 
 Return a vector containing all the symbols currently defined globally in sorted order (alphanumerically).
 
-Section: core
+Section: doc
 ",
     );
 }
@@ -504,9 +741,9 @@ Section: core
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{run_reader, set_builtins, set_initial_load_path, ENV};
     use compile_state::state::new_slosh_vm;
     use sl_compiler::Reader;
+    use slosh_lib::{run_reader, set_builtins, set_initial_load_path, ENV};
     use std::collections::BTreeMap;
     use std::ops::DerefMut;
     use tempdir::TempDir;

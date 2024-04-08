@@ -1,5 +1,5 @@
 [package]
-name = "slosh"
+name = "slosh_lib"
 version = "0.10.0"
 edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -8,7 +8,6 @@ edition = "2021"
 unicode_reader = "1"
 sl-compiler = { workspace = true }
 bridge_adapters = { path = "../bridge_adapters" }
-slosh_lib = { path = "../slosh_lib" }
 sl-liner = { git = "https://github.com/sl-sh-dev/sl-liner.git" }
 slvm = { workspace = true }
 builtins = { path = "../builtins" }
@@ -22,17 +21,7 @@ tempdir = "0.3.7"
 temp-env = "0.3.6"
 criterion = "0.5"
 iai-callgrind = "0.10.2"
-bench_utils = { path = "bench_utils" }
 compiler_test_utils = { workspace = true }
-
 
 [build-dependencies]
 chrono = "0.4.7"
-
-[[bench]]
-name = "criterion"
-harness = false
-
-[[bench]]
-name = "iai"
-harness = false
