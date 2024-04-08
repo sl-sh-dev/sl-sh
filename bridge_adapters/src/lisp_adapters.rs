@@ -105,6 +105,7 @@ use bridge_types::{LooseString, SloshChar};
 use compile_state::state::SloshVm;
 
 use slvm::{VMResult, Value};
+mod collections;
 pub mod numbers;
 pub mod primitives;
 pub mod text;

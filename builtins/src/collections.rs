@@ -1,6 +1,8 @@
 use crate::SloshVm;
 use bridge_adapters::add_builtin;
+use bridge_macros::sl_sh_fn;
 use slvm::{VMError, VMResult, Value};
+use std::collections::HashMap;
 
 pub fn vec_slice(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let (vector, start, end) = match registers.len() {
@@ -70,73 +72,164 @@ pub fn vec_to_list(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-pub fn hash_remove(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
-    let mut i = registers.iter();
-    if let (Some(Value::Map(map_handle)), Some(key), None) = (i.next(), i.next(), i.next()) {
-        let map = vm.get_map_mut(*map_handle)?;
-        if let Some(old) = map.remove(key) {
-            Ok(old)
-        } else {
-            Ok(Value::Nil)
-        }
+/// Usage: (hash-remove! hashmap key)
+///
+/// Remove a key from a hashmap. This is a destructive form!
+///
+/// Example:
+/// (def tst-hash {:key1  "val one" 'key2 "val two" "key3" "val three" \S "val S"})
+/// (test::assert-equal 4 (length (hash-keys tst-hash)))
+/// (test::assert-equal "val one" (hash-get tst-hash :key1))
+/// (test::assert-equal "val two" (hash-get tst-hash 'key2))
+/// (test::assert-equal "val three" (hash-get tst-hash "key3"))
+/// (test::assert-equal "val S" (hash-get tst-hash \S))
+/// (hash-remove! tst-hash 'key2)
+/// (test::assert-equal 3 (len (hash-keys tst-hash)))
+/// (test::assert-equal "val one" (hash-get tst-hash :key1))
+/// (test::assert-equal "val three" (hash-get tst-hash "key3"))
+/// (test::assert-equal "val S" (hash-get tst-hash \S))
+/// (hash-remove! tst-hash :key1)
+/// (test::assert-equal 2 (len (hash-keys tst-hash)))
+/// (test::assert-equal "val three" (hash-get tst-hash "key3"))
+/// (test::assert-equal "val S" (hash-get tst-hash \S))
+/// (hash-remove! tst-hash "key3")
+/// (test::assert-equal 1 (len (hash-keys tst-hash)))
+/// (test::assert-equal "val S" (hash-get tst-hash \S))
+/// (hash-remove! tst-hash \S)
+/// (test::assert-equal 0 (len (hash-keys tst-hash)))
+#[sl_sh_fn(fn_name = "hash-remove!")]
+pub fn hash_remove(map: &mut HashMap<Value, Value>, key: Value) -> VMResult<Value> {
+    if let Some(old) = map.remove(&key) {
+        Ok(old)
     } else {
-        Err(VMError::new_vm(
-            "takes three arguments (hash-map key value)".to_string(),
-        ))
+        Ok(Value::Nil)
     }
 }
 
-pub fn hash_hashkey(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
-    let mut i = registers.iter();
-    if let (Some(Value::Map(map_handle)), Some(key), None) = (i.next(), i.next(), i.next()) {
-        let map = vm.get_map(*map_handle);
-        if map.contains_key(key) {
-            Ok(Value::True)
-        } else {
-            Ok(Value::False)
-        }
+///Usage: (hash-haskey hashmap key)
+///
+/// Checks if a key is in a hashmap.
+///
+/// Section: hashmap
+///
+/// Example:
+/// (def tst-hash {:key1  "val one" 'key2 "val two" "key3" "val three" \S "val S"})
+/// (test::assert-equal 4 (len (hash-keys tst-hash)))
+/// (test::assert-true (hash-haskey tst-hash :key1))
+/// (test::assert-true (hash-haskey tst-hash 'key2))
+/// (test::assert-true (hash-haskey tst-hash "key3"))
+/// (test::assert-true (hash-haskey tst-hash \S))
+/// (test::assert-false (hash-haskey tst-hash 'key1))
+/// (test::assert-false (hash-haskey tst-hash :key2))
+/// (test::assert-false (hash-haskey tst-hash "keynone"))
+/// (hash-remove! tst-hash :key1)
+/// (test::assert-false (hash-haskey tst-hash :key1))
+/// (set! tst-hash :key1 "val one b")
+/// (test::assert-true (hash-haskey tst-hash :key1))
+#[sl_sh_fn(fn_name = "hash-haskey?")]
+pub fn hash_hashkey(map: &mut HashMap<Value, Value>, key: Value) -> VMResult<Value> {
+    if map.contains_key(&key) {
+        Ok(Value::True)
     } else {
-        Err(VMError::new_vm(
-            "takes two arguments (hash-map key)".to_string(),
-        ))
+        Ok(Value::False)
     }
 }
 
-pub fn hash_keys(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
-    let mut i = registers.iter();
-    if let (Some(Value::Map(map_handle)), None) = (i.next(), i.next()) {
-        let map = vm.get_map(*map_handle);
-        let mut keys = Vec::with_capacity(map.len());
-        for key in map.keys() {
-            keys.push(*key);
+/// Usage: (in? needle haystack)
+///
+/// In provided sequence, haystack, find a specific value, needle.
+///
+/// Section: collection
+///
+/// Example:
+/// (assert-true (in? [1 2 3 4 5] 3))
+/// (assert-false (in? [1 2 3 4 5] 9))
+/// (assert-true (in? (list 1 2 3 4 5) 3))
+/// (assert-true (in? '(1 2 3 4 5) 5))
+#[sl_sh_fn(fn_name = "in?", takes_env = true)]
+pub fn is_in(environment: &mut SloshVm, haystack: Value, needle: Value) -> VMResult<Value> {
+    for hay in haystack.iter(environment) {
+        match environment.is_equal_pair(hay, needle)? {
+            Value::True => {
+                return Ok(Value::True);
+            }
+            _ => {}
         }
-        Ok(vm.alloc_vector(keys))
-    } else {
-        Err(VMError::new_vm("takes one argument (hash-map)".to_string()))
     }
+    Ok(Value::False)
+}
+
+///  Usage: (hash-keys hashmap)
+///
+///  Returns a vector of all the hashmaps keys.  The keys will be unordered.
+///
+///  Section: hashmap
+///
+///  Example:
+///  (def tst-hash {:key1  "val one" 'key2 "val two" "key3" "val three" \S "val S"})
+///  (test::assert-equal 4 (len (hash-keys tst-hash)))
+///  (test::assert-true (in? (hash-keys tst-hash) :key1) " Test :key1")
+///  (test::assert-true (in? (hash-keys tst-hash) 'key2) " Test key2")
+///  (test::assert-true (in? (hash-keys tst-hash) \S) " Test S")
+///  (test::assert-true (in? (hash-keys tst-hash) "key3") " Test key3")
+///  (test::assert-false (in? (hash-keys tst-hash) :key4))
+#[sl_sh_fn(fn_name = "hash-keys")]
+pub fn hash_keys(map: &HashMap<Value, Value>) -> VMResult<Vec<Value>> {
+    let mut keys = Vec::with_capacity(map.len());
+    for key in map.keys() {
+        keys.push(*key);
+    }
+    Ok(keys)
+}
+
+pub fn flatten_helper(vec: &mut Vec<Value>, vm: &mut SloshVm, registers: &[Value]) -> VMResult<()> {
+    for i in registers.iter() {
+        if i.iter(vm).next().is_some() {
+            // is iter
+            let vs = i.iter(vm).collect::<Vec<Value>>();
+            flatten_helper(vec, vm, vs.as_slice())?;
+        } else {
+            vec.push(*i)
+        }
+    }
+    Ok(())
 }
 
 pub fn flatten(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut flat = Vec::with_capacity(registers.len());
-    for i in registers.iter() {
-        let mut val = None;
-        if i.iter(vm).next().is_some() {
-            // is iter
-            let vs = i.iter(vm).collect::<Vec<Value>>();
-            let v = flatten(vm, vs.as_slice())?;
-            val = Some(v);
-        } else {
-            flat.push(*i)
-        }
-        if let Some(val) = val {
-            let mut vs = val.iter_all(vm).collect::<Vec<Value>>();
-            flat.append(&mut vs);
-        }
-    }
+    flatten_helper(&mut flat, vm, registers)?;
     Ok(vm.alloc_vector(flat))
 }
 
+/// Usage: (reverse items)
+///
+/// Produce a vector that is the reverse of items. Will call iter on items and requires a double ended iterator.
+///
+/// Section: collection
+///
+/// Example:
+/// (def tmap [1 2 3 0])
+/// (assert-false (empty? tmap))
+/// (def tmap (reverse tmap))
+/// (assert-equal 2 (get tmap 2))
+/// (assert-equal 1 (get tmap 3))
+/// (assert-equal 0 (get tmap 0))
+/// (assert-error (reverse "string"))
+#[sl_sh_fn(fn_name = "reverse", takes_env = true)]
+pub fn reverse(environment: &mut SloshVm, seq: Value) -> VMResult<Value> {
+    let seq = seq
+        .iter(environment)
+        .collect::<Vec<Value>>()
+        .into_iter()
+        .rev()
+        .collect::<Vec<Value>>();
+    Ok(environment.alloc_vector(seq))
+}
+
 pub fn setup_collection_builtins(env: &mut SloshVm) {
+    intern_reverse(env);
+    intern_hash_keys(env);
+    intern_is_in(env);
     add_builtin(
         env,
         "flatten",
@@ -146,7 +239,7 @@ pub fn setup_collection_builtins(env: &mut SloshVm) {
 Takes a sequence composed of individual values or sequences of values and turns
 it into one vector of values.
 
-Section: core
+Section: collection
 
 Example:
 (assert-equal [1 2 3 1 2 3] (flatten 1 2 3 (list 1 2 3)))
