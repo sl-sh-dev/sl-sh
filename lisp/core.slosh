@@ -677,17 +677,13 @@ Section: core
 %#
 (defmacro test::assert-error (& body) `(assert-error ~@body))
 
-
-
-#%
-apply
-Takes a sequence composed of individual values or sequences of values and turns
-it into one vector of values.
-
-Section: core
-
-Example:
-(assert-equal 6 (apply + 1 2 3))
-%#
-(defmacro apply (a-fn & body) `(~a-fn ~@body))
-
+;; #%
+;; %#
+;; (defn fapply (accum a-fn body)
+;;     )
+;;
+;;
+;; (defmacro flatapply (fst & rest)
+;; `(let (rst (flatten ~@rest))
+;;     (fapply () ~fst (flatten ~@rest))))
+;;
