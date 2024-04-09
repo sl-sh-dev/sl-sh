@@ -598,7 +598,7 @@ fn build_each_docs_section_chapter(
             content = content + &format!("{{{{ #include section-docs/{}.md }}}}\n\n\n", section);
         }
 
-        let header = "List of symbols: \n".to_string();
+        let header = "\n\nList of symbols: \n\n".to_string();
         content = content + &header + &list;
 
         let path = make_file(section, &content)
