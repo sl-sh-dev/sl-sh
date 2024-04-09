@@ -282,7 +282,7 @@ impl AsMd for SloshDoc {
         //content = content + &format!("section: {}\n", docs.doc_string.section);
         content = content + &format!("{}\n", self.doc_string.description);
         if let Some(example) = &self.doc_string.example {
-            content += "Example:\n```\n";
+            content += "\n\nExample:\n```\n";
             content += example;
             content += "\n``` \n";
         } else {

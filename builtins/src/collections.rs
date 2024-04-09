@@ -76,6 +76,8 @@ pub fn vec_to_list(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
 ///
 /// Remove a key from a hashmap. This is a destructive form!
 ///
+/// Section: hashmap
+///
 /// Example:
 /// (def tst-hash {:key1  "val one" 'key2 "val two" "key3" "val three" \S "val S"})
 /// (test::assert-equal 4 (length (hash-keys tst-hash)))
@@ -106,7 +108,7 @@ pub fn hash_remove(map: &mut HashMap<Value, Value>, key: Value) -> VMResult<Valu
     }
 }
 
-///Usage: (hash-haskey hashmap key)
+/// Usage: (hash-haskey hashmap key)
 ///
 /// Checks if a key is in a hashmap.
 ///
@@ -182,10 +184,10 @@ pub fn hash_keys(map: &HashMap<Value, Value>) -> VMResult<Vec<Value>> {
     Ok(keys)
 }
 
-pub fn flatten_helper(vec: &mut Vec<Value>, vm: &mut SloshVm, registers: &[Value]) -> VMResult<()> {
+fn flatten_helper(vec: &mut Vec<Value>, vm: &mut SloshVm, registers: &[Value]) -> VMResult<()> {
     for i in registers.iter() {
         if i.iter(vm).next().is_some() {
-            // is iter
+            // is iterble
             let vs = i.iter(vm).collect::<Vec<Value>>();
             flatten_helper(vec, vm, vs.as_slice())?;
         } else {
@@ -230,6 +232,7 @@ pub fn setup_collection_builtins(env: &mut SloshVm) {
     intern_reverse(env);
     intern_hash_keys(env);
     intern_is_in(env);
+    intern_hash_remove(env);
     add_builtin(
         env,
         "flatten",
