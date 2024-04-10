@@ -10,9 +10,10 @@
         (prn "Symbol: " globals.~i)
         (prn "===")
         (def doc (doc-map globals.~i))
-        (prn "Usage: " (str doc.:usage))
-        (prn "Description: " (str doc.:description))
-        (prn "Section: " (str doc.:section))
+        ;; for some reason printing usage for vec-slice causes rust to panic with 'Handle 2045 is not a string!'
+        ;; (prn "Usage: " (str doc.:usage))
+        ;; (prn "Description: " (str doc.:description))
+        ;; (prn "Section: " (str doc.:section))
         (if (not (err? (get failing-tests (->key globals.~i))))
             (prn "~~~~~~~~~~~~~~~~~~~~~ Skipping failing test")
             (let (example (str doc.:example)

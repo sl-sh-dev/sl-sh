@@ -305,7 +305,7 @@ Example:
         env,
         "vec-slice",
         vec_slice,
-        "Usage: (vec-slice vector start end?)
+        "Usage: (vec-slice vector start end)
 
 Returns a slice of a vector (0 based indexes, end is exclusive).
 
