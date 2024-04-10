@@ -137,6 +137,27 @@ pub fn hash_hashkey(map: &mut HashMap<Value, Value>, key: Value) -> VMResult<Val
     }
 }
 
+/// Usage: (occurs (list 1 2 ...) 7)
+///
+/// Counts instances of item in sequence.
+///
+/// Section: core
+///
+/// Example:
+/// (test::assert-equal 1 (occurs (list 1 3 5 2 4 8 2 4 88 2 1) 8))
+/// (test::assert-equal 3 (occurs (list 1 3 5 2 4 10 2 4 88 2 1) 2))
+/// (test::assert-equal 0 (occurs (list 1 3 5 2 4 10 2 4 88 2 1) 42))
+#[sl_sh_fn(fn_name = "occurs", takes_env = true)]
+pub fn occurs(environment: &mut SloshVm, haystack: Value, needle: Value) -> VMResult<u64> {
+    let mut occurrences = 0;
+    for hay in haystack.iter(environment) {
+        if environment.is_equal_pair(hay, needle)? == Value::True {
+            occurrences += 1;
+        }
+    }
+    Ok(occurrences)
+}
+
 /// Usage: (in? needle haystack)
 ///
 /// In provided sequence, haystack, find a specific value, needle.
@@ -150,7 +171,7 @@ pub fn hash_hashkey(map: &mut HashMap<Value, Value>, key: Value) -> VMResult<Val
 /// (assert-true (in? '(1 2 3 4 5) 5))
 #[sl_sh_fn(fn_name = "in?", takes_env = true)]
 pub fn is_in(environment: &mut SloshVm, haystack: Value, needle: Value) -> VMResult<Value> {
-    for hay in haystack.iter(environment) {
+    for hay in haystack.iter_all(environment) {
         match environment.is_equal_pair(hay, needle)? {
             Value::True => {
                 return Ok(Value::True);
@@ -159,6 +180,30 @@ pub fn is_in(environment: &mut SloshVm, haystack: Value, needle: Value) -> VMRes
         }
     }
     Ok(Value::False)
+}
+
+/// Usage: (to-list any)
+///
+/// Turns any one value into a vector. If that value or if it was a sequence
+/// a new sequence with the same values.
+///
+/// Section: core
+#[sl_sh_fn(fn_name = "to-vec", takes_env = true)]
+pub fn to_vec(environment: &mut SloshVm, src: Value) -> VMResult<Value> {
+    Ok(environment.alloc_vector(src.iter_all(environment).collect::<Vec<Value>>()))
+}
+
+/// Usage: (to-list any)
+///
+/// Turns any one value into a list. If that value or if it was a sequence
+/// a new sequence with the same values.
+///
+/// Section: core
+#[sl_sh_fn(fn_name = "to-list", takes_env = true)]
+pub fn to_list(environment: &mut SloshVm, src: Value) -> VMResult<Value> {
+    let v = environment.alloc_vector(src.iter_all(environment).collect::<Vec<Value>>());
+    let h = v.get_handle().unwrap();
+    Ok(Value::List(h, 0))
 }
 
 ///  Usage: (hash-keys hashmap)
@@ -231,10 +276,13 @@ pub fn reverse(environment: &mut SloshVm, seq: Value) -> VMResult<Value> {
 }
 
 pub fn setup_collection_builtins(env: &mut SloshVm) {
+    intern_occurs(env);
     intern_reverse(env);
     intern_hash_keys(env);
-    intern_is_in(env);
     intern_hash_remove(env);
+    intern_is_in(env);
+    intern_to_vec(env);
+    intern_to_list(env);
     add_builtin(
         env,
         "flatten",
