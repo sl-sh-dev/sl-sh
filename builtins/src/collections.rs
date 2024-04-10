@@ -80,23 +80,23 @@ pub fn vec_to_list(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
 ///
 /// Example:
 /// (def tst-hash {:key1  "val one" 'key2 "val two" "key3" "val three" \S "val S"})
-/// (test::assert-equal 4 (length (hash-keys tst-hash)))
-/// (test::assert-equal "val one" (hash-get tst-hash :key1))
-/// (test::assert-equal "val two" (hash-get tst-hash 'key2))
-/// (test::assert-equal "val three" (hash-get tst-hash "key3"))
-/// (test::assert-equal "val S" (hash-get tst-hash \S))
+/// (test::assert-equal 4 (len (hash-keys tst-hash)))
+/// (test::assert-equal "val one" tst-hash.:key1)
+/// (test::assert-equal "val two" (get tst-hash 'key2))
+/// (test::assert-equal "val three" (get tst-hash "key3"))
+/// (test::assert-equal "val S" (get tst-hash \S))
 /// (hash-remove! tst-hash 'key2)
 /// (test::assert-equal 3 (len (hash-keys tst-hash)))
-/// (test::assert-equal "val one" (hash-get tst-hash :key1))
-/// (test::assert-equal "val three" (hash-get tst-hash "key3"))
-/// (test::assert-equal "val S" (hash-get tst-hash \S))
+/// (test::assert-equal "val one" tst-hash.:key1)
+/// (test::assert-equal "val three" (get tst-hash "key3"))
+/// (test::assert-equal "val S" (get tst-hash \S))
 /// (hash-remove! tst-hash :key1)
 /// (test::assert-equal 2 (len (hash-keys tst-hash)))
-/// (test::assert-equal "val three" (hash-get tst-hash "key3"))
-/// (test::assert-equal "val S" (hash-get tst-hash \S))
+/// (test::assert-equal "val three" (get tst-hash "key3"))
+/// (test::assert-equal "val S" (get tst-hash \S))
 /// (hash-remove! tst-hash "key3")
 /// (test::assert-equal 1 (len (hash-keys tst-hash)))
-/// (test::assert-equal "val S" (hash-get tst-hash \S))
+/// (test::assert-equal "val S" (get tst-hash \S))
 /// (hash-remove! tst-hash \S)
 /// (test::assert-equal 0 (len (hash-keys tst-hash)))
 #[sl_sh_fn(fn_name = "hash-remove!")]
@@ -191,7 +191,9 @@ fn flatten_helper(vec: &mut Vec<Value>, vm: &mut SloshVm, registers: &[Value]) -
             let vs = i.iter(vm).collect::<Vec<Value>>();
             flatten_helper(vec, vm, vs.as_slice())?;
         } else {
-            vec.push(*i)
+            if !i.is_nil() {
+                vec.push(*i);
+            }
         }
     }
     Ok(())

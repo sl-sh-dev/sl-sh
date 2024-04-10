@@ -677,13 +677,17 @@ Section: core
 %#
 (defmacro test::assert-error (& body) `(assert-error ~@body))
 
-;; #%
-;; %#
-;; (defn fapply (accum a-fn body)
-;;     )
-;;
-;;
-;; (defmacro flatapply (fst & rest)
-;; `(let (rst (flatten ~@rest))
-;;     (fapply () ~fst (flatten ~@rest))))
-;;
+
+#% Usage: (apply function arg* list)
+
+Call the provided function with the supplied arguments, last is a list that will be expanded.
+
+Section: core
+
+Example:
+(def test-apply-one (apply str "O" "NE"))
+(test::assert-equal "ONE" test-apply-one)
+(test::assert-equal 10 (apply + 1 2 7))
+%#
+(defmacro apply (a-fn & rst)
+    `(~a-fn ~@rst))
