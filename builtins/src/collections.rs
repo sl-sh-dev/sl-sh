@@ -1,7 +1,7 @@
 use crate::SloshVm;
 use bridge_adapters::add_builtin;
 use bridge_macros::sl_sh_fn;
-use slvm::{VMError, VMResult, Value};
+use slvm::{VMError, VMResult, Value, ValueType};
 use std::collections::HashMap;
 
 pub fn vec_slice(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
@@ -171,12 +171,26 @@ pub fn occurs(environment: &mut SloshVm, haystack: Value, needle: Value) -> VMRe
 /// (assert-true (in? '(1 2 3 4 5) 5))
 #[sl_sh_fn(fn_name = "in?", takes_env = true)]
 pub fn is_in(environment: &mut SloshVm, haystack: Value, needle: Value) -> VMResult<Value> {
+    let mut stack = vec![];
     for hay in haystack.iter_all(environment) {
+        let is_list = matches!(
+            hay.value_type(environment),
+            ValueType::Vector | ValueType::List
+        ) || hay.is_proper_list(environment);
+        if is_list {
+            stack.push(hay);
+        }
         match environment.is_equal_pair(hay, needle)? {
             Value::True => {
                 return Ok(Value::True);
             }
             _ => {}
+        }
+    }
+    for hay in stack {
+        let v = is_in(environment, hay, needle)?;
+        if v == Value::True {
+            return Ok(v);
         }
     }
     Ok(Value::False)

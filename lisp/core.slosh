@@ -715,12 +715,12 @@ Section: core
 
 Example:
 (let (lst (list 1 2 3 4 5))
-    (test::assert-equal (list 1 2 2 4 5) (nsubstitute! 2 3 lst))
+    (test::assert-equal (list 1 2 2 4 5) (nsubstitute! lst 3 2))
     (test::assert-equal (list 1 2 2 4 5) lst)
-    (test::assert-equal (list 1 3 2 4 5) (nsubstitute! 3 2 lst :first)))
+    (test::assert-equal (list 1 3 2 4 5) (nsubstitute! lst 2 3 :first)))
 %#
 (defn nsubstitute!
-    (new-item old-item lst & mods)
+    (lst old-item new-item & mods)
     (let (early-return (not (nil? mods)))
       (loop (idx items) (0 lst)
         (if (empty? items)
@@ -731,30 +731,29 @@ Example:
                     (set! lst.~idx new-item)
                     (when early-return (break lst))))
               (recur (+ 1 idx) (cdr items)))))
-           lst))
+        (prn "call-end")
+           lst
+           ))
 
-;; #%
-;; Replaces all instances of old-item in copy of lst with new-item.  If last
-;; argument passed in is keyword :first only the first instance of old-item will be
-;; replaced.
-;;
-;; Section: core
-;;
-;; Example:
-;;
-;; (let (lst (list 1 2 3 4 3)
-;;      olst (list 1 2 3 4 3)
-;;       lst2 (list 1 2 3 3 3 4 5)
-;;      olst2 (list 1 2 3 3 3 4 5))
-;;     (test::assert-equal (list 1 2 10 4 10) (substitute 10 3 lst))
-;;     (test::assert-equal (list 1 2 10 4 3) (substitute 10 3 lst :first))
-;;     (test::assert-equal olst lst)
-;;     (test::assert-equal (list 1 2 4 4 4 4 5) (substitute 4 3 lst2))
-;;     (test::assert-equal (list 1 2 4 3 3 4 5) (substitute 4 3 lst2 :first)))
-;;     (test::assert-equal olst2 lst2))
-;; %#
-;; ;; TODO PC needs to copy lst
-;;  (defmacro substitute (new-item old-item lst & mods)
-;;       `(nsubstitute! ~new-item ~old-item (to-list ~lst) ~@mods))
-;;
+ #%
+ Replaces all instances of old-item in copy of lst with new-item.  If last
+ argument passed in is keyword :first only the first instance of old-item will be
+ replaced.
 
+ Section: core
+
+ Example:
+
+ (let (lst (list 1 2 3 4 3)
+      olst (list 1 2 3 4 3)
+       lst2 (list 1 2 3 3 3 4 5)
+      olst2 (list 1 2 3 3 3 4 5))
+     (test::assert-equal (list 1 2 10 4 10) (substitute lst 3 10))
+     (test::assert-equal (list 1 2 10 4 3) (substitute lst 3 10 :first))
+     (test::assert-equal olst lst)
+     (test::assert-equal (list 1 2 4 4 4 4 5) (substitute lst2 3 4))
+     (test::assert-equal (list 1 2 4 3 3 4 5) (substitute lst2 3 4 :first))
+     (test::assert-equal olst2 lst2))
+ %#
+  (defmacro substitute (lst old-item new-item & mods)
+       `(nsubstitute! (to-list ~lst) ~old-item ~new-item ~@mods))

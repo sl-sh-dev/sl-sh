@@ -3,7 +3,7 @@ on:
   push:
     branches:
       - master
-      - custom-preprocessor2
+      - more-std-lib
 
 jobs:
   deploy:
