@@ -180,11 +180,8 @@ pub fn is_in(environment: &mut SloshVm, haystack: Value, needle: Value) -> VMRes
         if is_list {
             stack.push(hay);
         }
-        match environment.is_equal_pair(hay, needle)? {
-            Value::True => {
-                return Ok(Value::True);
-            }
-            _ => {}
+        if environment.is_equal_pair(hay, needle)? == Value::True {
+            return Ok(Value::True);
         }
     }
     for hay in stack {
@@ -246,13 +243,11 @@ pub fn hash_keys(map: &HashMap<Value, Value>) -> VMResult<Vec<Value>> {
 fn flatten_helper(vec: &mut Vec<Value>, vm: &mut SloshVm, registers: &[Value]) -> VMResult<()> {
     for i in registers.iter() {
         if i.iter(vm).next().is_some() {
-            // is iterble
+            // is iterable
             let vs = i.iter(vm).collect::<Vec<Value>>();
             flatten_helper(vec, vm, vs.as_slice())?;
-        } else {
-            if !i.is_nil() {
-                vec.push(*i);
-            }
+        } else if !i.is_nil() {
+            vec.push(*i);
         }
     }
     Ok(())

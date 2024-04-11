@@ -721,7 +721,8 @@ Example:
 %#
 (defn nsubstitute!
     (lst old-item new-item & mods)
-    (let (early-return (not (nil? mods)))
+    (prn "mods: " mods ", type: " (type mods))
+    (let (early-return (in? mods :first))
       (loop (idx items) (0 lst)
         (if (empty? items)
             lst
@@ -731,9 +732,7 @@ Example:
                     (set! lst.~idx new-item)
                     (when early-return (break lst))))
               (recur (+ 1 idx) (cdr items)))))
-        (prn "call-end")
-           lst
-           ))
+           lst))
 
  #%
  Replaces all instances of old-item in copy of lst with new-item.  If last
