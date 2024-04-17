@@ -721,7 +721,6 @@ Example:
 %#
 (defn nsubstitute!
     (lst old-item new-item & mods)
-    (prn "lst: " lst ", old-item: " old-item ", new-item: " new-item ", mods: " mods ", type: " (type mods))
     (let (early-return (in? mods :first))
       (loop (idx items) (0 lst)
         (if (empty? items)

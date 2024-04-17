@@ -17,14 +17,14 @@ use slvm::opcodes::*;
 use compile_state::state::*;
 use sl_compiler::reader::*;
 
-use builtins::{add_global_value, add_misc_builtins};
-use builtins::print::{add_print_builtins, display_value};
-use sl_liner::vi::AlphanumericAndVariableKeywordRule;
-use sl_liner::{keymap, ColorClosure, Context, Prompt};
 use builtins::collections::setup_collection_builtins;
 use builtins::conversions::add_conv_builtins;
 use builtins::io::add_io_builtins;
+use builtins::print::{add_print_builtins, display_value};
 use builtins::string::add_str_builtins;
+use builtins::{add_global_value, add_misc_builtins};
+use sl_liner::vi::AlphanumericAndVariableKeywordRule;
+use sl_liner::{keymap, ColorClosure, Context, Prompt};
 
 mod completions;
 pub mod debug;
