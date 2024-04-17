@@ -2,10 +2,11 @@ use std::path::PathBuf;
 
 use compile_state::state::{CompileState, SloshVm, SloshVmTrait};
 use sl_compiler::pass1::pass1;
-use sl_compiler::{compile, new_slosh_vm_with_builtins, Reader};
+use sl_compiler::{compile, Reader};
 use slvm::{
     Chunk, VMError, VMResult, Value, Vm, ADD, CONST, DIV, GET, INC, JMPLT, MUL, RET, SETCOL, VECMKD,
 };
+use slosh_lib::new_slosh_vm_with_builtins;
 use std::sync::Arc;
 
 // TODO PC would be nice to not have to copy load_one_expression and run_reader.

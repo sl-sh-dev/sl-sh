@@ -36,7 +36,7 @@ mod tests {
     extern crate tempdir;
 
     use compiler_test_utils::exec;
-    use slosh_lib::{set_builtins, set_initial_load_path, ENV};
+    use slosh_lib::{set_builtins_shell, set_initial_load_path, ENV};
     use slvm::{from_i56, Value};
     use std::fs::{create_dir_all, File};
     use std::io::Write;
@@ -72,7 +72,7 @@ mod tests {
         let v = temp_env::with_var("HOME", home_dir, || {
             ENV.with(|env| {
                 let mut vm = env.borrow_mut();
-                set_builtins(vm.deref_mut());
+                set_builtins_shell(vm.deref_mut());
                 set_initial_load_path(
                     vm.deref_mut(),
                     vec![

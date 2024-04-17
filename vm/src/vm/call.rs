@@ -167,9 +167,12 @@ impl<ENV> GVm<ENV> {
                 Ok(self.finish_special_call(chunk, tail_call, first_reg, res))
             }
             Value::Lambda(handle) => {
-                let stack_top = self.stack_top;
                 let l = self.heap().get_lambda(handle);
                 check_num_args(&l, num_args).map_err(|e| (e, chunk.clone()))?;
+                if l.rest {
+                    let (rest_reg, h) = self.setup_rest(&l, first_reg, num_args);
+                    *self.stack_mut(self.stack_top + rest_reg) = h;
+                }
                 if !tail_call {
                     let frame = self.make_call_frame(chunk, lambda, true);
                     let aframe = self.alloc_callframe(frame);
@@ -179,10 +182,6 @@ impl<ENV> GVm<ENV> {
                 self.stack_max = self.stack_top + l.input_regs + l.extra_regs;
                 self.this_fn = Some(lambda);
                 self.ip_ptr = get_code!(l);
-                if l.rest {
-                    let (rest_reg, h) = self.setup_rest(&l, first_reg, num_args);
-                    *self.stack_mut(stack_top + rest_reg) = h;
-                }
                 // XXX TODO- maybe test for stack overflow vs waiting for a panic.
                 self.clear_opts(&l, first_reg, num_args);
                 Ok(l)
@@ -191,6 +190,23 @@ impl<ENV> GVm<ENV> {
                 let stack_top = self.stack_top;
                 let (l, _) = self.heap().get_closure(handle);
                 check_num_args(&l, num_args).map_err(|e| (e, chunk.clone()))?;
+                let cap_first = if l.rest {
+                    let (rest_reg, h) = self.setup_rest(&l, first_reg, num_args);
+                    *self.stack_mut(self.stack_top + rest_reg) = h;
+                    rest_reg + 1
+                } else {
+                    (first_reg + l.args + l.opt_args + 1) as usize
+                };
+
+                // Take the heap so we can mutate self.  Put it back when done or will panic on next access.
+                let heap = self.heap.take().expect("VM must have a Heap!");
+                let caps = heap.get_closure_captures(handle);
+                for (i, c) in caps.iter().enumerate() {
+                    *self.stack_mut(self.stack_top + cap_first + i) = Value::Value(*c);
+                }
+                // Put the heap back, if this doesn't happen will panic on next access attempt.
+                self.heap = Some(heap);
+
                 let frame = if !tail_call {
                     let frame = self.make_call_frame(chunk, lambda, true);
                     self.stack_top += first_reg as usize;
@@ -199,27 +215,9 @@ impl<ENV> GVm<ENV> {
                     assert_eq!(first_reg, 0);
                     None
                 };
-                // Take the heap so we can mutate self.  Put it back when done or will panic on next access.
-                let heap = self.heap.take().expect("VM must have a Heap!");
-                let caps = heap.get_closure_captures(handle);
                 self.stack_max = self.stack_top + l.input_regs + l.extra_regs;
                 self.this_fn = Some(lambda);
                 self.ip_ptr = get_code!(l);
-                if l.rest {
-                    let (rest_reg, h) = self.setup_rest(&l, first_reg, num_args);
-                    let cap_first = rest_reg + 1;
-                    for (i, c) in caps.iter().enumerate() {
-                        *self.stack_mut(stack_top + cap_first + i) = Value::Value(*c);
-                    }
-                    *self.stack_mut(stack_top + rest_reg) = h;
-                } else {
-                    let cap_first = (first_reg + l.args + l.opt_args + 1) as usize;
-                    for (i, c) in caps.iter().enumerate() {
-                        *self.stack_mut(stack_top + cap_first + i) = Value::Value(*c);
-                    }
-                }
-                // Put the heap back, if this doesn't happen will panic on next access attempt.
-                self.heap = Some(heap);
                 if let Some(frame) = frame {
                     let aframe = self.alloc_callframe(frame);
                     *self.stack_mut(stack_top + first_reg as usize) = aframe;
