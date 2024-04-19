@@ -36,7 +36,7 @@ lazy_static! {
             .crlf(true)
             .build()
             .unwrap();
-    static ref EXEMPTIONS: HashSet<&'static str> = {
+    pub static ref EXEMPTIONS: HashSet<&'static str> = {
         let mut exemption_set = HashSet::new();
         exemption_set.insert("version");
         exemption_set.insert("env");
@@ -68,6 +68,8 @@ lazy_static! {
         exemption_set.insert("*int-max*");
         exemption_set.insert("prn");
         exemption_set.insert("pr");
+        exemption_set.insert("eprn");
+        exemption_set.insert("epr");
         exemption_set.insert("sizeof-value");
         exemption_set.insert("dump-regs");
         exemption_set.insert("dasm");
@@ -193,7 +195,7 @@ impl Display for DocStringSection {
             .unwrap_or_default();
         write!(
             f,
-            "{usage}{description}Section: {section}\n\n{example}",
+            "{usage}\n{description}\n\nSection: {section}\n\n{example}",
             usage = usage,
             description = self.description,
             section = self.section,
@@ -491,6 +493,7 @@ fn doc_map(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
             // Unpause GC, this MUST happen so no early returns (looking at you ?).
             vm.unpause_gc();
             res
+
         }
         _ => Err(VMError::new_vm("takes one argument (symbol)".to_string())),
     }
@@ -685,10 +688,25 @@ fn capitalize_first(s: &str) -> String {
     }
 }
 
+fn get_exemptions(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    if !registers.is_empty() {
+        return Err(VMError::new_vm(
+            "get-exemptions: takes no arguments".to_string(),
+        ));
+    }
+    let mut exemptions = EXEMPTIONS.iter().copied().collect::<Vec<&str>>();
+    exemptions.sort();
+    let exemptions = exemptions
+        .iter()
+        .map(|x| Value::Symbol(vm.intern(x)))
+        .collect::<Vec<Value>>();
+    Ok(vm.alloc_vector(exemptions))
+}
+
 fn get_globals_sorted(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if !registers.is_empty() {
         return Err(VMError::new_vm(
-            "get_globals_sorted: takes no arguments".to_string(),
+            "get-globals-sorted: takes no arguments".to_string(),
         ));
     }
     let mut result = BTreeMap::new();
@@ -740,6 +758,19 @@ Example:
         "Usage: (get-globals-sorted)
 
 Return a vector containing all the symbols currently defined globally in sorted order (alphanumerically).
+
+Section: doc
+",
+    );
+
+    add_builtin(
+        env,
+        "get-exemptions",
+        get_exemptions,
+        "Usage: (get-exemptions)
+
+Return a vector containing all the symbols currently exempted from docs
+(so the build passes), Ideally this will be 0.
 
 Section: doc
 ",

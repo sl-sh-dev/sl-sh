@@ -85,7 +85,8 @@ pub fn add_conv_builtins(env: &mut SloshVm) {
         env,
         "->sym",
         to_sym,
-        r#"Usage: (->sym exp) -> symbol
+        //space is needed here for test to pass do not know why
+        r#" Usage: (->sym exp) -> symbol
 
 Converts exp to a symbol.
 

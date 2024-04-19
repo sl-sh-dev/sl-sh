@@ -3,7 +3,7 @@ use compile_state::state::{CompileState, SloshVmTrait};
 use sl_compiler::compile;
 use sl_compiler::pass1::pass1;
 use slvm::{Interned, VMError, VMResult, Value};
-use std::io::{stdout, Write};
+use std::io::{stderr, stdout, Write};
 
 fn is_sym(vm: &SloshVm, name: &str, intern: Interned) -> bool {
     if let Some(i) = vm.get_if_interned(name) {
@@ -109,11 +109,27 @@ pub fn pr(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     Ok(Value::Nil)
 }
 
+pub fn epr(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    for v in registers {
+        eprint!("{}", pretty_value(vm, *v));
+    }
+    stderr().flush()?;
+    Ok(Value::Nil)
+}
+
 pub fn prn(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     for v in registers {
         print!("{}", pretty_value(vm, *v));
     }
     println!();
+    Ok(Value::Nil)
+}
+
+pub fn eprn(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    for v in registers {
+        eprint!("{}", pretty_value(vm, *v));
+    }
+    eprintln!();
     Ok(Value::Nil)
 }
 
@@ -155,6 +171,8 @@ pub fn dasm(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
 
 pub fn add_print_builtins(env: &mut SloshVm) {
     env.set_global_builtin("pr", pr);
+    env.set_global_builtin("epr", epr);
     env.set_global_builtin("prn", prn);
+    env.set_global_builtin("eprn", eprn);
     env.set_global_builtin("dasm", dasm);
 }
