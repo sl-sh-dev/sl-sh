@@ -493,7 +493,6 @@ fn doc_map(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
             // Unpause GC, this MUST happen so no early returns (looking at you ?).
             vm.unpause_gc();
             res
-
         }
         _ => Err(VMError::new_vm("takes one argument (symbol)".to_string())),
     }
