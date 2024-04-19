@@ -677,22 +677,6 @@ Section: test
 %#
 (defmacro test::assert-error (& body) `(assert-error ~@body))
 
-
-#%
-Usage: (apply function arg* list)
-
-Call the provided function with the supplied arguments, last is a list that will be expanded.
-
-Section: core
-
-Example:
-(def test-apply-one (apply str "O" "NE"))
-(test::assert-equal "ONE" test-apply-one)
-(test::assert-equal 10 (apply + 1 2 7))
-%#
-(defmacro apply (a-fn & rst)
-    `(~a-fn ~@rst))
-
 #%
 Usage: (identity arg)
 
