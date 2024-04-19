@@ -22,5 +22,7 @@ export PATH="$PATH:./mdbook-slosh-eval/target/debug"
 
 # make the slosh-forms.csv file
 ./list-slosh-forms.sh | tail -n +4 > src/slosh-forms.csv
+./list-slosh-forms.sh | tail -n +4 > slosh-forms.csv
 ./list-slosh-doc-exemptions.sh | tail -n +4 > src/slosh-doc-exemptions.csv
+./list-slosh-doc-exemptions.sh | tail -n +4 > slosh-doc-exemptions.csv
 ../target/debug/slosh_test -c "(build-doc \"${PWD}\")"
