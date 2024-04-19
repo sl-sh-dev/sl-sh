@@ -479,6 +479,8 @@ fn doc_map(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();
     match (i.next(), i.next()) {
         (Some(Value::Symbol(g)), None) => {
+            // Pause GC so that we don't wind up collecting any strings used to build the doc map
+            // before they get rooted via the map.
             vm.pause_gc();
             let res = match SloshDoc::new(*g, vm, Namespace::Global) {
                 Ok(slosh_doc) => Value::sl_from(slosh_doc, vm),
@@ -488,6 +490,7 @@ fn doc_map(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
                 }
                 Err(e) => Err(VMError::from(e)),
             };
+            // Unpause GC, this MUST happen so no early returns (looking at you ?).
             vm.unpause_gc();
             res
         }
@@ -778,7 +781,7 @@ mod test {
     use super::*;
     use compile_state::state::new_slosh_vm;
     use sl_compiler::Reader;
-    use slosh_lib::{run_reader, set_builtins, set_initial_load_path, ENV};
+    use slosh_lib::{run_reader, set_builtins_shell, set_initial_load_path, ENV};
     use std::collections::BTreeMap;
     use std::ops::DerefMut;
     use tempdir::TempDir;
@@ -793,7 +796,7 @@ mod test {
         temp_env::with_var("HOME", home_dir, || {
             ENV.with(|env| {
                 let mut vm = env.borrow_mut();
-                set_builtins(vm.deref_mut());
+                set_builtins_shell(vm.deref_mut());
                 set_initial_load_path(vm.deref_mut(), vec![&home_path]);
                 let mut reader =
                     Reader::from_string(r#"(load "core.slosh")"#.to_string(), &mut vm, "", 1, 0);
@@ -825,7 +828,7 @@ mod test {
     #[test]
     fn list_slosh_functions() {
         let mut vm = new_slosh_vm();
-        set_builtins(&mut vm);
+        set_builtins_shell(&mut vm);
         for (g, _) in vm.globals() {
             let sym = Value::Symbol(*g);
             let symbol = sym.display_value(&vm);
@@ -837,7 +840,7 @@ mod test {
     #[test]
     fn test_global_slosh_docs_formatted_properly() {
         let mut env = new_slosh_vm();
-        set_builtins(&mut env);
+        set_builtins_shell(&mut env);
 
         let mut docs: Vec<SloshDoc> = vec![];
         Namespace::Global.add_docs(&mut docs, &mut env).unwrap();
