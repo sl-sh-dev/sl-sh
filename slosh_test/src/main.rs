@@ -2,6 +2,8 @@ pub mod docs;
 
 use bridge_adapters::add_builtin;
 use compile_state::state::SloshVm;
+use sl_compiler::load_eval::run_reader;
+use sl_compiler::Reader;
 use slosh_lib::run;
 use slvm::{VMError, VMResult, Value};
 use std::process;
@@ -24,6 +26,9 @@ fn modify_vm(vm: &mut SloshVm) {
         version,
         "Return the software version string.",
     );
+
+    let mut reader = Reader::from_string(r#"(load "core.slosh")"#.to_string(), vm, "", 1, 0);
+    _ = run_reader(&mut reader);
 }
 
 fn main() {
