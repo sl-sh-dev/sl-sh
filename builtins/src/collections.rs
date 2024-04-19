@@ -261,7 +261,7 @@ pub fn flatten(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
 
 /// Usage: (reverse items)
 ///
-/// Produce a vector that is the reverse of items. Will call iter on items and requires a double ended iterator.
+/// Produce a vector that is the reverse of items.
 ///
 /// Section: collection
 ///
