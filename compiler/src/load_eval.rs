@@ -1,7 +1,7 @@
 use crate::pass1::pass1;
 use crate::{compile, Reader};
-use compile_state::state::{CompileState, SloshVm, SloshVmTrait};
-use slvm::{Chunk, VMError, VMResult, Value, RET};
+use compile_state::state::{CompileEnvironment, CompileState, SloshVm, SloshVmTrait};
+use slvm::{CallFuncSig, Chunk, VMError, VMResult, Value, RET};
 use std::borrow::Cow;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -242,21 +242,103 @@ fn load(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     r
 }
 
+fn eval_exp(vm: &mut SloshVm, exp: Value) -> VMResult<Value> {
+    let line_num = 1;
+    let mut state = CompileState::new_state("none/eval", line_num, None);
+    state.chunk.dbg_args = Some(Vec::new());
+    pass1(vm, &mut state, exp)?;
+    compile(vm, &mut state, exp, 0)?;
+    state.chunk.encode0(RET, vm.own_line())?;
+    let chunk = Arc::new(state.chunk.clone());
+    vm.do_call(chunk, &[], None)
+}
+
 fn eval(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if let (Some(exp), None) = (registers.first(), registers.get(1)) {
-        let line_num = 1;
-        let mut state = CompileState::new_state("none/eval", line_num, None);
-        state.chunk.dbg_args = Some(Vec::new());
-        pass1(vm, &mut state, *exp)?;
-        compile(vm, &mut state, *exp, 0)?;
-        state.chunk.encode0(RET, vm.own_line())?;
-        let chunk = Arc::new(state.chunk.clone());
-        vm.do_call(chunk, &[], None)
+        eval_exp(vm, *exp)
     } else {
         Err(VMError::new_compile(
             "eval: wrong number of args, expected one",
         ))
     }
+}
+
+fn quote_list(vm: &mut SloshVm, exp: Value) -> Value {
+    if matches!(exp, Value::List(_, _) | Value::Pair(_)) {
+        let cdr = vm.alloc_pair_ro(exp, Value::Nil);
+        let q_i = vm.specials().quote;
+        vm.alloc_pair_ro(Value::Symbol(q_i), cdr)
+    } else {
+        exp
+    }
+}
+
+fn apply_inner(vm: &mut SloshVm, car: Value, registers: &[Value]) -> VMResult<Value> {
+    let last_idx = registers.len() - 1;
+    // The allocation(s) here are sub-optimal.  Should be able to use the stack to avoid these but
+    // it is a little tricky.
+    let mut v: Vec<Value> = if last_idx > 0 {
+        let mut v: Vec<Value> = registers[0..last_idx].to_vec();
+        let spread = registers[last_idx].iter_all(vm);
+        v.extend(spread);
+        v
+    } else {
+        registers.to_vec()
+    };
+    match car {
+        Value::Special(_i) => {
+            // We have to compile compiled forms...
+            for i in v.iter_mut() {
+                // quote any lists so they do not get compiled...
+                *i = quote_list(vm, *i);
+            }
+            let exp = vm.alloc_list_ro(v);
+            vm.heap_sticky(exp);
+            let res = eval_exp(vm, exp);
+            vm.heap_unsticky(exp);
+            res
+        }
+        Value::Builtin(i) => {
+            let b = vm.get_builtin(i);
+            (b)(vm, &v[1..])
+        }
+        Value::Lambda(h) => {
+            let l = vm.get_lambda(h);
+            vm.do_call(l, &v[1..], None)
+        }
+        Value::Closure(h) => {
+            let (l, caps) = vm.get_closure(h);
+            let caps = caps.to_vec();
+            vm.do_call(l, &v[1..], Some(&caps[..]))
+        }
+        Value::Continuation(_handle) => {
+            // It probably does not make sense to use apply with a continuation, it can only take
+            // one argument so just call it with it's arg...  But if someone does it is still
+            // a callable so basically eval it.
+            if last_idx != 1 {
+                return Err(VMError::new_vm("Continuation takes one argument."));
+            }
+            let exp = vm.alloc_list_ro(v);
+            vm.heap_sticky(exp);
+            let res = eval_exp(vm, exp);
+            vm.heap_unsticky(exp);
+            res
+        }
+        Value::Value(handle) => {
+            // Need to deref and try again.
+            apply_inner(vm, vm.get_value(handle), registers)
+        }
+        _ => Err(VMError::new_vm(format!("apply: Not a callable {car:?}."))),
+    }
+}
+
+fn apply(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    if registers.is_empty() {
+        return Err(VMError::new_compile(
+            "apply: wrong number of args, expected at least one",
+        ));
+    }
+    apply_inner(vm, registers[0], registers)
 }
 
 fn read_all(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
@@ -288,8 +370,53 @@ fn read_all(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
+fn add_compiler_builtin(
+    env: &mut SloshVm,
+    name: &str,
+    func: CallFuncSig<CompileEnvironment>,
+    doc_string: &str,
+) {
+    let si = env.set_global_builtin(name, func);
+    let key = env.intern("doc-string");
+    let s = env.alloc_string(doc_string.to_string());
+    env.set_global_property(si, key, s);
+}
+
 pub fn add_load_builtins(env: &mut SloshVm) {
     env.set_global_builtin("load", load);
     env.set_global_builtin("eval", eval);
     env.set_global_builtin("read-all", read_all);
+    add_compiler_builtin(
+        env,
+        "apply",
+        apply,
+        r#"Usage: (apply function arg* list)
+
+Call the provided function with the supplied arguments, if last is a list or vector then it will
+be "spread" as arguments.  For instance (apply pr 1 2 3 [4 5 6]) is equivalent to (pr 1 2 3 4 5 6).
+
+Section: core
+
+Example:
+(def test-apply-one (apply str "O" "NE"))
+(test::assert-equal "ONE" test-apply-one)
+(test::assert-equal 10 (apply + 1 2 7))
+(test::assert-equal 10 (apply + 1 [2 7]))
+(test::assert-equal 10 (apply + 1 '(2 7))
+(test::assert-equal 10 (apply + [1 2 7]))
+(test::assert-equal 10 (apply + '(1 2 7))
+(def test-apply-fn1 (fn (& args) (apply + args)))
+(test::assert-equal 10 (apply test-apply-fn1 1 2 7)
+(test::assert-equal 10 (apply test-apply-fn1 1 [2 7])
+(test::assert-equal 10 (apply test-apply-fn1 1 '(2 7))
+(test::assert-equal 10 (apply test-apply-fn1 [1 2 7])
+(test::assert-equal 10 (apply test-apply-fn1 '(1 2 7))
+(def test-apply-fn2 (fn (x y z) (+ x y z)))
+(test::assert-equal 10 (apply test-apply-fn2 1 2 7)
+(test::assert-equal 10 (apply test-apply-fn2 1 [2 7])
+(test::assert-equal 10 (apply test-apply-fn2 1 '(2 7))
+(test::assert-equal 10 (apply test-apply-fn2 [1 2 7])
+(test::assert-equal 10 (apply test-apply-fn2 '(1 2 7))
+"#,
+    );
 }
