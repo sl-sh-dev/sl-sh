@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::GVm;
+use crate::io::HeapIo;
 
 /// Vm code to access storage, heap, stack, globals, etc.
 
@@ -362,6 +363,10 @@ impl<ENV> GVm<ENV> {
 
     pub fn get_error(&self, handle: Handle) -> Error {
         self.heap().get_error(handle)
+    }
+
+    pub fn get_io(&self, handle: Handle) -> &HeapIo {
+        self.heap().get_io(handle)
     }
 
     pub fn new_upval(&mut self, val: Value) -> Value {
