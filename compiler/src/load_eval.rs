@@ -253,6 +253,7 @@ fn eval_exp(vm: &mut SloshVm, exp: Value) -> VMResult<Value> {
     vm.do_call(chunk, &[], None)
 }
 
+/// Builtin eval implementation.  Tries to avoid compilation when possible (uses apply machinery).
 fn eval(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if let (Some(exp), None) = (registers.first(), registers.get(1)) {
         eval_exp(vm, *exp)
@@ -273,26 +274,53 @@ fn quote_list(vm: &mut SloshVm, exp: Value) -> Value {
     }
 }
 
-fn apply_inner(vm: &mut SloshVm, car: Value, registers: &[Value]) -> VMResult<Value> {
-    let last_idx = registers.len() - 1;
-    // The allocation(s) here are sub-optimal.  Should be able to use the stack to avoid these but
-    // it is a little tricky.
-    let mut v: Vec<Value> = if last_idx > 0 {
-        let mut v: Vec<Value> = registers[0..last_idx].to_vec();
-        let spread = registers[last_idx].iter_all(vm);
-        v.extend(spread);
-        v
-    } else {
-        registers.to_vec()
-    };
-    match car {
-        Value::Special(_i) => {
-            // We have to compile compiled forms...
-            for i in v.iter_mut() {
-                // quote any lists so they do not get compiled...
-                *i = quote_list(vm, *i);
+fn contains_list(args: &[Value]) -> bool {
+    for exp in args {
+        if matches!(exp, Value::List(_, _) | Value::Pair(_)) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Internal implementation, args is expected to have at least one value (the callable being called).
+fn apply_callable(vm: &mut SloshVm, lambda: Value, args: &[Value]) -> VMResult<Value> {
+    match lambda {
+        Value::Symbol(i) | Value::Special(i) if i == vm.specials().quote => {
+            if let Some(arg) = args.get(1) {
+                Ok(*arg)
+            } else {
+                Err(VMError::new_vm(
+                    "apply: invalid quote, requires one arg.".to_string(),
+                ))
             }
-            let exp = vm.alloc_list_ro(v);
+        }
+        Value::Symbol(i) => {
+            // Unknown symbol, check the global namespace.
+            let lambda = if let Some(slot) = vm.global_intern_slot(i) {
+                vm.get_global(slot)
+            } else {
+                return Err(VMError::new_vm(format!(
+                    "apply: Not a callable, unknown symbol {}.",
+                    vm.get_interned(i)
+                )));
+            };
+            apply_callable(vm, lambda, args)
+        }
+        Value::Special(_i) => {
+            let mut args_t;
+            let args = if contains_list(args) {
+                args_t = args.to_vec();
+                for i in args_t.iter_mut() {
+                    // quote any lists so they do not get compiled...
+                    *i = quote_list(vm, *i);
+                }
+                args_t
+            } else {
+                args.to_vec()
+            };
+            // We have to compile compiled forms...
+            let exp = vm.alloc_list_ro(args);
             vm.heap_sticky(exp);
             let res = eval_exp(vm, exp);
             vm.heap_unsticky(exp);
@@ -300,25 +328,25 @@ fn apply_inner(vm: &mut SloshVm, car: Value, registers: &[Value]) -> VMResult<Va
         }
         Value::Builtin(i) => {
             let b = vm.get_builtin(i);
-            (b)(vm, &v[1..])
+            (b)(vm, &args[1..])
         }
         Value::Lambda(h) => {
             let l = vm.get_lambda(h);
-            vm.do_call(l, &v[1..], None)
+            vm.do_call(l, &args[1..], None)
         }
         Value::Closure(h) => {
             let (l, caps) = vm.get_closure(h);
             let caps = caps.to_vec();
-            vm.do_call(l, &v[1..], Some(&caps[..]))
+            vm.do_call(l, &args[1..], Some(&caps[..]))
         }
         Value::Continuation(_handle) => {
             // It probably does not make sense to use apply with a continuation, it can only take
             // one argument so just call it with it's arg...  But if someone does it is still
             // a callable so basically eval it.
-            if last_idx != 1 {
+            if args.len() != 1 {
                 return Err(VMError::new_vm("Continuation takes one argument."));
             }
-            let exp = vm.alloc_list_ro(v);
+            let exp = vm.alloc_list_ro(args.to_vec());
             vm.heap_sticky(exp);
             let res = eval_exp(vm, exp);
             vm.heap_unsticky(exp);
@@ -326,10 +354,27 @@ fn apply_inner(vm: &mut SloshVm, car: Value, registers: &[Value]) -> VMResult<Va
         }
         Value::Value(handle) => {
             // Need to deref and try again.
-            apply_inner(vm, vm.get_value(handle), registers)
+            apply_callable(vm, vm.get_value(handle), args)
         }
-        _ => Err(VMError::new_vm(format!("apply: Not a callable {car:?}."))),
+        _ => Err(VMError::new_vm(format!(
+            "apply: Not a callable {lambda:?}."
+        ))),
     }
+}
+
+fn apply_inner(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    let last_idx = registers.len() - 1;
+    // The allocation(s) here are sub-optimal.  Should be able to use the stack to avoid these but
+    // it is tricky.
+    let v: Vec<Value> = if last_idx > 0 {
+        let mut v: Vec<Value> = registers[0..last_idx].to_vec();
+        let spread = registers[last_idx].iter_all(vm);
+        v.extend(spread);
+        v
+    } else {
+        registers.to_vec()
+    };
+    apply_callable(vm, v[0], &v[..])
 }
 
 fn apply(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
@@ -338,7 +383,7 @@ fn apply(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
             "apply: wrong number of args, expected at least one",
         ));
     }
-    apply_inner(vm, registers[0], registers)
+    apply_inner(vm, registers)
 }
 
 fn read_all(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
@@ -384,7 +429,31 @@ fn add_compiler_builtin(
 
 pub fn add_load_builtins(env: &mut SloshVm) {
     env.set_global_builtin("load", load);
-    env.set_global_builtin("eval", eval);
+    add_compiler_builtin(
+        env,
+        "eval",
+        eval,
+        r#"Usage: (eval expression)
+
+Evaluate the provided expression.  If expression is a list it will be compiled and executed and the result returned
+other values will just be returned (i.e. (eval 1) = 1, (eval "test") = "test", (eval [1 2 3]) = [1 2 3], etc).
+
+Note eval is a function not a special form, the provided expression will be evaluated as part of a call.
+
+Section: core
+
+Example:
+(test::assert-equal "ONE" (eval "ONE"))
+(test::assert-equal 10 (eval 10))
+(test::assert-equal [1 2 3] (eval [1 2 3]))
+(test::assert-equal 10 (eval '(+ 1 2 7)))
+(test::assert-equal 10 (eval '(apply + 1 2 7)))
+(test::assert-equal 10 (eval '(apply + 1 '(2 7))))
+(test::assert-equal 10 (eval '(apply + '(1 2 7))))
+(test::assert-equal 10 (eval '(apply + 1 [2 7])))
+(test::assert-equal 10 (eval '(apply + [1 2 7])))
+"#,
+    );
     env.set_global_builtin("read-all", read_all);
     add_compiler_builtin(
         env,
