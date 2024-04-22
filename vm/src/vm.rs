@@ -20,6 +20,16 @@ pub const STACK_CAP: usize = 1024;
 
 const DEAD_CODE: [u8; 3] = [HALT, HALT, HALT];
 
+/// Hold state of the VM, this is for making re-entrant calls on the VM.
+struct VmState {
+    stack_top: usize,
+    stack_max: usize,
+    ip: *const u8,
+    current_ip: *const u8,
+    this_fn: Option<Value>,
+    on_error: Option<Value>,
+}
+
 pub struct GVm<ENV> {
     interner: Interner,
     heap: Option<Heap>,
@@ -399,6 +409,28 @@ impl<ENV> GVm<ENV> {
         Ok(val)
     }
 
+    /// Return the current VM state (for re-entrant VM calls).
+    fn save_state(&self) -> VmState {
+        VmState {
+            stack_top: self.stack_top,
+            stack_max: self.stack_max,
+            ip: self.ip_ptr,
+            current_ip: self.current_ip_ptr,
+            this_fn: self.this_fn,
+            on_error: self.on_error,
+        }
+    }
+
+    /// Restore saved VM state (for cleaning up after re-entrant VM calls).
+    fn restore_state(&mut self, state: &VmState) {
+        self.stack_top = state.stack_top;
+        self.stack_max = state.stack_max;
+        self.ip_ptr = state.ip;
+        self.current_ip_ptr = state.current_ip;
+        self.this_fn = state.this_fn;
+        self.on_error = state.on_error;
+    }
+
     /// Runs a lambda.  Will save and restore the VM state even on error, chunk is expected to be a
     /// callable with params and any captures (closure) in caps.
     /// This is useful for macro expansion, eval and things like that.  It can be safely used while
@@ -409,11 +441,7 @@ impl<ENV> GVm<ENV> {
         params: &[Value],
         caps: Option<&[Handle]>,
     ) -> VMResult<Value> {
-        let stack_top = self.stack_top;
-        let stack_max = self.stack_max;
-        let ip = self.ip_ptr;
-        let this_fn = self.this_fn;
-        let on_error = self.on_error;
+        let vm_state = self.save_state();
         self.this_fn = None;
         self.on_error = None;
         self.stack_top = self.stack_max + 1;
@@ -443,11 +471,7 @@ impl<ENV> GVm<ENV> {
             }
         }
         let res = self.execute2(chunk).map(|_| self.stack(self.stack_top));
-        self.stack_top = stack_top;
-        self.stack_max = stack_max;
-        self.ip_ptr = ip;
-        self.this_fn = this_fn;
-        self.on_error = on_error;
+        self.restore_state(&vm_state);
         res
     }
 

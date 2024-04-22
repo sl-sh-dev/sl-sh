@@ -150,14 +150,15 @@ impl<ENV> GVm<ENV> {
         let result = match lambda {
             Value::Builtin(f_idx) => {
                 let last_reg = (first_reg + num_args + 1) as usize;
-                // Useful if the builtin runs bytecode that errors otherwise a waste...
-                let frame = self.make_call_frame(chunk.clone(), lambda, false);
                 let f = &self.buitins[f_idx as usize];
                 let regs = self.register_slice();
 
                 let res =
                     (f.func)(self, &regs[(first_reg + 1) as usize..last_reg]).map_err(|e| {
                         if self.err_frame().is_some() {
+                            // We should be OK making the frame here only when needed.  If a builtin
+                            // calls bytecode it should be using do_call() which will restore state.
+                            let frame = self.make_call_frame(chunk.clone(), lambda, false);
                             let call_frame = self.alloc_callframe(frame);
                             mov_register!(self, first_reg as usize, call_frame);
                             self.stack_top += first_reg as usize;
