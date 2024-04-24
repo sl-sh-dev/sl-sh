@@ -5,12 +5,12 @@ use crate::bits::FLAG_MUT;
 use crate::{get_code, Chunk, FxHashMap, Interned, VMError, VMResult, Value};
 pub mod handle;
 pub use crate::handle::Handle;
-use crate::heap::storage::Storage;
 use crate::heap::io::HeapIo;
+use crate::heap::storage::Storage;
 
 pub mod bits;
-mod storage;
 pub mod io;
+mod storage;
 
 #[derive(Clone, Debug)]
 pub struct CallFrame {
@@ -338,8 +338,8 @@ impl Heap {
         mutable: MutState,
         mark_roots: MarkFunc,
     ) -> Value
-        where
-            MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
+    where
+        MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
         if self.ios.live_objects() >= self.ios.capacity() && self.paused == 0 {
             self.collect(mark_roots);

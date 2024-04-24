@@ -30,8 +30,8 @@ impl HeapIo {
             match &mut *guard {
                 Io::File(f) => match f.take() {
                     Some(f) => *guard = Io::FileReadBuf(BufReader::new(f)),
-                    None => panic!("file without a file")
-                }
+                    None => panic!("file without a file"),
+                },
                 Io::FileReadBuf(_) => return Err(HeapIoError::NotFile),
                 Io::FileWriteBuf(_) => return Err(HeapIoError::NotFile),
                 Io::Closed => return Err(HeapIoError::Closed),
@@ -45,8 +45,8 @@ impl HeapIo {
             match &mut *guard {
                 Io::File(f) => match f.take() {
                     Some(f) => *guard = Io::FileWriteBuf(BufWriter::new(f)),
-                    None => panic!("file without a file")
-                }
+                    None => panic!("file without a file"),
+                },
                 Io::FileReadBuf(_) => return Err(HeapIoError::NotFile),
                 Io::FileWriteBuf(_) => return Err(HeapIoError::NotFile),
                 Io::Closed => return Err(HeapIoError::Closed),
@@ -57,9 +57,7 @@ impl HeapIo {
 
     pub fn get_io(&self) -> IoGuard {
         let io = self.io.lock().unwrap();
-        IoGuard {
-            io,
-        }
+        IoGuard { io }
     }
 }
 
@@ -98,13 +96,19 @@ enum Io {
 
 impl Read for Io {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-       match self {
-           Io::File(Some(f)) => f.read(buf),
-           Io::File(None) => panic!("file is missing a file"),
-           Io::FileReadBuf(io) => io.read(buf),
-           Io::FileWriteBuf(_) => Err(io::Error::new(ErrorKind::Unsupported, "read not supported for a write buffer")),
-           Io::Closed => Err(io::Error::new(ErrorKind::Unsupported, "read not supported for closed")),
-       }
+        match self {
+            Io::File(Some(f)) => f.read(buf),
+            Io::File(None) => panic!("file is missing a file"),
+            Io::FileReadBuf(io) => io.read(buf),
+            Io::FileWriteBuf(_) => Err(io::Error::new(
+                ErrorKind::Unsupported,
+                "read not supported for a write buffer",
+            )),
+            Io::Closed => Err(io::Error::new(
+                ErrorKind::Unsupported,
+                "read not supported for closed",
+            )),
+        }
     }
 }
 
@@ -113,9 +117,15 @@ impl Write for Io {
         match self {
             Io::File(Some(f)) => f.write(buf),
             Io::File(None) => panic!("file is missing a file"),
-            Io::FileReadBuf(_) => Err(io::Error::new(ErrorKind::Unsupported, "write not supported for a read buffer")),
+            Io::FileReadBuf(_) => Err(io::Error::new(
+                ErrorKind::Unsupported,
+                "write not supported for a read buffer",
+            )),
             Io::FileWriteBuf(io) => io.write(buf),
-            Io::Closed => Err(io::Error::new(ErrorKind::Unsupported, "write not supported for closed")),
+            Io::Closed => Err(io::Error::new(
+                ErrorKind::Unsupported,
+                "write not supported for closed",
+            )),
         }
     }
 
@@ -123,9 +133,15 @@ impl Write for Io {
         match self {
             Io::File(Some(f)) => f.flush(),
             Io::File(None) => panic!("file is missing a file"),
-            Io::FileReadBuf(_) => Err(io::Error::new(ErrorKind::Unsupported, "flush not supported for a read buffer")),
+            Io::FileReadBuf(_) => Err(io::Error::new(
+                ErrorKind::Unsupported,
+                "flush not supported for a read buffer",
+            )),
             Io::FileWriteBuf(io) => io.flush(),
-            Io::Closed => Err(io::Error::new(ErrorKind::Unsupported, "flush not supported for closed")),
+            Io::Closed => Err(io::Error::new(
+                ErrorKind::Unsupported,
+                "flush not supported for closed",
+            )),
         }
     }
 }
@@ -137,7 +153,10 @@ impl Seek for Io {
             Io::File(None) => panic!("file is missing a file"),
             Io::FileReadBuf(io) => io.seek(pos),
             Io::FileWriteBuf(io) => io.seek(pos),
-            Io::Closed => Err(io::Error::new(ErrorKind::Unsupported, "seek not supported for closed")),
+            Io::Closed => Err(io::Error::new(
+                ErrorKind::Unsupported,
+                "seek not supported for closed",
+            )),
         }
     }
 }

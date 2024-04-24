@@ -3,8 +3,8 @@ use crate::{CallFrame, Chunk, Continuation, Handle, Heap, Interned, MutState, VM
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::GVm;
 use crate::io::HeapIo;
+use crate::GVm;
 
 /// Vm code to access storage, heap, stack, globals, etc.
 
