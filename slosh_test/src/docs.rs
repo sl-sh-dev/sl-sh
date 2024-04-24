@@ -73,7 +73,6 @@ lazy_static! {
         exemption_set.insert("dasm");
         exemption_set.insert("load");
         exemption_set.insert("read-all");
-        exemption_set.insert("eval");
         exemption_set.insert("*int-bits*");
         exemption_set.insert("get-prop");
         exemption_set.insert("expand-macro");

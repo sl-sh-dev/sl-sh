@@ -355,7 +355,7 @@ fn compile_list(
     result: usize,
 ) -> VMResult<()> {
     match car {
-        Value::Symbol(i) => {
+        Value::Symbol(i) | Value::Special(i) => {
             if let Some(idx) = state.get_symbol(i) {
                 compile_call_reg(env, state, idx as u16, cdr, result)?
             } else if let Some(slot) = env.global_intern_slot(i) {
@@ -393,6 +393,7 @@ fn compile_list(
         }
         Value::Builtin(builtin) => compile_call(env, state, Value::Builtin(builtin), cdr, result)?,
         Value::Lambda(h) => compile_call(env, state, Value::Lambda(h), cdr, result)?,
+        Value::Continuation(h) => compile_call(env, state, Value::Continuation(h), cdr, result)?,
         Value::Pair(_) | Value::List(_, _) => {
             let (ncar, ncdr) = car.get_pair(env).expect("Pair/List not a Pair or List?");
             if let Value::List(h, idx) = ncdr {
