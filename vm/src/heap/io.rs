@@ -1,7 +1,6 @@
 use std::fs::File;
 use std::io;
 use std::io::{BufReader, BufWriter, ErrorKind, Read, Seek, SeekFrom, Write};
-//use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 pub enum HeapIoError {
