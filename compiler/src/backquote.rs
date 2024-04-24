@@ -115,7 +115,7 @@ impl Tag {
 
 fn quote(vm: &mut SloshVm, exp: Value) -> Value {
     let cdr = vm.alloc_pair_ro(exp, Value::Nil);
-    let q_i = vm.intern_static("quote");
+    let q_i = vm.specials().quote;
     vm.alloc_pair_ro(Value::Symbol(q_i), cdr)
 }
 

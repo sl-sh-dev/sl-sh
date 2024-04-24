@@ -320,13 +320,7 @@ impl<'vm> Reader<'vm> {
     ) -> Result<Value, ReadError> {
         if let Some(ch) = self.chars().next() {
             if let Some(pch) = self.chars().peek() {
-                if !is_whitespace(pch)
-                    && pch != "("
-                    && pch != ")"
-                    && pch != "\""
-                    && pch != "'"
-                    && pch != "`"
-                {
+                if pch == "{" || !end_symbol(pch, read_table_term) {
                     match &*ch {
                         "u" => {
                             let ch = self.read_utf_scalar()?;
