@@ -328,6 +328,13 @@ impl<ENV> GVm<ENV> {
         Ok(())
     }
 
+    /// If we are tail calling a builtin with no call frame then exit loop early.
+    /// Need to check this for some lambda -> builtin tail calls so SRET does not execute and
+    /// munge the return.
+    fn tail_builtin_exit(&self, lambda: Value) -> bool {
+        matches!(lambda, Value::Builtin(_)) && self.call_frame().is_none()
+    }
+
     // Some macro expansions trips this.
     #[allow(clippy::redundant_closure_call)]
     pub(super) fn exec_loop(&mut self, chunk: Arc<Chunk>) -> Result<(), (VMError, Arc<Chunk>)> {
@@ -644,7 +651,11 @@ impl<ENV> GVm<ENV> {
                 TCALL => {
                     let (lambda, num_args) = decode2!(self.ip_ptr, wide);
                     let lambda = self.register(lambda as usize);
+                    let done = self.tail_builtin_exit(lambda);
                     chunk = self.make_call(lambda, chunk, 0, num_args, true)?;
+                    if done {
+                        return Ok(());
+                    }
                     self.make_registers(); // In case of a builtin call
                 }
                 TCALLG => {
@@ -655,7 +666,11 @@ impl<ENV> GVm<ENV> {
                     };
                     let num_args = decode1!(self.ip_ptr, wide);
                     let lambda = self.get_global(idx);
+                    let done = self.tail_builtin_exit(lambda);
                     chunk = self.make_call(lambda, chunk, 0, num_args, true)?;
+                    if done {
+                        return Ok(());
+                    }
                     self.make_registers(); // In case of a builtin call
                 }
                 CALLM => {
