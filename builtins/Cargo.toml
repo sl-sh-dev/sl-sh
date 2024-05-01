@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 slvm = { workspace = true }
 compile_state = { workspace = true }
+sl-compiler = { workspace = true }
 bridge_adapters = { path = "../bridge_adapters" }
 unicode-segmentation = "1.10.1"
 bridge_types = { workspace = true }

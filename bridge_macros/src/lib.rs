@@ -406,7 +406,7 @@ fn make_orig_fn_call(
     required_args: usize,
     arg_names: Vec<Ident>,
 ) -> MacroResult<TokenStream> {
-    // the original function call must return an Value object
+    // the original function call must return a Value object
     // this means all returned rust native types must implement TryIntoExpression
     // this is nested inside the builtin expression which must always
     // return a VMResult.

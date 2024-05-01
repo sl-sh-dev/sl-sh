@@ -156,6 +156,7 @@ version = "0.1.0"
 dependencies = [
  "compile_state",
  "sl-compiler",
+ "slosh_lib",
  "slvm",
 ]
 
@@ -256,6 +257,7 @@ dependencies = [
  "bridge_macros",
  "bridge_types",
  "compile_state",
+ "sl-compiler",
  "slvm",
  "static_assertions",
  "trybuild",
@@ -1964,7 +1966,6 @@ checksum = "38b58827f4464d87d377d175e90bf58eb00fd8716ff0a62f80356b5e61555d0d"
 name = "sl-compiler"
 version = "0.1.0"
 dependencies = [
- "builtins",
  "chrono",
  "compile_state",
  "compiler_test_utils",
