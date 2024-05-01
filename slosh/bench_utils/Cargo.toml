@@ -8,3 +8,4 @@ edition = "2021"
 sl-compiler = { workspace = true }
 slvm = { workspace = true }
 compile_state = { workspace = true }
+slosh_lib = { path = "../../slosh_lib" }

@@ -356,16 +356,12 @@ pub(crate) fn compile_let_while(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::test_utils::{assert_vals, exec, exec_compile_error, exec_runtime_error, read_test};
-    use builtins::print::{dasm, prn};
     use compile_state::state::new_slosh_vm;
 
     #[test]
     fn test_let() {
         let mut env = new_slosh_vm();
-        env.set_global_builtin("prn", prn);
-        env.set_global_builtin("dasm", dasm);
 
         let result = exec(&mut env, "(let (a 1, b 2, c 3) `(~a ~b ~c))");
         let expected = read_test(&mut env, "(1 2 3)");
@@ -439,7 +435,7 @@ mod tests {
             "(do (def fnx (fn () (let (fny (fn (y) y))\
                       (let (fnx (fn (x) (if (= x 0) #t (fny (- x 1))))\
                             fny (fn (y) (if (= y 0) #t (fnx (- y 1)))))\
-                        (fny 10))))) (dasm fnx) (fnx))",
+                        (fny 10))))) (fnx))",
         );
         let expected = read_test(&mut env, "8");
         assert_vals(&env, expected, result);
@@ -500,7 +496,6 @@ mod tests {
     #[test]
     fn test_let_destructure() {
         let mut env = new_slosh_vm();
-        env.set_global_builtin("prn", prn);
 
         let result = exec(
             &mut env,
@@ -661,8 +656,6 @@ mod tests {
     #[test]
     fn test_let_shadow() {
         let mut env = new_slosh_vm();
-        env.set_global_builtin("prn", prn);
-        env.set_global_builtin("dasm", dasm);
 
         let result = exec(
             &mut env,

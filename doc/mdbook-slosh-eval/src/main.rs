@@ -161,7 +161,7 @@ mod slosh_eval_lib {
                     }
                     let mut buf = String::new();
                     let ret = cmark(events.iter(), &mut buf);
-                    // write new content back to chapter content.
+                    // write new content back to chapter.content.
                     match ret {
                         Ok(_) => {
                             chapter.content = buf;

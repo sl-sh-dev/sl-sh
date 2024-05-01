@@ -42,7 +42,7 @@
 "Generate slsh standard library documentation md page."
 (index-file sym-list)
      ;;TODO this or requires too much esoteric knowledge to be a good callee
-     ;; need a common way to ask if something is useable on the std lib's 
+     ;; need a common way to ask if something is useable on the std lib's
      ;; seq/iter stuffz.
      ;;TODO need a few macros around get-error to make it less verbose to deal with,
      ;; maybe form, if success, if failure

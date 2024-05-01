@@ -36,7 +36,7 @@ lazy_static! {
             .crlf(true)
             .build()
             .unwrap();
-    static ref EXEMPTIONS: HashSet<&'static str> = {
+    pub static ref EXEMPTIONS: HashSet<&'static str> = {
         let mut exemption_set = HashSet::new();
         exemption_set.insert("version");
         exemption_set.insert("env");
@@ -70,6 +70,8 @@ lazy_static! {
         exemption_set.insert("pr");
         exemption_set.insert("fprn");
         exemption_set.insert("fpr");
+        exemption_set.insert("eprn");
+        exemption_set.insert("epr");
         exemption_set.insert("sizeof-value");
         exemption_set.insert("dump-regs");
         exemption_set.insert("dasm");
@@ -194,7 +196,7 @@ impl Display for DocStringSection {
             .unwrap_or_default();
         write!(
             f,
-            "{usage}{description}Section: {section}\n\n{example}",
+            "{usage}\n{description}\n\nSection: {section}\n\n{example}",
             usage = usage,
             description = self.description,
             section = self.section,
@@ -283,7 +285,7 @@ impl AsMd for SloshDoc {
         //content = content + &format!("section: {}\n", docs.doc_string.section);
         content = content + &format!("{}\n", self.doc_string.description);
         if let Some(example) = &self.doc_string.example {
-            content += "Example:\n```\n";
+            content += "\n\nExample:\n```\n";
             content += example;
             content += "\n``` \n";
         } else {
@@ -476,20 +478,25 @@ impl SlFrom<SloshDoc> for Value {
 
 fn doc_map(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();
-    vm.pause_gc();
-    let res = match (i.next(), i.next()) {
-        (Some(Value::Symbol(g)), None) => match SloshDoc::new(*g, vm, Namespace::Global) {
-            Ok(slosh_doc) => Value::sl_from(slosh_doc, vm),
-            Err(DocError::ExemptFromProperDocString { symbol: _ }) => {
-                let map = SloshDoc::nil_doc_map(vm);
-                Ok(vm.alloc_map(map))
-            }
-            Err(e) => Err(VMError::from(e)),
-        },
+    match (i.next(), i.next()) {
+        (Some(Value::Symbol(g)), None) => {
+            // Pause GC so that we don't wind up collecting any strings used to build the doc map
+            // before they get rooted via the map.
+            vm.pause_gc();
+            let res = match SloshDoc::new(*g, vm, Namespace::Global) {
+                Ok(slosh_doc) => Value::sl_from(slosh_doc, vm),
+                Err(DocError::ExemptFromProperDocString { symbol: _ }) => {
+                    let map = SloshDoc::nil_doc_map(vm);
+                    Ok(vm.alloc_map(map))
+                }
+                Err(e) => Err(VMError::from(e)),
+            };
+            // Unpause GC, this MUST happen so no early returns (looking at you ?).
+            vm.unpause_gc();
+            res
+        }
         _ => Err(VMError::new_vm("takes one argument (symbol)".to_string())),
-    };
-    vm.unpause_gc();
-    res
+    }
 }
 
 /// Each doc has a tag in its `Section:` definition by convention that logically groups functions.
@@ -602,7 +609,7 @@ fn build_each_docs_section_chapter(
             content = content + &format!("{{{{ #include section-docs/{}.md }}}}\n\n\n", section);
         }
 
-        let header = "List of symbols: \n".to_string();
+        let header = "\n\nList of symbols: \n\n".to_string();
         content = content + &header + &list;
 
         let path = make_file(section, &content)
@@ -681,10 +688,25 @@ fn capitalize_first(s: &str) -> String {
     }
 }
 
+fn get_exemptions(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    if !registers.is_empty() {
+        return Err(VMError::new_vm(
+            "get-exemptions: takes no arguments".to_string(),
+        ));
+    }
+    let mut exemptions = EXEMPTIONS.iter().copied().collect::<Vec<&str>>();
+    exemptions.sort();
+    let exemptions = exemptions
+        .iter()
+        .map(|x| Value::Symbol(vm.intern(x)))
+        .collect::<Vec<Value>>();
+    Ok(vm.alloc_vector(exemptions))
+}
+
 fn get_globals_sorted(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if !registers.is_empty() {
         return Err(VMError::new_vm(
-            "get_globals_sorted: takes no arguments".to_string(),
+            "get-globals-sorted: takes no arguments".to_string(),
         ));
     }
     let mut result = BTreeMap::new();
@@ -740,6 +762,19 @@ Return a vector containing all the symbols currently defined globally in sorted 
 Section: doc
 ",
     );
+
+    add_builtin(
+        env,
+        "get-exemptions",
+        get_exemptions,
+        "Usage: (get-exemptions)
+
+Return a vector containing all the symbols currently exempted from docs
+(so the build passes), Ideally this will be 0.
+
+Section: doc
+",
+    );
 }
 
 #[cfg(test)]
@@ -747,7 +782,7 @@ mod test {
     use super::*;
     use compile_state::state::new_slosh_vm;
     use sl_compiler::Reader;
-    use slosh_lib::{run_reader, set_builtins, set_initial_load_path, ENV};
+    use slosh_lib::{run_reader, set_builtins_shell, set_initial_load_path, ENV};
     use std::collections::BTreeMap;
     use std::ops::DerefMut;
     use tempdir::TempDir;
@@ -764,7 +799,7 @@ mod test {
         temp_env::with_var("HOME", home_dir, || {
             ENV.with(|env| {
                 let mut vm = env.borrow_mut();
-                set_builtins(vm.deref_mut());
+                set_builtins_shell(vm.deref_mut());
                 set_initial_load_path(vm.deref_mut(), vec![&home_path]);
                 let mut reader =
                     Reader::from_string(r#"(load "core.slosh")"#.to_string(), &mut vm, "", 1, 0);
@@ -796,7 +831,7 @@ mod test {
     #[test]
     fn list_slosh_functions() {
         let mut vm = new_slosh_vm();
-        set_builtins(&mut vm);
+        set_builtins_shell(&mut vm);
         for (g, _) in vm.globals() {
             let sym = Value::Symbol(*g);
             let symbol = sym.display_value(&vm);
@@ -808,7 +843,7 @@ mod test {
     #[test]
     fn test_global_slosh_docs_formatted_properly() {
         let mut env = new_slosh_vm();
-        set_builtins(&mut env);
+        set_builtins_shell(&mut env);
 
         let mut docs: Vec<SloshDoc> = vec![];
         Namespace::Global.add_docs(&mut docs, &mut env).unwrap();

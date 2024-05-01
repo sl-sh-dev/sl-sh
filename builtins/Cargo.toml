@@ -9,6 +9,7 @@ edition = "2021"
 slvm = { workspace = true }
 compile_state = { workspace = true }
 shell = { workspace = true }
+sl-compiler = { workspace = true }
 bridge_adapters = { path = "../bridge_adapters" }
 unicode-segmentation = "1.10.1"
 unicode_reader = "1"
