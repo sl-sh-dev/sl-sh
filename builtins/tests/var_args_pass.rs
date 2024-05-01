@@ -98,6 +98,12 @@ pub fn accept_varargs(_args: VarArgs<char>) -> VMResult<()> {
 }
 
 /// obligatory doc
+#[sl_sh_fn(fn_name = "accept_vecvalues")]
+pub fn accept_vecvalues(_args: Vec<Value>) -> VMResult<()> {
+    Ok(())
+}
+
+/// obligatory doc
 #[sl_sh_fn(fn_name = "accept_vec")]
 pub fn accept_vec(_args: Vec<char>) -> VMResult<()> {
     Ok(())

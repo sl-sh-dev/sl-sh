@@ -105,6 +105,7 @@ use bridge_types::{LooseString, SloshChar};
 use compile_state::state::SloshVm;
 
 use slvm::{VMResult, Value};
+mod collections;
 pub mod numbers;
 pub mod primitives;
 pub mod text;
@@ -275,6 +276,12 @@ where
 
 impl SlFrom<Value> for Value {
     fn sl_from(value: Value, _vm: &mut SloshVm) -> VMResult<Self> {
+        Ok(value)
+    }
+}
+
+impl<'a> SlFromRef<'a, Value> for Value {
+    fn sl_from_ref(value: Value, _vm: &'a SloshVm) -> VMResult<Self> {
         Ok(value)
     }
 }

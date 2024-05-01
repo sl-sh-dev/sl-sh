@@ -10,15 +10,19 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::{env, fs};
 
-pub use sl_compiler::{compile, new_slosh_vm, new_slosh_vm_with_builtins, Reader};
+pub use sl_compiler::{compile, Reader};
 
 use slvm::opcodes::*;
 
 use compile_state::state::*;
 use sl_compiler::reader::*;
 
-use builtins::add_global_value;
-use builtins::print::display_value;
+use builtins::collections::setup_collection_builtins;
+use builtins::conversions::add_conv_builtins;
+use builtins::io::add_io_builtins;
+use builtins::print::{add_print_builtins, display_value};
+use builtins::string::add_str_builtins;
+use builtins::{add_global_value, add_misc_builtins};
 use sl_liner::vi::AlphanumericAndVariableKeywordRule;
 use sl_liner::{keymap, ColorClosure, Context, Prompt};
 
@@ -36,9 +40,9 @@ use crate::shell_builtins::add_shell_builtins;
 use debug::*;
 use shell::config::get_config;
 use shell::platform::{Platform, Sys, STDIN_FILENO};
-use sl_compiler::load_eval::{load_internal, SLSHRC};
+use sl_compiler::load_eval::{add_load_builtins, load_internal, SLSHRC};
 use sl_compiler::pass1::pass1;
-use slvm::{VMError, VMResult, Value};
+use slvm::{VMError, VMResult, Value, INT_BITS, INT_MAX, INT_MIN};
 
 thread_local! {
     /// Env (job control status, etc) for the shell.
@@ -343,7 +347,27 @@ pub fn usage(vm: &mut SloshVm, slot: u32, sym: &Value) -> String {
 }
 
 pub fn set_builtins(env: &mut SloshVm) {
-    sl_compiler::set_builtins(env);
+    setup_collection_builtins(env);
+    add_print_builtins(env);
+    add_load_builtins(env);
+    add_str_builtins(env);
+    add_misc_builtins(env);
+    add_io_builtins(env);
+    add_conv_builtins(env);
+
+    env.set_named_global("*int-bits*", (INT_BITS as i64).into());
+    env.set_named_global("*int-max*", INT_MAX.into());
+    env.set_named_global("*int-min*", INT_MIN.into());
+}
+
+pub fn new_slosh_vm_with_builtins() -> SloshVm {
+    let mut env = new_slosh_vm();
+    set_builtins(&mut env);
+    env
+}
+
+pub fn set_builtins_shell(env: &mut SloshVm) {
+    set_builtins(env);
     add_shell_builtins(env);
     env.set_global_builtin("dump-regs", builtin_dump_regs);
 
@@ -371,7 +395,7 @@ fn run_slosh(modify_vm: fn(&mut SloshVm) -> ()) -> i32 {
     if let Some(config) = get_config() {
         ENV.with(|renv| {
             let mut env = renv.borrow_mut();
-            set_builtins(&mut env);
+            set_builtins_shell(&mut env);
             modify_vm(&mut env);
         });
         if config.command.is_none() && config.script.is_none() {
@@ -642,7 +666,7 @@ mod tests {
         let v = temp_env::with_var("HOME", home_dir, || {
             ENV.with(|env| {
                 let mut vm = env.borrow_mut();
-                set_builtins(vm.deref_mut());
+                set_builtins_shell(vm.deref_mut());
                 set_initial_load_path(
                     vm.deref_mut(),
                     vec![

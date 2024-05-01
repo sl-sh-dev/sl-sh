@@ -1,14 +1,11 @@
 #[cfg(test)]
 mod tests {
-    use builtins::print::{dasm, prn};
     use compile_state::state::new_slosh_vm;
-    use compile_state::state::SloshVmTrait;
     use compiler_test_utils::{assert_vals, exec, read_test};
 
     #[test]
     fn test_def_set() {
         let mut env = new_slosh_vm();
-        env.set_global_builtin("prn", prn);
         let result = exec(&mut env, "(do (def x 3) x)");
         let expected = read_test(&mut env, "3");
         assert_vals(&env, expected, result);
@@ -53,8 +50,6 @@ mod tests {
     #[test]
     fn test_fn() {
         let mut env = new_slosh_vm();
-        env.set_global_builtin("prn", prn);
-        env.set_global_builtin("dasm", dasm);
         let result = exec(&mut env, "((fn () 1))");
         let expected = read_test(&mut env, "1");
         assert_vals(&env, expected, result);
@@ -110,14 +105,14 @@ mod tests {
 
         let result = exec(
             &mut env,
-            "(do (def fnx (fn (a b [x [y y2] % z := 10]) `(~a ~b ~x ~y ~y2 ~z))) (dasm fnx) (fnx 1 2 (list 3 [4 5])))",
+            "(do (def fnx (fn (a b [x [y y2] % z := 10]) `(~a ~b ~x ~y ~y2 ~z))) (fnx 1 2 (list 3 [4 5])))",
         );
         let expected = read_test(&mut env, "(1 2 3 4 5 10)");
         assert_vals(&env, expected, result);
 
         let result = exec(
             &mut env,
-            "(do (def fnx (fn (a b [x [y y2] % z := 10] [d d2]) `(~a ~b ~x ~y ~y2 ~z ~d ~d2))) (dasm fnx) (fnx 1 2 `(3 ~[4 5]) [23 24]))",
+            "(do (def fnx (fn (a b [x [y y2] % z := 10] [d d2]) `(~a ~b ~x ~y ~y2 ~z ~d ~d2))) (fnx 1 2 `(3 ~[4 5]) [23 24]))",
         );
         let expected = read_test(&mut env, "(1 2 3 4 5 10 23 24)");
         assert_vals(&env, expected, result);
@@ -152,7 +147,7 @@ mod tests {
 
         let result = exec(
             &mut env,
-            "(do (def fnx (fn (a b & {k1 :key1, k2 :key2, :or {:key1 66, :key2 55}}) `(~a ~b ~k1 ~k2))) (dasm fnx)(fnx 1 2))",
+            "(do (def fnx (fn (a b & {k1 :key1, k2 :key2, :or {:key1 66, :key2 55}}) `(~a ~b ~k1 ~k2))) (fnx 1 2))",
         );
         let expected = read_test(&mut env, "(1 2 66 55)");
         assert_vals(&env, expected, result);
@@ -161,8 +156,6 @@ mod tests {
     #[test]
     fn test_captures() {
         let mut env = new_slosh_vm();
-        env.set_global_builtin("prn", prn);
-        env.set_global_builtin("dasm", dasm);
 
         let result = exec(&mut env, "(do ((fn (a b c) ((fn () (let (x 10, y 20, z 30) (set! x 11) (def fnx (fn () (set! a 5)(set! b 6)`(~a ~b ~c ~x ~y ~z))))(let (s 51, t 52, u 53)(def fny (fn () (list s t u)))))))1 2 3)(fnx))");
         let expected = read_test(&mut env, "(5 6 3 11 20 30)");
@@ -192,8 +185,6 @@ mod tests {
     #[test]
     fn test_on_error() {
         let mut env = new_slosh_vm();
-        env.set_global_builtin("prn", prn);
-        env.set_global_builtin("dasm", dasm);
 
         let def_macro = r#"
         (def defmacro

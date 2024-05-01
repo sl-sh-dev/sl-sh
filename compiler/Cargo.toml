@@ -9,7 +9,6 @@ edition = "2021"
 unicode-segmentation = "1.9"
 unicode_reader = "1"
 slvm = { workspace = true }
-builtins = { path = "../builtins" }
 compile_state = { workspace = true }
 
 [dev-dependencies]

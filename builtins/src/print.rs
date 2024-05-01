@@ -1,7 +1,9 @@
 use crate::SloshVm;
-use compile_state::state::SloshVmTrait;
+use compile_state::state::{CompileState, SloshVmTrait};
+use sl_compiler::compile;
+use sl_compiler::pass1::pass1;
 use slvm::{Interned, VMError, VMResult, Value};
-use std::io::{stdout, Write};
+use std::io::{stderr, stdout, Write};
 
 fn is_sym(vm: &SloshVm, name: &str, intern: Interned) -> bool {
     if let Some(i) = vm.get_if_interned(name) {
@@ -107,11 +109,27 @@ pub fn pr(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     Ok(Value::Nil)
 }
 
+pub fn epr(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    for v in registers {
+        eprint!("{}", pretty_value(vm, *v));
+    }
+    stderr().flush()?;
+    Ok(Value::Nil)
+}
+
 pub fn prn(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     for v in registers {
         print!("{}", pretty_value(vm, *v));
     }
     println!();
+    Ok(Value::Nil)
+}
+
+pub fn eprn(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    for v in registers {
+        eprint!("{}", pretty_value(vm, *v));
+    }
+    eprintln!();
     Ok(Value::Nil)
 }
 
@@ -121,7 +139,8 @@ pub fn dasm(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
             "dasm: wrong number of args, expected one",
         ));
     }
-    match registers[0].unref(vm) {
+    let exp = registers[0].unref(vm);
+    match exp {
         Value::Lambda(handle) => {
             let l = vm.get_lambda(handle);
             l.disassemble_chunk(vm, 0)?;
@@ -132,12 +151,28 @@ pub fn dasm(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
             l.disassemble_chunk(vm, 0)?;
             Ok(Value::Nil)
         }
+        Value::List(_handle, _start_idx) => {
+            let mut state = CompileState::new_state("", 1, None);
+            pass1(vm, &mut state, exp)?;
+            compile(vm, &mut state, exp, 0)?;
+            state.chunk.disassemble_chunk(vm, 0)?;
+            Ok(Value::Nil)
+        }
+        Value::Pair(_handle) => {
+            let mut state = CompileState::new_state("", 1, None);
+            pass1(vm, &mut state, exp)?;
+            compile(vm, &mut state, exp, 0)?;
+            state.chunk.disassemble_chunk(vm, 0)?;
+            Ok(Value::Nil)
+        }
         _ => Err(VMError::new_vm("DASM: Not a callable.")),
     }
 }
 
 pub fn add_print_builtins(env: &mut SloshVm) {
     env.set_global_builtin("pr", pr);
+    env.set_global_builtin("epr", epr);
     env.set_global_builtin("prn", prn);
+    env.set_global_builtin("eprn", eprn);
     env.set_global_builtin("dasm", dasm);
 }
