@@ -137,6 +137,7 @@ pub enum Value {
     CallFrame(Handle),
     Value(Handle),
     Error(Handle),
+    Io(Handle),
 }
 
 impl Default for Value {
@@ -285,6 +286,7 @@ impl Value {
             Value::CallFrame(handle) => Some(*handle),
             Value::Value(handle) => Some(*handle),
             Value::Error(handle) => Some(*handle),
+            Value::Io(handle) => Some(*handle),
 
             Value::Byte(_) => None,
             Value::Int(_) => None,
@@ -469,6 +471,7 @@ impl Value {
                 let key = vm.get_interned(err.keyword);
                 format!("error [{key}]: {}", err.data.display_value(vm))
             }
+            Value::Io(_) => "#<IO>".to_string(),
         }
     }
 
@@ -515,6 +518,7 @@ impl Value {
             Value::Continuation(_) => ValueType::Continuation,
             Value::CallFrame(_) => ValueType::CallFrame,
             Value::Error(_) => ValueType::Error,
+            Value::Io(_) => ValueType::Io,
             Value::Value(handle) => vm.get_value(*handle).value_type(vm),
         }
     }
@@ -630,6 +634,7 @@ pub const SLOSH_VECTOR: &str = "Vector";
 pub const SLOSH_MAP: &str = "Map";
 pub const SLOSH_PAIR: &str = "Pair";
 pub const SLOSH_ERROR: &str = "Error";
+pub const SLOSH_IO: &str = "Io";
 
 /// Enum representing the various types of values in Slosh.
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
@@ -660,6 +665,7 @@ pub enum ValueType {
     Continuation,
     CallFrame,
     Error,
+    Io,
 }
 
 impl Display for ValueType {
@@ -697,6 +703,7 @@ impl From<ValueType> for &'static str {
             ValueType::List => SLOSH_PAIR,
             ValueType::String => SLOSH_STRING,
             ValueType::Error => SLOSH_ERROR,
+            ValueType::Io => SLOSH_IO,
         }
     }
 }

@@ -5,9 +5,11 @@ use crate::bits::FLAG_MUT;
 use crate::{get_code, Chunk, FxHashMap, Interned, VMError, VMResult, Value};
 pub mod handle;
 pub use crate::handle::Handle;
+use crate::heap::io::HeapIo;
 use crate::heap::storage::Storage;
 
 pub mod bits;
+pub mod io;
 mod storage;
 
 #[derive(Clone, Debug)]
@@ -87,6 +89,7 @@ pub struct Heap {
     errors: Storage<Error>,
     pairs: Storage<(Value, Value)>,
     values: Storage<Value>,
+    ios: Storage<HeapIo>,
     props: Option<FxHashMap<Value, Arc<FxHashMap<Interned, Value>>>>,
     greys: Vec<Value>,
     paused: u32,
@@ -115,6 +118,7 @@ macro_rules! value_op {
             $crate::Value::Value(handle) => $heap.values.$op(handle.idx()),
 
             $crate::Value::Error(handle) => $heap.errors.$op(handle.idx()),
+            $crate::Value::Io(handle) => $heap.ios.$op(handle.idx()),
 
             $crate::Value::Byte(_)
             | $crate::Value::Int(_)
@@ -149,6 +153,7 @@ impl Heap {
             errors: Storage::default(),
             pairs: Storage::default(),
             values: Storage::default(),
+            ios: Storage::default(),
             props: Some(FxHashMap::default()),
             greys: vec![],
             paused: 0,
@@ -327,6 +332,21 @@ impl Heap {
         Value::Error(self.errors.alloc(error, mutable.flag()).into())
     }
 
+    pub fn alloc_io<MarkFunc>(
+        &mut self,
+        io: HeapIo,
+        mutable: MutState,
+        mark_roots: MarkFunc,
+    ) -> Value
+    where
+        MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
+    {
+        if self.ios.live_objects() >= self.ios.capacity() && self.paused == 0 {
+            self.collect(mark_roots);
+        }
+        Value::Io(self.ios.alloc(io, mutable.flag()).into())
+    }
+
     pub fn get_string(&self, handle: Handle) -> &str {
         if let Some(Object::String(ptr)) = self.objects.get(handle.idx()) {
             ptr
@@ -483,6 +503,14 @@ impl Heap {
         }
     }
 
+    pub fn get_io(&self, handle: Handle) -> &HeapIo {
+        if let Some(error) = self.ios.get(handle.idx()) {
+            error
+        } else {
+            panic!("Handle {} is not an io!", handle.idx());
+        }
+    }
+
     /// If val is on the heap is it still alive after GC
     /// Return true if val is not a heap object.
     pub fn is_live(&self, val: Value) -> bool {
@@ -636,6 +664,7 @@ impl Heap {
             | Value::StringConst(_)
             | Value::Special(_)
             | Value::Builtin(_)
+            | Value::Io(_)
             | Value::True
             | Value::False
             | Value::Nil
