@@ -68,6 +68,8 @@ lazy_static! {
         exemption_set.insert("*int-max*");
         exemption_set.insert("prn");
         exemption_set.insert("pr");
+        exemption_set.insert("fprn");
+        exemption_set.insert("fpr");
         exemption_set.insert("sizeof-value");
         exemption_set.insert("dump-regs");
         exemption_set.insert("dasm");
@@ -474,7 +476,8 @@ impl SlFrom<SloshDoc> for Value {
 
 fn doc_map(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();
-    match (i.next(), i.next()) {
+    vm.pause_gc();
+    let res = match (i.next(), i.next()) {
         (Some(Value::Symbol(g)), None) => match SloshDoc::new(*g, vm, Namespace::Global) {
             Ok(slosh_doc) => Value::sl_from(slosh_doc, vm),
             Err(DocError::ExemptFromProperDocString { symbol: _ }) => {
@@ -484,7 +487,9 @@ fn doc_map(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
             Err(e) => Err(VMError::from(e)),
         },
         _ => Err(VMError::new_vm("takes one argument (symbol)".to_string())),
-    }
+    };
+    vm.unpause_gc();
+    res
 }
 
 /// Each doc has a tag in its `Section:` definition by convention that logically groups functions.
@@ -754,6 +759,8 @@ mod test {
         let home_dir = tmp_dir.path().to_str();
         let home_path = home_dir.unwrap().to_string();
 
+        // Need to mask signals in case any tests shell out (use 'sh' or '$sh') otherwise test will hang but appear to finish...
+        shell::signals::mask_signals();
         temp_env::with_var("HOME", home_dir, || {
             ENV.with(|env| {
                 let mut vm = env.borrow_mut();

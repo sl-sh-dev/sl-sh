@@ -12,6 +12,7 @@ bridge_adapters = { path = "../bridge_adapters" }
 slvm = { workspace = true }
 sl-compiler = { workspace = true }
 compile_state = { workspace = true }
+shell = { workspace = true }
 mdbook = "0.4"
 
 [dev-dependencies]

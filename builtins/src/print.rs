@@ -115,6 +115,39 @@ pub fn prn(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     Ok(Value::Nil)
 }
 
+pub fn fpr(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    let mut args = registers.iter();
+    if let Some(Value::Io(h)) = args.next() {
+        let mut file = vm.get_io(*h).get_io();
+        for v in args {
+            write!(file, "{}", pretty_value(vm, *v))?;
+        }
+        Ok(Value::Nil)
+    } else {
+        Err(VMError::new(
+            "io",
+            "fpr: require a writable IO object as first parameter",
+        ))
+    }
+}
+
+pub fn fprn(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    let mut args = registers.iter();
+    if let Some(Value::Io(h)) = args.next() {
+        let mut file = vm.get_io(*h).get_io();
+        for v in args {
+            write!(file, "{}", pretty_value(vm, *v))?;
+        }
+        writeln!(file)?;
+        Ok(Value::Nil)
+    } else {
+        Err(VMError::new(
+            "io",
+            "fpr: require a writable IO object as first parameter",
+        ))
+    }
+}
+
 pub fn dasm(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if registers.len() != 1 {
         return Err(VMError::new_compile(
@@ -140,4 +173,6 @@ pub fn add_print_builtins(env: &mut SloshVm) {
     env.set_global_builtin("pr", pr);
     env.set_global_builtin("prn", prn);
     env.set_global_builtin("dasm", dasm);
+    env.set_global_builtin("fpr", fpr);
+    env.set_global_builtin("fprn", fprn);
 }

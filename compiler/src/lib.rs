@@ -5,6 +5,8 @@ pub use crate::reader::*;
 use builtins::add_misc_builtins;
 use builtins::collections::setup_collection_builtins;
 use builtins::conversions::add_conv_builtins;
+use builtins::fs_meta::add_fs_meta_builtins;
+use builtins::fs_temp::add_fs_temp_builtins;
 use builtins::io::add_io_builtins;
 use builtins::print::add_print_builtins;
 use builtins::string::add_str_builtins;
@@ -34,6 +36,8 @@ pub fn set_builtins(env: &mut SloshVm) {
     add_str_builtins(env);
     add_misc_builtins(env);
     add_io_builtins(env);
+    add_fs_meta_builtins(env);
+    add_fs_temp_builtins(env);
     add_conv_builtins(env);
 
     env.set_named_global("*int-bits*", (INT_BITS as i64).into());

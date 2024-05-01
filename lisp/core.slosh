@@ -658,3 +658,97 @@ Asserts the value is an error
 Section: core
 %#
 (defmacro test::assert-error (& body) `(assert-error ~@body))
+
+
+#%
+Usage: (with-temp-file (fn (x) (println "given temp file:" x)) ["optional-prefix" "optional-suffix" length])
+
+Takes a function that accepts a temporary file. This file will be removed when the provided function
+is finished executing. Also accepts an optional prefix, an optional suffix, and an optional
+length for the random number of characters in the temporary file created. Defaults to prefix of
+".tmp", no suffix, and five random characters.
+
+Section: file
+
+Example:
+(def fp nil)
+(with-temp-file (fn (tmp-file)
+    (let (a-file (fopen tmp-file :create :truncate))
+        (test::assert-true (fs-exists? tmp-file))
+        (set! fp tmp-file)
+        (fclose a-file))))
+(test::assert-false (nil? fp))
+(test::assert-false (fs-exists? fp))
+
+(with-temp-file
+    (fn (tmp)
+        (test::assert-true (str-contains tmp "some-prefix")))
+    "some-prefix")
+
+(with-temp-file
+    (fn (tmp)
+        (test::assert-true (str-contains tmp "some-prefix"))
+        (test::assert-true (str-contains tmp "some-suffix")))
+    "some-prefix"
+    "some-suffix")
+
+(with-temp-file
+    (fn (tmp)
+        (test::assert-true (str-contains tmp "some-prefix"))
+        (test::assert-true (str-contains tmp "some-suffix"))
+        (test::assert-equal (len "some-prefix0123456789some-suffix") (len (fs-base tmp))))
+    "some-prefix"
+    "some-suffix"
+    10)
+%#
+(defn with-temp-file (func & args)
+    (let (file-name (apply get-temp-file (temp-dir) args))
+        (defer (fs-rm file-name))
+        (func file-name)))
+
+#%
+Usage: (with-temp (fn (x) (println "given temp dir:" x)) ["optional-prefix" "optional-suffix" length])
+
+Takes a function that accepts a temporary directory. This directory will be recursively removed
+when the provided function is finished executing. Also accepts an optional prefix, an optional
+suffix, and an optional length for the random number of characters in the temporary directory
+created. Defaults to prefix of \".tmp\", no suffix, and five random characters.
+
+Section: file
+
+Example:
+(def fp nil)
+(with-temp (fn (tmp-dir)
+    (let (tmp-file (str tmp-dir "/sl-sh-tmp-file.txt")
+         a-file (fopen tmp-file :create :truncate))
+        (test::assert-true (fs-exists? tmp-file))
+        (set! fp tmp-file)
+        (fclose a-file))))
+(test::assert-false (nil? fp))
+(test::assert-false (fs-exists? fp))
+
+(with-temp
+    (fn (tmp)
+        (test::assert-true (str-contains tmp "some-prefix")))
+    "some-prefix")
+
+(with-temp
+    (fn (tmp)
+        (test::assert-true (str-contains tmp "some-prefix"))
+        (test::assert-true (str-contains tmp "some-suffix")))
+    "some-prefix"
+    "some-suffix")
+
+(with-temp
+    (fn (tmp)
+        (test::assert-true (str-contains tmp "some-prefix"))
+        (test::assert-true (str-contains tmp "some-suffix"))
+        (test::assert-equal (len "some-prefix0123456789some-suffix") (len (fs-base tmp))))
+    "some-prefix"
+    "some-suffix"
+    10)
+%#
+(defn with-temp (func & args)
+    (let (dir (apply get-temp (temp-dir) args))
+        (defer (fs-rm dir))
+        (func dir)))
