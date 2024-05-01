@@ -19,15 +19,15 @@ use sl_compiler::reader::*;
 
 use builtins::collections::setup_collection_builtins;
 use builtins::conversions::add_conv_builtins;
+use builtins::fs_meta::add_fs_meta_builtins;
+use builtins::fs_temp::add_fs_temp_builtins;
 use builtins::io::add_io_builtins;
 use builtins::print::{add_print_builtins, display_value};
+use builtins::rand::add_rand_builtins;
 use builtins::string::add_str_builtins;
 use builtins::{add_global_value, add_misc_builtins};
 use sl_liner::vi::AlphanumericAndVariableKeywordRule;
 use sl_liner::{keymap, ColorClosure, Context, Prompt};
-use builtins::fs_meta::add_fs_meta_builtins;
-use builtins::fs_temp::add_fs_temp_builtins;
-use builtins::rand::add_rand_builtins;
 
 mod completions;
 pub mod debug;
