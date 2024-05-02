@@ -47,10 +47,13 @@ fn builtin_get_random_str(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Val
         let i: i64 = from_i56(i);
         match i {
             positive if positive > 0 => get_random_str(vm, *arg2, positive as u64),
-            _ => Err(VMError::new("rand", "Expected positive number")),
+            _ => Err(VMError::new("rand", "Expected positive length")),
         }
     } else {
-        Err(VMError::new("rand", "Expected at least one number"))
+        Err(VMError::new(
+            "rand",
+            "Expected two arguments, length and charset",
+        ))
     }
 }
 
@@ -65,29 +68,39 @@ pub fn rand_alphanumeric_str(len: u64, rng: &mut ThreadRng) -> Cow<'static, str>
 fn get_random_str(vm: &mut SloshVm, arg: Value, len: u64) -> VMResult<Value> {
     let mut rng = rand::thread_rng();
     match arg {
-        Value::Symbol(i) => {
+        Value::Keyword(i) => {
             let sym = vm.get_interned(i);
             match sym {
-                ":ascii" => Ok(vm.alloc_string(
+                "ascii" => Ok(vm.alloc_string(
                     iter::repeat(())
                         .map(|()| rng.sample(Ascii))
                         .map(char::from)
                         .take(len as usize)
                         .collect(),
                 )),
-                ":alnum" => Ok(vm.alloc_string(rand_alphanumeric_str(len, &mut rng).to_string())),
-                ":hex" => Ok(vm.alloc_string(
+                "alnum" => Ok(vm.alloc_string(rand_alphanumeric_str(len, &mut rng).to_string())),
+                "hex" => Ok(vm.alloc_string(
                     iter::repeat(())
                         .map(|()| rng.sample(Hex))
                         .map(char::from)
                         .take(len as usize)
                         .collect(),
                 )),
-                _ => Err(VMError::new("rand", format!("Unknown symbol {}", sym))),
+                _ => Err(VMError::new("rand", format!("Unknown symbol :{}", sym))),
             }
         }
         Value::String(h) => {
             let string = vm.get_string(h);
+            let upg = UserProvidedGraphemes::new(string);
+            Ok(vm.alloc_string(
+                iter::repeat(())
+                    .map(|()| rng.sample(&upg))
+                    .take(len as usize)
+                    .collect(),
+            ))
+        }
+        Value::StringConst(i) => {
+            let string = vm.get_interned(i);
             let upg = UserProvidedGraphemes::new(string);
             Ok(vm.alloc_string(
                 iter::repeat(())
@@ -178,7 +191,7 @@ fn builtin_probool(_vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         (Some(Value::Int(first)), Some(Value::Int(second)), None) => {
             let i: i64 = from_i56(first);
             let j: i64 = from_i56(second);
-            if i > 0 && i < u32::MAX as i64 && j > 0 && j < u32::MAX as i64 {
+            if i >= 0 && i < u32::MAX as i64 && j >= 0 && j < u32::MAX as i64 {
                 Some((i as u32, j as u32))
             } else {
                 None
@@ -222,12 +235,13 @@ Example:
 (test::assert-true (or (= #t val1) (= nil val1)))
 (test::assert-true (probool 1 1))
 (test::assert-false (probool 0 42))
-(test::assert-error-msg (probool 0 0) \"Denominator can not be zero\")
-(test::assert-error-msg (probool 0 0 0) \"Expected zero or two numbers\")
+(test::assert-error-msg (probool 0 0) :rand \"Denominator can not be zero\")
+(test::assert-error-msg (probool 0 0 0) :rand \"Expected zero or two positive ints\")
 ",
     );
 
-    add_builtin(env,
+    add_builtin(
+        env,
         "random-str",
         builtin_get_random_str,
         "Usage: (random-str str-length [char-set])
@@ -241,13 +255,15 @@ and providing a string results in a random string composed by sampling input.
 Section: random
 
 Example:
-(test::assert-error-msg (random-str) \"random-str: Missing required argument, see (doc 'random-str) for usage.\")
-(test::assert-error-msg (random-str -1) \"Expected positive number\")
-(test::assert-error-msg (random-str 10) \"random-str: Missing required argument, see (doc 'random-str) for usage.\")
-(test::assert-equal 100 (length (random-str 10 :hex))
-(test::assert-true (str-contains \"\u{2699}\" (random-str 42 \"\u{2699}\"))
-(test::assert-equal 19 (length (random-str 19 :ascii)
-(test::assert-equal 91 (length (random-str 91 :alnum)
+(test::assert-error-msg (random-str) :rand \"Expected two arguments, length and charset\")
+(test::assert-error-msg (random-str 10) :rand \"Expected two arguments, length and charset\")
+(test::assert-error-msg (random-str -1 :hex) :rand \"Expected positive length\")
+(test::assert-error-msg (random-str 10 1) :rand \"Second argument must be keyword or string\")
+(test::assert-error-msg (random-str 1 :hexy) :rand \"Unknown symbol :hexy\")
+(test::assert-equal 10 (len (random-str 10 :hex)))
+(test::assert-true (str-contains (random-str 42 \"\u{2699}\") \"\u{2699}\"))
+(test::assert-equal 19 (len (random-str 19 :ascii)))
+(test::assert-equal 91 (len (random-str 91 :alnum)))
 ",
     );
 
@@ -263,11 +279,11 @@ Section: random
 
 Example:
 (def rand-int (random 100))
-(test::assert-true (and (> rand-int 0) (< rand-int 100))
+(test::assert-true (and (> rand-int 0) (< rand-int 100)))
 (def rand-float (random 1.0))
 (test::assert-true (and (> rand-float 0) (< rand-float 1)))
-(test::assert-error-msg (random -1) \"Expected positive integer\")
-(test::assert-error-msg (random 1 2) \"Expected zero or one integers\")
+(test::assert-error-msg (random -1) :rand \"Expected positive number\")
+(test::assert-error-msg (random 1 2) :rand \"Expected positive number, float or int\")
 ",
     );
 }
