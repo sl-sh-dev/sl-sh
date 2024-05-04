@@ -189,7 +189,7 @@ impl<ENV> GVm<ENV> {
         Ok(val)
     }
 
-    fn is_eq(&self, reg1: u16, reg2: u16) -> VMResult<Value> {
+    fn is_identical(&self, reg1: u16, reg2: u16) -> VMResult<Value> {
         let mut val = Value::False;
         if reg1 == reg2 {
             val = Value::True;
@@ -230,9 +230,14 @@ impl<ENV> GVm<ENV> {
                 val = Value::True;
             }
         } else if val1.is_number() && val2.is_number() {
-            let diff = (val1.get_float(self)? - val2.get_float(self)?).abs();
-            if diff == 0.0 {
-                val = Value::True;
+            // compare two floats by converting to f64 and using native equality check (IEEE)
+            if val1.is_float() && val2.is_float() {
+                if val1.get_float(self)? == val2.get_float(self)? {
+                    val = Value::True;
+                }
+            } else {
+                // we are comparing two numbers but they aren't both ints or both floats
+                val = Value::False;
             }
         } else {
             match (val1, val2) {
@@ -391,6 +396,7 @@ impl<ENV> GVm<ENV> {
         Ok(val)
     }
 
+    /// test if the operands are = (more lenient than identical)
     fn is_equal(&self, reg1: u16, reg2: u16) -> VMResult<Value> {
         let mut val = Value::False;
         if reg1 == reg2 {
@@ -1576,5 +1582,30 @@ mod tests {
         assert!(res.is_err());
         assert!(res.unwrap_err().to_string() == "[rt]: Divide by zero error.");
         Ok(())
+    }
+
+    #[test]
+    fn test_equality() {
+        let vm = Vm::new();
+
+        let byte = Value::Byte(2);
+        let another_byte = Value::Byte(2);
+        let int = Value::Int([0, 0, 0, 0, 0, 0, 2]);
+        let another_int = Value::Int([0, 0, 0, 0, 0, 0, 2]);
+        let float = Value::Float(2.0.into());
+        let another_float = Value::Float(2.0000000000000000000000000000000000000000001.into());
+
+        // testing `=`
+        assert!(vm.is_equal_pair(byte, int).unwrap().is_true());
+        assert!(vm.is_equal_pair(byte, float).unwrap().is_false());
+        assert!(vm.is_equal_pair(int, float).unwrap().is_false());
+
+        // testing `identical?`
+        assert!(byte == another_byte);
+        assert!(int == another_int);
+        assert!(float == another_float);
+        assert!(byte != int);
+        assert!(byte != float);
+        assert!(int != float);
     }
 }

@@ -245,6 +245,18 @@ impl Value {
         matches!(&self, Value::Byte(_) | Value::Int(_) | Value::Float(_))
     }
 
+    pub fn is_float(&self) -> bool {
+        matches!(self, Value::Float(_))
+    }
+
+    pub fn not(&self) -> Value {
+        match self {
+            Value::False => Value::True,
+            Value::Nil => Value::True,
+            _ => Value::False,
+        }
+    }
+
     pub fn get_int<ENV>(&self, _vm: &GVm<ENV>) -> VMResult<i64> {
         match &self {
             Value::Byte(b) => Ok(*b as i64),

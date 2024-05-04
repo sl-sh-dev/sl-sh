@@ -102,9 +102,9 @@ macro_rules! decode3 {
     }};
 }
 
-macro_rules! compare_int {
-    ($vm:expr, $chunk:expr, $code:expr, $comp_fn:expr,
-     $compf_fn:expr, $wide:expr, $move:expr, $not:expr) => {{
+macro_rules! compare_numeric {
+    ($vm:expr, $chunk:expr, $code:expr, $comp_fn:expr, $wide:expr) => {{
+        let should_move = true;
         let (dest, reg1, reg2) = decode3!($code, $wide);
         let mut val = false;
         for reg in reg1..reg2 {
@@ -113,33 +113,32 @@ macro_rules! compare_int {
             val = if matches!(op1, $crate::Value::Float(_))
                 || matches!(op2, $crate::Value::Float(_))
             {
-                // The macro expansion trips this.
-                #[allow(clippy::redundant_closure_call)]
-                $compf_fn(
-                    get_float!($vm, op1).map_err(|e| (e, $chunk.clone()))?,
-                    get_float!($vm, op2).map_err(|e| (e, $chunk.clone()))?,
-                )
-            } else {
+                // Both operands are floats.
                 // The macro expansion trips this.
                 #[allow(clippy::redundant_closure_call)]
                 $comp_fn(
-                    get_int!($vm, op1).map_err(|e| (e, $chunk.clone()))?,
-                    get_int!($vm, op2).map_err(|e| (e, $chunk.clone()))?,
+                    get_primitive_float!($vm, op1).map_err(|e| (e, $chunk.clone()))?,
+                    get_primitive_float!($vm, op2).map_err(|e| (e, $chunk.clone()))?,
+                )
+            } else {
+                // Both operands are treated as integers.
+                // The macro expansion trips this.
+                #[allow(clippy::redundant_closure_call)]
+                $comp_fn(
+                    get_primitive_int!($vm, op1).map_err(|e| (e, $chunk.clone()))?,
+                    get_primitive_int!($vm, op2).map_err(|e| (e, $chunk.clone()))?,
                 )
             };
             if !val {
                 break;
             }
         }
-        if $not {
-            val = !val;
-        }
         let val = if val {
             $crate::Value::True
         } else {
             $crate::Value::False
         };
-        if $move {
+        if should_move {
             *$vm.register_mut(dest as usize) = val;
         } else {
             set_register!($vm, dest as usize, val);
@@ -147,13 +146,8 @@ macro_rules! compare_int {
     }};
 }
 
-macro_rules! compare {
-    ($vm:expr, $chunk:expr, $code:expr, $comp_fn:expr, $wide:expr, $move:expr) => {{
-        compare_int!($vm, $chunk, $code, $comp_fn, $comp_fn, $wide, $move, false)
-    }};
-}
-
-macro_rules! get_int {
+/// Convert a Value into an i64 integer primitive if possible
+macro_rules! get_primitive_int {
     ($vm:expr, $val:expr) => {{
         match $val {
             $crate::Value::Byte(b) => Ok(b as i64),
@@ -166,7 +160,8 @@ macro_rules! get_int {
     }};
 }
 
-macro_rules! get_float {
+/// Convert a numeric Value into an f64 float primitive
+macro_rules! get_primitive_float {
     ($vm:expr, $val:expr) => {{
         match $val {
             $crate::Value::Byte(b) => Ok(b as f64),
@@ -193,21 +188,21 @@ macro_rules! binary_math {
             ($crate::Value::Float(op1_f), _) => {
                 *$vm.register_mut(dest as usize) = $bin_fn(
                     f64::from(op1_f),
-                    get_float!($vm, op2).map_err(|e| (e, $chunk.clone()))?,
+                    get_primitive_float!($vm, op2).map_err(|e| (e, $chunk.clone()))?,
                 )
                 .into();
             }
             (_, $crate::Value::Float(op2_f)) => {
                 *$vm.register_mut(dest as usize) = $bin_fn(
-                    get_float!($vm, op1).map_err(|e| (e, $chunk.clone()))?,
+                    get_primitive_float!($vm, op1).map_err(|e| (e, $chunk.clone()))?,
                     f64::from(op2_f),
                 )
                 .into();
             }
             (_, _) => {
                 *$vm.register_mut(dest as usize) = $bin_fn(
-                    get_int!($vm, op1).map_err(|e| (e, $chunk.clone()))?,
-                    get_int!($vm, op2).map_err(|e| (e, $chunk.clone()))?,
+                    get_primitive_int!($vm, op1).map_err(|e| (e, $chunk.clone()))?,
+                    get_primitive_int!($vm, op2).map_err(|e| (e, $chunk.clone()))?,
                 )
                 .into();
             }
@@ -231,14 +226,14 @@ macro_rules! div_math {
             }
             ($crate::Value::Float(op1_f), _) => {
                 let op1 = f64::from(op1_f);
-                let op2 = get_float!($vm, op2).map_err(|e| (e, $chunk.clone()))? as f64;
+                let op2 = get_primitive_float!($vm, op2).map_err(|e| (e, $chunk.clone()))? as f64;
                 if op2 == 0.0 {
                     return Err(($crate::VMError::new_vm("Divide by zero error."), $chunk));
                 }
                 *$vm.register_mut(dest as usize) = (op1 / op2).into();
             }
             (_, $crate::Value::Float(op2_f)) => {
-                let op1 = get_float!($vm, op1).map_err(|e| (e, $chunk.clone()))? as f64;
+                let op1 = get_primitive_float!($vm, op1).map_err(|e| (e, $chunk.clone()))? as f64;
                 let op2 = f64::from(op2_f);
                 if op2 == 0.0 {
                     return Err(($crate::VMError::new_vm("Divide by zero error."), $chunk));
@@ -246,8 +241,8 @@ macro_rules! div_math {
                 *$vm.register_mut(dest as usize) = (op1 / op2).into();
             }
             (_, _) => {
-                let op1 = get_int!($vm, op1).map_err(|e| (e, $chunk.clone()))?;
-                let op2 = get_int!($vm, op2).map_err(|e| (e, $chunk.clone()))?;
+                let op1 = get_primitive_int!($vm, op1).map_err(|e| (e, $chunk.clone()))?;
+                let op2 = get_primitive_int!($vm, op2).map_err(|e| (e, $chunk.clone()))?;
                 if op2 == 0 {
                     return Err(($crate::VMError::new_vm("Divide by zero error."), $chunk));
                 }
