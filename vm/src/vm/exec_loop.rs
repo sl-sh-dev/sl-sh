@@ -896,7 +896,9 @@ impl<ENV> GVm<ENV> {
                 }
                 EQ => {
                     let (dest, reg1, reg2) = decode3!(self.ip_ptr, wide);
-                    let val = self.is_eq(reg1, reg2).map_err(|e| (e, chunk.clone()))?;
+                    let val = self
+                        .is_identical(reg1, reg2)
+                        .map_err(|e| (e, chunk.clone()))?;
                     set_register!(self, dest as usize, val);
                 }
                 EQUAL => {
@@ -1039,32 +1041,71 @@ impl<ENV> GVm<ENV> {
                 SUB => binary_math!(self, chunk, self.ip_ptr, |a, b| a - b, wide),
                 MUL => binary_math!(self, chunk, self.ip_ptr, |a, b| a * b, wide),
                 DIV => div_math!(self, chunk, self.ip_ptr, wide),
-                NUMEQ => compare_int!(
-                    self,
-                    chunk,
-                    self.ip_ptr,
-                    |a, b| a == b,
-                    |a: f64, b: f64| (a - b).abs() < f64::EPSILON,
-                    wide,
-                    true,
-                    false
-                ),
-                NUMNEQ => compare_int!(
-                    self,
-                    chunk,
-                    self.ip_ptr,
-                    |a, b| a == b,
-                    |a: f64, b: f64| (a - b).abs() < f64::EPSILON,
-                    wide,
-                    true,
-                    true
-                ),
-                NUMLT => compare!(self, chunk, self.ip_ptr, |a, b| a < b, wide, true),
-                NUMLTE => compare!(self, chunk, self.ip_ptr, |a, b| a <= b, wide, true),
-                NUMGT => compare!(self, chunk, self.ip_ptr, |a, b| a > b, wide, true),
-                NUMGTE => compare!(self, chunk, self.ip_ptr, |a, b| a >= b, wide, true),
-                INC => self.inc_val(wide).map_err(|e| (e, chunk.clone()))?,
-                DEC => self.dec_val(wide).map_err(|e| (e, chunk.clone()))?,
+                NUMEQ => {
+                    compare_numeric!(self, chunk, self.ip_ptr, |a, b| a == b, wide)
+                }
+                NUMNEQ => {
+                    // TODO: #142 NUMNEQ is being hijacked temporarily to implement clojure `not=` which is a non-numeric comparison
+                    let (dest, reg1, reg2) = decode3!(self.ip_ptr, wide);
+                    let val = self.is_equal(reg1, reg2).map_err(|e| (e, chunk.clone()))?;
+                    set_register!(self, dest as usize, val.not());
+                    // This is what NUMNEQ would look like if it were a numeric comparison
+                    // compare_numeric!(self, chunk, self.ip_ptr, |a, b| a != b, wide)
+                }
+                NUMLT => {
+                    compare_numeric!(self, chunk, self.ip_ptr, |a, b| a < b, wide)
+                }
+                NUMLTE => {
+                    compare_numeric!(self, chunk, self.ip_ptr, |a, b| a <= b, wide)
+                }
+                NUMGT => {
+                    compare_numeric!(self, chunk, self.ip_ptr, |a, b| a > b, wide)
+                }
+                NUMGTE => {
+                    compare_numeric!(self, chunk, self.ip_ptr, |a, b| a >= b, wide)
+                }
+                INC => {
+                    let (dest, i) = decode2!(self.ip_ptr, wide);
+                    match self.register(dest as usize) {
+                        Value::Byte(v) => {
+                            *self.register_mut(dest as usize) = Value::Byte(v + i as u8)
+                        }
+                        Value::Int(v) => {
+                            let v = from_i56(&v);
+                            *self.register_mut(dest as usize) = (v + i as i64).into()
+                        }
+                        _ => {
+                            return Err((
+                                VMError::new_vm(format!(
+                                    "INC: Can only INC an integer type, got {:?}.",
+                                    self.register(dest as usize)
+                                )),
+                                chunk,
+                            ))
+                        }
+                    }
+                }
+                DEC => {
+                    let (dest, i) = decode2!(self.ip_ptr, wide);
+                    match self.register(dest as usize) {
+                        Value::Byte(v) => {
+                            *self.register_mut(dest as usize) = Value::Byte(v - i as u8)
+                        }
+                        Value::Int(v) => {
+                            let v = from_i56(&v);
+                            *self.register_mut(dest as usize) = (v - i as i64).into()
+                        }
+                        _ => {
+                            return Err((
+                                VMError::new_vm(format!(
+                                    "DEC: Can only DEC an integer type, got {:?}.",
+                                    self.register(dest as usize)
+                                )),
+                                chunk,
+                            ))
+                        }
+                    }
+                }
                 CONS => {
                     let (dest, op2, op3) = decode3!(self.ip_ptr, wide);
                     let car = self.register(op2 as usize);

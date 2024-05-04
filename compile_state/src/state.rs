@@ -379,7 +379,6 @@ Example:
 (test::assert-equal 0 (+))
 (test::assert-equal 5 (+ 5))
 (test::assert-equal 10 (+ 5 5))
-(test::assert-equal 5 (+ 5.0))
 (test::assert-equal 6 (+ 1 5))
 (test::assert-equal 6.5 (+ 1 5.5))
 (test::assert-equal 7 (+ 1 2 4))
@@ -750,6 +749,8 @@ Example:
 (test::assert-true (not= 1.1 1.0))
 (test::assert-false (not= 1.1 1.1))
 (test::assert-true (not= 3 2 3))
+(test::assert-true (not= 1 1.0))
+(test::assert-true (not= 1e-30 1.0001e-30))
 "#),
             numlt: add_special(vm, "<", r#"Usage: (< val0 ... valN)
 
