@@ -288,7 +288,7 @@ fn contains_list(args: &[Value]) -> bool {
 }
 
 /// Call lambda with args, this is re-entrant.
-fn apply_callable(vm: &mut SloshVm, lambda: Value, args: &[Value]) -> VMResult<Value> {
+pub fn apply_callable(vm: &mut SloshVm, lambda: Value, args: &[Value]) -> VMResult<Value> {
     match lambda {
         Value::Symbol(i) | Value::Special(i) if i == vm.specials().quote => {
             if let Some(arg) = args.first() {

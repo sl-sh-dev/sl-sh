@@ -2,8 +2,8 @@ use bridge_macros::sl_sh_fn;
 use bridge_types::VarArgs;
 use compile_state::state::SloshVm;
 use shell::builtins::expand_tilde;
-//use slvm::{from_i56, VMError, VMResult, Value};
-use slvm::{VMError, VMResult, Value};
+use sl_compiler::load_eval::apply_callable;
+use slvm::{from_i56, VMError, VMResult, Value};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::{env, fs, io};
@@ -14,7 +14,7 @@ use bridge_adapters::add_builtin;
 use same_file;
 use std::fs::{File, Metadata};
 use std::time::SystemTime;
-//use walkdir::{DirEntry, WalkDir};
+use walkdir::{DirEntry, WalkDir};
 
 fn cd_expand_all_dots(cd: String) -> String {
     let mut all_dots = false;
@@ -327,8 +327,7 @@ fn is_same_file(path_0: &str, path_1: &str) -> VMResult<Value> {
     }
 }
 
-/*
-/// Usage: (fs-crawl /path/to/file/or/dir (fn (x) (println "found path" x) [max-depth]
+/// Usage: (fs-crawl /path/to/file/or/dir (fn (x) (prn "found path" x) [max-depth]
 ///              [:follow-syms])
 ///
 /// If a directory is provided the path is recursively searched and every
@@ -345,77 +344,81 @@ fn is_same_file(path_0: &str, path_1: &str) -> VMResult<Value> {
 /// Example:
 ///
 /// (with-temp-file (fn (tmp-file)
-/// 	(def cnt 0)
+/// 	(let (cnt 0)
 /// 	(fs-crawl tmp-file (fn (x)
 /// 		(test::assert-equal (fs-base tmp-file) (fs-base x))
 /// 		(set! cnt (+ 1 cnt))))
-/// 	(test::assert-equal 1 cnt)))
+/// 	(test::assert-equal 1 cnt))))
+///
 ///
 /// (defn create-in (in-dir num-files visited)
 /// 	(dotimes-i i num-files
-/// 		 (hash-set! visited (get-temp-file in-dir) nil)))
+/// 		 (let (tmp-file (get-temp-file in-dir))
+/// 		 (set! visited.~tmp-file nil))))
 ///
 /// (defn create-dir (tmp-dir visited)
-/// 	(let ((new-tmp (get-temp tmp-dir)))
-/// 		(hash-set! visited new-tmp nil)
+/// 	(let (new-tmp (get-temp tmp-dir))
+/// 		(set! visited.~new-tmp #f)
 /// 		new-tmp))
 ///
+/// #| XXXX Fix hashmaps so strings and string consts hash the same then restore this testing...
 /// (with-temp (fn (root-tmp-dir)
-/// 	(let ((tmp-file-count 5)
-/// 		  (visited (make-hash)))
+/// 	(let (tmp-file-count 5
+/// 		  visited {})
 /// 	(def cnt 0)
-/// 	(hash-set! visited root-tmp-dir nil)
+/// 	(set! visited.~root-tmp-dir nil)
 /// 	(create-in root-tmp-dir tmp-file-count visited)
-/// 	(let* ((tmp-dir (create-dir root-tmp-dir visited))
-/// 			(new-files (create-in tmp-dir tmp-file-count visited))
-/// 			(tmp-dir (create-dir tmp-dir visited))
-/// 			(new-files (create-in tmp-dir tmp-file-count visited)))
+/// 	(let (tmp-dir (create-dir root-tmp-dir visited)
+/// 			new-files (create-in tmp-dir tmp-file-count visited)
+/// 			tmp-dir (create-dir tmp-dir visited)
+/// 			new-files (create-in tmp-dir tmp-file-count visited))
 /// 	(fs-crawl root-tmp-dir (fn (x)
-/// 		(let ((file (hash-get visited x)))
+/// 		(let (file visited.~x)
 /// 			(test::assert-true (not file)) ;; also tests double counting
-/// 			(hash-set! visited x #t)
-/// 			(set! cnt (+ 1 cnt)))))
+/// 			(set! visited.~x #t)
+/// 			(inc! cnt))))
 /// 	(test::assert-equal (+ 3 (* 3 tmp-file-count)) cnt)
-/// 	(test::assert-equal (+ 3 (* 3 tmp-file-count)) (length (hash-keys visited)))
-/// 	(iterator::map (fn (x) (test::assert-true (hash-get visited y))) (hash-keys visited))))))
+/// 	(test::assert-equal (+ 3 (* 3 tmp-file-count)) (len (hash-keys visited)))
+/// 	(seq-for key in (hash-keys visited) (test::assert-true visited.~key))))))
 ///
 /// (with-temp (fn (root-tmp-dir)
-/// 	(let ((tmp-file-count 5)
-/// 		  (visited (make-hash)))
+/// 	(let (tmp-file-count 5
+/// 		  visited {})
 /// 	(def cnt 0)
-/// 	(hash-set! visited root-tmp-dir nil)
+/// 	(set! visited.~root-tmp-dir nil)
 /// 	(create-in root-tmp-dir tmp-file-count visited)
-/// 	(let* ((tmp-dir (create-dir root-tmp-dir visited))
-/// 			(new-files (create-in tmp-dir tmp-file-count visited))
-/// 			(tmp-dir (create-dir tmp-dir (make-hash)))
-/// 			(new-files (create-in tmp-dir tmp-file-count (make-hash))))
+/// 	(let (tmp-dir (create-dir root-tmp-dir visited)
+/// 			new-files (create-in tmp-dir tmp-file-count visited)
+/// 			tmp-dir (create-dir tmp-dir {})
+/// 			new-files (create-in tmp-dir tmp-file-count {}))
 /// 	(fs-crawl root-tmp-dir (fn (x)
-/// 		(let ((file (hash-get visited x)))
+/// 		(let (file visited.~x)
 /// 			(test::assert-true (not file)) ;; also tests double counting
-/// 			(hash-set! visited x #t)
-/// 			(set! cnt (+ 1 cnt)))) 2)
+/// 			(set! visited.~x #t)
+/// 			(inc! cnt))) 2)
 /// 	(test::assert-equal (+ 3 (* 2 tmp-file-count)) cnt)
 /// 	(test::assert-equal (+ 3 (* 2 tmp-file-count)) (length (hash-keys visited)))
-/// 	(iterator::map (fn (x) (test::assert-true (hash-get visited y))) (hash-keys visited))))))
+/// 	(seq-for key in (hash-keys visited) (test::assert-true visited.~key)))))
 ///
 /// (with-temp (fn (root-tmp-dir)
-/// 	(let ((tmp-file-count 5)
-/// 		  (visited (make-hash)))
+/// 	(let (tmp-file-count 5
+/// 		  visited {})
 /// 	(def cnt 0)
-/// 	(hash-set! visited root-tmp-dir nil)
+/// 	(set! visited.~root-tmp-dir nil)
 /// 	(create-in root-tmp-dir tmp-file-count visited)
-/// 	(let* ((tmp-dir (create-dir root-tmp-dir (make-hash)))
-/// 			(new-files (create-in tmp-dir tmp-file-count (make-hash)))
-/// 			(tmp-dir (create-dir tmp-dir (make-hash)))
-/// 			(new-files (create-in tmp-dir tmp-file-count (make-hash))))
+/// 	(let (tmp-dir (create-dir root-tmp-dir {})
+/// 			new-files (create-in tmp-dir tmp-file-count {})
+/// 			tmp-dir (create-dir tmp-dir {})
+/// 			new-files (create-in tmp-dir tmp-file-count {}))
 /// 	(fs-crawl root-tmp-dir (fn (x)
-/// 		(let ((file (hash-get visited x)))
+/// 		(let (file visited.~x)
 /// 			(test::assert-true (not file)) ;; also tests double counting
-/// 			(hash-set! visited x #t)
-/// 			(set! cnt (+ 1 cnt)))) 1)
+/// 			(set! visited.~x #t)
+/// 			(inc! cnt))) 1)
 /// 	(test::assert-equal (+ 2 tmp-file-count) cnt)
 /// 	(test::assert-equal (+ 2 tmp-file-count) (length (hash-keys visited)))
-/// 	(iterator::map (fn (x) (test::assert-true (hash-get visited y))) (hash-keys visited))))))
+/// 	(seq-for key in (hash-keys visited) (test::assert-true visited.~key)))))
+/// |#
 #[sl_sh_fn(fn_name = "fs-crawl", takes_env = true)]
 fn fs_crawl(
     environment: &mut SloshVm,
@@ -436,7 +439,15 @@ fn fs_crawl(
             Value::Keyword(i) if environment.get_interned(i) == "follow-syms" => {
                 sym_links = Some(true);
             }
-            _ => return Err(VMError::new("io", format!("invalid argument {}", depth_or_symlink.display_value(environment)))),
+            _ => {
+                return Err(VMError::new(
+                    "io",
+                    format!(
+                        "invalid argument {}",
+                        depth_or_symlink.display_value(environment)
+                    ),
+                ))
+            }
         }
     }
     match lambda_exp {
@@ -446,8 +457,7 @@ fn fs_crawl(
                     let path = entry.path();
                     if let Some(path) = path.to_str() {
                         let path = environment.alloc_string(path.to_string());
-                        // XXXX make a call...
-                        //call_lambda(environment, lambda_exp, &[path])?;
+                        apply_callable(environment, lambda_exp, &[path])?;
                     }
                     Ok(())
                 };
@@ -498,7 +508,6 @@ fn fs_crawl(
         }
     }
 }
- */
 
 /// Usage: (fs-len /path/to/file/or/dir)
 ///
@@ -650,7 +659,7 @@ pub fn add_fs_meta_builtins(env: &mut SloshVm) {
     intern_is_file(env);
     intern_is_dir(env);
     intern_do_glob(env);
-    //intern_fs_crawl(env);
+    intern_fs_crawl(env);
     intern_is_same_file(env);
     intern_fs_base(env);
     intern_fs_parent(env);
