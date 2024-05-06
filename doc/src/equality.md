@@ -5,11 +5,14 @@ For numeric equality (IEEE) use `==`
 For bytewise equality use `identical?`
 
 The behavior and names are based on Clojure's implementation. Read their docs here: https://clojure.org/guides/equality
+Also check out `slosh/tests/equality.slosh` for some examples.
 
 -   `=`
+
     -   `(= 2 0x2)` is `true` (comparing an int to a byte)
     -   `(= 2 2.0)` is `false` (comparing an int to a float)
     -   `(= NaN NaN)` is `false`
+
     -   `state.rs` defines special forms object with key `equal` mapped to the name `=`.
     -   `compile.rs` matches on `env.specials().equal` and generates opcode `EQUAL`
     -   `exec_loop.rs` maps opcode `EQUAL` to function `is_equal`
@@ -18,6 +21,7 @@ The behavior and names are based on Clojure's implementation. Read their docs he
         -   check if both args are Byte or Int and if so, converts both to `i64` with `Value::get_int` and compares with rust native `==`
         -   check if both args are Byte or Int or Float and if so, converts both to `f64` with `Value::get_float`
             -   then subtracts the second from the first and takes the absolute value and tests `diff == 0.0`
+
 -   `==`
 
     -   `(== 1 1.0)` is `true` (comparing an int to a float)
@@ -37,7 +41,16 @@ The behavior and names are based on Clojure's implementation. Read their docs he
 
 -   `identical?`
 
-    -   uses `Value::PartialEq` implementation
+    -   `(identical? 1 1)` is `true`
+    -   `(identical? 1 1.0)` is `false`
+    -   `(identical? NaN NaN)` might be `true` or `false`. There are trillions of different bit patterns that represent NaN in IEEE 754
+
+    -   is the only equality comparison that uses `Value::PartialEq` implementation which is always false for different types of Values
+    -   using identical equality for floats causes problems with hashing.
+        [#125](https://github.com/sl-sh-dev/sl-sh/issues/125)
+        identical equality is 'too strict' in that you probably expect that +0 and -0 should hash to the same thing, but they don't
+        rendering hash tables
+
     -   `state.rs` defines special forms object with key `eq` mapped to the name `identical?`.
     -   `compile.rs` matches on `env.specials().eq` and generates opcode `EQ`
     -   `exec_loop.rs` maps opcode `EQ` to function `is_identical`
@@ -45,33 +58,12 @@ The behavior and names are based on Clojure's implementation. Read their docs he
 
 -   `assert-equal`
 
-    -   based on `equal?`
-    -   is a macro defined in core.slosh which checks if the arguments are `equal?` and throws an error if they are not
+    -   based on `=`
+    -   is a macro defined in core.slosh which checks if the arguments are `=` and throws an error if they are not
 
 -   `not=`
-    -   `(not= 1 2)` is equivalent to `(not (= 1 2))`
-    -   `(not= 1 1.0)` is `true` (comparing an int to a float)
+
+    -   based on `=`
     -   `state.rs` defines special forms object with key `numneq` mapped to the name `not=`.
     -   `compile_math.rs` converts `numneq` to opcode `NUMNEQ`
     -   `exec_loop.rs` maps opcode `NUMNEQ` to a negation of the implementation of opcode `EQUAL` AKA `=`
-
-### Moving Forward
-
--   = should be converted to =?
--   =? should just be an alias for equal? which is the slower more intuitive equality check
--   eq? is the faster more strict equality check but it does spend a little extra time making sure to dereference captured heap values
--   eq? on floats should do an IEEE comparison
--   eq? should consider 1.0 equal to 1
--   equal? on floats should do a fuzzy comparison
--   if we want a bitwise comparison of floats we will implement it later
-
-eq? does not do type coercion
-just do what clojure does
-numeq should be a bit fuzzy
-NaN != NaN is false and NaN == NaN is false
-
-may 1 2024
-= (equal) loosy goosey (still use IEEE comparison)
-== (=?) (for numbers) (IEEE comparison)
-identical? (eq?) (bytewise equality)
-users who want rough epsilon equality can defn their own fn
