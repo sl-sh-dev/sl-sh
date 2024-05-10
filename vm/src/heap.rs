@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::bits::FLAG_MUT;
@@ -7,10 +6,12 @@ pub mod handle;
 pub use crate::handle::Handle;
 use crate::heap::io::HeapIo;
 use crate::heap::storage::Storage;
+use crate::vm_hashmap::VMHashMap;
 
 pub mod bits;
 pub mod io;
 mod storage;
+pub mod vm_hashmap;
 
 #[derive(Clone, Debug)]
 pub struct CallFrame {
@@ -51,7 +52,7 @@ pub struct Continuation {
 enum Object {
     String(Arc<String>),
     Vector(Arc<Vec<Value>>),
-    Map(Arc<HashMap<Value, Value>>),
+    Map(Arc<VMHashMap>),
     Bytes(Arc<Vec<u8>>),
 
     // Everything below here is always read only.
@@ -241,7 +242,7 @@ impl Heap {
 
     pub fn alloc_map<MarkFunc>(
         &mut self,
-        map: HashMap<Value, Value>,
+        map: VMHashMap,
         mutable: MutState,
         mark_roots: MarkFunc,
     ) -> Value
@@ -385,7 +386,7 @@ impl Heap {
         }
     }
 
-    pub fn get_map(&self, handle: Handle) -> &HashMap<Value, Value> {
+    pub fn get_map(&self, handle: Handle) -> &VMHashMap {
         if let Some(Object::Map(map)) = self.objects.get(handle.idx()) {
             map
         } else {
@@ -393,7 +394,7 @@ impl Heap {
         }
     }
 
-    pub fn get_map_mut(&mut self, handle: Handle) -> VMResult<&mut HashMap<Value, Value>> {
+    pub fn get_map_mut(&mut self, handle: Handle) -> VMResult<&mut VMHashMap> {
         if !self.objects.is_mutable(handle.idx()) {
             return Err(VMError::new_heap("Map is not mutable!"));
         }
@@ -572,8 +573,8 @@ impl Heap {
             }
             Object::Map(map) => {
                 for (key, val) in map.iter() {
-                    self.mark_trace(*key);
-                    self.mark_trace(*val);
+                    self.mark_trace(key);
+                    self.mark_trace(val);
                 }
             }
             Object::Bytes(_) => {}

@@ -1,9 +1,9 @@
 use crate::heap::Error;
 use crate::{CallFrame, Chunk, Continuation, Handle, Heap, Interned, MutState, VMResult, Value};
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::io::HeapIo;
+use crate::vm_hashmap::VMHashMap;
 use crate::GVm;
 
 /// Vm code to access storage, heap, stack, globals, etc.
@@ -157,14 +157,14 @@ impl<ENV> GVm<ENV> {
         res
     }
 
-    pub fn alloc_map(&mut self, map: HashMap<Value, Value>) -> Value {
+    pub fn alloc_map(&mut self, map: VMHashMap) -> Value {
         let mut heap = self.heap.take().expect("VM must have a Heap!");
         let res = heap.alloc_map(map, MutState::Mutable, |heap| self.mark_roots(heap));
         self.heap = Some(heap);
         res
     }
 
-    pub fn alloc_map_ro(&mut self, map: HashMap<Value, Value>) -> Value {
+    pub fn alloc_map_ro(&mut self, map: VMHashMap) -> Value {
         let mut heap = self.heap.take().expect("VM must have a Heap!");
         let res = heap.alloc_map(map, MutState::Immutable, |heap| self.mark_roots(heap));
         self.heap = Some(heap);
@@ -322,11 +322,11 @@ impl<ENV> GVm<ENV> {
         self.heap_mut().get_vector_mut(handle)
     }
 
-    pub fn get_map(&self, handle: Handle) -> &HashMap<Value, Value> {
+    pub fn get_map(&self, handle: Handle) -> &VMHashMap {
         self.heap().get_map(handle)
     }
 
-    pub fn get_map_mut(&mut self, handle: Handle) -> VMResult<&mut HashMap<Value, Value>> {
+    pub fn get_map_mut(&mut self, handle: Handle) -> VMResult<&mut VMHashMap> {
         self.heap_mut().get_map_mut(handle)
     }
 

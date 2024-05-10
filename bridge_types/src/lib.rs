@@ -1,5 +1,4 @@
 use std::borrow::Cow;
-use std::collections::HashMap;
 use std::fmt::Display;
 
 /// Marker traits
@@ -12,14 +11,6 @@ impl<T> BridgedType for Option<T> where T: BridgedType {}
 
 /// A [`Result`] value that contains a [`BridgedType`] can be represented as a rust value.
 impl<T, U> BridgedType for Result<T, U> where T: BridgedType {}
-
-/// A [`HashMap`] that contains a [`BridgedType`] can be represented as a rust value.
-impl<T, U> BridgedType for HashMap<T, U>
-where
-    T: BridgedType,
-    U: BridgedType,
-{
-}
 
 /// A [`Vec`] that contains a [`BridgedType`] can be represented as a rust value.
 impl<T> BridgedType for Vec<T> where T: BridgedType {}

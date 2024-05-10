@@ -1,8 +1,8 @@
 use crate::SloshVm;
 use bridge_adapters::add_builtin;
 use bridge_macros::sl_sh_fn;
+use slvm::vm_hashmap::{VMHashMap, ValHash};
 use slvm::{VMError, VMResult, Value, ValueType};
-use std::collections::HashMap;
 
 pub fn vec_slice(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let (vector, start, end) = match registers.len() {
@@ -72,39 +72,26 @@ pub fn vec_to_list(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-/// Usage: (hash-remove! hashmap key)
-///
-/// Remove a key from a hashmap. This is a destructive form!
-///
-/// Section: hashmap
-///
-/// Example:
-/// (def tst-hash {:key1  "val one" 'key2 "val two" "key3" "val three" \S "val S"})
-/// (test::assert-equal 4 (len (hash-keys tst-hash)))
-/// (test::assert-equal "val one" tst-hash.:key1)
-/// (test::assert-equal "val two" (get tst-hash 'key2))
-/// (test::assert-equal "val three" (get tst-hash "key3"))
-/// (test::assert-equal "val S" (get tst-hash \S))
-/// (hash-remove! tst-hash 'key2)
-/// (test::assert-equal 3 (len (hash-keys tst-hash)))
-/// (test::assert-equal "val one" tst-hash.:key1)
-/// (test::assert-equal "val three" (get tst-hash "key3"))
-/// (test::assert-equal "val S" (get tst-hash \S))
-/// (hash-remove! tst-hash :key1)
-/// (test::assert-equal 2 (len (hash-keys tst-hash)))
-/// (test::assert-equal "val three" (get tst-hash "key3"))
-/// (test::assert-equal "val S" (get tst-hash \S))
-/// (hash-remove! tst-hash "key3")
-/// (test::assert-equal 1 (len (hash-keys tst-hash)))
-/// (test::assert-equal "val S" (get tst-hash \S))
-/// (hash-remove! tst-hash \S)
-/// (test::assert-equal 0 (len (hash-keys tst-hash)))
-#[sl_sh_fn(fn_name = "hash-remove!")]
-pub fn hash_remove(map: &mut HashMap<Value, Value>, key: Value) -> VMResult<Value> {
-    if let Some(old) = map.remove(&key) {
-        Ok(old)
+// This has to be a low level not macro implementation because passing in a &mut VMHashMap means
+// we can not use our vm (it has a mutable borrow already out) so we have to play some ordering games
+// for the borrow checker and need the raw registers...
+// Note, this should probably become a bytecode at some point anyway (?).
+pub fn hash_remove(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    let mut args = registers.iter();
+    if let (Some(Value::Map(map_handle)), Some(key), None) = (args.next(), args.next(), args.next())
+    {
+        let id = ValHash::from_value(vm, *key);
+        let map = vm.get_map_mut(*map_handle)?;
+        if let Some(old) = map.remove_id(id) {
+            Ok(old)
+        } else {
+            Ok(Value::Nil)
+        }
     } else {
-        Ok(Value::Nil)
+        Err(VMError::new(
+            "hashmap",
+            "Invalid args, requires hashmap and key to remove.",
+        ))
     }
 }
 
@@ -128,9 +115,9 @@ pub fn hash_remove(map: &mut HashMap<Value, Value>, key: Value) -> VMResult<Valu
 /// (test::assert-false (hash-haskey tst-hash :key1))
 /// (set! tst-hash :key1 "val one b")
 /// (test::assert-true (hash-haskey tst-hash :key1))
-#[sl_sh_fn(fn_name = "hash-haskey?")]
-pub fn hash_hashkey(map: &mut HashMap<Value, Value>, key: Value) -> VMResult<Value> {
-    if map.contains_key(&key) {
+#[sl_sh_fn(fn_name = "hash-haskey?", takes_env = true)]
+pub fn hash_hashkey(environment: &mut SloshVm, map: &VMHashMap, key: Value) -> VMResult<Value> {
+    if map.contains_key(environment, key) {
         Ok(Value::True)
     } else {
         Ok(Value::False)
@@ -232,10 +219,10 @@ pub fn to_list(environment: &mut SloshVm, src: Value) -> VMResult<Value> {
 ///  (test::assert-true (in? (hash-keys tst-hash) "key3") " Test key3")
 ///  (test::assert-false (in? (hash-keys tst-hash) :key4))
 #[sl_sh_fn(fn_name = "hash-keys")]
-pub fn hash_keys(map: &HashMap<Value, Value>) -> VMResult<Vec<Value>> {
+pub fn hash_keys(map: &VMHashMap) -> VMResult<Vec<Value>> {
     let mut keys = Vec::with_capacity(map.len());
     for key in map.keys() {
-        keys.push(*key);
+        keys.push(key);
     }
     Ok(keys)
 }
@@ -288,10 +275,43 @@ pub fn setup_collection_builtins(env: &mut SloshVm) {
     intern_occurs(env);
     intern_reverse(env);
     intern_hash_keys(env);
-    intern_hash_remove(env);
     intern_is_in(env);
     intern_to_vec(env);
     intern_to_list(env);
+
+    add_builtin(
+        env,
+        "hash-remove!",
+        hash_remove,
+        r#"Usage: (hash-remove! hashmap key)
+
+Remove a key from a hashmap. This is a destructive form!
+
+Section: hashmap
+
+Example:
+(def tst-hash {:key1  "val one" 'key2 "val two" "key3" "val three" \S "val S"})
+(test::assert-equal 4 (len (hash-keys tst-hash)))
+(test::assert-equal "val one" tst-hash.:key1)
+(test::assert-equal "val two" (get tst-hash 'key2))
+(test::assert-equal "val three" (get tst-hash "key3"))
+(test::assert-equal "val S" (get tst-hash \S))
+(hash-remove! tst-hash 'key2)
+(test::assert-equal 3 (len (hash-keys tst-hash)))
+(test::assert-equal "val one" tst-hash.:key1)
+(test::assert-equal "val three" (get tst-hash "key3"))
+(test::assert-equal "val S" (get tst-hash \S))
+(hash-remove! tst-hash :key1)
+(test::assert-equal 2 (len (hash-keys tst-hash)))
+(test::assert-equal "val three" (get tst-hash "key3"))
+(test::assert-equal "val S" (get tst-hash \S))
+(hash-remove! tst-hash "key3")
+(test::assert-equal 1 (len (hash-keys tst-hash)))
+(test::assert-equal "val S" (get tst-hash \S))
+(hash-remove! tst-hash \S)
+(test::assert-equal 0 (len (hash-keys tst-hash)))
+    "#,
+    );
     add_builtin(
         env,
         "flatten",
