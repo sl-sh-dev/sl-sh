@@ -2,6 +2,12 @@ use crate::lisp_adapters::{SlFrom, SlFromRef};
 use compile_state::state::SloshVm;
 use slvm::{VMResult, Value};
 
+impl<'a> SlFromRef<'a, Value> for Value {
+    fn sl_from_ref(value: Value, _vm: &SloshVm) -> VMResult<Self> {
+        Ok(value)
+    }
+}
+
 impl<'a> SlFromRef<'a, Value> for bool {
     fn sl_from_ref(value: Value, _vm: &SloshVm) -> VMResult<Self> {
         match value {

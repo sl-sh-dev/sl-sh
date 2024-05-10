@@ -250,7 +250,11 @@ fn eval_exp(vm: &mut SloshVm, exp: Value) -> VMResult<Value> {
     compile(vm, &mut state, exp, 0)?;
     state.chunk.encode0(RET, vm.own_line())?;
     let chunk = Arc::new(state.chunk.clone());
-    vm.do_call(chunk, &[], None)
+    let l = vm.alloc_lambda(chunk.clone());
+    vm.heap_sticky(l);
+    let ret = vm.do_call(chunk, &[], None);
+    vm.heap_unsticky(l);
+    ret
 }
 
 /// Builtin eval implementation.  Tries to avoid compilation when possible (uses apply machinery).
@@ -283,11 +287,11 @@ fn contains_list(args: &[Value]) -> bool {
     false
 }
 
-/// Internal implementation, args is expected to have at least one value (the callable being called).
-fn apply_callable(vm: &mut SloshVm, lambda: Value, args: &[Value]) -> VMResult<Value> {
+/// Call lambda with args, this is re-entrant.
+pub fn apply_callable(vm: &mut SloshVm, lambda: Value, args: &[Value]) -> VMResult<Value> {
     match lambda {
         Value::Symbol(i) | Value::Special(i) if i == vm.specials().quote => {
-            if let Some(arg) = args.get(1) {
+            if let Some(arg) = args.first() {
                 Ok(*arg)
             } else {
                 Err(VMError::new_vm(
@@ -309,7 +313,7 @@ fn apply_callable(vm: &mut SloshVm, lambda: Value, args: &[Value]) -> VMResult<V
         }
         Value::Special(_i) => {
             let mut args_t;
-            let args = if contains_list(args) {
+            let mut args = if contains_list(args) {
                 args_t = args.to_vec();
                 for i in args_t.iter_mut() {
                     // quote any lists so they do not get compiled...
@@ -319,6 +323,7 @@ fn apply_callable(vm: &mut SloshVm, lambda: Value, args: &[Value]) -> VMResult<V
             } else {
                 args.to_vec()
             };
+            args.insert(0, lambda);
             // We have to compile compiled forms...
             let exp = vm.alloc_list_ro(args);
             vm.heap_sticky(exp);
@@ -328,16 +333,16 @@ fn apply_callable(vm: &mut SloshVm, lambda: Value, args: &[Value]) -> VMResult<V
         }
         Value::Builtin(i) => {
             let b = vm.get_builtin(i);
-            (b)(vm, &args[1..])
+            (b)(vm, args)
         }
         Value::Lambda(h) => {
             let l = vm.get_lambda(h);
-            vm.do_call(l, &args[1..], None)
+            vm.do_call(l, args, None)
         }
         Value::Closure(h) => {
             let (l, caps) = vm.get_closure(h);
             let caps = caps.to_vec();
-            vm.do_call(l, &args[1..], Some(&caps[..]))
+            vm.do_call(l, args, Some(&caps[..]))
         }
         Value::Continuation(_handle) => {
             // It probably does not make sense to use apply with a continuation, it can only take
@@ -346,7 +351,9 @@ fn apply_callable(vm: &mut SloshVm, lambda: Value, args: &[Value]) -> VMResult<V
             if args.len() != 1 {
                 return Err(VMError::new_vm("Continuation takes one argument."));
             }
-            let exp = vm.alloc_list_ro(args.to_vec());
+            let mut args = args.to_vec();
+            args.insert(0, lambda);
+            let exp = vm.alloc_list_ro(args);
             vm.heap_sticky(exp);
             let res = eval_exp(vm, exp);
             vm.heap_unsticky(exp);
@@ -374,7 +381,7 @@ fn apply_inner(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     } else {
         registers.to_vec()
     };
-    apply_callable(vm, v[0], &v[..])
+    apply_callable(vm, v[0], &v[1..])
 }
 
 fn apply(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {

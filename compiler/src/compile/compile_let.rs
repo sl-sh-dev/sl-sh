@@ -297,9 +297,6 @@ fn let_while_inner(
         }
         let mut free_reg2 = result;
         compile_right_exps(env, right_exps, state, symbols.clone(), &mut free_reg2)?;
-        /*if free_reg2 != result && free_reg != free_reg2 {
-            panic!("mismatch in let-while lets!");
-        }XXXX*/
 
         state
             .chunk

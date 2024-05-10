@@ -166,6 +166,7 @@ impl<'a> SlFromRef<'a, Value> for String {
     fn sl_from_ref(value: Value, vm: &'a SloshVm) -> VMResult<Self> {
         match value {
             Value::String(h) => Ok(vm.get_string(h).to_string()),
+            Value::StringConst(i) => Ok(vm.get_interned(i).to_string()),
             _ => Err(VMError::new_conversion(
                 ErrorStrings::fix_me_mismatched_type(
                     <&'static str>::from(ValueType::String),

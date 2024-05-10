@@ -240,6 +240,15 @@ impl<ENV> GVm<ENV> {
         res
     }
 
+    /// Allocate a Value on the heap.  Moving a value to the heap is useful for captured variable
+    /// for instance.
+    pub fn alloc_io(&mut self, io: HeapIo) -> Value {
+        let mut heap = self.heap.take().expect("VM must have a Heap!");
+        let res = heap.alloc_io(io, MutState::Mutable, |heap| self.mark_roots(heap));
+        self.heap = Some(heap);
+        res
+    }
+
     pub fn heap_immutable(&mut self, val: Value) {
         self.heap_mut().immutable(val);
     }

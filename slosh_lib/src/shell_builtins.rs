@@ -131,5 +131,5 @@ Section: core"#,
         sh,
         "Runs a shell command and returns it's status.",
     );
-    add_builtin(env, "env", env_var, "Retrieves and environment variable.");
+    add_builtin(env, "env", env_var, "Retrieves an environment variable.");
 }

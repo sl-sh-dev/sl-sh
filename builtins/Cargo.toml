@@ -8,12 +8,18 @@ edition = "2021"
 [dependencies]
 slvm = { workspace = true }
 compile_state = { workspace = true }
+shell = { workspace = true }
 sl-compiler = { workspace = true }
 bridge_adapters = { path = "../bridge_adapters" }
 unicode-segmentation = "1.10.1"
+unicode_reader = "1"
 bridge_types = { workspace = true }
 bridge_macros = { path = "../bridge_macros" }
 static_assertions = "1.1.0"
+rand = "0.8.5"
+walkdir = "2.5.0"
+same-file = "1.0.6"
+glob = "0.3"
 
 [dev-dependencies]
 trybuild = "1.0"

@@ -35,6 +35,11 @@ impl SlFrom<u32> for Value {
     }
 }
 
+impl SlFrom<i64> for Value {
+    fn sl_from(value: i64, _vm: &mut SloshVm) -> VMResult<Self> {
+        Ok(to_i56(value))
+    }
+}
 impl<'a> SlFromRef<'a, Value> for i32 {
     fn sl_from_ref(value: Value, vm: &'a SloshVm) -> VMResult<i32> {
         match value {
