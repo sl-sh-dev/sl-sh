@@ -22,7 +22,7 @@ impl<I: std::iter::Iterator> PeekableIterator for std::iter::Peekable<I> {
 
 pub type CharIter = Box<dyn PeekableIterator<Item = io::Result<Cow<'static, str>>>>;
 
-struct ReaderCharIter {
+pub struct ReaderCharIter {
     inner: CharIter,
     line: usize,
     column: usize,
@@ -270,6 +270,11 @@ impl<'vm> Reader<'vm> {
             char_iter: Some(char_iter),
             file_name,
         }
+    }
+
+    /** Consume the Reader and return the internal Char iter. */
+    pub fn into_char_iter(mut self) -> Box<ReaderCharIter> {
+        self.char_iter.take().expect("invalid Reader")
     }
 
     fn line(&self) -> usize {
