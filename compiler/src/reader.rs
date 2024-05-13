@@ -1,10 +1,10 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::error::Error;
-use std::fmt;
 use std::fs::File;
-use std::io::{BufReader, Cursor};
+use std::io::{BufReader, Cursor, Read};
 use std::num::{ParseFloatError, ParseIntError};
+use std::{fmt, io};
 
 use compile_state::state::{SloshVm, SloshVmTrait};
 use slvm::{Chunk, Value};
@@ -20,7 +20,7 @@ impl<I: std::iter::Iterator> PeekableIterator for std::iter::Peekable<I> {
     }
 }
 
-pub type CharIter = Box<dyn PeekableIterator<Item = Cow<'static, str>>>;
+pub type CharIter = Box<dyn PeekableIterator<Item = io::Result<Cow<'static, str>>>>;
 
 struct ReaderCharIter {
     inner: CharIter,
@@ -29,12 +29,12 @@ struct ReaderCharIter {
 }
 
 impl Iterator for ReaderCharIter {
-    type Item = Cow<'static, str>;
+    type Item = io::Result<Cow<'static, str>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let ch = self.inner.next();
-        if let Some(ch) = &ch {
-            if ch == "\n" {
+        if let Some(Ok(ch)) = &ch {
+            if &**ch == "\n" {
                 self.line += 1;
                 self.column = 0;
             } else {
@@ -61,6 +61,22 @@ impl Error for ReadError {}
 impl fmt::Display for ReadError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.reason)
+    }
+}
+
+impl From<io::Error> for ReadError {
+    fn from(err: io::Error) -> Self {
+        Self {
+            reason: format!("IO Error: {}", err),
+        }
+    }
+}
+
+impl From<&io::Error> for ReadError {
+    fn from(err: &io::Error) -> Self {
+        Self {
+            reason: format!("IO Error: {}", err),
+        }
     }
 }
 
@@ -114,14 +130,39 @@ fn char_to_hex_num(ch: &str) -> Result<u8, ReadError> {
     }
 }
 
-fn end_symbol(ch: &str, read_table_term: &HashMap<&'static str, Value>) -> bool {
-    if is_whitespace(ch) || read_table_term.contains_key(ch) {
-        true
+/** Peek the next char and return Ok(true) if it signals an end symbol. */
+fn end_symbol(
+    ch: Option<&io::Result<Cow<'static, str>>>,
+    read_table_term: &HashMap<&'static str, Value>,
+) -> Result<bool, ReadError> {
+    if let Some(ch) = ch {
+        match ch {
+            Ok(ch) => {
+                let ch = &**ch;
+                if is_whitespace(ch) || read_table_term.contains_key(ch) {
+                    Ok(true)
+                } else {
+                    Ok(matches!(
+                        ch,
+                        "(" | ")"
+                            | "#"
+                            | "\""
+                            | "~"
+                            | "'"
+                            | "`"
+                            | "["
+                            | "]"
+                            | "{"
+                            | "}"
+                            | "\\"
+                            | ";"
+                    ))
+                }
+            }
+            Err(e) => Err(e.into()),
+        }
     } else {
-        matches!(
-            ch,
-            "(" | ")" | "#" | "\"" | "~" | "'" | "`" | "[" | "]" | "{" | "}" | "\\" | ";"
-        )
+        Ok(false)
     }
 }
 
@@ -140,21 +181,18 @@ enum ReadReturn {
 }
 
 impl<'vm> Reader<'vm> {
-    pub fn from_file(
-        src: File,
+    pub fn from_reader<R: Read + 'static>(
+        src: R,
         vm: &'vm mut SloshVm,
         file_name: &'static str,
         line: usize,
         column: usize,
     ) -> Self {
         let char_iter: CharIter = Box::new(
-            Graphemes::from(BufReader::new(src))
-                .map(|s| {
-                    if let Ok(s) = s {
-                        Cow::Owned(s)
-                    } else {
-                        Cow::Borrowed("")
-                    }
+            Graphemes::from(src)
+                .map(|s| match s {
+                    Ok(s) => Ok(Cow::Owned(s)),
+                    Err(e) => Err(e),
                 })
                 .peekable(),
         );
@@ -170,6 +208,16 @@ impl<'vm> Reader<'vm> {
         }
     }
 
+    pub fn from_file(
+        src: File,
+        vm: &'vm mut SloshVm,
+        file_name: &'static str,
+        line: usize,
+        column: usize,
+    ) -> Self {
+        Self::from_reader(BufReader::new(src), vm, file_name, line, column)
+    }
+
     pub fn from_static_string(
         src: &'static str,
         vm: &'vm mut SloshVm,
@@ -179,12 +227,9 @@ impl<'vm> Reader<'vm> {
     ) -> Self {
         let char_iter: CharIter = Box::new(
             Graphemes::from(BufReader::new(Cursor::new(src.as_bytes())))
-                .map(|s| {
-                    if let Ok(s) = s {
-                        Cow::Owned(s)
-                    } else {
-                        Cow::Borrowed("")
-                    }
+                .map(|s| match s {
+                    Ok(s) => Ok(Cow::Owned(s)),
+                    Err(e) => Err(e),
                 })
                 .peekable(),
         );
@@ -209,12 +254,9 @@ impl<'vm> Reader<'vm> {
     ) -> Self {
         let char_iter: CharIter = Box::new(
             Graphemes::from(BufReader::new(Cursor::new(src.into_bytes())))
-                .map(|s| {
-                    if let Ok(s) = s {
-                        Cow::Owned(s)
-                    } else {
-                        Cow::Borrowed("")
-                    }
+                .map(|s| match s {
+                    Ok(s) => Ok(Cow::Owned(s)),
+                    Err(e) => Err(e),
                 })
                 .peekable(),
         );
@@ -242,7 +284,7 @@ impl<'vm> Reader<'vm> {
         self.vm
     }
 
-    fn chars(&mut self) -> &mut dyn PeekableIterator<Item = Cow<'static, str>> {
+    fn chars(&mut self) -> &mut dyn PeekableIterator<Item = io::Result<Cow<'static, str>>> {
         &mut **self.char_iter.as_mut().expect("Invalid Reader!")
     }
 
@@ -269,7 +311,7 @@ impl<'vm> Reader<'vm> {
 
     fn escape_to_char(&mut self) -> Result<char, ReadError> {
         if let (Some(ch1), Some(ch2)) = (self.chars().next(), self.chars().next()) {
-            let ch_n: u8 = (char_to_hex_num(&ch1)? * 16) + (char_to_hex_num(&ch2)?);
+            let ch_n: u8 = (char_to_hex_num(&ch1?)? * 16) + (char_to_hex_num(&ch2?)?);
             if ch_n > 0x7f {
                 Err(ReadError {
                     reason: "Invalid hex ascii code, must be less then \\x7f.".to_string(),
@@ -288,18 +330,21 @@ impl<'vm> Reader<'vm> {
         self.read_string(buffer, true)
     }
 
-    fn consume_line_comment(&mut self) {
+    fn consume_line_comment(&mut self) -> Result<(), ReadError> {
         for ch in self.chars() {
+            let ch = ch?;
             if ch == "\n" {
-                return;
+                return Ok(());
             }
         }
+        Ok(())
     }
 
-    fn consume_block_comment(&mut self) {
+    fn consume_block_comment(&mut self) -> Result<(), ReadError> {
         let mut depth = 1;
         let mut last_ch = Cow::Borrowed(" ");
         while let Some(ch) = self.chars().next() {
+            let ch = ch?;
             if last_ch == "|" && ch == "#" {
                 depth -= 1;
             }
@@ -311,6 +356,7 @@ impl<'vm> Reader<'vm> {
                 break;
             }
         }
+        Ok(())
     }
 
     fn do_char(
@@ -319,39 +365,38 @@ impl<'vm> Reader<'vm> {
         read_table_term: &HashMap<&'static str, Value>,
     ) -> Result<Value, ReadError> {
         if let Some(ch) = self.chars().next() {
-            if let Some(pch) = self.chars().peek() {
-                if pch == "{" || !end_symbol(pch, read_table_term) {
-                    match &*ch {
-                        "u" => {
-                            let ch = self.read_utf_scalar()?;
-                            // XXX TODO- codepoint here?
-                            return Ok(Value::CodePoint(ch));
-                        }
-                        "x" => {
-                            let ch = self.escape_to_char()?;
-                            return Ok(Value::CodePoint(ch));
-                        }
-                        _ => {
-                            buffer.clear();
-                            buffer.push_str(&ch);
-                            self.read_symbol(buffer, true, false, read_table_term);
-                            match &buffer.to_lowercase()[..] {
-                                "space" => return Ok(Value::CodePoint(' ')),
-                                "tab" => return Ok(Value::CodePoint('\t')),
-                                // newline should be the platform line end.
-                                "newline" => return Ok(Value::CodePoint('\n')),
-                                "linefeed" => return Ok(Value::CodePoint('\n')),
-                                "return" => return Ok(Value::CodePoint('\r')),
-                                "backspace" => return Ok(Value::CodePoint('\u{0008}')),
-                                _ => {
-                                    let reason = format!(
-                                        "Not a valid char [{}]: line {}, col: {}",
-                                        buffer,
-                                        self.line(),
-                                        self.column()
-                                    );
-                                    return Err(ReadError { reason });
-                                }
+            let ch = ch?;
+            if self.peek_is("{")? || !end_symbol(self.chars().peek(), read_table_term)? {
+                match &*ch {
+                    "u" => {
+                        let ch = self.read_utf_scalar()?;
+                        // XXX TODO- codepoint here?
+                        return Ok(Value::CodePoint(ch));
+                    }
+                    "x" => {
+                        let ch = self.escape_to_char()?;
+                        return Ok(Value::CodePoint(ch));
+                    }
+                    _ => {
+                        buffer.clear();
+                        buffer.push_str(&ch);
+                        self.read_symbol(buffer, true, false, read_table_term)?;
+                        match &buffer.to_lowercase()[..] {
+                            "space" => return Ok(Value::CodePoint(' ')),
+                            "tab" => return Ok(Value::CodePoint('\t')),
+                            // newline should be the platform line end.
+                            "newline" => return Ok(Value::CodePoint('\n')),
+                            "linefeed" => return Ok(Value::CodePoint('\n')),
+                            "return" => return Ok(Value::CodePoint('\r')),
+                            "backspace" => return Ok(Value::CodePoint('\u{0008}')),
+                            _ => {
+                                let reason = format!(
+                                    "Not a valid char [{}]: line {}, col: {}",
+                                    buffer,
+                                    self.line(),
+                                    self.column()
+                                );
+                                return Err(ReadError { reason });
                             }
                         }
                     }
@@ -383,6 +428,7 @@ impl<'vm> Reader<'vm> {
         let mut char_u32 = 0;
         let mut nibbles = 0;
         while let Some(ch) = self.chars().next() {
+            let ch = ch?;
             if ch == "\n" {
                 if has_bracket {
                     return Err(ReadError {
@@ -410,8 +456,13 @@ impl<'vm> Reader<'vm> {
             let nib = char_to_hex_num(&ch)?;
             char_u32 = (char_u32 << 4) | nib as u32;
             if let Some(pch) = self.chars().peek() {
-                if !has_bracket && is_whitespace(pch) {
-                    return finish(char_u32);
+                match pch {
+                    Ok(pch) => {
+                        if !has_bracket && is_whitespace(pch) {
+                            return finish(char_u32);
+                        }
+                    }
+                    Err(e) => return Err(e.into()),
                 }
             }
         }
@@ -424,21 +475,16 @@ impl<'vm> Reader<'vm> {
         }
     }
 
-    fn end_string(&mut self, ch: &str, doc_string: bool) -> bool {
+    fn end_string(&mut self, ch: &str, doc_string: bool) -> Result<bool, ReadError> {
         if doc_string {
-            let peek = if let Some(pch) = self.chars().peek() {
-                pch
-            } else {
-                ""
-            };
-            if ch == "%" && peek == "#" {
+            if ch == "%" && self.peek_is("#")? {
                 self.chars().next();
-                return true;
+                return Ok(true);
             }
         } else if ch == "\"" {
-            return true;
+            return Ok(true);
         }
-        false
+        Ok(false)
     }
 
     fn read_string(&mut self, symbol: &mut String, doc_string: bool) -> Result<Value, ReadError> {
@@ -449,6 +495,7 @@ impl<'vm> Reader<'vm> {
         let column = self.column() as u32;
 
         while let Some(ch) = self.chars().next() {
+            let ch = ch?;
             if last_ch_escape {
                 match &*ch {
                     "n" => symbol.push('\n'),
@@ -468,7 +515,7 @@ impl<'vm> Reader<'vm> {
                 }
                 last_ch_escape = false;
             } else {
-                if self.end_string(&ch, doc_string) {
+                if self.end_string(&ch, doc_string)? {
                     break;
                 }
                 if ch == "{" {
@@ -483,10 +530,12 @@ impl<'vm> Reader<'vm> {
                     }
                     symbol.clear();
                     let ch = self.chars().next();
-                    if ch != Some("}".into()) {
-                        return Err(ReadError {
-                            reason: "invalid str format, missing '}'".to_string(),
-                        });
+                    if let Some(ch) = ch {
+                        if ch? != "}" {
+                            return Err(ReadError {
+                                reason: "invalid str format, missing '}'".to_string(),
+                            });
+                        }
                     }
                 } else if ch == "\\" {
                     last_ch_escape = true;
@@ -512,7 +561,7 @@ impl<'vm> Reader<'vm> {
     ) -> Result<&'sym mut String, ReadError> {
         symbol.clear();
         let end_ch = if let Some(ch) = self.chars().next() {
-            ch
+            ch?
         } else {
             return Err(ReadError {
                 reason: "Unexpected stream end on string literal".to_string(),
@@ -520,12 +569,8 @@ impl<'vm> Reader<'vm> {
         };
 
         while let Some(ch) = self.chars().next() {
-            let peek = if let Some(pch) = self.chars().peek() {
-                pch
-            } else {
-                ""
-            };
-            if ch == end_ch && peek == "\"" {
+            let ch = ch?;
+            if ch == end_ch && self.peek_is("\"")? {
                 self.chars().next();
                 return Ok(symbol);
             }
@@ -571,7 +616,7 @@ impl<'vm> Reader<'vm> {
         for_ch: bool,
         skip_underscore: bool,
         read_table_term: &HashMap<&'static str, Value>,
-    ) -> bool {
+    ) -> Result<bool, ReadError> {
         fn maybe_number(
             ch: &str,
             has_e: &mut bool,
@@ -594,7 +639,6 @@ impl<'vm> Reader<'vm> {
             }
         }
 
-        let mut has_peek;
         let mut push_next = false;
         let mut is_number = buffer.is_empty()
             || (buffer.len() == 1
@@ -605,22 +649,13 @@ impl<'vm> Reader<'vm> {
         let mut has_decimal = buffer.len() == 1 && &buffer[..] == ".";
         let mut has_e = false;
         let mut last_e = false;
-        if let Some(ch) = self.chars().peek() {
-            if end_symbol(ch, read_table_term) && !for_ch {
-                return buffer.len() == 1 && is_digit(&buffer[..]);
-            }
-        };
+        if end_symbol(self.chars().peek(), read_table_term)? && !for_ch {
+            return Ok(buffer.len() == 1 && is_digit(&buffer[..]));
+        }
         let mut next_ch = self.chars().next();
         while let Some(ch) = next_ch {
-            let pch = self.chars().peek();
-            let peek_ch = if let Some(pch) = pch {
-                has_peek = true;
-                pch
-            } else {
-                has_peek = false;
-                " "
-            };
-            if ch == "\\" && has_peek && !for_ch {
+            let ch = ch?;
+            if ch == "\\" && self.chars().peek().is_some() && !for_ch {
                 push_next = true;
             } else if !skip_underscore || ch != "_" {
                 if is_number {
@@ -633,38 +668,51 @@ impl<'vm> Reader<'vm> {
                 if is_number {
                     is_number = maybe_number(&ch, &mut has_e, &mut last_e, &mut has_decimal);
                 }
-                buffer.push_str(&next_ch);
+                buffer.push_str(&next_ch?);
                 push_next = false;
-            } else if ch == "." && peek_ch == "~" {
+            } else if ch == "." && self.peek_is("~")? {
                 buffer.push_str(&ch);
-            } else if end_symbol(peek_ch, read_table_term) {
+            } else if end_symbol(self.chars().peek(), read_table_term)? {
                 break;
             }
             next_ch = self.chars().next();
         }
-        is_number
+        Ok(is_number)
     }
 
-    fn next2(&mut self) -> Option<(Cow<'static, str>, Cow<'static, str>)> {
-        if let Some(ch) = self.chars().next() {
-            let peek_ch = if let Some(pch) = self.chars().peek() {
-                pch.clone()
-            } else {
-                Cow::Borrowed(" ")
-            };
-            Some((ch, peek_ch))
+    fn peek_is(&mut self, test: &str) -> Result<bool, ReadError> {
+        if let Some(pch) = self.chars().peek() {
+            match pch {
+                Ok(pch) => {
+                    if test == &**pch {
+                        Ok(true)
+                    } else {
+                        Ok(false)
+                    }
+                }
+                Err(e) => Err(e.into()),
+            }
         } else {
-            None
+            Ok(false)
         }
     }
 
-    fn consume_whitespace(&mut self) {
+    fn consume_whitespace(&mut self) -> Result<(), ReadError> {
         // Consume whitespace.
-        let mut ch = self.chars().peek();
-        while ch.is_some() && is_whitespace(ch.unwrap()) {
-            self.chars().next();
-            ch = self.chars().peek();
+        loop {
+            match self.chars().peek() {
+                Some(Ok(ch)) => {
+                    if is_whitespace(ch) {
+                        self.chars().next();
+                    } else {
+                        break;
+                    }
+                }
+                Some(Err(e)) => return Err(e.into()),
+                None => break,
+            }
         }
+        Ok(())
     }
 
     fn read_num_radix(
@@ -674,7 +722,7 @@ impl<'vm> Reader<'vm> {
         read_table_term: &HashMap<&'static str, Value>,
     ) -> Result<i64, ReadError> {
         buffer.clear();
-        self.read_symbol(buffer, true, true, read_table_term);
+        self.read_symbol(buffer, true, true, read_table_term)?;
         match i64::from_str_radix(buffer, radix) {
             Ok(n) => Ok(n),
             Err(e) => Err(ReadError {
@@ -971,13 +1019,14 @@ impl<'vm> Reader<'vm> {
         in_back_quote: bool,
         return_close: ReadReturn,
     ) -> Result<Option<Value>, ReadError> {
-        self.consume_whitespace();
+        self.consume_whitespace()?;
         let read_table_term: HashMap<&'static str, Value> = HashMap::new();
         let _read_table: HashMap<&'static str, Chunk> = HashMap::new();
 
         let i_quote = self.vm.intern("quote");
         let i_backquote = self.vm.intern("back-quote");
-        while let Some((ch, peek_ch)) = self.next2() {
+        while let Some(ch) = self.chars().next() {
+            let ch = ch?;
             let line = self.line() as u32;
             let column = self.column() as u32;
             match &*ch {
@@ -1018,10 +1067,10 @@ impl<'vm> Reader<'vm> {
                     }
                 },
                 "~" if in_back_quote => {
-                    let sym = if peek_ch == "@" {
+                    let sym = if self.peek_is("@")? {
                         self.chars().next();
                         Value::Symbol(self.vm.intern("unquote-splice"))
-                    } else if peek_ch == "." {
+                    } else if self.peek_is(".")? {
                         self.chars().next();
                         Value::Symbol(self.vm.intern("unquote-splice!"))
                     } else {
@@ -1051,82 +1100,89 @@ impl<'vm> Reader<'vm> {
                     return Ok(Some(self.do_char(buffer, &read_table_term)?));
                 }
                 "#" => {
-                    self.chars().next();
-                    match &*peek_ch {
-                        "|" => self.consume_block_comment(),
-                        "!" => {
-                            // This is an alternate line comment for shebang in a script.
-                            self.consume_line_comment();
-                        }
-                        "%" => {
-                            let line = self.line() as u32;
-                            let column = self.column() as u32;
-                            match self.read_doc_string(buffer) {
-                                Ok(s) => {
-                                    let doc_sym = Value::Symbol(self.vm.intern("doc-string"));
-                                    let doc_string = s;
-                                    let list =
-                                        self.alloc_list(vec![doc_sym, doc_string], line, column);
-                                    return Ok(Some(list));
-                                }
+                    let next = self.chars().next();
+                    let (line, column) = (self.line(), self.column());
+                    if let Some(Ok(peek_ch)) = &next {
+                        match &**peek_ch {
+                            "|" => self.consume_block_comment()?,
+                            "!" => {
+                                // This is an alternate line comment for shebang in a script.
+                                self.consume_line_comment()?;
+                            }
+                            "%" => {
+                                let line = self.line() as u32;
+                                let column = self.column() as u32;
+                                match self.read_doc_string(buffer) {
+                                    Ok(s) => {
+                                        let doc_sym = Value::Symbol(self.vm.intern("doc-string"));
+                                        let doc_string = s;
+                                        let list = self.alloc_list(
+                                            vec![doc_sym, doc_string],
+                                            line,
+                                            column,
+                                        );
+                                        return Ok(Some(list));
+                                    }
+                                    Err(e) => return Err(e),
+                                };
+                            }
+                            "<" => {
+                                let reason = format!(
+                                    "Found an unreadable token: line {}, col: {}",
+                                    line, column
+                                );
+                                return Err(ReadError { reason });
+                            }
+                            "t" => {
+                                return Ok(Some(Value::True));
+                            }
+                            "f" => {
+                                return Ok(Some(Value::False));
+                            }
+                            "\"" => match self.read_string_literal(buffer) {
+                                Ok(s) => return Ok(Some(Value::StringConst(self.vm.intern(s)))),
                                 Err(e) => return Err(e),
-                            };
-                        }
-                        "<" => {
-                            let reason = format!(
-                                "Found an unreadable token: line {}, col: {}",
-                                self.line(),
-                                self.column()
-                            );
-                            return Err(ReadError { reason });
-                        }
-                        "t" => {
-                            return Ok(Some(Value::True));
-                        }
-                        "f" => {
-                            return Ok(Some(Value::False));
-                        }
-                        "\"" => match self.read_string_literal(buffer) {
-                            Ok(s) => return Ok(Some(Value::StringConst(self.vm.intern(s)))),
-                            Err(e) => return Err(e),
-                        },
-                        //"." => {
-                        //    return prep_reader_macro(environment, chars, "reader-macro-dot", ".");
-                        //}
-                        // Read an octal int
-                        "o" => {
-                            let exp = self.read_num_radix(buffer, 8, &read_table_term)?;
-                            return Ok(Some(exp.into()));
-                        }
-                        // Read a hex int
-                        "x" => {
-                            let exp = self.read_num_radix(buffer, 16, &read_table_term)?;
-                            return Ok(Some(exp.into()));
-                        }
-                        // Read a binary int
-                        "b" => {
-                            let exp = self.read_num_radix(buffer, 2, &read_table_term)?;
-                            return Ok(Some(exp.into()));
-                        }
-                        ";" => {
-                            match self.read_inner(buffer, in_back_quote, ReadReturn::None) {
-                                Ok(_) => {
-                                    // Consumed and threw away one form so return the next.
-                                    return self.read_inner(buffer, in_back_quote, return_close);
-                                }
-                                Err(err) => {
-                                    return Err(err);
+                            },
+                            //"." => {
+                            //    return prep_reader_macro(environment, chars, "reader-macro-dot", ".");
+                            //}
+                            // Read an octal int
+                            "o" => {
+                                let exp = self.read_num_radix(buffer, 8, &read_table_term)?;
+                                return Ok(Some(exp.into()));
+                            }
+                            // Read a hex int
+                            "x" => {
+                                let exp = self.read_num_radix(buffer, 16, &read_table_term)?;
+                                return Ok(Some(exp.into()));
+                            }
+                            // Read a binary int
+                            "b" => {
+                                let exp = self.read_num_radix(buffer, 2, &read_table_term)?;
+                                return Ok(Some(exp.into()));
+                            }
+                            ";" => {
+                                match self.read_inner(buffer, in_back_quote, ReadReturn::None) {
+                                    Ok(_) => {
+                                        // Consumed and threw away one form so return the next.
+                                        return self.read_inner(
+                                            buffer,
+                                            in_back_quote,
+                                            return_close,
+                                        );
+                                    }
+                                    Err(err) => {
+                                        return Err(err);
+                                    }
                                 }
                             }
-                        }
-                        _ => {
-                            let reason = format!(
-                                "Found # with invalid char {}: line {}, col: {}",
-                                peek_ch,
-                                self.line(),
-                                self.column()
-                            );
-                            return Err(ReadError { reason });
+                            _ => {
+                                let reason = format!(
+                                    "Found # with invalid char {}: line {}, col: {}",
+                                    peek_ch, line, column
+                                );
+                                return Err(ReadError { reason });
+                            }
                         }
                     }
                 }
@@ -1167,11 +1223,11 @@ impl<'vm> Reader<'vm> {
                         format!("Unexpected ']': line {} col {}", self.line(), self.column());
                     return Err(ReadError { reason });
                 }
-                ";" => self.consume_line_comment(),
+                ";" => self.consume_line_comment()?,
                 _ => {
                     buffer.clear();
                     buffer.push_str(&ch);
-                    let is_number = self.read_symbol(buffer, false, false, &read_table_term);
+                    let is_number = self.read_symbol(buffer, false, false, &read_table_term)?;
                     if is_number {
                         return Ok(Some(self.do_atom(buffer, is_number)));
                     } else if let Some(get) = self.parse_get(buffer) {
@@ -1181,7 +1237,7 @@ impl<'vm> Reader<'vm> {
                     }
                 }
             }
-            self.consume_whitespace();
+            self.consume_whitespace()?;
         }
         Ok(None)
     }

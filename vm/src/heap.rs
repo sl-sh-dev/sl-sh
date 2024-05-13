@@ -505,8 +505,8 @@ impl Heap {
     }
 
     pub fn get_io(&self, handle: Handle) -> &HeapIo {
-        if let Some(error) = self.ios.get(handle.idx()) {
-            error
+        if let Some(io) = self.ios.get(handle.idx()) {
+            io
         } else {
             panic!("Handle {} is not an io!", handle.idx());
         }

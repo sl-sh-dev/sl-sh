@@ -83,6 +83,12 @@ impl HeapIo {
     }
 }
 
+impl Read for HeapIo {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.io.lock().unwrap().read(buf)
+    }
+}
+
 pub struct IoGuard<'a> {
     io: MutexGuard<'a, Io>,
 }
