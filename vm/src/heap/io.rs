@@ -3,6 +3,7 @@ use std::io;
 use std::io::{BufReader, BufWriter, ErrorKind, Read, Seek, SeekFrom, Write};
 use std::sync::{Arc, Mutex, MutexGuard};
 
+#[derive(Copy, Clone, Debug)]
 pub enum HeapIoError {
     Closed,
     NotFile,
@@ -16,6 +17,21 @@ pub struct HeapIo {
 impl HeapIo {
     pub fn from_file(file: File) -> Self {
         let io = Arc::new(Mutex::new(Io::File(Some(file))));
+        Self { io }
+    }
+
+    pub fn stdin() -> Self {
+        let io = Arc::new(Mutex::new(Io::StdIn));
+        Self { io }
+    }
+
+    pub fn stdout() -> Self {
+        let io = Arc::new(Mutex::new(Io::StdOut));
+        Self { io }
+    }
+
+    pub fn stderr() -> Self {
+        let io = Arc::new(Mutex::new(Io::StdErr));
         Self { io }
     }
 
@@ -34,6 +50,9 @@ impl HeapIo {
                 },
                 Io::FileReadBuf(_) => return Err(HeapIoError::NotFile),
                 Io::FileWriteBuf(_) => return Err(HeapIoError::NotFile),
+                Io::StdIn => return Err(HeapIoError::NotFile),
+                Io::StdOut => return Err(HeapIoError::NotFile),
+                Io::StdErr => return Err(HeapIoError::NotFile),
                 Io::Closed => return Err(HeapIoError::Closed),
             }
         }
@@ -49,6 +68,9 @@ impl HeapIo {
                 },
                 Io::FileReadBuf(_) => return Err(HeapIoError::NotFile),
                 Io::FileWriteBuf(_) => return Err(HeapIoError::NotFile),
+                Io::StdIn => return Err(HeapIoError::NotFile),
+                Io::StdOut => return Err(HeapIoError::NotFile),
+                Io::StdErr => return Err(HeapIoError::NotFile),
                 Io::Closed => return Err(HeapIoError::Closed),
             }
         }
@@ -91,6 +113,9 @@ enum Io {
     File(Option<File>),
     FileReadBuf(BufReader<File>),
     FileWriteBuf(BufWriter<File>),
+    StdIn,
+    StdOut,
+    StdErr,
     Closed,
 }
 
@@ -103,6 +128,15 @@ impl Read for Io {
             Io::FileWriteBuf(_) => Err(io::Error::new(
                 ErrorKind::Unsupported,
                 "read not supported for a write buffer",
+            )),
+            Io::StdIn => io::stdin().read(buf),
+            Io::StdOut => Err(io::Error::new(
+                ErrorKind::Unsupported,
+                "read not supported for stdout",
+            )),
+            Io::StdErr => Err(io::Error::new(
+                ErrorKind::Unsupported,
+                "read not supported for stderr",
             )),
             Io::Closed => Err(io::Error::new(
                 ErrorKind::Unsupported,
@@ -122,6 +156,12 @@ impl Write for Io {
                 "write not supported for a read buffer",
             )),
             Io::FileWriteBuf(io) => io.write(buf),
+            Io::StdIn => Err(io::Error::new(
+                ErrorKind::Unsupported,
+                "write not supported for stdin",
+            )),
+            Io::StdOut => io::stdout().write(buf),
+            Io::StdErr => io::stderr().write(buf),
             Io::Closed => Err(io::Error::new(
                 ErrorKind::Unsupported,
                 "write not supported for closed",
@@ -138,6 +178,12 @@ impl Write for Io {
                 "flush not supported for a read buffer",
             )),
             Io::FileWriteBuf(io) => io.flush(),
+            Io::StdIn => Err(io::Error::new(
+                ErrorKind::Unsupported,
+                "flush not supported for stdin",
+            )),
+            Io::StdOut => io::stdout().flush(),
+            Io::StdErr => io::stderr().flush(),
             Io::Closed => Err(io::Error::new(
                 ErrorKind::Unsupported,
                 "flush not supported for closed",
@@ -153,6 +199,18 @@ impl Seek for Io {
             Io::File(None) => panic!("file is missing a file"),
             Io::FileReadBuf(io) => io.seek(pos),
             Io::FileWriteBuf(io) => io.seek(pos),
+            Io::StdIn => Err(io::Error::new(
+                ErrorKind::Unsupported,
+                "seek not supported for stdin",
+            )),
+            Io::StdOut => Err(io::Error::new(
+                ErrorKind::Unsupported,
+                "seek not supported for stdout",
+            )),
+            Io::StdErr => Err(io::Error::new(
+                ErrorKind::Unsupported,
+                "seek not supported for stderr",
+            )),
             Io::Closed => Err(io::Error::new(
                 ErrorKind::Unsupported,
                 "seek not supported for closed",

@@ -279,9 +279,3 @@ impl SlFrom<Value> for Value {
         Ok(value)
     }
 }
-
-impl<'a> SlFromRef<'a, Value> for Value {
-    fn sl_from_ref(value: Value, _vm: &'a SloshVm) -> VMResult<Self> {
-        Ok(value)
-    }
-}

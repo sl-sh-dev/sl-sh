@@ -6,8 +6,11 @@ use slvm::{VMError, VMResult, Value};
 pub mod bridge_macro_tests;
 pub mod collections;
 pub mod conversions;
+pub mod fs_meta;
+pub mod fs_temp;
 pub mod io;
 pub mod print;
+pub mod rand;
 pub mod string;
 
 fn get_globals(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {

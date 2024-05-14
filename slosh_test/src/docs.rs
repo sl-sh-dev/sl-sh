@@ -68,6 +68,8 @@ lazy_static! {
         exemption_set.insert("*int-max*");
         exemption_set.insert("prn");
         exemption_set.insert("pr");
+        exemption_set.insert("fprn");
+        exemption_set.insert("fpr");
         exemption_set.insert("eprn");
         exemption_set.insert("epr");
         exemption_set.insert("sizeof-value");
@@ -792,6 +794,8 @@ mod test {
         let home_dir = tmp_dir.path().to_str();
         let home_path = home_dir.unwrap().to_string();
 
+        // Need to mask signals in case any tests shell out (use 'sh' or '$sh') otherwise test will hang but appear to finish...
+        shell::signals::mask_signals();
         temp_env::with_var("HOME", home_dir, || {
             ENV.with(|env| {
                 let mut vm = env.borrow_mut();

@@ -19,8 +19,11 @@ use sl_compiler::reader::*;
 
 use builtins::collections::setup_collection_builtins;
 use builtins::conversions::add_conv_builtins;
+use builtins::fs_meta::add_fs_meta_builtins;
+use builtins::fs_temp::add_fs_temp_builtins;
 use builtins::io::add_io_builtins;
 use builtins::print::{add_print_builtins, display_value};
+use builtins::rand::add_rand_builtins;
 use builtins::string::add_str_builtins;
 use builtins::{add_global_value, add_misc_builtins};
 use sl_liner::vi::AlphanumericAndVariableKeywordRule;
@@ -354,6 +357,9 @@ pub fn set_builtins(env: &mut SloshVm) {
     add_misc_builtins(env);
     add_io_builtins(env);
     add_conv_builtins(env);
+    add_fs_meta_builtins(env);
+    add_fs_temp_builtins(env);
+    add_rand_builtins(env);
 
     env.set_named_global("*int-bits*", (INT_BITS as i64).into());
     env.set_named_global("*int-max*", INT_MAX.into());
