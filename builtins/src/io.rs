@@ -1,14 +1,12 @@
 use bridge_adapters::add_builtin;
 use compile_state::state::SloshVm;
 use slvm::{VMError, VMResult, Value};
-use std::borrow::Cow;
 use std::fs::{self, OpenOptions};
-use std::io::{Seek, SeekFrom, Write};
+use std::io::{Read, Write};
 extern crate unicode_reader;
 use bridge_macros::sl_sh_fn;
 use shell::builtins::expand_tilde;
 use slvm::io::HeapIo;
-use unicode_reader::Graphemes;
 
 fn fopen(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut args = registers.iter();
@@ -85,13 +83,8 @@ fn fopen(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
                 return Err(VMError::new("io", msg));
             }
         }
-        if is_read && is_write {
-            return Err(VMError::new(
-                "io",
-                "fopen: only open file for read or write not both",
-            ));
-        }
-        if !is_write {
+        if !is_write && !is_read {
+            is_read = true;
             opts.read(true);
         }
         let file = match opts.open(&file_name) {
@@ -107,31 +100,23 @@ fn fopen(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
                 }
             }
         };
-        return if !is_write {
-            let io = HeapIo::from_file(file);
-            io.to_buf_reader()
-                .expect("Could not create a buf reader for file open to read!");
-            Ok(vm.alloc_io(io))
-            /*let fd: i64 = file.as_raw_fd() as i64;
-            let file_iter: CharIter = Box::new(
-                Graphemes::from(BufReader::new(file))
-                    .map(|s| {
-                        if let Ok(s) = s {
-                            Cow::Owned(s)
-                        } else {
-                            Cow::Borrowed("")
-                        }
-                    })
-                    .peekable(),
-            );
-            Ok(Expression::alloc_data(ExpEnum::File(Rc::new(
-                RefCell::new(FileState::Read(Some(file_iter), fd)),
-            ))))*/
-        } else {
-            let io = HeapIo::from_file(file);
-            io.to_buf_writer()
-                .expect("Could not create a buf writer for file open to write!");
-            Ok(vm.alloc_io(io))
+        return match (is_read, is_write) {
+            (true, true) | (false, false) => {
+                let io = HeapIo::from_file(file);
+                Ok(vm.alloc_io(io))
+            }
+            (true, false) => {
+                let io = HeapIo::from_file(file);
+                io.to_buf_reader()
+                    .expect("Could not create a buf reader for file open to read!");
+                Ok(vm.alloc_io(io))
+            }
+            (false, true) => {
+                let io = HeapIo::from_file(file);
+                io.to_buf_writer()
+                    .expect("Could not create a buf writer for file open to write!");
+                Ok(vm.alloc_io(io))
+            }
         };
     }
     Err(VMError::new(
@@ -158,33 +143,25 @@ fn builtin_read_line(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut args = registers.iter();
     if let (Some(Value::Io(h)), None) = (args.next(), args.next()) {
         let mut io = vm.get_io(*h).get_io();
-        let io_len = io.stream_position()?;
-        let mut f_iter: Box<dyn Iterator<Item = Cow<'static, str>>> =
-            Box::new(Graphemes::from(io).map(|s| {
-                if let Ok(s) = s {
-                    Cow::Owned(s)
-                } else {
-                    Cow::Borrowed("")
-                }
-            }));
-        let mut line = String::new();
-        let mut out_ch = f_iter.next();
-        if out_ch.is_none() {
-            return Ok(Value::Nil);
-        }
-        while let Some(ch) = out_ch {
-            line.push_str(&ch);
-            if ch == "\n" {
+
+        let mut byte = [0_u8];
+        let mut line_bytes = Vec::new();
+        while io.read(&mut byte)? == 1 {
+            line_bytes.push(byte[0]);
+            if byte[0] == b'\n' {
                 break;
             }
-            out_ch = f_iter.next();
         }
-        drop(f_iter);
-        // Graphemes will pre-read (apparently) so reset the pos when done.
-        vm.get_io(*h)
-            .get_io()
-            .seek(SeekFrom::Start(io_len + line.len() as u64))?;
-        Ok(vm.alloc_string(line))
+        let line = match String::from_utf8(line_bytes) {
+            Ok(line) => line,
+            Err(e) => return Err(VMError::new("read", e.to_string())),
+        };
+        drop(io);
+        if line.is_empty() {
+            Ok(Value::Nil)
+        } else {
+            Ok(vm.alloc_string(line))
+        }
     } else {
         Err(VMError::new("io", "read-line takes one form (file)"))
     }
@@ -243,7 +220,9 @@ pub fn add_io_builtins(env: &mut SloshVm) {
         fopen,
         "Usage: (fopen filename option*)
 
-Open a file.
+Open a file.  If you use :read and :write then you get a read/write unbuffered file.  Including
+one of :read or :write will provide a file buffered for read or write (this is faster).
+Note: :append, :truncate, :create, :create-new all imply :write.
 
 Options are:
     :read
@@ -257,11 +236,13 @@ Options are:
 Section: file
 
 Example:
-(def tmp (get-temp))
-(def test-open-f (fopen (str tmp \"/slsh-tst-open.txt\") :create :truncate))
-(fprn test-open-f \"Test Line One\")
-(fclose test-open-f)
-(test::assert-equal \"Test Line One\n\" (read-line (fopen (str tmp \"/slsh-tst-open.txt\"))))
+(with-temp-file (fn (tmp-file)
+    (let (test-open-f (fopen tmp-file :create :truncate))
+        (fprn test-open-f \"Test Line One\")
+        (fclose test-open-f)
+        (set! test-open-f (fopen tmp-file :read))
+        (defer (fclose test-open-f))
+        (test::assert-equal \"Test Line One\n\" (read-line test-open-f)))))
 ",
     );
     add_builtin(
@@ -275,13 +256,13 @@ Close a file.
 Section: file
 
 Example:
-(def tmp (get-temp))
-(def tst-file (fopen (str tmp \"/slsh-tst-open.txt\") :create :truncate))
-(fprn tst-file \"Test Line Two\")
-(fclose tst-file)
-(def tst-file (fopen (str tmp \"/slsh-tst-open.txt\") :read))
-(test::assert-equal \"Test Line Two\n\" (read-line tst-file))
-(fclose tst-file)
+(with-temp-file (fn (tmp-file)
+    (let (tst-file (fopen tmp-file :create :truncate))
+        (fprn tst-file \"Test Line Two\")
+        (fclose tst-file)
+        (set! tst-file (fopen tmp-file :read))
+        (defer (fclose tst-file))
+        (test::assert-equal \"Test Line Two\n\" (read-line tst-file)))))
 ",
     );
     add_builtin(
@@ -290,7 +271,7 @@ Example:
         builtin_read_line,
         r#"Usage: (read-line file) -> string
 
-Read a line from a file.
+Read a line from a file.  Returns Nil if there is nothing left to read.
 
 Section: file
 
@@ -317,13 +298,14 @@ Flush a file.
 Section: file
 
 Example:
-(def tmp (get-temp))
-(def tst-file (fopen (str tmp \"/slsh-tst-open.txt\") :create :truncate))
-(fprn tst-file \"Test Line Three\")
-(fflush tst-file)
-(def tst-file (fopen (str tmp \"/slsh-tst-open.txt\") :read))
-(test::assert-equal \"Test Line Three\n\" (read-line tst-file))
-(fclose tst-file)
+(with-temp-file (fn (tmp-file)
+    (let (tst-file (fopen tmp-file :create :truncate)
+          tst-file-read (fopen tmp-file :read))
+        (defer (fclose tst-file))
+        (defer (fclose tst-file-read))
+        (fprn tst-file \"Test Line Three\")
+        (fflush tst-file)
+        (test::assert-equal \"Test Line Three\n\" (read-line tst-file-read)))))
 ",
     );
 }

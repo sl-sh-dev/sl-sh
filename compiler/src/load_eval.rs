@@ -498,7 +498,26 @@ fn add_compiler_builtin(
 }
 
 pub fn add_load_builtins(env: &mut SloshVm) {
-    env.set_global_builtin("load", load);
+    add_compiler_builtin(
+        env,
+        "load",
+        load,
+        r#"Usage: (load path) -> [last form value]
+
+Read and eval a file (from path- a string).
+
+Section: scripting
+
+Example:
+(def test-load-one nil)
+(def test-load-two nil)
+(def test-load-fn (fopen "/tmp/slsh-test-load.testing" :create :truncate))
+(fpr test-load-fn "(set! test-load-one \"LOAD TEST\") '(1 2 3)")
+(fclose test-load-fn)
+(set! test-load-two (load "/tmp/slsh-test-load.testing"))
+(test::assert-equal "LOAD TEST" test-load-one)
+(test::assert-equal '(1 2 3) test-load-two)"#,
+    );
     add_compiler_builtin(
         env,
         "eval",
