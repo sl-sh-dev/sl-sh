@@ -279,9 +279,9 @@ Section: random
 
 Example:
 (def rand-int (random 100))
-(test::assert-true (and (> rand-int 0) (< rand-int 100)))
+(test::assert-true (and (>= rand-int 0) (< rand-int 100)))
 (def rand-float (random 1.0))
-(test::assert-true (and (> rand-float 0) (< rand-float 1)))
+(test::assert-true (and (>= rand-float 0.0) (< rand-float 1.0)))
 (test::assert-error-msg (random -1) :rand \"Expected positive number\")
 (test::assert-error-msg (random 1 2) :rand \"Expected positive number, float or int\")
 ",

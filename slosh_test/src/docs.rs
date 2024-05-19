@@ -7,6 +7,7 @@ use mdbook::{BookItem, MDBook};
 use regex::{Regex, RegexBuilder};
 use sl_compiler::load_eval::run_reader;
 use sl_compiler::Reader;
+use slvm::vm_hashmap::VMHashMap;
 use slvm::VMErrorObj::Message;
 use slvm::{Interned, VMError, VMResult, Value};
 use std::borrow::Cow;
@@ -363,8 +364,8 @@ impl SloshDoc {
     }
 
     /// Return an empty documentation map.
-    fn nil_doc_map(vm: &mut SloshVm) -> HashMap<Value, Value> {
-        let mut map = HashMap::with_capacity(4);
+    fn nil_doc_map(vm: &mut SloshVm) -> VMHashMap {
+        let mut map = VMHashMap::with_capacity(4);
         insert_nil_section(&mut map, USAGE, vm);
         insert_nil_section(&mut map, SECTION, vm);
         insert_nil_section(&mut map, DESCRIPTION, vm);
@@ -426,23 +427,18 @@ impl From<DocError> for VMError {
 
 type DocResult<T> = Result<T, DocError>;
 
-fn insert_section(
-    map: &mut HashMap<Value, Value>,
-    key: &'static str,
-    value: String,
-    vm: &mut SloshVm,
-) {
+fn insert_section(map: &mut VMHashMap, key: &'static str, value: String, vm: &mut SloshVm) {
     let key_const = Value::Keyword(vm.intern_static(key));
     let value_text = vm.alloc_string(value);
-    map.insert(key_const, value_text);
+    map.insert(vm, key_const, value_text);
 }
 
-fn insert_nil_section(map: &mut HashMap<Value, Value>, key: &'static str, vm: &mut SloshVm) {
+fn insert_nil_section(map: &mut VMHashMap, key: &'static str, vm: &mut SloshVm) {
     let key_const = Value::Keyword(vm.intern_static(key));
-    map.insert(key_const, Value::Nil);
+    map.insert(vm, key_const, Value::Nil);
 }
 
-impl SlFrom<SloshDoc> for HashMap<Value, Value> {
+impl SlFrom<SloshDoc> for VMHashMap {
     fn sl_from(value: SloshDoc, vm: &mut SloshVm) -> VMResult<Self> {
         let mut map = Self::with_capacity(4);
         match (value.doc_string.usage, value.doc_string.example) {
@@ -471,7 +467,7 @@ impl SlFrom<SloshDoc> for HashMap<Value, Value> {
 
 impl SlFrom<SloshDoc> for Value {
     fn sl_from(value: SloshDoc, vm: &mut SloshVm) -> VMResult<Self> {
-        let map = HashMap::sl_from(value, vm)?;
+        let map = VMHashMap::sl_from(value, vm)?;
         Ok(vm.alloc_map(map))
     }
 }

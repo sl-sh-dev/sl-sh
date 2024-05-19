@@ -345,8 +345,8 @@ impl<ENV> GVm<ENV> {
                             // must set val to false in two instances because
                             // its possible a previous iteration set val to true.
                             for (k, v) in m1.iter() {
-                                if let Some(v2) = m2.get(k) {
-                                    if self.is_equal_pair(*v, *v2)? == Value::False {
+                                if let Some(v2) = m2.get(self, k) {
+                                    if self.is_equal_pair(v, v2)? == Value::False {
                                         val = Value::False;
                                         break;
                                     } else {

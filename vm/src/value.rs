@@ -1,4 +1,4 @@
-use crate::{float, Handle, Heap, Interned, VMError, VMResult};
+use crate::{float, FxHasher, Handle, Heap, Interned, VMError, VMResult};
 use bridge_types::BridgedType;
 use std::collections::{BTreeSet, HashMap};
 use std::fmt;
@@ -539,6 +539,56 @@ impl Value {
         } else {
             matches!(self, Value::List(_, _))
         }
+    }
+
+    /**
+     * Get the hash of a value making sure that strings (whether const or allocated) hash to the same
+     * value.
+     * Note: This use the FxHasher which means it is fast and stable but is not randomized to be
+     * hardened against external key attacks.
+     */
+    pub fn get_hash<ENV>(&self, vm: &GVm<ENV>) -> u64 {
+        let mut hasher = FxHasher::default();
+        match self {
+            Value::StringConst(i) => {
+                let s = vm.get_interned(*i);
+                hasher.write_u8(0xFF);
+                hasher.write(s.as_bytes());
+            }
+            Value::String(h) => {
+                let s = vm.get_string(*h);
+                hasher.write_u8(0xFF);
+                hasher.write(s.as_bytes());
+            }
+
+            Value::Byte(_)
+            | Value::Int(_)
+            | Value::Float(_)
+            | Value::CodePoint(_)
+            | Value::CharCluster(_, _)
+            | Value::CharClusterLong(_)
+            | Value::Symbol(_)
+            | Value::Keyword(_)
+            | Value::Builtin(_)
+            | Value::True
+            | Value::False
+            | Value::Nil
+            | Value::Undefined
+            | Value::Special(_)
+            | Value::Vector(_)
+            | Value::Map(_)
+            | Value::Bytes(_)
+            | Value::Pair(_)
+            | Value::List(_, _)
+            | Value::Lambda(_)
+            | Value::Closure(_)
+            | Value::Continuation(_)
+            | Value::CallFrame(_)
+            | Value::Value(_)
+            | Value::Error(_)
+            | Value::Io(_) => self.hash(&mut hasher),
+        }
+        hasher.finish()
     }
 }
 
