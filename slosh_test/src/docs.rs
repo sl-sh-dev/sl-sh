@@ -606,7 +606,7 @@ fn build_each_docs_section_chapter(
         }
 
         let header = "\n\nList of symbols: \n\n".to_string();
-        content = content + &header + &list;
+        content = content + &header + list;
 
         let path = make_file(section, &content)
             .map_err(|e| VMError::new_vm(format!("Failed to write to file: {e}.")))?;
