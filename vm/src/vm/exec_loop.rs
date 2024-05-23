@@ -1,10 +1,11 @@
 use crate::opcodes::*;
+use crate::vm_hashmap::{VMHashMap, ValHash};
 use crate::{
     from_i56, CallFrame, Chunk, Continuation, Error, GVm, VMError, VMErrorObj, VMResult, Value,
     STACK_CAP,
 };
-use std::collections::HashMap;
 use std::marker::PhantomData;
+use std::num::TryFromIntError;
 use std::sync::Arc;
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -26,8 +27,8 @@ impl<ENV> GVm<ENV> {
                     let map = self.get_map(handle);
                     for i in 0..len {
                         let key = self.register(dest + i);
-                        if let Some(item) = map.get(&key) {
-                            *self.register_mut(dest + i) = *item;
+                        if let Some(item) = map.get(self, key) {
+                            *self.register_mut(dest + i) = item;
                         } else {
                             *self.register_mut(dest + i) = Value::Undefined;
                         }
@@ -220,8 +221,8 @@ impl<ENV> GVm<ENV> {
             Value::Map(h) => {
                 let map = self.get_map(h);
                 let key = self.register(i as usize);
-                if let Some(val) = map.get(&key) {
-                    *val
+                if let Some(val) = map.get(self, key) {
+                    val
                 } else {
                     self.make_err("vm-missing", key)
                 }
@@ -314,9 +315,9 @@ impl<ENV> GVm<ENV> {
             }
             Value::Map(h) => {
                 let key = self.register(i as usize);
+                let id = ValHash::from_value(self, key);
                 let map = self.get_map_mut(h)?;
-                let slot = map.entry(key);
-                *slot.or_insert(Value::Undefined) = src;
+                map.insert_id(id, src);
             }
             _ => {
                 return Err(VMError::new_vm(format!(
@@ -333,6 +334,96 @@ impl<ENV> GVm<ENV> {
     /// munge the return.
     fn tail_builtin_exit(&self, lambda: Value) -> bool {
         matches!(lambda, Value::Builtin(_)) && self.call_frame().is_none()
+    }
+
+    /** Implementation of the INC bytecode. */
+    fn inc_val(&mut self, wide: bool) -> VMResult<()> {
+        let (dest, i) = decode2!(self.ip_ptr, wide);
+        match self.register(dest as usize) {
+            Value::Byte(v) => {
+                let i: u8 = i
+                    .try_into()
+                    .map_err(|e: TryFromIntError| VMError::new_vm(e.to_string()))?;
+                *self.register_mut(dest as usize) = Value::Byte(v + i);
+                Ok(())
+            }
+            Value::Int(v) => {
+                let v = from_i56(&v);
+                *self.register_mut(dest as usize) = (v + i as i64).into();
+                Ok(())
+            }
+            // Handle closed over values...
+            Value::Value(h) => {
+                let val = self.get_value_mut(h);
+                match val {
+                    Value::Byte(v) => {
+                        let i: u8 = i
+                            .try_into()
+                            .map_err(|e: TryFromIntError| VMError::new_vm(e.to_string()))?;
+                        *val = Value::Byte(*v + i);
+                        Ok(())
+                    }
+                    Value::Int(v) => {
+                        let v = from_i56(v);
+                        *val = (v + i as i64).into();
+                        Ok(())
+                    }
+                    _ => Err(VMError::new_vm(format!(
+                        "INC: Can only INC an integer type, got {:?}.",
+                        val
+                    ))),
+                }
+            }
+            _ => Err(VMError::new_vm(format!(
+                "INC: Can only INC an integer type, got {:?}.",
+                self.register(dest as usize)
+            ))),
+        }
+    }
+
+    /** Implementation of the DEC bytecode. */
+    fn dec_val(&mut self, wide: bool) -> VMResult<()> {
+        let (dest, i) = decode2!(self.ip_ptr, wide);
+        match self.register(dest as usize) {
+            Value::Byte(v) => {
+                let i: u8 = i
+                    .try_into()
+                    .map_err(|e: TryFromIntError| VMError::new_vm(e.to_string()))?;
+                *self.register_mut(dest as usize) = Value::Byte(v - i);
+                Ok(())
+            }
+            Value::Int(v) => {
+                let v = from_i56(&v);
+                *self.register_mut(dest as usize) = (v - i as i64).into();
+                Ok(())
+            }
+            // Handle closed over values...
+            Value::Value(h) => {
+                let val = self.get_value_mut(h);
+                match val {
+                    Value::Byte(v) => {
+                        let i: u8 = i
+                            .try_into()
+                            .map_err(|e: TryFromIntError| VMError::new_vm(e.to_string()))?;
+                        *val = Value::Byte(*v - i);
+                        Ok(())
+                    }
+                    Value::Int(v) => {
+                        let v = from_i56(v);
+                        *val = (v - i as i64).into();
+                        Ok(())
+                    }
+                    _ => Err(VMError::new_vm(format!(
+                        "INC: Can only INC an integer type, got {:?}.",
+                        val
+                    ))),
+                }
+            }
+            _ => Err(VMError::new_vm(format!(
+                "DEC: Can only DEC an integer type, got {:?}.",
+                self.register(dest as usize)
+            ))),
+        }
     }
 
     // Some macro expansions trips this.
@@ -1085,7 +1176,7 @@ impl<ENV> GVm<ENV> {
                 MAPMK => {
                     let (dest, start, end) = decode3!(self.ip_ptr, wide);
                     let map = if end == start {
-                        HashMap::new()
+                        VMHashMap::new()
                     } else if (end - start) % 2 != 0 {
                         return Err((
                             VMError::new_vm(
@@ -1095,9 +1186,13 @@ impl<ENV> GVm<ENV> {
                             chunk.clone(),
                         ));
                     } else {
-                        let mut map = HashMap::new();
+                        let mut map = VMHashMap::new();
                         for i in (start..end).step_by(2) {
-                            map.insert(self.register(i as usize), self.register(i as usize + 1));
+                            map.insert(
+                                self,
+                                self.register(i as usize),
+                                self.register(i as usize + 1),
+                            );
                         }
                         map
                     };

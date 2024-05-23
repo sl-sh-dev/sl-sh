@@ -1,7 +1,7 @@
 use compile_state::state::CompileState;
 use slvm::opcodes::*;
+use slvm::vm_hashmap::VMHashMap;
 use slvm::{Handle, Interned, VMError, VMResult, Value};
-use std::collections::HashMap;
 
 use crate::{compile, mkconst, SloshVm, SloshVmTrait};
 
@@ -49,10 +49,10 @@ pub fn resolve_destruct_containers(env: &mut SloshVm, arg: Value) -> Value {
             }
             Value::Symbol(i) if *i == i_hash => {
                 let mut iter = v[s + 1..].iter();
-                let mut map = HashMap::new();
+                let mut map = VMHashMap::new();
                 while let Some(key) = iter.next() {
                     if let Some(val) = iter.next() {
-                        map.insert(*key, *val);
+                        map.insert(env, *key, *val);
                     }
                 }
                 let v = env.alloc_map(map);
@@ -304,19 +304,19 @@ impl DestructState {
         let mut opt_comps = Vec::new();
         let mut len = map.len();
         let mut register_labels = Vec::new();
-        let optionals = if let Some(opts) = map.get(&Value::Keyword(or_i)) {
-            let opts = resolve_destruct_containers(env, *opts);
+        let optionals = if let Some(opts) = map.get(env, Value::Keyword(or_i)) {
+            let opts = resolve_destruct_containers(env, opts);
             if let Value::Map(handle) = opts {
                 env.get_map(handle).clone()
             } else {
                 return Err(VMError::new_compile(":or must be followed by a map"));
             }
         } else {
-            HashMap::new()
+            VMHashMap::new()
         };
         let start_reg = *next_reg;
-        for (key, val) in &map {
-            let key = resolve_destruct_containers(env, *key);
+        for (key, val) in map.iter() {
+            let key = resolve_destruct_containers(env, key);
             match &key {
                 Value::Keyword(i) if *i == or_i => {
                     len -= 1;
@@ -324,25 +324,25 @@ impl DestructState {
                 }
                 Value::Symbol(i) => {
                     register_labels.push(Register::Named(*i, *next_reg as u16));
-                    keys.push(*val);
+                    keys.push(val);
                     *next_reg += 1;
                 }
                 Value::Vector(h) => {
                     register_labels.push(Register::Reserved(*next_reg as u16));
                     stack.push(DestructType::Vector(*h, *next_reg));
-                    keys.push(*val);
+                    keys.push(val);
                     *next_reg += 1;
                 }
                 Value::Map(h) => {
                     register_labels.push(Register::Reserved(*next_reg as u16));
                     stack.push(DestructType::Map(*h, *next_reg));
-                    keys.push(*val);
+                    keys.push(val);
                     *next_reg += 1;
                 }
                 _ => return Err(VMError::new_compile("not a valid destructure")),
             }
-            if let Some(opt_val) = optionals.get(val) {
-                opt_comps.push((*next_reg - 1, *opt_val));
+            if let Some(opt_val) = optionals.get(env, val) {
+                opt_comps.push((*next_reg - 1, opt_val));
             }
         }
         self.destructures.push(Destructure {

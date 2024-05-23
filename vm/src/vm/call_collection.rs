@@ -10,8 +10,8 @@ impl<ENV> GVm<ENV> {
         match num_args {
             1 => {
                 let map = self.heap().get_map(handle);
-                let res = if let Some(val) = map.get(&self.register(first_reg as usize + 1)) {
-                    *val
+                let res = if let Some(val) = map.get(self, self.register(first_reg as usize + 1)) {
+                    val
                 } else {
                     Value::Nil
                 };
@@ -19,8 +19,8 @@ impl<ENV> GVm<ENV> {
             }
             2 => {
                 let map = self.heap().get_map(handle);
-                let res = if let Some(val) = map.get(&self.register(first_reg as usize + 1)) {
-                    *val
+                let res = if let Some(val) = map.get(self, self.register(first_reg as usize + 1)) {
+                    val
                 } else {
                     self.register(first_reg as usize + 2)
                 };
