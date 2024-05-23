@@ -1488,7 +1488,7 @@ fn get_documentation_for_fn(original_item_fn: &ItemFn) -> MacroResult<String> {
             if &path_segment.ident.to_string() == "doc" {
                 if let Ok(Meta::NameValue(pair)) = attr.parse_meta() {
                     if let Lit::Str(partial_name) = &pair.lit {
-                        docs += &(*partial_name.value()).trim();
+                        docs += (*partial_name.value()).trim();
                         docs += "\n";
                     }
                 }

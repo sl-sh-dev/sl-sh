@@ -69,6 +69,7 @@ impl Symbols {
         self.data.borrow().syms.contains_key(&key)
     }
 
+    #[allow(clippy::assigning_clones)] // clippy warns about clone on copy for performance, but we need to do it this way to avoid a borrow checker error.
     pub fn can_capture(&self, key: Interned) -> bool {
         let mut loop_outer = self.outer.clone();
         while let Some(outer) = loop_outer {
