@@ -200,9 +200,6 @@ pub(crate) fn compile_math(
         Value::Special(i) if i == env.specials().numeq => {
             make_math_comp(env, state, cdr, result, NUMEQ)?;
         }
-        Value::Special(i) if i == env.specials().numneq => {
-            make_math_comp(env, state, cdr, result, NUMNEQ)?;
-        }
         Value::Special(i) if i == env.specials().numlt => {
             make_math_comp(env, state, cdr, result, NUMLT)?;
         }

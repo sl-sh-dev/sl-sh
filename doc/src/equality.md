@@ -11,6 +11,7 @@ Also check out `slosh/tests/equality.slosh` for some examples.
 
     -   `(= 2 0x2)` is `true` (comparing an int to a byte)
     -   `(= 2 2.0)` is `false` (comparing an int to a float)
+    -   `(= 0.0 -0.0)` is `true`
     -   `(= NaN NaN)` is `false`
 
     -   `state.rs` defines special forms object with key `equal` mapped to the name `=`.
@@ -19,12 +20,12 @@ Also check out `slosh/tests/equality.slosh` for some examples.
     -   `vm.rs` `is_equal` converts each arg to a `Value` (in case it needs to be dereferenced) and calls `is_equal_pair`
     -   `vm.rs` `is_equal_pair` does a complex test for equality
         -   check if both args are Byte or Int and if so, converts both to `i64` with `Value::get_int` and compares with rust native `==`
-        -   check if both args are Byte or Int or Float and if so, converts both to `f64` with `Value::get_float`
-            -   then subtracts the second from the first and takes the absolute value and tests `diff == 0.0`
+        -   check if both args are numbers (Byte, Int, or Float) and if so, converts both to `f64` with `Value::get_float` and compares with rust native `==`
 
 -   `==`
 
     -   `(== 1 1.0)` is `true` (comparing an int to a float)
+    -   `(== 0.0 -0.0)` is `true`
     -   `(== NaN NaN)` is `false`
     -   returns true whenever `=` does, but also returns true for numbers that are numerically equal
 
@@ -42,7 +43,8 @@ Also check out `slosh/tests/equality.slosh` for some examples.
 -   `identical?`
 
     -   `(identical? 1 1)` is `true`
-    -   `(identical? 1 1.0)` is `false`
+    -   `(identical? 1 1.0)` is `false` (different types)
+    -   `(identical? 0.0 -0.0)` is `false` (comparing floats with different bit patterns)
     -   `(identical? NaN NaN)` might be `true` or `false`. There are trillions of different bit patterns that represent NaN in IEEE 754
 
     -   is the only equality comparison that uses `Value::PartialEq` implementation which is always false for different types of Values
@@ -63,7 +65,8 @@ Also check out `slosh/tests/equality.slosh` for some examples.
 
 -   `not=`
 
-    -   based on `=`
-    -   `state.rs` defines special forms object with key `numneq` mapped to the name `not=`.
-    -   `compile_math.rs` converts `numneq` to opcode `NUMNEQ`
-    -   `exec_loop.rs` maps opcode `NUMNEQ` to a negation of the implementation of opcode `EQUAL` AKA `=`
+    -   defined in `vm/core.slosh` as the negation of `=`
+
+-   `not==`
+
+    -   defined in `vm/core.slosh` as the negation of `==`

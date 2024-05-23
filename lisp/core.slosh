@@ -808,6 +808,40 @@ Example:
 (defn identity (x) x)
 
 #%
+Usage: (not= arg1 arg2)
+
+Test if two values are not equal using `=`
+
+Section: core
+
+Example:
+(assert-true (not= 0 1))
+(assert-true (not= 1 1.0))
+(assert-false (not= 2 2))
+(assert-false (not= 0.0 -0.0))
+%#
+(defmacro not= (expected-val right-val & body)
+    `(not (= ~expected-val ~right-val))
+)
+
+#%
+Usage: (not== arg1 arg2)
+
+Test if two values are not numerically equal using `==`
+
+Section: core
+
+Example:
+(assert-true (not== 0 1))
+(assert-false (not== 1 1.0))
+(assert-false (not== 0.0 -0.0))
+(assert-false (not== 2 2))
+%#
+(defmacro not== (expected-val right-val & body)
+    `(not (== ~expected-val ~right-val))
+)
+
+#%
 Replaces all instances of old-item in lst with new-item. If last argument
 passed in is keyword :first only the first instance of old-item will be
 replaced.

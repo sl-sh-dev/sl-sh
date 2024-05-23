@@ -175,7 +175,6 @@ pub struct Specials {
     pub recur: Interned,
     pub this_fn: Interned,
     pub numeq: Interned,
-    pub numneq: Interned,
     pub numlt: Interned,
     pub numlte: Interned,
     pub numgt: Interned,
@@ -728,30 +727,6 @@ Example:
 (test::assert-false (== 1.1 1.0))
 (test::assert-true (== 1.1 1.1))
 (test::assert-false (== 3 2 3))
-"#),
-            numneq: add_special(vm, "not=", r#"Usage: (not= val0 ... valN)
-
-Not Equals.  Works for numeric types (int, float).
-
-Section: conditional
-
-Example:
-(test::assert-true (not= 1 2))
-(test::assert-false (not= 2 2))
-(test::assert-false (not= 2 2 2))
-(test::assert-true (not= 3 2 2))
-(test::assert-true (not= 3.0 2.0))
-(test::assert-false (not= 2.0 2.0))
-(test::assert-false (not= 2.0 2.0 2.0))
-(test::assert-true (not= 3.0 2.0 2.0))
-(test::assert-true (not= 2.1 2.0 3.0))
-(test::assert-true (not= 2 1))
-(test::assert-true (not= 3 2 1))
-(test::assert-true (not= 1.1 1.0))
-(test::assert-false (not= 1.1 1.1))
-(test::assert-true (not= 3 2 3))
-(test::assert-true (not= 1 1.0))
-(test::assert-true (not= 1e-30 1.0001e-30))
 "#),
             numlt: add_special(vm, "<", r#"Usage: (< val0 ... valN)
 

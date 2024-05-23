@@ -116,9 +116,9 @@ pub const DEC: OpCode = MATH_BASE + 5;
 // NUMEQ A B C - compare (=) in register B (inclusive) to C (inclusive) and set R[A] to the
 // result.
 pub const NUMEQ: OpCode = MATH_BASE + 6;
-// NUMNEQ A B C - compare (!=) in register B (inclusive) to C (inclusive) and set R[A] to the
-// result.
-pub const NUMNEQ: OpCode = MATH_BASE + 7;
+
+// NUMNEQ was here but it was removed and implemented as a macro instead
+
 // NUMLT A B C - compare (<) in register B (inclusive) to C (inclusive) and set R[A] to the
 // result.
 pub const NUMLT: OpCode = MATH_BASE + 8;

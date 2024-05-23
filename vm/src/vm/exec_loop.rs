@@ -1044,14 +1044,6 @@ impl<ENV> GVm<ENV> {
                 NUMEQ => {
                     compare_numeric!(self, chunk, self.ip_ptr, |a, b| a == b, wide)
                 }
-                NUMNEQ => {
-                    // TODO: #171 NUMNEQ is being hijacked temporarily to implement clojure `not=` which is a non-numeric comparison
-                    let (dest, reg1, reg2) = decode3!(self.ip_ptr, wide);
-                    let val = self.is_equal(reg1, reg2).map_err(|e| (e, chunk.clone()))?;
-                    set_register!(self, dest as usize, val.not());
-                    // This is what NUMNEQ would look like if it were a numeric comparison
-                    // compare_numeric!(self, chunk, self.ip_ptr, |a, b| a != b, wide)
-                }
                 NUMLT => {
                     compare_numeric!(self, chunk, self.ip_ptr, |a, b| a < b, wide)
                 }
