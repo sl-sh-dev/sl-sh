@@ -17,8 +17,8 @@ const fn from_utf8(bytes: &[u8]) -> &str {
     }
 }
 
-//const CORE_LISP: &[u8] = include_bytes!("../lisp/core.slosh");
 const CORE_LISP: &str = from_utf8(include_bytes!("../../lisp/core.slosh"));
+const ITER_LISP: &str = from_utf8(include_bytes!("../../lisp/iterator.slosh"));
 const COLORS_LISP: &str = from_utf8(include_bytes!("../../lisp/sh-color.slosh"));
 pub const SLSHRC: &str = from_utf8(include_bytes!("../../init.slosh"));
 
@@ -89,6 +89,7 @@ pub fn load_internal(vm: &mut SloshVm, name: &'static str) -> VMResult<Value> {
             Ok(file) => Reader::from_file(file, vm, name, 1, 0),
             Err(e) => match name {
                 "core.slosh" => Reader::from_static_string(CORE_LISP, vm, name, 1, 0),
+                "iterator.slosh" => Reader::from_static_string(ITER_LISP, vm, name, 1, 0),
                 "sh-color.slosh" => Reader::from_static_string(COLORS_LISP, vm, name, 1, 0),
                 "init.slosh" => Reader::from_static_string(SLSHRC, vm, name, 1, 0),
                 _ => {
@@ -98,6 +99,7 @@ pub fn load_internal(vm: &mut SloshVm, name: &'static str) -> VMResult<Value> {
         },
         Err(e) => match name {
             "core.slosh" => Reader::from_static_string(CORE_LISP, vm, name, 1, 0),
+            "iterator.slosh" => Reader::from_static_string(ITER_LISP, vm, name, 1, 0),
             "sh-color.slosh" => Reader::from_static_string(COLORS_LISP, vm, name, 1, 0),
             "init.slosh" => Reader::from_static_string(SLSHRC, vm, name, 1, 0),
             _ => {

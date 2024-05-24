@@ -1,0 +1,240 @@
+#%
+Iterator that wraps a vector.
+
+Section: iterator
+
+Example:
+(def test-vec-iter (vec-iter [1 2 3]))
+(assert-equal 1 (test-vec-iter))
+(assert-equal 2 (test-vec-iter))
+(assert-equal 3 (test-vec-iter))
+(assert-equal :*iter-empty* (test-vec-iter))
+(def test-vec-iter (vec-iter (vec)))
+(assert-equal :*iter-empty* (test-vec-iter))
+%#
+(defn vec-iter (v)
+    (let (idx 0
+          vlen (len v)
+          next (fn () (if (< idx vlen) (let (tmp idx) (inc! idx) v.~tmp) :*iter-empty*)))
+        (set-prop next :is-iter #t)
+        next))
+
+#%
+Iterator that wraps a list.
+
+Section: iterator
+
+Example:
+(def test-list-iter (list-iter '(1 2 3)))
+(assert-equal 1 (test-list-iter))
+(assert-equal 2 (test-list-iter))
+(assert-equal 3 (test-list-iter))
+(assert-equal :*iter-empty* (test-list-iter))
+(def test-list-iter (list-iter '()))
+(assert-equal :*iter-empty* (test-list-iter))
+%#
+(defn list-iter (l)
+    (let (next (fn () (if l (let (val (car l)) (set! l (cdr l)) val) :*iter-empty*)))
+        (set-prop next :is-iter #t)
+        next))
+
+#%
+Iterator that wraps a file.  Each call to next! returns the next line (with
+trailing newline).
+
+Section: iterator
+
+Example:
+(def tst-file (fopen "/tmp/file-iter-test.txt" :create :truncate))
+(fprn tst-file "line 1")
+(fprn tst-file "line 2")
+(fprn tst-file "line 3")
+(fpr tst-file "line 4")
+(fclose tst-file)
+(def test-iter (file-iter (fopen "/tmp/file-iter-test.txt")))
+(assert-equal "line 1\\n" (test-iter))
+(assert-equal "line 2\\n" (test-iter))
+(assert-equal "line 3\\n" (test-iter))
+(assert-equal "line 4" (test-iter))
+(assert-equal :*iter-empty* (test-iter))
+%#
+(defn file-iter (f)
+    (let (next (fn () (let (line (read-line f))(if line line :*iter-empty*))))
+        (set-prop next :is-iter #t)
+        next))
+
+#%
+Iterator that wraps a string.  Each element is the next character.
+
+Section: iterator
+
+Example:
+(def test-string-iter (string-iter "123"))
+(assert-equal \\1 (test-string-iter))
+(assert-equal \\2 (test-string-iter))
+(assert-equal \\3 (test-string-iter))
+(assert-equal :*iter-empty* (test-string-iter))
+%#
+(defn string-iter (s)
+    (let (idx 0
+          slen (len s)
+          next (fn () (if (< idx slen) (let (tmp idx) (inc! idx) s.~tmp) :*iter-empty*)))
+        (set-prop next :is-iter #t)
+        next))
+
+#%
+Return true if thing is an iterator, false otherwise.
+
+Section: iterator
+
+Example:
+(assert-true (iter? (list-iter '(1 2 3))))
+(assert-false (iter? '(1 2 3)))
+%#
+(defn iter? (test)
+    (if (get-prop test :is-iter) #t #f))
+
+#%
+Iterator that wraps and returns a single object once.
+
+Section: iterator
+
+Example:
+(def test-iter (once-iter 3))
+(assert-equal 3 (test-iter))
+(assert-equal :*iter-empty* (test-iter))
+(def test-iter (once-iter "iter"))
+(assert-equal "iter" (test-iter))
+(assert-equal :*iter-empty* (test-iter))
+%#
+(defn once-iter (i)
+    (let (next (fn () (let (val i) (set! i :*iter-empty*) val)))
+        (set-prop next :is-iter #t)
+        next))
+
+#%
+Iterator that wraps and returns a single object on each call.
+
+Section: iterator
+
+Example:
+(def test-iter (repeat-iter 3))
+(assert-equal 3 (test-iter))
+(assert-equal 3 (test-iter))
+(assert-equal 3 (test-iter))
+(assert-equal 3 (test-iter))
+(assert-equal 3 (test-iter))
+(def test-iter (repeat-iter "iter"))
+(assert-equal "iter" (test-iter))
+(assert-equal "iter" (test-iter))
+(assert-equal "iter" (test-iter))
+(assert-equal "iter" (test-iter))
+(assert-equal "iter" (test-iter))
+%#
+(defn repeat-iter (i)
+    (let (next (fn () i))
+        (set-prop next :is-iter #t)
+        next))
+
+#%
+Return thing as an iterator if possible (if it is an iterator just return thing).
+
+Section: iterator
+
+Example:
+(assert-true (iter? (iter '(1 2 3))))
+(assert-true (iter? (iter [1 2 3])))
+(assert-true (iter? (iter "abc")))
+(assert-true (iter? (iter (iter '(1 2 3)))))
+%#
+(defn iter (thing)
+  (if (iter? thing)
+        thing
+      (list? thing)
+        (list-iter thing)
+      (vec? thing)
+        (vec-iter thing)
+      (string? thing)
+        (string-iter thing)
+      (io? thing)
+        (file-iter thing)
+      (err "iter: requires a list, vector, string, file or existing iterator")))
+
+#%
+Return thing as an iterator if possible (if it is an iterator just return thing).
+If not possible then wrap thing in a once iter and return that.
+
+Section: iterator
+
+Example:
+(assert-true (iter? (iter-or-single '(1 2 3))))
+(assert-true (iter? (iter-or-single [1 2 3])))
+(assert-true (iter? (iter-or-single "abc")))
+(assert-true (iter? (iter-or-single (iter '(1 2 3)))))
+(assert-true (iter? (iter-or-single 1)))
+(assert-true (iter? (iter-or-single \\A)))
+%#
+(defn iter-or-single (thing)
+  (if (iter? thing)
+        thing
+      (list? thing)
+        (list-iter thing)
+      (vec? thing)
+        (vec-iter thing)
+      (string? thing)
+        (string-iter thing)
+      (io? thing)
+        (file-iter thing)
+      (once-iter thing)))
+
+#%
+Iterator that generates numbers within a range.
+
+Section: iterator
+
+Example:
+(def test-iter (range 3 6))
+(assert-equal 3 (test-iter))
+(assert-equal 4 (test-iter))
+(assert-equal 5 (test-iter))
+(assert-equal :*iter-empty* (test-iter))
+%#
+(defn range (start end)
+    (let (next (fn () (if (< start end) (let (tmp start) (inc! start) tmp) :*iter-empty*)))
+        (set-prop next :is-iter #t)
+        next))
+
+#%
+Loops over each element in an iterator.  Will call iter on the input object.
+bind is bound to the current element of items and is accesible
+in body. Body is evaluated a number of times equal to the items in the iterator.
+
+Section: iterator
+
+Example:
+(def i 0)
+(for x in (range 0 11) (set! i (+ 1 i)))
+(assert-equal 11 i)
+%#
+(defmacro for (bind in items & body)
+    (if (not (= in 'in)) (err "Invalid for: (for [i] in [iterator] (body))"))
+    (let (i-name (gensym))
+    `(let-while (~i-name ~items)(~bind (~i-name)) (not (identical? ~bind :*iter-empty*)) ~@body)))
+
+#%
+Iterator that applies a lambda to each element of another iterator- is lazy.
+
+Section: iterator
+
+Example:
+(def test-map-iter (map (list-iter '(1 2 3)) (fn (x) (* x 2))))
+(assert-equal 2 (test-map-iter))
+(assert-equal 4 (test-map-iter))
+(assert-equal 6 (test-map-iter))
+(assert-equal :*iter-empty* (test-map-iter))
+%#
+(defn map (i lambda)
+    (let (next (fn () (let (val (i)) (if (identical? val :*iter-empty*) :*iter-empty* (lambda val)))))
+        (set-prop next :is-iter #t)
+        next))
+

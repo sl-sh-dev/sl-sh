@@ -143,6 +143,22 @@ True if the to-test can be called as the first argument in an expression.
                                              (identical? t :Pair)))))
 
 #%
+Usage: (io? expression)
+
+True if the expression is an IO object (file), false otherwise.
+
+Section: type
+
+Example:
+(def iotst (fopen "/tmp/iotst" :create))
+(test::assert-true (io? iotst))
+(test::assert-false (io? 1))
+(test::assert-false (io? '(1 2 3)))
+(test::assert-false (io? (list)))
+%#
+(def io? (fn (v) (identical? (type v) :Io)))
+
+#%
 Usage: (defmacro name doc_string? argument_list body)
 
 Create a macro and bind it to a symbol in the current scope.
@@ -856,3 +872,5 @@ Example:
  %#
   (defmacro substitute (lst old-item new-item & mods)
        `(nsubstitute! (to-list ~lst) ~old-item ~new-item ~@mods))
+
+(load "iterator.slosh")

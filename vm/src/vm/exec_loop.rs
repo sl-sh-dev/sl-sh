@@ -146,7 +146,7 @@ impl<ENV> GVm<ENV> {
             iter.rev().nth(((0 - idx) - 1) as usize)
         };
         let v = if let Some(ch) = ch {
-            // borrow checker won;t let us use self.alloc_char(ch) here....
+            // borrow checker won't let us use self.alloc_char(ch) here....
             let len = ch.len();
             if len <= 6 {
                 let mut b = [0_u8; 6];
@@ -157,7 +157,7 @@ impl<ENV> GVm<ENV> {
                 Value::CharClusterLong(h.get_handle().expect("just allocated, missing handle!"))
             }
         } else {
-            return Err(VMError::new_vm("GET: Index out of range."));
+            self.make_err("vm-missing", idx.into())
         };
         Ok(v)
     }
