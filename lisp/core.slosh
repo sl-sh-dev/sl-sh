@@ -820,7 +820,7 @@ Example:
 (assert-false (not= 2 2))
 (assert-false (not= 0.0 -0.0))
 %#
-(defmacro not= (expected-val right-val & body)
+(defmacro not= (expected-val right-val)
     `(not (= ~expected-val ~right-val))
 )
 
@@ -837,7 +837,7 @@ Example:
 (assert-false (not== 0.0 -0.0))
 (assert-false (not== 2 2))
 %#
-(defmacro not== (expected-val right-val & body)
+(defmacro not== (expected-val right-val)
     `(not (== ~expected-val ~right-val))
 )
 

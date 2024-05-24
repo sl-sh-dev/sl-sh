@@ -104,7 +104,6 @@ macro_rules! decode3 {
 
 macro_rules! compare_numeric {
     ($vm:expr, $chunk:expr, $code:expr, $comp_fn:expr, $wide:expr) => {{
-        let should_move = true;
         let (dest, reg1, reg2) = decode3!($code, $wide);
         let mut val = false;
         for reg in reg1..reg2 {
@@ -138,11 +137,7 @@ macro_rules! compare_numeric {
         } else {
             $crate::Value::False
         };
-        if should_move {
-            *$vm.register_mut(dest as usize) = val;
-        } else {
-            set_register!($vm, dest as usize, val);
-        }
+        *$vm.register_mut(dest as usize) = val;
     }};
 }
 

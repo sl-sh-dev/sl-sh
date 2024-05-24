@@ -251,8 +251,7 @@ impl Value {
 
     pub fn not(&self) -> Value {
         match self {
-            Value::False => Value::True,
-            Value::Nil => Value::True,
+            Value::False | Value::Nil => Value::True,
             _ => Value::False,
         }
     }

@@ -116,24 +116,21 @@ pub const DEC: OpCode = MATH_BASE + 5;
 // NUMEQ A B C - compare (=) in register B (inclusive) to C (inclusive) and set R[A] to the
 // result.
 pub const NUMEQ: OpCode = MATH_BASE + 6;
-
-// NUMNEQ was here but it was removed and implemented as a macro instead
-
 // NUMLT A B C - compare (<) in register B (inclusive) to C (inclusive) and set R[A] to the
 // result.
-pub const NUMLT: OpCode = MATH_BASE + 8;
+pub const NUMLT: OpCode = MATH_BASE + 7;
 // NUMGT A B C - compare (>) in register B (inclusive) to C (inclusive) and set R[A] to the
 // result.
-pub const NUMGT: OpCode = MATH_BASE + 9;
+pub const NUMGT: OpCode = MATH_BASE + 8;
 // NUMLTE A B C - compare (<=) in register B (inclusive) to C (inclusive) and set R[A] to the
 // result.
-pub const NUMLTE: OpCode = MATH_BASE + 10;
+pub const NUMLTE: OpCode = MATH_BASE + 9;
 // NUMGTE A B C - compare (>=) in register B (inclusive) to C (inclusive) and set R[A] to the
 // result.
-pub const NUMGTE: OpCode = MATH_BASE + 11;
+pub const NUMGTE: OpCode = MATH_BASE + 10;
 
 // Cons cells
-const CONS_BASE: OpCode = MATH_BASE + 12;
+const CONS_BASE: OpCode = MATH_BASE + 11;
 pub const CONS: OpCode = CONS_BASE; // CONS A B C - R(A) = conscell(R(B), R(C))
 pub const CAR: OpCode = CONS_BASE + 1; // CAR A B - R(A) = car(R(B))
 pub const CDR: OpCode = CONS_BASE + 2; // CDR A B - R(A) = cdr(R(B))
