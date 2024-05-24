@@ -36,33 +36,14 @@ pub struct F56(pub [u8; 7]);
 impl Eq for F56 {}
 impl PartialEq for F56 {
     fn eq(&self, other: &Self) -> bool {
-        self.strictly_equal_but_nan_and_0(other)
+        self.strictest_equal(other) // appropriate for `identical?` comparison
     }
 }
 impl Hash for F56 {
     // In order to use F56 as a key in a hash map, we need to ensure:
     // If a == b then hash(a) == hash(b)
     fn hash<H: Hasher>(&self, state: &mut H) {
-        // Generally, our approach will be to convert to f64 and use the bit pattern as the hash
-        // However, we need to carefully handle cases where two values are equal but have different bit patterns
-        // Special Case 1: 0.0 and -0.0 are equal but have different bit patterns
-        // Special Case 2: There are trillions of different bit patterns that represent NaN
-
-        let f56_word = u64::from_be_bytes([
-            0, self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5], self.0[6],
-        ]);
-        // Special Case 1: Convert any 0 to the same bit pattern
-        if f56_word == 0x0080000000000000u64 {
-            state.write_u64(0x0000000000000000u64);
-            return;
-        }
-        // Special Case 2: Convert any NaN to the same bit pattern
-        if self.is_nan() {
-            state.write_u64(0x7FF8000000000001u64);
-            return;
-        }
-        // Normal Case:
-        state.write_u64(f56_word)
+        state.write_u64(self.hash_for_strictest_equal())
     }
 }
 impl std::fmt::Debug for F56 {
@@ -301,8 +282,13 @@ impl F56 {
     pub fn strictest_equal(&self, other: &F56) -> bool {
         self.0 == other.0
     }
+    pub fn hash_for_strictest_equal(&self) -> u64 {
+        u64::from_be_bytes([
+            0, self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5], self.0[6],
+        ])
+    }
     /// Returns true if the two F56s are bitwise identical OR if they are both NaN or both 0
-    pub fn strictly_equal_but_nan_and_0(&self, other: &F56) -> bool {
+    pub fn strictly_equal_except_nan_and_0(&self, other: &F56) -> bool {
         // if the bit patterns are identical, then they are equal
         if self.0 == other.0 {
             return true;
@@ -321,6 +307,21 @@ impl F56 {
         }
 
         false
+    }
+
+    pub fn hash_for_strictly_equal_except_nan_and_0(&self) -> u64 {
+        let f56_word = u64::from_be_bytes([
+            0, self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5], self.0[6],
+        ]);
+        // Special Case 1: Convert any 0 to the same bit pattern
+        if f56_word == 0x0080000000000000u64 {
+            return 0x0000000000000000u64;
+        }
+        // Special Case 2: Convert any NaN to the same bit pattern
+        if self.is_nan() {
+            return 0x7FF8000000000001u64;
+        }
+        f56_word
     }
 
     /// Returns true if the F56 is NaN. Note that there are many bit patterns that represent NaN
