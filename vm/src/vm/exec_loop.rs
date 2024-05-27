@@ -896,7 +896,9 @@ impl<ENV> GVm<ENV> {
                 }
                 EQ => {
                     let (dest, reg1, reg2) = decode3!(self.ip_ptr, wide);
-                    let val = self.is_eq(reg1, reg2).map_err(|e| (e, chunk.clone()))?;
+                    let val = self
+                        .is_identical(reg1, reg2)
+                        .map_err(|e| (e, chunk.clone()))?;
                     set_register!(self, dest as usize, val);
                 }
                 EQUAL => {
@@ -1039,30 +1041,21 @@ impl<ENV> GVm<ENV> {
                 SUB => binary_math!(self, chunk, self.ip_ptr, |a, b| a - b, wide),
                 MUL => binary_math!(self, chunk, self.ip_ptr, |a, b| a * b, wide),
                 DIV => div_math!(self, chunk, self.ip_ptr, wide),
-                NUMEQ => compare_int!(
-                    self,
-                    chunk,
-                    self.ip_ptr,
-                    |a, b| a == b,
-                    |a: f64, b: f64| (a - b).abs() < f64::EPSILON,
-                    wide,
-                    true,
-                    false
-                ),
-                NUMNEQ => compare_int!(
-                    self,
-                    chunk,
-                    self.ip_ptr,
-                    |a, b| a == b,
-                    |a: f64, b: f64| (a - b).abs() < f64::EPSILON,
-                    wide,
-                    true,
-                    true
-                ),
-                NUMLT => compare!(self, chunk, self.ip_ptr, |a, b| a < b, wide, true),
-                NUMLTE => compare!(self, chunk, self.ip_ptr, |a, b| a <= b, wide, true),
-                NUMGT => compare!(self, chunk, self.ip_ptr, |a, b| a > b, wide, true),
-                NUMGTE => compare!(self, chunk, self.ip_ptr, |a, b| a >= b, wide, true),
+                NUMEQ => {
+                    compare_numeric!(self, chunk, self.ip_ptr, |a, b| a == b, wide)
+                }
+                NUMLT => {
+                    compare_numeric!(self, chunk, self.ip_ptr, |a, b| a < b, wide)
+                }
+                NUMLTE => {
+                    compare_numeric!(self, chunk, self.ip_ptr, |a, b| a <= b, wide)
+                }
+                NUMGT => {
+                    compare_numeric!(self, chunk, self.ip_ptr, |a, b| a > b, wide)
+                }
+                NUMGTE => {
+                    compare_numeric!(self, chunk, self.ip_ptr, |a, b| a >= b, wide)
+                }
                 INC => self.inc_val(wide).map_err(|e| (e, chunk.clone()))?,
                 DEC => self.dec_val(wide).map_err(|e| (e, chunk.clone()))?,
                 CONS => {

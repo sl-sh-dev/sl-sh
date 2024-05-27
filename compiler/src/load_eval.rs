@@ -1,9 +1,10 @@
 use crate::pass1::pass1;
-use crate::{compile, Reader};
+use crate::{compile, ReadError, Reader};
 use compile_state::state::{CompileEnvironment, CompileState, SloshVm, SloshVmTrait};
 use slvm::{CallFuncSig, Chunk, VMError, VMResult, Value, RET};
 use std::borrow::Cow;
 use std::ffi::OsString;
+use std::io::{Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -395,31 +396,93 @@ fn apply(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     apply_inner(vm, registers)
 }
 
+fn read(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    fn read_inner(
+        next: Option<Result<Value, ReadError>>,
+        err_val: Option<Value>,
+    ) -> VMResult<Value> {
+        match next {
+            Some(r) => r.map_or_else(
+                |e| err_val.map_or_else(|| Err(VMError::new("read", e.to_string())), Ok),
+                Ok,
+            ),
+            None => err_val.map_or_else(|| Err(VMError::new_compile("read: nothing to read.")), Ok),
+        }
+    }
+    if let (Some(exp), err_val) = (registers.first(), registers.get(1)) {
+        match exp {
+            Value::StringConst(i) => {
+                let string_as_code = vm.get_interned(*i);
+                let mut reader = Reader::from_static_string(string_as_code, vm, "", 1, 0);
+                read_inner(reader.next(), err_val.copied())
+            }
+            Value::String(h) => {
+                let string_as_code = vm.get_string(*h).to_string();
+                let mut reader = Reader::from_string(string_as_code, vm, "", 1, 0);
+                read_inner(reader.next(), err_val.copied())
+            }
+            Value::Io(h) => {
+                let io = vm.get_io(*h).clone();
+                let mut reader = Reader::from_reader(io, vm, "", 1, 0);
+                let r = read_inner(reader.next(), err_val.copied());
+                // The grapheme reader will have consumed one extra char so we need to seek back over
+                // it so the file is left in the "correct" position to read the next form.
+                let mut chars = reader.into_char_iter();
+                let io = vm.get_io(*h);
+                let pos = io.get_io().stream_position(); // Don't combine this with the if below...
+                if let Ok(pos) = pos {
+                    // If our input object does not support seek (like stdin) then don't fail.
+                    if let Some(Ok(ch)) = chars.next() {
+                        io.get_io().seek(SeekFrom::Start(pos - ch.len() as u64))?;
+                    }
+                }
+                r
+            }
+            _ => Err(VMError::new_compile(
+                "read: only accepts strings or IO objects as arguments.",
+            )),
+        }
+    } else {
+        Err(VMError::new_compile(
+            "read: wrong number of args, expected one or two",
+        ))
+    }
+}
+
 fn read_all(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
-    if let (Some(exp), None) = (registers.first(), registers.get(1)) {
-        let string_as_code = match exp {
-            Value::CharCluster(l, c) => {
-                format!("{}", String::from_utf8_lossy(&c[0..*l as usize]))
-            }
-            Value::CharClusterLong(h) => vm.get_string(*h).to_string(),
-            Value::StringConst(i) => vm.get_interned(*i).to_string(),
-            Value::String(h) => vm.get_string(*h).to_string(),
-            _ => {
-                return Err(VMError::new_compile(
-                    "read: only accepts strings as arguments.",
-                ));
-            }
-        };
-        let reader = Reader::from_string(string_as_code, vm, "", 1, 0);
+    fn read_all_inner(mut reader: Reader) -> VMResult<Value> {
         let mut vals = vec![];
-        for exp in reader {
+        for exp in &mut reader {
             let exp = exp.map_err(|e| VMError::new("read", e.to_string()))?;
             vals.push(exp);
         }
-        Ok(vm.alloc_vector(vals))
+        Ok(reader.vm().alloc_vector(vals))
+    }
+    if let (Some(exp), None) = (registers.first(), registers.get(1)) {
+        match exp {
+            Value::StringConst(i) => {
+                let string_as_code = vm.get_interned(*i);
+                let reader = Reader::from_static_string(string_as_code, vm, "", 1, 0);
+                read_all_inner(reader)
+            }
+            Value::String(h) => {
+                let string_as_code = vm.get_string(*h).to_string();
+                let reader = Reader::from_string(string_as_code, vm, "", 1, 0);
+                read_all_inner(reader)
+            }
+            Value::Io(h) => {
+                let io = vm.get_io(*h).clone();
+                let reader = Reader::from_reader(io, vm, "", 1, 0);
+                read_all_inner(reader)
+            }
+            _ => Err(VMError::new(
+                "read",
+                "read-all: only accepts strings or IO objects as arguments.",
+            )),
+        }
     } else {
         Err(VMError::new_compile(
-            "eval: wrong number of args, expected one",
+            "read-all: wrong number of args, expected one",
         ))
     }
 }
@@ -437,7 +500,26 @@ fn add_compiler_builtin(
 }
 
 pub fn add_load_builtins(env: &mut SloshVm) {
-    env.set_global_builtin("load", load);
+    add_compiler_builtin(
+        env,
+        "load",
+        load,
+        r#"Usage: (load path) -> [last form value]
+
+Read and eval a file (from path- a string).
+
+Section: scripting
+
+Example:
+(def test-load-one nil)
+(def test-load-two nil)
+(def test-load-fn (fopen "/tmp/slsh-test-load.testing" :create :truncate))
+(fpr test-load-fn "(set! test-load-one \"LOAD TEST\") '(1 2 3)")
+(fclose test-load-fn)
+(set! test-load-two (load "/tmp/slsh-test-load.testing"))
+(test::assert-equal "LOAD TEST" test-load-one)
+(test::assert-equal '(1 2 3) test-load-two)"#,
+    );
     add_compiler_builtin(
         env,
         "eval",
@@ -463,7 +545,71 @@ Example:
 (test::assert-equal 10 (eval '(apply + [1 2 7])))
 "#,
     );
-    env.set_global_builtin("read-all", read_all);
+    add_compiler_builtin(
+        env,
+        "read",
+        read,
+        r#"Usage: (read file|string end-exp?) -> expression
+
+Read a file or string and return the next object (symbol, string, list, etc).
+Raises an error if the file or string has been read unless end-exp is provided
+then returns that on the end condition.
+Note: When reading a string read always starts at the beginning of the string.
+
+Section: file
+
+Example:
+(with-temp-file (fn (tmp)
+    (let (tst-file (fopen tmp :create :truncate)
+          test-str nil)
+        (fprn tst-file "(1 2 3)(x y z)")
+        (fclose tst-file)
+        (set! tst-file (fopen tmp :read))
+        (test::assert-equal '(1 2 3) (read tst-file))
+        (test::assert-equal '(x y z) (read tst-file))
+        (test::assert-error (read test-file))
+        (fclose tst-file)
+        (set! tst-file (fopen tmp :read))
+        (test::assert-equal '(1 2 3) (read tst-file :done))
+        (test::assert-equal '(x y z) (read tst-file :done))
+        (test::assert-equal :done (read tst-file :done))
+        (fclose tst-file)
+        (test::assert-equal '(4 5 6) (read "(4 5 6)"))
+        (set! test-str "7 8 9")
+        (test::assert-equal 7 (read test-str))
+        (test::assert-equal 7 (read test-str))
+        (test::assert-equal '(x y z) (read "(x y z)")))))"#,
+    );
+    add_compiler_builtin(
+        env,
+        "read-all",
+        read_all,
+        r#"Usage: (read-all file|string) -> vec
+
+Read a file or string and return the vector of contained expressions.  This reads the entire
+file or string and will wrap it in an outer vector (always returns a vector).
+
+Unlike most lisp readers this one will put loose symbols in a vector (i.e. you
+enter things at the repl without the enclosing parens).
+
+If the read item is empty (including a comment) then will return an empty vector.
+
+Section: file
+
+Example:
+(with-temp-file (fn (tmp)
+    (let (tst-file (fopen tmp :create :truncate)
+          test-str nil)
+        (fprn tst-file "(1 2 3)(x y z)")
+        (fclose tst-file)
+        (set! tst-file (fopen tmp :read))
+        (test::assert-equal ['(1 2 3)'(x y z)] (read-all tst-file))
+        (fclose tst-file)
+        (test::assert-equal ['(4 5 6)] (read-all "(4 5 6)"))
+        (test::assert-equal [7 8 9] (read-all "7 8 9"))
+        (test::assert-equal ['(x y z)] (read-all "(x y z)"))
+        (test::assert-equal [] (read-all ";(x y z)")))))"#,
+    );
     add_compiler_builtin(
         env,
         "apply",

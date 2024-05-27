@@ -1,0 +1,23 @@
+#!/usr/bin/env slosh
+
+(assert-true (= 1 1))
+(assert-false (= 2 2.0))
+(assert-true (not= 2 2.0))
+(assert-true (== 2 2.0))
+(assert-true (== 2 2.000000000000000000000000000000000000000000001))
+(assert-false(== 1e-30 1.001e-30))
+
+#% 0 and -0 %#
+(assert-true(          = 0   -0))
+(assert-true(         == 0   -0))
+(assert-true( identical? 0   -0))
+
+#% 0 and 0.0 %#
+(assert-false(         = 0 0.0))
+(assert-true(         == 0 0.0))
+(assert-false(identical? 0 0.0))
+
+#% 0.0 and -0.0 %#
+(assert-true(          = 0.0 -0.0))
+(assert-true(         == 0.0 -0.0))
+(assert-false(identical? 0.0 -0.0))

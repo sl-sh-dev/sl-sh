@@ -620,16 +620,6 @@ impl Chunk {
                 println!();
                 Ok(false)
             }
-            NUMNEQ => {
-                print!("NUMNEQ \t");
-                disassemble_operand!(code, true, wide);
-                print!("\t");
-                disassemble_operand!(code, true, wide);
-                print!("\t");
-                disassemble_operand!(code, true, wide);
-                println!();
-                Ok(false)
-            }
             NUMLT => {
                 print!("NUMLT  \t");
                 disassemble_operand!(code, true, wide);
