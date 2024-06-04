@@ -425,8 +425,9 @@ impl<ENV> GVm<ENV> {
             heap.mark(on_error);
         }
         // TODO: XXX do we need this?  Probably but maybe not.
-        //if let Some(err_frame) = &self.err_frame {
-        //}
+        if let Some(err_frame) = &self.err_frame {
+            heap.mark_call_frame(err_frame);
+        }
         for defer in &self.defers {
             heap.mark(*defer);
         }

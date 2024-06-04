@@ -1,4 +1,17 @@
 #%
+Helper to create an iterator.  Will make sure it has the correct
+property set.
+
+Section: iterator
+
+Example:
+%#
+(defmacro mk-iter (& body)
+    `(let (iter (fn () ~@body))
+        (set-prop iter :is-iter #t)
+        iter))
+
+#%
 Iterator that wraps a vector.
 
 Section: iterator
@@ -13,11 +26,8 @@ Example:
 (assert-equal :*iter-empty* (test-vec-iter))
 %#
 (defn vec-iter (v)
-    (let (idx 0
-          vlen (len v)
-          next (fn () (if (< idx vlen) (let (tmp idx) (inc! idx) v.~tmp) :*iter-empty*)))
-        (set-prop next :is-iter #t)
-        next))
+    (let (idx 0, vlen (len v))
+        (mk-iter (if (< idx vlen) (let (tmp idx) (inc! idx) v.~tmp) :*iter-empty*))))
 
 #%
 Iterator that wraps a list.
@@ -34,9 +44,7 @@ Example:
 (assert-equal :*iter-empty* (test-list-iter))
 %#
 (defn list-iter (l)
-    (let (next (fn () (if l (let (val (car l)) (set! l (cdr l)) val) :*iter-empty*)))
-        (set-prop next :is-iter #t)
-        next))
+    (mk-iter (if l (let (val (car l)) (set! l (cdr l)) val) :*iter-empty*)))
 
 #%
 Iterator that wraps a file.  Each call to next! returns the next line (with
@@ -59,9 +67,7 @@ Example:
 (assert-equal :*iter-empty* (test-iter))
 %#
 (defn file-iter (f)
-    (let (next (fn () (let (line (read-line f))(if line line :*iter-empty*))))
-        (set-prop next :is-iter #t)
-        next))
+    (mk-iter (let (line (read-line f))(if line line :*iter-empty*))))
 
 #%
 Iterator that wraps a string.  Each element is the next character.
@@ -76,11 +82,8 @@ Example:
 (assert-equal :*iter-empty* (test-string-iter))
 %#
 (defn string-iter (s)
-    (let (idx 0
-          slen (len s)
-          next (fn () (if (< idx slen) (let (tmp idx) (inc! idx) s.~tmp) :*iter-empty*)))
-        (set-prop next :is-iter #t)
-        next))
+    (let (idx 0, slen (len s))
+        (mk-iter (if (< idx slen) (let (tmp idx) (inc! idx) s.~tmp) :*iter-empty*))))
 
 #%
 Return true if thing is an iterator, false otherwise.
@@ -108,9 +111,7 @@ Example:
 (assert-equal :*iter-empty* (test-iter))
 %#
 (defn once-iter (i)
-    (let (next (fn () (let (val i) (set! i :*iter-empty*) val)))
-        (set-prop next :is-iter #t)
-        next))
+    (mk-iter (let (val i) (set! i :*iter-empty*) val)))
 
 #%
 Iterator that wraps and returns a single object on each call.
@@ -132,9 +133,7 @@ Example:
 (assert-equal "iter" (test-iter))
 %#
 (defn repeat-iter (i)
-    (let (next (fn () i))
-        (set-prop next :is-iter #t)
-        next))
+    (mk-iter i))
 
 #%
 Return thing as an iterator if possible (if it is an iterator just return thing).
@@ -200,9 +199,7 @@ Example:
 (assert-equal :*iter-empty* (test-iter))
 %#
 (defn range (start end)
-    (let (next (fn () (if (< start end) (let (tmp start) (inc! start) tmp) :*iter-empty*)))
-        (set-prop next :is-iter #t)
-        next))
+    (mk-iter (if (< start end) (let (tmp start) (inc! start) tmp) :*iter-empty*)))
 
 #%
 Loops over each element in an iterator.  Will call iter on the input object.
@@ -234,7 +231,5 @@ Example:
 (assert-equal :*iter-empty* (test-map-iter))
 %#
 (defn map (i lambda)
-    (let (next (fn () (let (val (i)) (if (identical? val :*iter-empty*) :*iter-empty* (lambda val)))))
-        (set-prop next :is-iter #t)
-        next))
+    (mk-iter (let (val (i)) (if (identical? val :*iter-empty*) :*iter-empty* (lambda val)))))
 

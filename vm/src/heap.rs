@@ -549,7 +549,7 @@ impl Heap {
         }
     }
 
-    fn mark_call_frame(&mut self, call_frame: &CallFrame) {
+    pub fn mark_call_frame(&mut self, call_frame: &CallFrame) {
         self.mark_chunk(&call_frame.chunk);
         if let Some(this_fn) = call_frame.this_fn {
             self.mark_trace(this_fn);
@@ -639,7 +639,7 @@ impl Heap {
                 let k = self
                     .continuations
                     .get(handle.idx())
-                    .expect("Invalid error handle!")
+                    .expect("Invalid continuation handle!")
                     .clone();
                 self.mark_call_frame(&k.frame);
                 for obj in &k.stack {

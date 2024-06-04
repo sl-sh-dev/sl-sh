@@ -701,8 +701,7 @@ Section: test
 Example:
 (test::assert-error-msg (err "error thrown") :error "error thrown")
 %#
-(defmacro assert-error-msg
-  (form key msg)
+(defmacro assert-error-msg (form key msg)
     `((fn (ret) (test::assert-true (and (= ~key (car ret)) (= ~msg (cdr ret)))
          (str ". Expected \n" ~key ", [" ~msg "]\n => Test returned:\n" (car ret) ", [" (cdr ret) "]")))
         (get-error ~form)))

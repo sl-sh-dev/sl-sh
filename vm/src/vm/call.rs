@@ -159,7 +159,9 @@ impl<ENV> GVm<ENV> {
                             // We should be OK making the frame here only when needed.  If a builtin
                             // calls bytecode it should be using do_call() which will restore state.
                             let frame = self.make_call_frame(chunk.clone(), lambda, false);
+                            self.pause_gc(); // We might have allocated incoming parms that are not rooted yet (see the CCC opcode for instance).
                             let call_frame = self.alloc_callframe(frame);
+                            self.unpause_gc();
                             mov_register!(self, first_reg as usize, call_frame);
                             self.stack_top += first_reg as usize;
                         }
@@ -176,7 +178,9 @@ impl<ENV> GVm<ENV> {
                 }
                 if !tail_call {
                     let frame = self.make_call_frame(chunk, lambda, true);
+                    self.pause_gc(); // We might have allocated incoming parms that are not rooted yet (see the CCC opcode for instance).
                     let aframe = self.alloc_callframe(frame);
+                    self.unpause_gc();
                     mov_register!(self, first_reg as usize, aframe);
                     self.stack_top += first_reg as usize;
                 }
@@ -220,7 +224,9 @@ impl<ENV> GVm<ENV> {
                 self.this_fn = Some(lambda);
                 self.ip_ptr = get_code!(l);
                 if let Some(frame) = frame {
+                    self.pause_gc(); // We might have allocated incoming parms that are not rooted yet (see the CCC opcode for instance).
                     let aframe = self.alloc_callframe(frame);
+                    self.unpause_gc();
                     *self.stack_mut(stack_top + first_reg as usize) = aframe;
                 }
                 self.clear_opts(&l, first_reg, num_args);
