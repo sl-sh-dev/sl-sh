@@ -108,8 +108,8 @@ impl Platform for Sys {
         } else {
             unsafe {
                 cvt(libc::pipe(fds.as_mut_ptr()))?;
-                cvt(libc::fcntl(fds[0], libc::F_SETFD, libc::O_CLOEXEC))?;
-                cvt(libc::fcntl(fds[1], libc::F_SETFD, libc::O_CLOEXEC))?;
+                cvt(libc::fcntl(fds[0], libc::F_SETFD, libc::FD_CLOEXEC))?;
+                cvt(libc::fcntl(fds[1], libc::F_SETFD, libc::FD_CLOEXEC))?;
             }
             Ok((UnixFileDesc(fds[0]), UnixFileDesc(fds[1])))
         }
