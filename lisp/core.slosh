@@ -608,14 +608,15 @@ Asserts the two values are identical.
 Section: test
 %#
 (defmacro assert-equal (expected-val right-val & body)
-    `(if (= ~expected-val ~right-val)
-        #t
-        (let (ev (type ~expected-val)
-              rv (type ~right-val)
-              assert-err (mk-err :assert (str "Expected: " ~expected-val " " ev ", Got: " ~right-val " " rv "." ~@body)))
-        (do
-            (prn assert-err)
-            (err assert-err)))))
+    `(let (expected-val ~expected-val, right-val ~right-val) ; make sure to eval expressions only once.
+        (if (= expected-val right-val)
+            #t
+            (let (ev (type expected-val)
+                  rv (type right-val)
+                  assert-err (mk-err :assert (str "Expected: " expected-val " " ev ", Got: " right-val " " rv "." ~@body)))
+                (do
+                    (prn assert-err)
+                    (err assert-err))))))
 
 #%
 Asserts the two values are identical.
@@ -630,14 +631,15 @@ Asserts the two values are not identical.
 Section: test
 %#
 (defmacro assert-not-equal (expected-val right-val & body)
-    `(if (not (= ~expected-val ~right-val))
-        #t
-        (let (ev (type ~expected-val)
-              rv (type ~right-val)
-              assert-err (mk-err :assert (str "Did not expect: " ~expected-val " " ev ", but got a matching: " ~right-val " " rv "." ~@body)))
-        (do
-            (prn assert-err)
-            (err assert-err)))))
+    `(let (expected-val ~expected-val, right-val ~right-val) ; make sure to eval expressions only once.
+        (if (not (= expected-val right-val))
+            #t
+            (let (ev (type expected-val)
+                  rv (type right-val)
+                  assert-err (mk-err :assert (str "Did not expect: " expected-val " " ev ", but got a matching: " right-val " " rv "." ~@body)))
+                (do
+                    (prn assert-err)
+                    (err assert-err))))))
 
 #%
 Asserts the two values are not identical.
@@ -680,11 +682,13 @@ Asserts the value is an error
 Section: test
 %#
 (defmacro assert-error (val & body)
-(if `(err? ~val)
-    #t
-    (mk-err
-        :assert
-        `(str "Expected error got: " ~val "." ~@body))))
+    `(let (val (get-error ~val))
+        (if (not (= (car val) :ok))
+            #t
+            (let (assert-err (mk-err :assert (str "Expected error got: " (cdr val) "." ~@body)))
+                (do
+                    (prn assert-err)
+                    (err assert-err))))))
 
 #%
 Asserts the value is an error

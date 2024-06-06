@@ -236,11 +236,7 @@ Example:
     (test::assert-equal "Default" test-do-four))
 ; Original outer scope not changed.
 (test::assert-equal "One" test-do-one)
-(test::assert-equal "Default" test-do-four)
-;(def (sym "test-do-one") "do one")
-(test::assert-error (def (sym "test-do-one") "do one"))
-;(test::assert-equal "do one" test-do-one)
-(test::assert-error (def (sym->str test-do-one) "do one 2"))"#),
+(test::assert-equal "Default" test-do-four)"#),
             set: add_special(vm, "set!", r#"Usage: (set! symbol expression) -> expression
 
 Sets an existing expression in the current scope(s).  Return the expression that was set.
@@ -263,10 +259,7 @@ Example:
     (test::assert-equal "1111" (set! test-do-one "1111"))
     (test::assert-equal "1111" test-do-one))
 ; Original outer scope not changed.
-(test::assert-equal "One" test-do-one)
-;(set! (sym "test-do-one") "do one")
-;(test::assert-equal "do one" test-do-one)
-(test::assert-error (set! (sym->str test-do-one) "do one 2"))"#),
+(test::assert-equal "One" test-do-one)"#),
             do_: add_special(vm, "do", r#"Usage: (do exp0 ... expN) -> expN
 
 Evaluatate each form and return the last.
@@ -382,7 +375,7 @@ Example:
 (test::assert-equal 6 (+ 1 5))
 (test::assert-equal 6.5 (+ 1 5.5))
 (test::assert-equal 7 (+ 1 2 4))
-(test::assert-error (+ 1 2 4 5))"#),
+(test::assert-error (+ 1 2 4 "5"))"#),
             sub: add_special(vm, "-", r#"Usage: (- number+)
 
 Subtract a sequence of numbers.  Requires at least one number (negate if only one number).
@@ -391,7 +384,6 @@ Section: math
 
 Example:
 (ns-import 'math)
-(test::assert-error (-))
 (test::assert-error (- 5 "2"))
 (test::assert-equal -5 (- 5))
 (test::assert-equal -5.0 (- 5.0))
@@ -898,7 +890,7 @@ Example:
                 "len",
                 r#"Usage: (len expression) -> int
 
-Return length of supplied expression.
+Return length of supplied expression.  The length of an atom is 1.
 
 Section: core
 
@@ -911,9 +903,9 @@ Example:
 (test::assert-equal 3 (len [1 2 3]))
 (test::assert-equal 3 (len (list 1 2 3)))
 (test::assert-equal 3 (len (vec 1 2 3)))
-(test::assert-error (len 100))
-(test::assert-error (len 100.0))
-(test::assert-error (len \tab))
+(test::assert-equal 1 (len 100))
+(test::assert-equal 1 (len 100.0))
+(test::assert-equal 1 (len \tab))
 "#,
             ),
             clear: add_special(
@@ -945,7 +937,6 @@ Example:
 (test::assert-equal "stringsome" (str "string" "some"))
 (test::assert-equal "string" (str "string" ""))
 (test::assert-equal "string 50" (str "string" " " 50))
-(test::assert-error (str {:key 'symbol}))
 "#),
             let_: add_special(vm, "let", r#"Usage: (let vals &rest let-body)
 

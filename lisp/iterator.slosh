@@ -30,6 +30,48 @@ Example:
         (mk-iter (if (< idx vlen) (let (tmp idx) (inc! idx) v.~tmp) :*iter-empty*))))
 
 #%
+Iterator produces a vector in reverse.
+
+Section: iterator
+
+Example:
+(let (test-vec-iter (vec-iter-rev [1 2 3]))
+    (assert-equal 3 (test-vec-iter))
+    (assert-equal 2 (test-vec-iter))
+    (assert-equal 1 (test-vec-iter))
+    (assert-equal :*iter-empty* (test-vec-iter))
+    (set! test-vec-iter (vec-iter-rev (vec)))
+    (assert-equal :*iter-empty* (test-vec-iter)))
+%#
+(defn vec-iter-rev (v)
+    (let (idx (len v))
+        (mk-iter (if (> idx 0) (do (dec! idx) v.~idx) :*iter-empty*))))
+
+#%
+Return a pair of iterators, one forward and one reverse for a vector.
+The two iterators will not overlap (i.e. the forward and reverse will never
+produce the same items).
+
+Section: iterator
+
+Example:
+(let ([fwd-iter, rev-iter] (vec-iter-pair [1 2 3]))
+    (assert-equal 1 (fwd-iter))
+    (assert-equal 3 (rev-iter))
+    (assert-equal 2 (fwd-iter))
+    (assert-equal :*iter-empty* (rev-iter))
+    (assert-equal :*iter-empty* (fwd-iter)))
+(let ([fwd-iter, rev-iter] (vec-iter-pair (vec)))
+    (assert-equal :*iter-empty* (fwd-iter))
+    (assert-equal :*iter-empty* (rev-iter)))
+%#
+(defn vec-iter-pair (v)
+    (let (fidx 0, bidx (len v))
+        (cons
+            (mk-iter (if (< fidx bidx) (let (tmp fidx) (inc! fidx) v.~tmp) :*iter-empty*))
+            (mk-iter (if (> bidx fidx) (do (dec! bidx) v.~bidx) :*iter-empty*)))))
+
+#%
 Iterator that wraps a list.
 
 Section: iterator
@@ -47,7 +89,7 @@ Example:
     (mk-iter (if l (let (val (car l)) (set! l (cdr l)) val) :*iter-empty*)))
 
 #%
-Iterator that wraps a file.  Each call to next! returns the next line (with
+Iterator that wraps a file.  Each call produces the next line (with
 trailing newline).
 
 Section: iterator

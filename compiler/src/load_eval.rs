@@ -579,7 +579,7 @@ Example:
         (set! tst-file (fopen tmp :read))
         (test::assert-equal '(1 2 3) (read tst-file))
         (test::assert-equal '(x y z) (read tst-file))
-        (test::assert-error (read test-file))
+        (test::assert-error (read tst-file))
         (fclose tst-file)
         (set! tst-file (fopen tmp :read))
         (test::assert-equal '(1 2 3) (read tst-file :done))
