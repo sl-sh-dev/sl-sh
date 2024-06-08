@@ -253,22 +253,30 @@ pub fn flatten(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
 /// Section: collection
 ///
 /// Example:
-/// (def tmap [1 2 3 0])
-/// (assert-false (empty? tmap))
-/// (def tmap (reverse tmap))
-/// (assert-equal 2 (get tmap 2))
-/// (assert-equal 1 (get tmap 3))
-/// (assert-equal 0 (get tmap 0))
-/// (assert-error (reverse "string"))
+/// (let (tmap [1 2 3 0])
+///     (assert-false (empty? tmap))
+///     (set! tmap (reverse tmap))
+///     (assert-equal 2 (get tmap 2))
+///     (assert-equal 1 (get tmap 3))
+///     (assert-equal 0 (get tmap 0))
+///     (assert-error (reverse "string")))
 #[sl_sh_fn(fn_name = "reverse", takes_env = true)]
 pub fn reverse(environment: &mut SloshVm, seq: Value) -> VMResult<Value> {
-    let seq = seq
-        .iter(environment)
-        .collect::<Vec<Value>>()
-        .into_iter()
-        .rev()
-        .collect::<Vec<Value>>();
-    Ok(environment.alloc_vector(seq))
+    match seq {
+        Value::Pair(_) | Value::List(_, _) | Value::Vector(_) => {
+            let seq = seq
+                .iter(environment)
+                .collect::<Vec<Value>>()
+                .into_iter()
+                .rev()
+                .collect::<Vec<Value>>();
+            Ok(environment.alloc_vector(seq))
+        }
+        _ => Err(VMError::new(
+            "collection",
+            "Can only reverse a vector or list!",
+        )),
+    }
 }
 
 pub fn setup_collection_builtins(env: &mut SloshVm) {

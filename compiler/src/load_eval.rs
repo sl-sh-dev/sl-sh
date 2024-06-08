@@ -18,10 +18,23 @@ const fn from_utf8(bytes: &[u8]) -> &str {
     }
 }
 
-//const CORE_LISP: &[u8] = include_bytes!("../lisp/core.slosh");
 const CORE_LISP: &str = from_utf8(include_bytes!("../../lisp/core.slosh"));
+const ITER_LISP: &str = from_utf8(include_bytes!("../../lisp/iterator.slosh"));
 const COLORS_LISP: &str = from_utf8(include_bytes!("../../lisp/sh-color.slosh"));
 pub const SLSHRC: &str = from_utf8(include_bytes!("../../init.slosh"));
+
+/// Execute a chunk that may not be rooted, will make sure any allocated consts don't get GCed
+/// out from under it...
+fn exec_unrooted_chunk(vm: &mut SloshVm, chunk: Arc<Chunk>) -> VMResult<Value> {
+    for constant in &chunk.constants {
+        vm.heap_sticky(*constant);
+    }
+    let res = vm.execute(chunk.clone());
+    for constant in &chunk.constants {
+        vm.heap_unsticky(*constant);
+    }
+    res
+}
 
 /// With the given reader, for each sexp compile then load and execute.
 pub fn run_reader(reader: &mut Reader) -> VMResult<Value> {
@@ -32,12 +45,11 @@ pub fn run_reader(reader: &mut Reader) -> VMResult<Value> {
             .map_err(|e| VMError::new("read", e.to_string()))
             .unwrap();
         reader_vm.heap_sticky(exp);
-
         let result = load_one_expression(reader_vm, exp, "", None);
-
         reader_vm.heap_unsticky(exp);
-        let (chunk, _new_doc_string) = result.unwrap();
-        last = reader_vm.execute(chunk)?;
+
+        let (chunk, _) = result?;
+        last = exec_unrooted_chunk(reader_vm, chunk)?;
     }
     Ok(last)
 }
@@ -90,6 +102,7 @@ pub fn load_internal(vm: &mut SloshVm, name: &'static str) -> VMResult<Value> {
             Ok(file) => Reader::from_file(file, vm, name, 1, 0),
             Err(e) => match name {
                 "core.slosh" => Reader::from_static_string(CORE_LISP, vm, name, 1, 0),
+                "iterator.slosh" => Reader::from_static_string(ITER_LISP, vm, name, 1, 0),
                 "sh-color.slosh" => Reader::from_static_string(COLORS_LISP, vm, name, 1, 0),
                 "init.slosh" => Reader::from_static_string(SLSHRC, vm, name, 1, 0),
                 _ => {
@@ -99,6 +112,7 @@ pub fn load_internal(vm: &mut SloshVm, name: &'static str) -> VMResult<Value> {
         },
         Err(e) => match name {
             "core.slosh" => Reader::from_static_string(CORE_LISP, vm, name, 1, 0),
+            "iterator.slosh" => Reader::from_static_string(ITER_LISP, vm, name, 1, 0),
             "sh-color.slosh" => Reader::from_static_string(COLORS_LISP, vm, name, 1, 0),
             "init.slosh" => Reader::from_static_string(SLSHRC, vm, name, 1, 0),
             _ => {
@@ -119,7 +133,7 @@ pub fn load_internal(vm: &mut SloshVm, name: &'static str) -> VMResult<Value> {
         reader_vm.heap_unsticky(exp);
         let (chunk, new_doc_string) = result?;
         doc_string = new_doc_string;
-        last = reader_vm.execute(chunk)?;
+        last = exec_unrooted_chunk(reader_vm, chunk)?;
     }
     Ok(last)
 }
@@ -565,7 +579,7 @@ Example:
         (set! tst-file (fopen tmp :read))
         (test::assert-equal '(1 2 3) (read tst-file))
         (test::assert-equal '(x y z) (read tst-file))
-        (test::assert-error (read test-file))
+        (test::assert-error (read tst-file))
         (fclose tst-file)
         (set! tst-file (fopen tmp :read))
         (test::assert-equal '(1 2 3) (read tst-file :done))

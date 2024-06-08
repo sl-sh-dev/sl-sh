@@ -143,6 +143,22 @@ True if the to-test can be called as the first argument in an expression.
                                              (identical? t :Pair)))))
 
 #%
+Usage: (io? expression)
+
+True if the expression is an IO object (file), false otherwise.
+
+Section: type
+
+Example:
+(def iotst (fopen "/tmp/iotst" :create))
+(test::assert-true (io? iotst))
+(test::assert-false (io? 1))
+(test::assert-false (io? '(1 2 3)))
+(test::assert-false (io? (list)))
+%#
+(def io? (fn (v) (identical? (type v) :Io)))
+
+#%
 Usage: (defmacro name doc_string? argument_list body)
 
 Create a macro and bind it to a symbol in the current scope.
@@ -592,14 +608,15 @@ Asserts the two values are identical.
 Section: test
 %#
 (defmacro assert-equal (expected-val right-val & body)
-    `(if (= ~expected-val ~right-val)
-        #t
-        (let (ev (type ~expected-val)
-              rv (type ~right-val)
-              assert-err (mk-err :assert (str "Expected: " ~expected-val " " ev ", Got: " ~right-val " " rv "." ~@body)))
-        (do
-            (prn assert-err)
-            (err assert-err)))))
+    `(let (expected-val ~expected-val, right-val ~right-val) ; make sure to eval expressions only once.
+        (if (= expected-val right-val)
+            #t
+            (let (ev (type expected-val)
+                  rv (type right-val)
+                  assert-err (mk-err :assert (str "Expected: " expected-val " " ev ", Got: " right-val " " rv "." ~@body)))
+                (do
+                    (prn assert-err)
+                    (err assert-err))))))
 
 #%
 Asserts the two values are identical.
@@ -614,14 +631,15 @@ Asserts the two values are not identical.
 Section: test
 %#
 (defmacro assert-not-equal (expected-val right-val & body)
-    `(if (not (= ~expected-val ~right-val))
-        #t
-        (let (ev (type ~expected-val)
-              rv (type ~right-val)
-              assert-err (mk-err :assert (str "Did not expect: " ~expected-val " " ev ", but got a matching: " ~right-val " " rv "." ~@body)))
-        (do
-            (prn assert-err)
-            (err assert-err)))))
+    `(let (expected-val ~expected-val, right-val ~right-val) ; make sure to eval expressions only once.
+        (if (not (= expected-val right-val))
+            #t
+            (let (ev (type expected-val)
+                  rv (type right-val)
+                  assert-err (mk-err :assert (str "Did not expect: " expected-val " " ev ", but got a matching: " right-val " " rv "." ~@body)))
+                (do
+                    (prn assert-err)
+                    (err assert-err))))))
 
 #%
 Asserts the two values are not identical.
@@ -664,11 +682,13 @@ Asserts the value is an error
 Section: test
 %#
 (defmacro assert-error (val & body)
-(if `(err? ~val)
-    #t
-    (mk-err
-        :assert
-        `(str "Expected error got: " ~val "." ~@body))))
+    `(let (val (get-error ~val))
+        (if (not (= (car val) :ok))
+            #t
+            (let (assert-err (mk-err :assert (str "Expected error got: " (cdr val) "." ~@body)))
+                (do
+                    (prn assert-err)
+                    (err assert-err))))))
 
 #%
 Asserts the value is an error
@@ -685,8 +705,7 @@ Section: test
 Example:
 (test::assert-error-msg (err "error thrown") :error "error thrown")
 %#
-(defmacro assert-error-msg
-  (form key msg)
+(defmacro assert-error-msg (form key msg)
     `((fn (ret) (test::assert-true (and (= ~key (car ret)) (= ~msg (cdr ret)))
          (str ". Expected \n" ~key ", [" ~msg "]\n => Test returned:\n" (car ret) ", [" (cdr ret) "]")))
         (get-error ~form)))
@@ -890,3 +909,5 @@ Example:
  %#
   (defmacro substitute (lst old-item new-item & mods)
        `(nsubstitute! (to-list ~lst) ~old-item ~new-item ~@mods))
+
+(load "iterator.slosh")
