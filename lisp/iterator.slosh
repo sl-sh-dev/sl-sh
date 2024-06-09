@@ -246,8 +246,35 @@ Example:
     (mk-iter (if (< start end) (let (tmp start) (inc! start) tmp) :*iter-empty*)))
 
 #%
-Loops over each element in an iterator.  Will call iter on the input object.
-bind is bound to the current element of items and is accesible
+Iterator that wraps an iterator and generates pairs oF current index and value.
+Index is 0 based by default, takes an optional second parameter with the start
+index.
+
+Section: iterator
+
+Example:
+(let (test-iter (enumerate (vec-iter [:a :b :c])))
+    (let ([i v] (test-iter)) (assert-equal 0 i) (assert-equal :a v))
+    (let ([i v] (test-iter)) (assert-equal 1 i) (assert-equal :b v))
+    (let ([i v] (test-iter)) (assert-equal 2 i) (assert-equal :c v))
+    (assert-equal :*iter-empty* (test-iter)))
+(let (test-iter (enumerate (vec-iter [:a :b :c]) 5))
+    (let ([i v] (test-iter)) (assert-equal 5 i) (assert-equal :a v))
+    (let ([i v] (test-iter)) (assert-equal 6 i) (assert-equal :b v))
+    (let ([i v] (test-iter)) (assert-equal 7 i) (assert-equal :c v))
+    (assert-equal :*iter-empty* (test-iter)))
+%#
+(defn enumerate (iter % start := 0)
+    (let (idx start)
+    (mk-iter
+        (let (val (iter))
+            (if (identical? val :*iter-empty*)
+                :*iter-empty*
+                (let (tidx idx) (inc! idx)(cons tidx val)))))))
+
+#%
+Loops over each element in an iterator.
+The bind parameter is bound to the current element of items and is accesible
 in body. Body is evaluated a number of times equal to the items in the iterator.
 
 Section: iterator
@@ -256,11 +283,16 @@ Example:
 (let (i 0)
     (for x in (range 0 11) (set! i (+ 1 i)))
     (assert-equal 11 i))
+(let (v [:a :b :c], iter (enumerate (vec-iter v)))
+    (for [idx, val] in iter (assert-equal v.~idx val)))
 %#
 (defmacro for (bind in items & body)
     (if (not (= in 'in)) (err "Invalid for: (for [i] in [iterator] (body))"))
-    (let (i-name (gensym))
-    `(let-while (~i-name ~items)(~bind (~i-name)) (not (identical? ~bind :*iter-empty*)) ~@body)))
+    (let (i-name (gensym), actual-bind (gensym))
+    `(let-while (~i-name ~items)(~actual-bind (~i-name))
+                (not (identical? ~actual-bind :*iter-empty*))
+        ; This let allows destructure bindings to work correctly (combined with actual-bind).
+        (let (~bind ~actual-bind) ~@body))))
 
 #%
 Iterator that applies a lambda to each element of another iterator- is lazy.
@@ -277,3 +309,42 @@ Example:
 (defn map (i lambda)
     (mk-iter (let (val (i)) (if (identical? val :*iter-empty*) :*iter-empty* (lambda val)))))
 
+#%
+Returns a filter-iter around iter.
+Iterator that applies a lambda to each element to determine if is returned- is lazy.
+
+Section: iterator
+
+Example:
+(let (test-iter (filter (vec-iter [1 2 3]) (fn (x) (not (= x 2)))))
+    (assert-equal 1 (test-iter))
+    (assert-equal 3 (test-iter))
+    (assert-equal :*iter-empty* (test-iter)))
+%#
+(defn filter (iter lambda)
+    (mk-iter (let (val (iter)) (while (and (not (identical? val :*iter-empty*))(not (lambda val))) (set! val (iter))) val)))
+
+
+#%
+reduce is used to amalgamate an iterator and an intitial value,
+according to the reducing function provided. The reducing-fcn should be a function
+of two arguments. In the first iteration of reduce, the init-val will be used as
+the first argument to the reducing-fcn and (iter) will be used as the
+second argument. For all subsequent iterations, The result from the previous
+application of the reducing-fcn will be used as the first argument to the
+reducing-fcn and the second argument will be the next item in the collection
+when the collection is empty reduce will return the amalgamated result.
+
+Section: iterator
+
+Example:
+
+(assert-true (= 15 (reduce (vec-iter [1 2 3 4 5]) 0 +)))
+(assert-true (= 16 (reduce (vec-iter [1 2 3 4 5]) 1 +)))
+(assert-true (= \"one hoopy frood\" (reduce (vec-iter ["one " "hoopy " "frood"]) "" str)))
+%#
+(defn reduce (iter acc reducing-fn)
+    ; Use apply so we can seamlessly handle compiled forms (like +, -, etc).
+    ; Currently they won;t work without apply if passed in as the reducing-fn.
+    (for val in iter (set! acc (apply reducing-fn acc val nil)))
+    acc)
