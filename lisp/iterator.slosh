@@ -345,6 +345,6 @@ Example:
 %#
 (defn reduce (iter acc reducing-fn)
     ; Use apply so we can seamlessly handle compiled forms (like +, -, etc).
-    ; Currently they won;t work without apply if passed in as the reducing-fn.
+    ; Currently they won't work without apply if passed in as the reducing-fn.
     (for val in iter (set! acc (apply reducing-fn acc val nil)))
     acc)
