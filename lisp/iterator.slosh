@@ -246,7 +246,7 @@ Example:
     (mk-iter (if (< start end) (let (tmp start) (inc! start) tmp) :*iter-empty*)))
 
 #%
-Iterator that wraps an iterator and generates pairs oF current index and value.
+Iterator that wraps an iterator and generates pairs of current index and value.
 Index is 0 based by default, takes an optional second parameter with the start
 index.
 
