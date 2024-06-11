@@ -1074,6 +1074,10 @@ impl<ENV> GVm<ENV> {
                             set_register!(self, dest as usize, car);
                         }
                         Value::Nil => set_register!(self, dest as usize, Value::Nil),
+                        Value::Error(h) => {
+                            let err = self.get_error(h);
+                            set_register!(self, dest as usize, Value::Keyword(err.keyword));
+                        }
                         _ => {
                             return Err((
                                 VMError::new_vm(format!(
@@ -1094,6 +1098,10 @@ impl<ENV> GVm<ENV> {
                             set_register!(self, dest as usize, cdr);
                         }
                         Value::Nil => set_register!(self, dest as usize, Value::Nil),
+                        Value::Error(h) => {
+                            let err = self.get_error(h);
+                            set_register!(self, dest as usize, err.data);
+                        }
                         _ => return Err((VMError::new_vm("CDR: Not a pair/conscell."), chunk)),
                     }
                 }
