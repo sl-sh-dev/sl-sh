@@ -3,8 +3,27 @@
 True if the expression is nil, false otherwise
 
 Section: type
+
+Example:
+(test::assert-true (nil? ()))
+(test::assert-true (nil? '()))
+(test::assert-true (nil? nil))
+(test::assert-true (nil? (list)))
+(test::assert-false (nil? #f))
 %#
 (def nil? (fn (v) (identical? (type v) :Nil)))
+
+#%
+
+True if the expression is an error, false otherwise
+
+Section: type
+
+Example:
+(test::assert-true (err? (mk-err :arr "test")))
+(test::assert-false (err? nil))
+%#
+(def err? (fn (v) (identical? (type v) :Error)))
 
 #%
 Usage: (pair? expression)
@@ -190,19 +209,19 @@ the pair.  Always returns a pair with the first value either being :ok or :error
 Section: core
 
 Example:
-(def get-error-t1 (get-error (err (mk-err :string (str "Some Error")))))
-(test::assert-equal :error (car get-error-t1))
-(test::assert-equal "error [string]: \\"Some Error\\"" (str (cdr get-error-t1)))
-(test::assert-equal '(:ok . \"Some String\") (get-error \"Some String\"))
-(test::assert-equal '(:ok . \"Some Other String\") (get-error (def test-get-error \"Some \") (str test-get-error \"Other String\")))
+(let (get-error-t1 (get-error (err (mk-err :string (str "Some Error")))))
+    (test::assert-equal :error (car get-error-t1))
+    (test::assert-equal "error [string]: \\"Some Error\\"" (str (cdr get-error-t1))))
+(test::assert-equal "Some String" (get-error \"Some String\"))
+(test::assert-equal "Some Other String" (get-error (let (test-get-error \"Some \") (str test-get-error \"Other String\"))))
 %#
 (defmacro get-error (& body)
     (let (old-error (gensym))
     `(let (~old-error (on-error nil))
         (defer (on-error ~old-error))
         (call/cc (fn (k)
-                     (on-error (fn (key val) (k (cons key val))))
-                     (cons :ok (do ~@body)))))))
+                     (on-error (fn (key val) (k (mk-err key val))))
+                     ~@body)))))
 
 
 (defmacro block (& body)
@@ -683,9 +702,9 @@ Section: test
 %#
 (defmacro assert-error (val & body)
     `(let (val (get-error ~val))
-        (if (not (= (car val) :ok))
+        (if (err? val)
             #t
-            (let (assert-err (mk-err :assert (str "Expected error got: " (cdr val) "." ~@body)))
+            (let (assert-err (mk-err :assert (str "Expected error got: " val "." ~@body)))
                 (do
                     (prn assert-err)
                     (err assert-err))))))
@@ -706,7 +725,7 @@ Example:
 (test::assert-error-msg (err "error thrown") :error "error thrown")
 %#
 (defmacro assert-error-msg (form key msg)
-    `((fn (ret) (test::assert-true (and (= ~key (car ret)) (= ~msg (cdr ret)))
+    `((fn (ret) (test::assert-true (and (err? ret) (= ~key (car ret)) (= ~msg (cdr ret)))
          (str ". Expected \n" ~key ", [" ~msg "]\n => Test returned:\n" (car ret) ", [" (cdr ret) "]")))
         (get-error ~form)))
 
