@@ -1,0 +1,1 @@
+cargo:rustc-env=VERSION_STRING=shell 0.1.0 (master:44beebb9, debug build, linux [x86_64], Jun 13 2024, 03:35:21 UTC [rustc 1.78.0 (9b00956e5 2024-04-29)])

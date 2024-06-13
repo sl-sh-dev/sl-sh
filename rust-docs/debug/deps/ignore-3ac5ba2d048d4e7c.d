@@ -1,0 +1,12 @@
+/home/runner/work/sl-sh/sl-sh/doc/src/rust-docs/debug/deps/libignore-3ac5ba2d048d4e7c.rmeta: /home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ignore-0.4.22/src/lib.rs /home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ignore-0.4.22/src/default_types.rs /home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ignore-0.4.22/src/dir.rs /home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ignore-0.4.22/src/gitignore.rs /home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ignore-0.4.22/src/overrides.rs /home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ignore-0.4.22/src/pathutil.rs /home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ignore-0.4.22/src/types.rs /home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ignore-0.4.22/src/walk.rs
+
+/home/runner/work/sl-sh/sl-sh/doc/src/rust-docs/debug/deps/ignore-3ac5ba2d048d4e7c.d: /home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ignore-0.4.22/src/lib.rs /home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ignore-0.4.22/src/default_types.rs /home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ignore-0.4.22/src/dir.rs /home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ignore-0.4.22/src/gitignore.rs /home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ignore-0.4.22/src/overrides.rs /home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ignore-0.4.22/src/pathutil.rs /home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ignore-0.4.22/src/types.rs /home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ignore-0.4.22/src/walk.rs
+
+/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ignore-0.4.22/src/lib.rs:
+/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ignore-0.4.22/src/default_types.rs:
+/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ignore-0.4.22/src/dir.rs:
+/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ignore-0.4.22/src/gitignore.rs:
+/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ignore-0.4.22/src/overrides.rs:
+/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ignore-0.4.22/src/pathutil.rs:
+/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ignore-0.4.22/src/types.rs:
+/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ignore-0.4.22/src/walk.rs:
