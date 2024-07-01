@@ -8,8 +8,8 @@ title = "Slosh Documentation"
 #[preprocessor.slosh-eval]
 #after = ["links"]
 
-[preprocessor.nop]
+[preprocessor.slosh]
 after = ["links"]
 
-[nop]
+[slosh]
 blow-up = "blow-up"

@@ -4,7 +4,7 @@ extern crate pulldown_cmark_to_cmark;
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 use pulldown_cmark_to_cmark::cmark;
 
-use crate::nop_lib::Nop;
+use crate::slosh_lib::ExecuteAndPrintSloshCode;
 use anyhow::Context;
 use clap::{Arg, ArgMatches, Command};
 use mdbook::book::{Book, BookItem};
@@ -15,8 +15,8 @@ use std::io;
 use std::process;
 
 pub fn make_app() -> Command {
-    Command::new("mdbook-nop")
-        .about("A mdbook preprocessor which does precisely nothing")
+    Command::new("mdbook-slosh-executor")
+        .about("A mdbook preprocessor which converts codeblocks demarcated as `slosh` the code will be evaluated and results printed.")
         .subcommand(
             Command::new("supports")
                 .arg(Arg::new("renderer").required(true))
@@ -28,8 +28,7 @@ fn main() {
     env_logger::init();
     let matches = make_app().get_matches();
 
-    // Users will want to construct their own preprocessor here
-    let preprocessor = Nop::new();
+    let preprocessor = ExecuteAndPrintSloshCode::new();
 
     if let Some(sub_args) = matches.subcommand_matches("supports") {
         handle_supports(&preprocessor, sub_args);
@@ -75,31 +74,31 @@ fn handle_supports(pre: &dyn Preprocessor, sub_args: &ArgMatches) -> ! {
     }
 }
 
-/// The actual implementation of the `Nop` preprocessor. This would usually go
+/// The actual implementation of the [`ExecuteAndPrintSloshCode`] preprocessor. This would usually go
 /// in your main `lib.rs` file.
-mod nop_lib {
+mod slosh_lib {
     use super::*;
     use pulldown_cmark::CodeBlockKind;
 
     /// A no-op preprocessor.
-    pub struct Nop;
+    pub struct ExecuteAndPrintSloshCode;
 
-    impl Nop {
-        pub fn new() -> Nop {
-            Nop
+    impl ExecuteAndPrintSloshCode {
+        pub fn new() -> ExecuteAndPrintSloshCode {
+            ExecuteAndPrintSloshCode
         }
     }
 
-    impl Preprocessor for Nop {
+    impl Preprocessor for ExecuteAndPrintSloshCode {
         fn name(&self) -> &str {
-            "nop-preprocessor"
+            "slosh-preprocessor"
         }
 
         fn run(&self, ctx: &PreprocessorContext, mut book: Book) -> Result<Book, Error> {
             // In testing we want to tell the preprocessor to blow up by setting a
             // particular config value
-            if let Some(nop_cfg) = ctx.config.get_preprocessor(self.name()) {
-                if nop_cfg.contains_key("blow-up") {
+            if let Some(slosh_cfg) = ctx.config.get_preprocessor(self.name()) {
+                if slosh_cfg.contains_key("blow-up") {
                     anyhow::bail!("Boom!!1!");
                 }
             }
@@ -155,7 +154,7 @@ mod nop_lib {
         use super::*;
 
         #[test]
-        fn nop_preprocessor_run() {
+        fn slosh_preprocessor_run() {
             let input_json = r##"[
                 {
                     "root": "/path/to/book",
@@ -168,7 +167,7 @@ mod nop_lib {
                             "title": "TITLE"
                         },
                         "preprocessor": {
-                            "nop": {}
+                            "slosh": {}
                         }
                     },
                     "renderer": "html",
@@ -195,10 +194,10 @@ mod nop_lib {
 
             let (ctx, book) = mdbook::preprocess::CmdPreprocessor::parse_input(input_json).unwrap();
             let expected_book = book.clone();
-            let result = Nop::new().run(&ctx, book);
+            let result = ExecuteAndPrintSloshCode::new().run(&ctx, book);
             assert!(result.is_ok());
 
-            // The nop-preprocessor should not have made any changes to the book content.
+            // The slosh-preprocessor should not have made any changes to the book content.
             let actual_book = result.unwrap();
             assert_eq!(actual_book, expected_book);
         }

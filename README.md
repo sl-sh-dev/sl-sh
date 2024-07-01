@@ -206,14 +206,10 @@ These forms (written in Rust but callable from Lisp) are supported.
 The [documentation site](https://sl-sh-dev.github.io/sl-sh/) is served from the `doc` directory
 based on the `doc/mk-site.sh` script referenced in the github action `.github/workflows/gh_pages.yml`.
 
-To create new documentation files add them in markdown format to the `doc/src/` directory and
-then reference them in `doc/src/SUMMARY.md` when slosh builds the documentation it will create
-an html file in the format specified in the SUMMARY.md table of contents at the provided relative URL.
+Documentation can be built and viewed locally as the documentation site is a static set of html files
+generated from the source code.
 
-For more information about how the docs are generated see [mdBook](https://rust-lang.github.io/mdBook/index.html)
-crate and related documentation.
+All of this is covered in `doc/README.md`
 
 Must be compiled in lisp-test mode for appropriate documenation functions to be present (`cargo build --features list-test`).
 
-
- TODO PC need md files in a specific folder named after a section to be inlined within the section documetnation
