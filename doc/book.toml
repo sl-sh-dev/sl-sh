@@ -4,7 +4,12 @@ language = "en"
 multilingual = false
 src = "src"
 title = "Slosh Documentation"
-slosh-eval-preprocessor = "blow-up"
 
 [preprocessor.slosh-eval]
 after = ["links"]
+
+[preprocessor.slosh]
+after = ["links"]
+
+[slosh]
+blow-up = "blow-up"
