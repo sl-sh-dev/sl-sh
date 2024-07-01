@@ -82,28 +82,34 @@ pub(crate) fn compile_call_reg(
 ) -> VMResult<()> {
     let tail = state.tail && state.defers == 0;
     state.tail = false;
-    let b_reg = if tail {
-        let b_reg = result + cdr.len() + 2;
+    if tail {
+        if result as u16 + 1 != reg {
+            state
+                .chunk
+                .encode2(MOV, result as u16 + 1, reg, env.own_line())?;
+        }
+        // Lie abpout this being a tail call because we can not emit the BMOV yet.
+        compile_params(env, state, cdr, result + 2, false)?;
+        let b_reg = result + cdr.len() + 3;
         if b_reg > state.max_regs {
             state.max_regs = b_reg;
         }
+        if result + 1 != b_reg {
+            state
+                .chunk
+                .encode2(MOV, b_reg as u16, result as u16 + 1, env.own_line())?;
+        }
         state
             .chunk
-            .encode2(MOV, b_reg as u16, reg, env.own_line())?;
-        b_reg
+            .encode3(BMOV, 1, result as u16 + 2, cdr.len() as u16, env.own_line())?;
+        state
+            .chunk
+            .encode2(TCALL, b_reg as u16, cdr.len() as u16, env.own_line())?;
     } else {
-        0
-    };
-    compile_params(env, state, cdr, result + 1, tail)?;
-    let line = env.own_line();
-    if tail {
+        compile_params(env, state, cdr, result + 1, tail)?;
         state
             .chunk
-            .encode2(TCALL, b_reg as u16, cdr.len() as u16, line)?;
-    } else {
-        state
-            .chunk
-            .encode3(CALL, reg, cdr.len() as u16, result as u16, line)?;
+            .encode3(CALL, reg, cdr.len() as u16, result as u16, env.own_line())?;
     }
     Ok(())
 }
