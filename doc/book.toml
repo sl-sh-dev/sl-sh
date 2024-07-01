@@ -5,8 +5,8 @@ multilingual = false
 src = "src"
 title = "Slosh Documentation"
 
-#[preprocessor.slosh-eval]
-#after = ["links"]
+[preprocessor.slosh-eval]
+after = ["links"]
 
 [preprocessor.slosh]
 after = ["links"]
