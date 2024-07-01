@@ -428,26 +428,32 @@ impl<ENV> GVm<ENV> {
 
     // Some macro expansions trips this.
     #[allow(clippy::redundant_closure_call)]
-    pub(super) fn exec_loop(&mut self, chunk: Arc<Chunk>) -> Result<(), (VMError, Arc<Chunk>)> {
+    pub(super) fn exec_loop(
+        &mut self,
+        chunk: Arc<Chunk>,
+        skip_init: bool,
+    ) -> Result<(), (VMError, Arc<Chunk>)> {
         let _env: PhantomData<ENV>;
         self.make_registers();
         let mut chunk = chunk;
-        self.ip_ptr = get_code!(chunk);
         let mut wide = false;
-        // Clean up the working regs we are about to use.
-        if chunk.extra_regs > 0 {
-            let regs = unsafe {
-                std::slice::from_raw_parts_mut(
-                    self.stack.add(self.stack_top),
-                    STACK_CAP - self.stack_top,
-                )
-            };
-            for reg in regs
-                .iter_mut()
-                .skip(chunk.input_regs)
-                .take(chunk.extra_regs + 1)
-            {
-                *reg = Value::Undefined;
+        if !skip_init {
+            self.ip_ptr = get_code!(chunk);
+            // Clean up the working regs we are about to use.
+            if chunk.extra_regs > 0 {
+                let regs = unsafe {
+                    std::slice::from_raw_parts_mut(
+                        self.stack.add(self.stack_top),
+                        STACK_CAP - self.stack_top,
+                    )
+                };
+                for reg in regs
+                    .iter_mut()
+                    .skip(chunk.input_regs)
+                    .take(chunk.extra_regs + 1)
+                {
+                    *reg = Value::Undefined;
+                }
             }
         }
         let mut opcode = NOP;

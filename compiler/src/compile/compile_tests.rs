@@ -195,8 +195,8 @@ mod tests {
         (defmacro get-error (& body)
         `(let (old-error (on-error nil))
             (defer (on-error old-error))
-            (call/cc (fn (k) (on-error (fn (key val) (k (cons key val))))
-            (cons :ok (do ~@body))))))"#;
+            (call/cc (fn (k) (on-error (fn (err) (k (cons (car err)(cdr err)))))
+                        (cons :ok (do ~@body))))))"#;
         exec(&mut env, def_macro);
         exec(&mut env, get_error);
 

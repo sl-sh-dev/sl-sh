@@ -220,7 +220,7 @@ Example:
     `(let (~old-error (on-error nil))
         (defer (on-error ~old-error))
         (call/cc (fn (k)
-                     (on-error (fn (key val) (k (mk-err key val))))
+                     (on-error k)
                      ~@body)))))
 
 
