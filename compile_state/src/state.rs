@@ -884,7 +884,6 @@ Example:
 (test::assert-equal "or- done" (or nil nil "or- done"))
 (test::assert-equal 6 (or nil nil (+ 1 2 3)))
 (test::assert-equal 2 (or (/ 10 5) (* 5 2) (+ 1 2 3)))"#),
-            err: add_special(vm, "err", ""),
             len: add_special(
                 vm,
                 "len",
@@ -993,13 +992,84 @@ Example:
 "#),
             call_cc: add_special(vm, "call/cc", ""),
             defer: add_special(vm, "defer", ""),
-            on_error: add_special(vm, "on-error", ""),
+            on_error: add_special(vm, "on-raised-error", r#"Usage: (on-raised-error (fn (error) ...))
+
+Low level (consider this unstable) interface to the raised error machinery.
+Useful for building higher level error handling (get-error for instance).
+It takes either Nil or a callable with one parameter.  That parameter will be
+the error that was raised.  The entire running "chunk" of code will be
+displaced for the installed handler.  Probably best to use this with a
+continuation or a function that ends in a continuation call otherwise it
+may be difficult to reason about...
+
+Will return the previously installed handler or Nil if one is not installed.
+Calling with Nil will return the old handler and clear it (no handler
+installed).
+
+This special form will override breaking into the debugger when an error is
+raised.
+
+Section: core
+
+Example:
+(defmacro get-error-test (& body)
+`(let (old-error (on-raised-error nil))
+    (defer (on-raised-error old-error))
+    (call/cc (fn (k) (on-raised-error (fn (err) (k (cons (car err)(cdr err)))))
+                (cons :ok (do ~@body))))))
+
+(test::assert-equal (cons :ok 6) (get-error-test (let (x 1, y 5) (+ x y))))
+(test::assert-equal '(:test . "error") (get-error-test (let (x 1, y 5) (err :test "error")(+ x y))))
+"#),
             while_: add_special(vm, "while", ""),
             doc_string: add_special(vm, "doc-string", ""),
             get: add_special(vm, "get", ""),
-            mk_err: add_special(vm, "mk-err", ""),
-            is_err: add_special(vm, "err?", ""),
-            is_ok: add_special(vm, "ok?", ""),
+            err: add_special(vm, "err", r#"Usage: (err :keyword value)
+
+Raises an error with keyword and value.  By default this will break into the
+debugger like a runtime error (use get-error to avoid this).
+
+Section: core
+
+Example:
+(let (error (get-error (err :test "Test error")))
+    (test::assert-equal :test (car error))
+    (test::assert-equal "Test error" (cdr error))
+    (test::assert-true (err? error)))
+"#),
+            mk_err: add_special(vm, "mk-err", r#"Usage: (mk-err :keyword value)
+
+Create an error object.  This does not raise the error but merly cretes it.
+Can use car/cdr to extract the keyword and value.
+
+Section: core
+
+Example:
+(let (error (mk-err :test "Test error"))
+    (test::assert-equal :test (car error))
+    (test::assert-equal "Test error" (cdr error))
+    (test::assert-true (err? error)))
+"#),
+            is_err: add_special(vm, "err?", r#"Usage: (err? expression)
+
+True if the expression is an error, false otherwise.
+
+Section: type
+
+Example:
+(test::assert-true (err? (mk-err :arr "test")))
+(test::assert-false (err? nil))
+"#),
+            is_ok: add_special(vm, "ok?", r#"Usage: (ok? expression)
+
+True if the expression is NOT an error, false if it is an error.
+
+Section: type
+
+Example:
+(test::assert-false (ok? (mk-err :arr "test")))
+(test::assert-true (ok? nil))
+"#),
             ret: add_special(vm, "return", ""),
 
             rest: vm.intern_static("&"),

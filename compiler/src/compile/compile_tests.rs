@@ -183,7 +183,7 @@ mod tests {
     }
 
     #[test]
-    fn test_on_error() {
+    fn test_on_raised_error() {
         let mut env = new_slosh_vm();
 
         let def_macro = r#"
@@ -193,9 +193,9 @@ mod tests {
 
         let get_error = r#"
         (defmacro get-error (& body)
-        `(let (old-error (on-error nil))
-            (defer (on-error old-error))
-            (call/cc (fn (k) (on-error (fn (err) (k (cons (car err)(cdr err)))))
+        `(let (old-error (on-raised-error nil))
+            (defer (on-raised-error old-error))
+            (call/cc (fn (k) (on-raised-error (fn (err) (k (cons (car err)(cdr err)))))
                         (cons :ok (do ~@body))))))"#;
         exec(&mut env, def_macro);
         exec(&mut env, get_error);

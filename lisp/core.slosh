@@ -14,18 +14,6 @@ Example:
 (def nil? (fn (v) (identical? (type v) :Nil)))
 
 #%
-
-True if the expression is an error, false otherwise
-
-Section: type
-
-Example:
-(test::assert-true (err? (mk-err :arr "test")))
-(test::assert-false (err? nil))
-%#
-(def err? (fn (v) (identical? (type v) :Error)))
-
-#%
 Usage: (pair? expression)
 
 True if the expression is a pair, false otherwise.
@@ -217,10 +205,10 @@ Example:
 %#
 (defmacro get-error (& body)
     (let (old-error (gensym))
-    `(let (~old-error (on-error nil))
-        (defer (on-error ~old-error))
+    `(let (~old-error (on-raised-error nil))
+        (defer (on-raised-error ~old-error))
         (call/cc (fn (k)
-                     (on-error k)
+                     (on-raised-error k)
                      ~@body)))))
 
 
