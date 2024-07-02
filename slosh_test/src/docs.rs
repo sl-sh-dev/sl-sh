@@ -48,16 +48,11 @@ lazy_static! {
         exemption_set.insert("list-append");
         exemption_set.insert("identical?");
         exemption_set.insert("type");
-        exemption_set.insert("err");
         exemption_set.insert("call/cc");
         exemption_set.insert("defer");
-        exemption_set.insert("on-error");
         exemption_set.insert("while");
         exemption_set.insert("doc-string");
         exemption_set.insert("get");
-        exemption_set.insert("mk-err");
-        exemption_set.insert("err?");
-        exemption_set.insert("ok?");
         exemption_set.insert("return");
         exemption_set.insert("*euid*");
         exemption_set.insert("*last-status*");

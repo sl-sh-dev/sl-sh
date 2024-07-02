@@ -139,7 +139,10 @@ impl<ENV> GVm<ENV> {
         match reg {
             Value::Byte(b) => Ok(b as i64),
             Value::Int(i) => Ok(from_i56(&i)),
-            _ => Err(VMError::new_value(format!("Not an integer: {:?}", reg))),
+            _ => Err(VMError::new_value(format!(
+                "Not an integer: {}",
+                reg.display_value(self)
+            ))),
         }
     }
 
@@ -526,8 +529,10 @@ impl<ENV> GVm<ENV> {
 
         let mut done = false;
         let mut result = Ok(());
+        let mut skip_init = false;
         while !done {
-            result = if let Err((e, echunk)) = self.exec_loop(chunk.clone()) {
+            result = if let Err((e, echunk)) = self.exec_loop(chunk.clone(), skip_init) {
+                skip_init = false;
                 if self.err_frame.is_none() {
                     self.err_frame = Some(CallFrame {
                         id: 0,
@@ -543,15 +548,20 @@ impl<ENV> GVm<ENV> {
                 }
                 if let Some(on_error) = self.on_error {
                     self.make_registers();
-                    *self.register_mut(1) = Value::Keyword(self.intern(e.key));
-                    *self.register_mut(2) = match &e.obj {
+                    let keyword = self.intern(e.key);
+                    let data = match &e.obj {
                         VMErrorObj::Message(msg) => Value::StringConst(self.intern(msg)),
                         VMErrorObj::Object(v) => *v,
                     };
+                    *self.register_mut(1) = self.alloc_error(crate::Error { keyword, data });
                     self.on_error = None;
-                    match self.make_call(on_error, chunk.clone(), 0, 2, true) {
+                    match self.make_call(on_error, chunk.clone(), 0, 1, true) {
                         Ok(c) => {
                             chunk = c;
+                            if let Value::Continuation(_) = on_error {
+                                // Make sure to leave the new stack and ip_ptr alone when calling exec_loop().
+                                skip_init = true;
+                            }
                             Err(e)
                         }
                         Err((ne, _c)) => {

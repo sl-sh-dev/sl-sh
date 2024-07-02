@@ -217,8 +217,6 @@ Section: shell
                  out))
 
     (defn __line_handler (line) (line-handler line))
-      ;(let (result (get-error (line-handler line)))
-      ;  (if (identical? :error (car result)) (do (prn result) line) (cdr result))))
 
     nil))
 

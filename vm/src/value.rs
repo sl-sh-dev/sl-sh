@@ -256,11 +256,14 @@ impl Value {
         }
     }
 
-    pub fn get_int<ENV>(&self, _vm: &GVm<ENV>) -> VMResult<i64> {
+    pub fn get_int<ENV>(&self, vm: &GVm<ENV>) -> VMResult<i64> {
         match &self {
             Value::Byte(b) => Ok(*b as i64),
             Value::Int(i) => Ok(from_i56(i)),
-            _ => Err(VMError::new_value(format!("Not an integer: {self:?}"))),
+            _ => Err(VMError::new_value(format!(
+                "Not an integer: {}",
+                self.display_value(vm)
+            ))),
         }
     }
 

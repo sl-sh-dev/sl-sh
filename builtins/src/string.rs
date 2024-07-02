@@ -329,11 +329,7 @@ fn char_whitespace(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
 /// (test::assert-equal "some" (str-sub "stringxxxyyyxxxsome" 15))
 #[sl_sh_fn(fn_name = "str-sub")]
 fn str_sub(s: &str, start: usize, length: Option<usize>) -> VMResult<String> {
-    let len = if let Some(length) = length {
-        length
-    } else {
-        0usize
-    };
+    let len = length.unwrap_or_default();
     if (start + len) <= s.len() {
         if len > 0 {
             Ok(s[start..(start + len)].to_string())
