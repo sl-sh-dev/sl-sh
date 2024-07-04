@@ -1,0 +1,75 @@
+(ns test)
+
+#%
+Asserts the two values are identical.
+
+Section: test
+%#
+(defmacro assert-equal (expected-val right-val & body)
+    `(let (expected-val ~expected-val, right-val ~right-val) ; make sure to eval expressions only once.
+        (if (= expected-val right-val)
+            #t
+            (let (ev (type expected-val)
+                  rv (type right-val)
+                  assert-err (mk-err :assert (str "Expected: " expected-val " " ev ", Got: " right-val " " rv "." ~@body)))
+                (do
+                    (prn assert-err)
+                    (err assert-err))))))
+
+#%
+Asserts the two values are not identical.
+
+Section: test
+%#
+(defmacro assert-not-equal (expected-val right-val & body)
+    `(let (expected-val ~expected-val, right-val ~right-val) ; make sure to eval expressions only once.
+        (if (not (= expected-val right-val))
+            #t
+            (let (ev (type expected-val)
+                  rv (type right-val)
+                  assert-err (mk-err :assert (str "Did not expect: " expected-val " " ev ", but got a matching: " right-val " " rv "." ~@body)))
+                (do
+                    (prn assert-err)
+                    (err assert-err))))))
+
+#%
+Asserts the value is true.
+
+Section: test
+%#
+(defmacro assert-true (val & body) `(test::assert-equal #t ~val ~@body))
+
+#%
+Asserts the value is false
+
+Section: test
+%#
+(defmacro assert-false (val & body) `(test::assert-equal #f ~val ~@body))
+
+#%
+Asserts the value is an error
+
+Section: test
+%#
+(defmacro assert-error (val & body)
+    `(let (val (get-error ~val))
+        (if (err? val)
+            #t
+            (let (assert-err (mk-err :assert (str "Expected error got: " val "." ~@body)))
+                (do
+                    (prn assert-err)
+                    (err assert-err))))))
+
+#%
+Test asserts an error is thrown with a given key and message.
+
+Section: test
+
+Example:
+(test::assert-error-msg (err "error thrown") :error "error thrown")
+%#
+(defmacro assert-error-msg (form key msg)
+    `((fn (ret) (test::assert-true (and (err? ret) (= ~key (car ret)) (= ~msg (cdr ret)))
+         (str ". Expected \n" ~key ", [" ~msg "]\n => Test returned:\n" (car ret) ", [" (cdr ret) "]")))
+        (get-error ~form)))
+

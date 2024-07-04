@@ -1,5 +1,7 @@
 #!/usr/bin/env slosh
 
+(import test)
+
 (assert-true (= 1 1))
 (assert-false (= 2 2.0))
 (assert-true (not= 2 2.0))

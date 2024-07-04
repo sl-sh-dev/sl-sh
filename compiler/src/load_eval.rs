@@ -1,6 +1,6 @@
 use crate::pass1::pass1;
 use crate::{compile, ReadError, Reader};
-use compile_state::state::{CompileEnvironment, CompileState, SloshVm, SloshVmTrait};
+use compile_state::state::{CompileEnvironment, CompileState, Namespace, SloshVm, SloshVmTrait};
 use slvm::{CallFuncSig, Chunk, VMError, VMResult, Value, RET};
 use std::borrow::Cow;
 use std::ffi::OsString;
@@ -20,6 +20,7 @@ const fn from_utf8(bytes: &[u8]) -> &str {
 
 const CORE_LISP: &str = from_utf8(include_bytes!("../../lisp/core.slosh"));
 const ITER_LISP: &str = from_utf8(include_bytes!("../../lisp/iterator.slosh"));
+const TEST_LISP: &str = from_utf8(include_bytes!("../../lisp/test.slosh"));
 const COLORS_LISP: &str = from_utf8(include_bytes!("../../lisp/sh-color.slosh"));
 pub const SLSHRC: &str = from_utf8(include_bytes!("../../init.slosh"));
 
@@ -103,6 +104,7 @@ pub fn load_internal(vm: &mut SloshVm, name: &'static str) -> VMResult<Value> {
             Err(e) => match name {
                 "core.slosh" => Reader::from_static_string(CORE_LISP, vm, name, 1, 0),
                 "iterator.slosh" => Reader::from_static_string(ITER_LISP, vm, name, 1, 0),
+                "test.slosh" => Reader::from_static_string(TEST_LISP, vm, name, 1, 0),
                 "sh-color.slosh" => Reader::from_static_string(COLORS_LISP, vm, name, 1, 0),
                 "init.slosh" => Reader::from_static_string(SLSHRC, vm, name, 1, 0),
                 _ => {
@@ -113,6 +115,7 @@ pub fn load_internal(vm: &mut SloshVm, name: &'static str) -> VMResult<Value> {
         Err(e) => match name {
             "core.slosh" => Reader::from_static_string(CORE_LISP, vm, name, 1, 0),
             "iterator.slosh" => Reader::from_static_string(ITER_LISP, vm, name, 1, 0),
+            "test.slosh" => Reader::from_static_string(TEST_LISP, vm, name, 1, 0),
             "sh-color.slosh" => Reader::from_static_string(COLORS_LISP, vm, name, 1, 0),
             "init.slosh" => Reader::from_static_string(SLSHRC, vm, name, 1, 0),
             _ => {
@@ -252,7 +255,12 @@ fn load(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     };
     let olf_line_num = vm.line_num();
     vm.set_line_num(1);
+    let old_ns = vm.env().get_namespace().clone();
+    vm.env_mut().set_namespace(Namespace::default());
+    let i = vm.intern("ROOT");
+    vm.set_named_global("*ns*", Value::Symbol(i));
     let r = load_internal(vm, name);
+    vm.env_mut().set_namespace(old_ns);
     vm.set_line_num(olf_line_num);
     r
 }

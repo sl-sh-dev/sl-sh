@@ -364,6 +364,8 @@ pub fn set_builtins(env: &mut SloshVm) {
     env.set_named_global("*int-bits*", (INT_BITS as i64).into());
     env.set_named_global("*int-max*", INT_MAX.into());
     env.set_named_global("*int-min*", INT_MIN.into());
+    let i = env.intern("ROOT");
+    env.set_named_global("*ns*", Value::Symbol(i));
 }
 
 pub fn new_slosh_vm_with_builtins() -> SloshVm {

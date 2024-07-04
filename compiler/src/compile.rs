@@ -1,4 +1,4 @@
-use compile_state::state::{CompileState, SloshVm, SloshVmTrait};
+use compile_state::state::{CompileState, Namespace, SloshVm, SloshVmTrait};
 use slvm::opcodes::*;
 use slvm::{from_i56, Handle, VMError, VMResult, Value};
 
@@ -315,6 +315,47 @@ fn compile_special(
                 } else {
                     compile(env, state, cdr[0], result)?;
                     state.chunk.encode1(SRET, result as u16, env.own_line())?;
+                }
+            }
+            Value::Special(i) if i == env.specials().ns => {
+                if cdr.len() != 1 {
+                    return Err(VMError::new_compile("Requires one argument."));
+                } else {
+                    match cdr[0] {
+                        Value::Nil => {
+                            env.env_mut().set_namespace(Namespace::default());
+                            let i = env.intern("ROOT");
+                            env.set_named_global("*ns*", Value::Symbol(i));
+                        }
+                        Value::Symbol(i) => {
+                            let sym = env.get_interned(i);
+                            env.env_mut()
+                                .set_namespace(Namespace::new_with_name(sym.to_string()));
+                            env.set_named_global("*ns*", Value::Symbol(i));
+                        }
+                        _ => return Err(VMError::new_compile("Requires a Symbol or Nil.")),
+                    }
+                }
+            }
+            Value::Special(i) if i == env.specials().import => {
+                let mut cdr_i = cdr.iter();
+                let as_i = env.intern_static("as");
+                match (cdr_i.next(), cdr_i.next(), cdr_i.next(), cdr_i.next()) {
+                    (Some(Value::Symbol(i)), None, None, None) => {
+                        let ns = env.get_interned(*i).to_string();
+                        env.env_mut().add_ns_import(ns, None);
+                    }
+                    (
+                        Some(Value::Symbol(i)),
+                        Some(Value::Keyword(k)),
+                        Some(Value::Symbol(a)),
+                        None,
+                    ) if *k == as_i => {
+                        let ns = env.get_interned(*i).to_string();
+                        let alias = env.get_interned(*a).to_string();
+                        env.env_mut().add_ns_import(ns, Some(alias));
+                    }
+                    _ => return Err(VMError::new_compile("Malformed import.")),
                 }
             }
             Value::Special(i) => panic!("Unknown special {} is not special!", env.get_interned(i)),

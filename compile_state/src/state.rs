@@ -201,6 +201,8 @@ pub struct Specials {
     pub is_err: Interned,
     pub is_ok: Interned,
     pub ret: Interned,
+    pub ns: Interned,
+    pub import: Interned,
 
     pub rest: Interned,
     pub optional: Interned,
@@ -690,12 +692,12 @@ Example:
 (loop (idx) (3) (do
     (set! tot (+ tot 1))
     (if (> idx 1) (recur (- idx 1)))))
-(assert-equal 3 tot)
+(test::assert-equal 3 tot)
 (set! tot 0)
 ((fn (idx) (do
     (set! tot (+ tot 1))
     (if (> idx 1) (recur (- idx 1)))))5)
-(assert-equal 5 tot)",
+(test::assert-equal 5 tot)",
             ),
             this_fn: add_special(vm, "this-fn", ""),
             numeq: add_special(vm, "==", r#"Usage: (== val0 ... valN)
@@ -1071,6 +1073,38 @@ Example:
 (test::assert-true (ok? nil))
 "#),
             ret: add_special(vm, "return", ""),
+            ns: add_special(vm, "ns", r#"Usage: (ns namespace)
+
+Changes to namespace.  This will cause all globals defined to have namespace:: prepended.
+This will also clear any existin imports.
+
+Section: core
+
+Example:
+(ns testing)
+(def x #t)
+(test::assert-true x)
+(ns nil)
+(test::assert-true testing::x)
+"#),
+            import: add_special(vm, "import", r#"Usage: (import namespace [:as symbol])
+
+Will import a namespace.  Without an as then all symbols in the namespace will become available in the current
+namespace as if local.  With [:as symbol] then all namespace symbols become available with symbol:: prepended.
+
+Section: core
+
+Example:
+(ns testing)
+(def x #t)
+(test::assert-true x)
+(ns nil)
+(test::assert-true testing::x)
+(import testing)
+(test::assert-true x)
+(import testing :as t)
+(test::assert-true t::x)
+"#),
 
             rest: vm.intern_static("&"),
             optional: vm.intern_static("%"),
@@ -1157,12 +1191,42 @@ impl CompileState {
     }
 }
 
+/// Data for the current namespace
+#[derive(Clone, Debug)]
+pub struct Namespace {
+    name: String,
+    imports: Vec<(String, Option<String>)>,
+}
+
+impl Namespace {
+    pub fn new_with_name(name: String) -> Self {
+        Self {
+            name,
+            imports: vec![],
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+impl Default for Namespace {
+    fn default() -> Self {
+        Self {
+            name: "".to_string(),
+            imports: vec![],
+        }
+    }
+}
+
 pub struct CompileEnvironment {
     use_line: bool,
     line: u32,
     specials: Option<Specials>,
     global_map: HashMap<Interned, usize>,
     gensym_idx: usize,
+    namespace: Namespace,
 }
 
 impl Default for CompileEnvironment {
@@ -1179,6 +1243,10 @@ impl CompileEnvironment {
             specials: None,
             global_map: HashMap::new(),
             gensym_idx: 0,
+            namespace: Namespace {
+                name: "".to_string(),
+                imports: vec![],
+            },
         }
     }
 
@@ -1192,8 +1260,22 @@ impl CompileEnvironment {
         self.line
     }
 
-    pub fn global_defined(&self, i: Interned) -> bool {
-        self.global_map.contains_key(&i)
+    pub fn set_namespace(&mut self, namespace: Namespace) {
+        self.namespace = namespace;
+    }
+
+    pub fn add_ns_import(&mut self, ns: String, alias: Option<String>) {
+        for (ns_name, ns_alias) in self.namespace.imports.iter_mut() {
+            if ns_name == &ns {
+                *ns_alias = alias;
+                return;
+            }
+        }
+        self.namespace.imports.push((ns, alias));
+    }
+
+    pub fn get_namespace(&self) -> &Namespace {
+        &self.namespace
     }
 }
 
@@ -1306,6 +1388,38 @@ impl SloshVmTrait for SloshVm {
     }
 
     fn global_intern_slot(&self, symbol: Interned) -> Option<u32> {
+        fn check_global(vm: &SloshVm, ns: &str, sym: &str) -> Option<u32> {
+            let mut ns = ns.to_string();
+            ns.push_str("::");
+            ns.push_str(sym);
+            if let Some(i) = vm.get_if_interned(&ns) {
+                if let Some(global) = vm.env().global_map.get(&i).copied().map(|i| i as u32) {
+                    return Some(global);
+                }
+            }
+            None
+        }
+
+        let sym = self.get_interned(symbol);
+        if let Some(g) = check_global(self, &self.env().namespace.name, sym) {
+            return Some(g);
+        }
+        for (import, alias) in &self.env().namespace.imports {
+            if let Some(alias) = alias {
+                if sym.starts_with(alias) {
+                    let s = sym.replacen(alias, import, 1);
+                    if let Some(i) = self.get_if_interned(&s) {
+                        if let Some(global) =
+                            self.env().global_map.get(&i).copied().map(|i| i as u32)
+                        {
+                            return Some(global);
+                        }
+                    }
+                }
+            } else if let Some(g) = check_global(self, import, sym) {
+                return Some(g);
+            }
+        }
         self.env()
             .global_map
             .get(&symbol)
