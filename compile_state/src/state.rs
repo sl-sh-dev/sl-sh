@@ -1399,6 +1399,24 @@ impl SloshVmTrait for SloshVm {
             }
             None
         }
+        fn is_alias(alias: &str, sym: &str) -> bool {
+            let mut a_i = alias.chars();
+            let mut s_i = sym.chars().peekable();
+            let mut is_alias = true;
+            while let (Some(ach), Some(sch)) = (a_i.next(), s_i.peek()) {
+                if ach != *sch {
+                    is_alias = false;
+                    break;
+                }
+                s_i.next();
+            }
+            if is_alias {
+                if let (Some(':'), Some(':')) = (s_i.next(), s_i.next()) {
+                    return true;
+                }
+            }
+            false
+        }
 
         let sym = self.get_interned(symbol);
         if let Some(g) = check_global(self, &self.env().namespace.name, sym) {
@@ -1406,7 +1424,7 @@ impl SloshVmTrait for SloshVm {
         }
         for (import, alias) in &self.env().namespace.imports {
             if let Some(alias) = alias {
-                if sym.starts_with(alias) {
+                if is_alias(alias, sym) {
                     let s = sym.replacen(alias, import, 1);
                     if let Some(i) = self.get_if_interned(&s) {
                         if let Some(global) =
