@@ -205,4 +205,13 @@ These forms (written in Rust but callable from Lisp) are supported.
 
 ### Generated documentation
 
-See the `doc` directory README.md for more information on how to modify and generate the documentation.
+The [documentation site](https://sl-sh-dev.github.io/sl-sh/) is served from the `doc` directory
+based on the `doc/mk-site.sh` script referenced in the github action `.github/workflows/gh_pages.yml`.
+
+Documentation can be built and viewed locally as the documentation site is a static set of html files
+generated from the source code.
+
+All of this is covered in `doc/README.md`
+
+Must be compiled in lisp-test mode for appropriate documenation functions to be present (`cargo build --features lisp-test`).
+
