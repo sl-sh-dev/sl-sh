@@ -5,6 +5,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
+default = []
 lisp-test = ["dep:regex", "dep:lazy_static", "dep:mdbook", "dep:env_logger"]
 
 [dependencies]

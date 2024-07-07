@@ -197,12 +197,14 @@ These forms (written in Rust but callable from Lisp) are supported.
 - sl-sh legacy shell: https://github.com/sl-sh-dev/sl-sh/legacy
 
 ### Benchmarking
- - Install [bencher](https://bencher.dev/docs/tutorial/quick-start/)
- - To run benchmarks locally: `cargo bench`
- - To upload benchmarks to bencher.dev: `bencher run "cargo bench"`
- - Consider using iai in cloud: https://bencher.dev/learn/benchmarking/rust/iai/
+
+- Install [bencher](https://bencher.dev/docs/tutorial/quick-start/)
+- To run benchmarks locally: `cargo bench`
+- To upload benchmarks to bencher.dev: `bencher run "cargo bench"`
+- Consider using iai in cloud: https://bencher.dev/learn/benchmarking/rust/iai/
 
 ### Generated documentation
+
 The [documentation site](https://sl-sh-dev.github.io/sl-sh/) is served from the `doc` directory
 based on the `doc/mk-site.sh` script referenced in the github action `.github/workflows/gh_pages.yml`.
 
@@ -211,5 +213,5 @@ generated from the source code.
 
 All of this is covered in `doc/README.md`
 
-Must be compiled in lisp-test mode for appropriate documenation functions to be present (`cargo build --features list-test`).
+Must be compiled in lisp-test mode for appropriate documenation functions to be present (`cargo build --features lisp-test`).
 
