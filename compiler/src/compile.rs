@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use compile_state::state::{CompileState, Namespace, SloshVm, SloshVmTrait};
 use slvm::opcodes::*;
 use slvm::{from_i56, Handle, VMError, VMResult, Value};
@@ -12,6 +14,7 @@ use crate::compile::compile_let::{compile_let, compile_let_while};
 use crate::compile::compile_math::compile_math;
 use crate::compile::compile_seq::{compile_cons, compile_vec};
 use crate::compile::compile_store::{compile_def, compile_set};
+use crate::load_eval::{exec_unrooted_chunk, get_load_name, load_one_expression};
 use crate::pass1::pass1;
 
 mod compile_call;
@@ -322,10 +325,9 @@ fn compile_special(
                     return Err(VMError::new_compile("Requires one argument."));
                 } else {
                     match cdr[0] {
-                        Value::Nil => {
+                        Value::Keyword(i) if i == env.specials().colon => {
                             env.env_mut().set_namespace(Namespace::default());
-                            let i = env.intern("ROOT");
-                            env.set_named_global("*ns*", Value::Symbol(i));
+                            env.set_named_global("*ns*", Value::Symbol(env.specials().root));
                         }
                         Value::Symbol(i) => {
                             let sym = env.get_interned(i);
@@ -333,8 +335,36 @@ fn compile_special(
                                 .set_namespace(Namespace::new_with_name(sym.to_string()));
                             env.set_named_global("*ns*", Value::Symbol(i));
                         }
-                        _ => return Err(VMError::new_compile("Requires a Symbol or Nil.")),
+                        _ => return Err(VMError::new_compile("Requires a Symbol.")),
                     }
+                }
+            }
+            Value::Special(i) if i == env.specials().with_ns => {
+                if cdr.len() < 2 {
+                    return Err(VMError::new_compile("Requires at least two arguments."));
+                } else {
+                    let old_ns = env.env().get_namespace().clone();
+                    match cdr[0] {
+                        Value::Keyword(i) if i == env.specials().colon => {
+                            env.env_mut().set_namespace(Namespace::default());
+                        }
+                        Value::Symbol(i) => {
+                            let sym = env.get_interned(i);
+                            env.env_mut()
+                                .set_namespace(Namespace::new_with_name(sym.to_string()));
+                        }
+                        _ => return Err(VMError::new_compile("Requires a Symbol.")),
+                    }
+                    let last_thing = cdr.len() - 1;
+                    let old_tail = state.tail;
+                    state.tail = false;
+                    for (i, r) in cdr[1..].iter().enumerate() {
+                        if i == last_thing {
+                            state.tail = old_tail;
+                        }
+                        compile(env, state, *r, result)?;
+                    }
+                    env.env_mut().set_namespace(old_ns);
                 }
             }
             Value::Special(i) if i == env.specials().import => {
@@ -357,6 +387,61 @@ fn compile_special(
                     }
                     _ => return Err(VMError::new_compile("Malformed import.")),
                 }
+            }
+            Value::Special(i) if i == env.specials().load => {
+                if cdr.len() != 1 {
+                    return Err(VMError::new_compile(
+                        "load: wrong number of args, expected one",
+                    ));
+                }
+                let raw_name = {
+                    let old_name = state.chunk.file_name;
+                    let mut name_state = CompileState::new_state(old_name, env.line_num(), None);
+                    name_state.chunk.dbg_args = Some(Vec::new());
+                    load_one_expression(
+                        env,
+                        &mut name_state,
+                        0,
+                        cdr[0].unref(env),
+                        old_name,
+                        None,
+                        true,
+                    )?;
+                    exec_unrooted_chunk(env, Arc::new(name_state.chunk))?
+                };
+                let name = get_load_name(env, raw_name)?;
+                let old_line_num = env.line_num();
+                env.set_line_num(1);
+                let mut load_state = CompileState::new_state(name, 1, None);
+                load_state.chunk.dbg_args = Some(Vec::new());
+                crate::load_eval::load(env, &mut load_state, name, 0)?;
+                load_state.chunk.encode0(RET, env.own_line())?;
+                env.set_line_num(old_line_num);
+                let load = env.alloc_lambda(Arc::new(load_state.chunk));
+                let load_const = state.add_constant(load);
+                state
+                    .chunk
+                    .encode2(CONST, result as u16 + 1, load_const as u16, env.own_line())?;
+                compile_call_reg(env, state, result as u16 + 1, &[], result)?;
+            }
+            Value::Special(i) if i == env.specials().comp_time => {
+                if cdr.is_empty() {
+                    return Err(VMError::new_compile(
+                        "comp-time: wrong number of args, expected at least one",
+                    ));
+                }
+                let mut last = Value::Nil;
+                let mut doc_string = state.doc_string;
+                for exp in cdr {
+                    let name = state.chunk.file_name;
+                    let mut state = CompileState::new_state(name, env.line_num(), None);
+                    state.chunk.dbg_args = Some(Vec::new());
+                    let new_doc_string =
+                        load_one_expression(env, &mut state, 0, *exp, name, doc_string, true)?;
+                    doc_string = new_doc_string;
+                    last = exec_unrooted_chunk(env, Arc::new(state.chunk))?;
+                }
+                compile(env, state, last, result)?;
             }
             Value::Special(i) => panic!("Unknown special {} is not special!", env.get_interned(i)),
             _ => panic!("compile_special called with something mundane!"),
@@ -402,9 +487,9 @@ fn compile_list(
             } else if let Some(slot) = env.global_intern_slot(i) {
                 // Have to at least pre-declare a global.
                 let global = env.get_global(slot);
-                if let Value::Undefined = global {
-                    eprintln!("Warning: {} not defined.", env.get_interned(i));
-                }
+                //if let Value::Undefined = global {
+                //    eprintln!("Warning: {} not defined.", env.get_interned(i));
+                //}
                 if let Value::Special(_) = global {
                     compile_special(env, state, global, cdr, result)?;
                 } else if is_macro(env, global) {

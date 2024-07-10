@@ -1,7 +1,5 @@
 #!/usr/bin/env slosh_test
 
-(load "core.slosh")
-
 (let (globals (get-globals-sorted)
       globals-len (len globals)
       i 0

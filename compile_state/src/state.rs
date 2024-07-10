@@ -202,11 +202,16 @@ pub struct Specials {
     pub is_ok: Interned,
     pub ret: Interned,
     pub ns: Interned,
+    pub with_ns: Interned,
     pub import: Interned,
+    pub load: Interned,
+    pub comp_time: Interned,
 
     pub rest: Interned,
     pub optional: Interned,
     pub scratch: Interned,
+    pub colon: Interned,
+    pub root: Interned,
 }
 
 impl Specials {
@@ -370,7 +375,6 @@ Add a sequence of numbers.  (+) will return 0.
 Section: math
 
 Example:
-(ns-import 'math)
 (test::assert-equal 0 (+))
 (test::assert-equal 5 (+ 5))
 (test::assert-equal 10 (+ 5 5))
@@ -385,7 +389,6 @@ Subtract a sequence of numbers.  Requires at least one number (negate if only on
 Section: math
 
 Example:
-(ns-import 'math)
 (test::assert-error (- 5 "2"))
 (test::assert-equal -5 (- 5))
 (test::assert-equal -5.0 (- 5.0))
@@ -401,7 +404,6 @@ Multiply a sequence of numbers.  (*) will return 1.
 Section: math
 
 Example:
-(ns-import 'math)
 (test::assert-equal 1 (*))
 (test::assert-equal 5 (* 5))
 (test::assert-equal 5 (* 1 5))
@@ -422,7 +424,6 @@ Divide a sequence of numbers.  Requires at least two numbers.
 
 Section: math
 Example:
-(ns-import 'math)
 (test::assert-equal 5 (/ 50 10))
 (test::assert-equal 5 (/ 50.0 10.0))
 (test::assert-equal 0 (/ 1 5))
@@ -1073,10 +1074,13 @@ Example:
 (test::assert-true (ok? nil))
 "#),
             ret: add_special(vm, "return", ""),
-            ns: add_special(vm, "ns", r#"Usage: (ns namespace)
+            ns: add_special(vm, "ns", r#"Usage: (ns SYMBOL)
 
-Changes to namespace.  This will cause all globals defined to have namespace:: prepended.
-This will also clear any existin imports.
+Changes to namespace.  This is "open-ended" change and is intended for use with
+the REPL prefer with-ns for scripts.
+THe symbol "::" will return to the "root" namespace (i.e. no namespace prepended to globals).
+This will cause all globals defined to have namespace:: prepended.
+This will also clear any existing imports.
 
 Section: core
 
@@ -1084,8 +1088,24 @@ Example:
 (ns testing)
 (def x #t)
 (test::assert-true x)
-(ns nil)
+(ns ::)
 (test::assert-true testing::x)
+"#),
+            with_ns: add_special(vm, "with-ns", r#"Usage: (with-ns SYMBOL sexp+)
+
+Create a namespace and compile sexp+ within it.  Restore the previous namespace when scope ends.
+THe symbol "::" will return to the "root" namespace (i.e. no namespace prepended to globals).
+This will cause all globals defined to have namespace:: prepended.
+This will also clear any existing imports.
+
+Section: core
+
+Example:
+(with-ns test-with-ns
+    (def ttf (fn () '(1 2 3)))
+    (test::assert-equal '(1 2 3) (ttf))
+    (test::assert-equal '(1 2 3) (test-out::ttf)))
+(test::assert-equal '(1 2 3) (test-out::ttf))
 "#),
             import: add_special(vm, "import", r#"Usage: (import namespace [:as symbol])
 
@@ -1098,17 +1118,67 @@ Example:
 (ns testing)
 (def x #t)
 (test::assert-true x)
-(ns nil)
+(ns ::)
 (test::assert-true testing::x)
 (import testing)
 (test::assert-true x)
 (import testing :as t)
 (test::assert-true t::x)
 "#),
+            load: add_special(vm, "load", r#"Usage: (load path) -> [last form value]
+
+Read and eval a file (from path- a string).  The load special form executes at compile time.
+This means it's parameter must resolve at compile time.  Most of the time you will want to use
+this in conjuction with 'with-ns' to namespace the contents.
+Note: on it's own does noting with namespaces.
+
+Section: core
+
+Example:
+(comp-time (def test-temp-file (get-temp-file)) nil)
+(defer (fs-rm test-temp-file))
+(let (tst-file (fopen test-temp-file :create))
+    (defer (fclose tst-file))
+    (fprn tst-file "(with-ns test-load")
+    (fprn tst-file "    (defn test-fn () '(1 2 3)))"))
+(load test-temp-file) ; put stuff in it's own namespace
+(test::assert-equal '(1 2 3) (test-load::test-fn))
+
+
+(with-ns test-out2
+    (comp-time
+        (def test-temp-file (get-temp-file))
+        (let (tst-file (fopen test-temp-file :create))
+            (defer (fclose tst-file))
+            (fprn tst-file "(defn test-fn () '(1 2 3))"))
+        nil)
+    (defer (fs-rm test-temp-file))
+    (load test-temp-file) ; put new stuff in current namespace
+    (test::assert-equal '(1 2 3) (test-fn))
+    (test::assert-equal '(1 2 3) (test-out2::test-fn)))
+"#),
+            comp_time: add_special(vm, "comp-time", r#"Usage: (comp-time sexp+)
+
+Compile and execute sexp+ at compile time.  The result of the final sexp will then be compiled into
+the current module being compiled (produce nil to avoid this).
+
+Section: core
+
+Example:
+(with-ns test-out
+    (comp-time '(def ttf (fn () '(1 2 3))))
+    (comp-time (def ttf2 (fn () '(1 2 3))) nil)
+    (test::assert-equal '(1 2 3) (ttf))
+    (test::assert-equal '(1 2 3) (test-out::ttf))
+    (test::assert-equal '(1 2 3) (ttf2))
+    (test::assert-equal '(1 2 3) (test-out::ttf2)))
+"#),
 
             rest: vm.intern_static("&"),
             optional: vm.intern_static("%"),
             scratch: vm.intern_static("[SCRATCH]"),
+            colon: vm.intern_static(":"),
+            root: vm.intern_static("ROOT"),
         }
     }
 }

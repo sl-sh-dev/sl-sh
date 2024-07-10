@@ -1,4 +1,4 @@
-(ns test)
+(with-ns test
 
 #%
 Asserts the two values are identical.
@@ -71,5 +71,5 @@ Example:
 (defmacro assert-error-msg (form key msg)
     `((fn (ret) (test::assert-true (and (err? ret) (= ~key (car ret)) (= ~msg (cdr ret)))
          (str ". Expected \n" ~key ", [" ~msg "]\n => Test returned:\n" (car ret) ", [" (cdr ret) "]")))
-        (get-error ~form)))
+        (get-error ~form))))
 

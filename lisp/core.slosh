@@ -181,9 +181,9 @@ Example:
 (test-mac test-mac-x)
 (test::assert-equal 15 test-mac-x)
 %#
-(def defmacro
+(comp-time (def defmacro
   (macro (name args & body)
-      `(def ~name (macro ~args ~@body))))
+      `(comp-time (def ~name (macro ~args ~@body))nil))) nil)
 
 #%
 Usage: (get-error exp0 ... expN) -> pair
@@ -601,13 +601,6 @@ Example:
 (defmacro when
     (provided-condition if-true)
     `(if ~provided-condition ~if-true))
-
-#%
-Does nothing for now, namespaces aren't yet implemented.
-
-Section: core
-%#
-(defmacro ns-import (val) nil)
 
 #%
 Usage: (with-temp-file (fn (x) (println "given temp file:" x)) ["optional-prefix" "optional-suffix" length])

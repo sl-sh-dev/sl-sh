@@ -1,4 +1,4 @@
-(ns iter)
+(with-ns iter
 
 #%
 Helper to create an iterator.  Will make sure it has the correct
@@ -333,7 +333,7 @@ Iterator that applies a lambda to each element to determine if is returned- is l
 Section: iterator
 
 Example:
-(let (test-iter (filter (vec-iter [1 2 3]) (fn (x) (not (= x 2)))))
+(let (test-iter (iter::filter (iter::vec-iter [1 2 3]) (fn (x) (not (= x 2)))))
     (test::assert-equal 1 (test-iter))
     (test::assert-equal 3 (test-iter))
     (test::assert-equal :*iter-empty* (test-iter)))
@@ -357,12 +357,12 @@ Section: iterator
 Example:
 
 (import iter)
-(test::assert-true (= 15 (reduce (vec-iter [1 2 3 4 5]) 0 +)))
-(test::assert-true (= 16 (reduce (vec-iter [1 2 3 4 5]) 1 +)))
-(test::assert-true (= \"one hoopy frood\" (reduce (vec-iter ["one " "hoopy " "frood"]) "" str)))
+(test::assert-true (= 15 (iter::reduce (iter::vec-iter [1 2 3 4 5]) 0 +)))
+(test::assert-true (= 16 (iter::reduce (iter::vec-iter [1 2 3 4 5]) 1 +)))
+(test::assert-true (= \"one hoopy frood\" (iter::reduce (iter::vec-iter ["one " "hoopy " "frood"]) "" str)))
 %#
 (defn reduce (iter acc reducing-fn)
     ; Use apply so we can seamlessly handle compiled forms (like +, -, etc).
     ; Currently they won't work without apply if passed in as the reducing-fn.
     (for val in iter (set! acc (apply reducing-fn acc val nil)))
-    acc)
+    acc))

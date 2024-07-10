@@ -3,9 +3,6 @@
 (prn "Using default slshrc written to \"~/.config/slosh/init.slosh\".")
 (prn "Edit this file to remove this message and customize your shell")
 
-; load the core lib
-(load "core.slosh")
-
 (defn parse-git-branch () (let (branch ($sh "git rev-parse --abbrev-ref HEAD 2>/dev/null"))
 	(if (= branch "")
 		(str "")

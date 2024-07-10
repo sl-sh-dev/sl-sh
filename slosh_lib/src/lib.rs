@@ -158,6 +158,16 @@ fn get_home_dir() -> Option<PathBuf> {
     }
 }
 
+fn load_core_slosh() {
+    ENV.with(|renv| {
+        let mut env = renv.borrow_mut();
+        match load_internal(&mut env, "core.slosh") {
+            Ok(_) => {}
+            Err(err) => println!("ERROR: {err}"),
+        }
+    });
+}
+
 /// Expected that the user's init.slosh will be in the user's home directory
 /// at `$HOME/.config/slosh/` otherwise the directory structure will be created.
 fn load_sloshrc() {
@@ -407,6 +417,7 @@ fn run_slosh(modify_vm: fn(&mut SloshVm) -> ()) -> i32 {
             modify_vm(&mut env);
         });
         if config.command.is_none() && config.script.is_none() {
+            load_core_slosh();
             load_sloshrc();
             if Sys::is_tty(STDIN_FILENO) {
                 status = run_shell_tty();
@@ -440,6 +451,7 @@ fn run_slosh(modify_vm: fn(&mut SloshVm) -> ()) -> i32 {
                 jobs.borrow_mut().reap_procs();
             });
         } else if let Some(script) = config.script {
+            load_core_slosh();
             load_sloshrc();
             status = ENV.with(|renv| {
                 let mut env = renv.borrow_mut();
@@ -593,8 +605,22 @@ fn exec_expression(res: String, env: &mut SloshVm) {
                     return;
                 }
                 if let Err(e) = compile(env, &mut state, exp, 0) {
-                    eprintln!("Compile error, line {}: {}", env.line_num(), e);
-                    return;
+                    if e.key == "compile" || e.key == "read" {
+                        eprintln!("Compile error, line {}: {}", env.line_num(), e);
+                        return;
+                    } else {
+                        eprintln!("Comp Time ERROR: {}", e.display(env));
+                        if let Some(err_frame) = env.err_frame() {
+                            let line = err_frame.current_line().unwrap_or(0);
+                            eprintln!(
+                                "{} line: {} ip: {:#010x}",
+                                err_frame.chunk.file_name,
+                                line,
+                                err_frame.current_offset()
+                            );
+                        }
+                        debug(env);
+                    }
                 }
                 if let Err(e) = state.chunk.encode0(RET, env.own_line()) {
                     eprintln!(

@@ -26,7 +26,7 @@ pub const SLSHRC: &str = from_utf8(include_bytes!("../../init.slosh"));
 
 /// Execute a chunk that may not be rooted, will make sure any allocated consts don't get GCed
 /// out from under it...
-fn exec_unrooted_chunk(vm: &mut SloshVm, chunk: Arc<Chunk>) -> VMResult<Value> {
+pub fn exec_unrooted_chunk(vm: &mut SloshVm, chunk: Arc<Chunk>) -> VMResult<Value> {
     for constant in &chunk.constants {
         vm.heap_sticky(*constant);
     }
@@ -46,26 +46,30 @@ pub fn run_reader(reader: &mut Reader) -> VMResult<Value> {
             .map_err(|e| VMError::new("read", e.to_string()))
             .unwrap();
         reader_vm.heap_sticky(exp);
-        let result = load_one_expression(reader_vm, exp, "", None);
+        let line_num = reader_vm.line_num();
+        let mut state = CompileState::new_state("", line_num, None);
+        state.chunk.dbg_args = Some(Vec::new());
+        let result = load_one_expression(reader_vm, &mut state, 0, exp, "", None, true);
         reader_vm.heap_unsticky(exp);
 
-        let (chunk, _) = result?;
-        last = exec_unrooted_chunk(reader_vm, chunk)?;
+        result?;
+        last = exec_unrooted_chunk(reader_vm, Arc::new(state.chunk))?;
     }
+    reader.vm().env_mut().set_namespace(Namespace::default());
     Ok(last)
 }
 
 pub fn load_one_expression(
     vm: &mut SloshVm,
+    state: &mut CompileState,
+    result: usize,
     exp: Value,
     name: &'static str,
     doc_string: Option<Value>,
-) -> VMResult<(Arc<Chunk>, Option<Value>)> {
-    let line_num = vm.line_num();
-    let mut state = CompileState::new_state(name, line_num, None);
-    state.chunk.dbg_args = Some(Vec::new());
+    terminal: bool,
+) -> VMResult<Option<Value>> {
     state.doc_string = doc_string;
-    if let Err(e) = pass1(vm, &mut state, exp) {
+    if let Err(e) = pass1(vm, state, exp) {
         println!(
             "Compile error (pass one), {}, line {}: {}",
             name,
@@ -74,7 +78,7 @@ pub fn load_one_expression(
         );
         return Err(e);
     }
-    if let Err(e) = compile(vm, &mut state, exp, 0) {
+    if let Err(e) = compile(vm, state, exp, result) {
         println!(
             "Compile error, {} line {}: {} exp: {}",
             name,
@@ -84,59 +88,33 @@ pub fn load_one_expression(
         );
         return Err(e);
     }
-    if let Err(e) = state.chunk.encode0(RET, vm.own_line()) {
-        println!("Compile error, {} line {}: {}", name, vm.line_num(), e);
-        return Err(e);
+    if terminal {
+        if let Err(e) = state.chunk.encode0(RET, vm.own_line()) {
+            println!("Compile error, {} line {}: {}", name, vm.line_num(), e);
+            return Err(e);
+        }
     }
-    state.chunk.extra_regs = state.max_regs;
-    Ok((Arc::new(state.chunk), state.doc_string))
+    Ok(state.doc_string)
 }
 
 pub fn load_internal(vm: &mut SloshVm, name: &'static str) -> VMResult<Value> {
-    let fname = if fs::metadata::<&Path>(name.as_ref()).is_ok() {
-        Ok(Cow::Borrowed(name))
-    } else {
-        find_first_instance_of_file_in_load_path(vm, name)
-    };
-    let mut reader = match fname {
-        Ok(fname) => match std::fs::File::open(&*fname) {
-            Ok(file) => Reader::from_file(file, vm, name, 1, 0),
-            Err(e) => match name {
-                "core.slosh" => Reader::from_static_string(CORE_LISP, vm, name, 1, 0),
-                "iterator.slosh" => Reader::from_static_string(ITER_LISP, vm, name, 1, 0),
-                "test.slosh" => Reader::from_static_string(TEST_LISP, vm, name, 1, 0),
-                "sh-color.slosh" => Reader::from_static_string(COLORS_LISP, vm, name, 1, 0),
-                "init.slosh" => Reader::from_static_string(SLSHRC, vm, name, 1, 0),
-                _ => {
-                    return Err(VMError::new("io", format!("{name}: {e}")));
-                }
-            },
-        },
-        Err(e) => match name {
-            "core.slosh" => Reader::from_static_string(CORE_LISP, vm, name, 1, 0),
-            "iterator.slosh" => Reader::from_static_string(ITER_LISP, vm, name, 1, 0),
-            "test.slosh" => Reader::from_static_string(TEST_LISP, vm, name, 1, 0),
-            "sh-color.slosh" => Reader::from_static_string(COLORS_LISP, vm, name, 1, 0),
-            "init.slosh" => Reader::from_static_string(SLSHRC, vm, name, 1, 0),
-            _ => {
-                return Err(VMError::new("io", format!("{name}: {e}")));
-            }
-        },
-    };
-
-    let mut last = Value::Nil;
+    let mut reader = reader_for_file(vm, name)?;
     let mut doc_string = None;
+    let mut last = Value::Nil;
     while let Some(exp) = reader.next() {
         let reader_vm = reader.vm();
         let exp = exp.map_err(|e| VMError::new("read", e.to_string()))?;
         reader_vm.heap_sticky(exp);
 
-        let result = load_one_expression(reader_vm, exp, name, doc_string);
+        let line_num = reader_vm.line_num();
+        let mut state = CompileState::new_state(name, line_num, None);
+        state.chunk.dbg_args = Some(Vec::new());
+        let result = load_one_expression(reader_vm, &mut state, 0, exp, name, doc_string, true);
 
         reader_vm.heap_unsticky(exp);
-        let (chunk, new_doc_string) = result?;
+        let new_doc_string = result?;
         doc_string = new_doc_string;
-        last = exec_unrooted_chunk(reader_vm, chunk)?;
+        last = exec_unrooted_chunk(reader_vm, Arc::new(state.chunk))?;
     }
     Ok(last)
 }
@@ -225,13 +203,8 @@ pub fn expand_tilde(path: PathBuf) -> PathBuf {
     }
 }
 
-fn load(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
-    if registers.len() != 1 {
-        return Err(VMError::new_compile(
-            "load: wrong number of args, expected one",
-        ));
-    }
-    let name = match registers[0].unref(vm) {
+pub fn get_load_name(vm: &mut SloshVm, value: Value) -> VMResult<&'static str> {
+    let name = match value {
         Value::StringConst(i) => vm.get_interned(i),
         Value::String(h) => {
             let s = vm.get_string(h);
@@ -239,28 +212,88 @@ fn load(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
             let s_i = vm.intern(&s);
             vm.get_interned(s_i)
         }
-        _ => return Err(VMError::new_vm("load: Not a string.")),
+        _ => return Err(VMError::new_vm("Not a string.")),
     };
-    let name = if name.contains('~') {
+    if name.contains('~') {
         let name_path = PathBuf::from_str(name).expect("PathBuf from_str failed!");
         let name_exp = expand_tilde(name_path.clone());
         if name_exp == name_path {
-            name
+            Ok(name)
         } else {
             let s_i = vm.intern(name_exp.to_string_lossy().as_ref());
-            vm.get_interned(s_i)
+            Ok(vm.get_interned(s_i))
         }
     } else {
-        name
+        Ok(name)
+    }
+}
+
+fn reader_for_file<'vm>(vm: &'vm mut SloshVm, name: &'static str) -> VMResult<Reader<'vm>> {
+    let fname = if fs::metadata::<&Path>(name.as_ref()).is_ok() {
+        Ok(Cow::Borrowed(name))
+    } else {
+        find_first_instance_of_file_in_load_path(vm, name)
     };
+    let reader = match fname {
+        Ok(fname) => match std::fs::File::open(&*fname) {
+            Ok(file) => Reader::from_file(file, vm, name, 1, 0),
+            Err(e) => match name {
+                "core.slosh" => Reader::from_static_string(CORE_LISP, vm, name, 1, 0),
+                "iterator.slosh" => Reader::from_static_string(ITER_LISP, vm, name, 1, 0),
+                "test.slosh" => Reader::from_static_string(TEST_LISP, vm, name, 1, 0),
+                "sh-color.slosh" => Reader::from_static_string(COLORS_LISP, vm, name, 1, 0),
+                "init.slosh" => Reader::from_static_string(SLSHRC, vm, name, 1, 0),
+                _ => {
+                    return Err(VMError::new("io", format!("{name}: {e}")));
+                }
+            },
+        },
+        Err(e) => match name {
+            "core.slosh" => Reader::from_static_string(CORE_LISP, vm, name, 1, 0),
+            "iterator.slosh" => Reader::from_static_string(ITER_LISP, vm, name, 1, 0),
+            "test.slosh" => Reader::from_static_string(TEST_LISP, vm, name, 1, 0),
+            "sh-color.slosh" => Reader::from_static_string(COLORS_LISP, vm, name, 1, 0),
+            "init.slosh" => Reader::from_static_string(SLSHRC, vm, name, 1, 0),
+            _ => {
+                return Err(VMError::new("io", format!("{name}: {e}")));
+            }
+        },
+    };
+    Ok(reader)
+}
+
+pub fn load(
+    vm: &mut SloshVm,
+    state: &mut CompileState,
+    name: &'static str,
+    result: usize,
+) -> VMResult<()> {
+    let mut doc_string = None;
+    let mut reader = reader_for_file(vm, name)?;
+    while let Some(exp) = reader.next() {
+        let reader_vm = reader.vm();
+        let exp = exp.map_err(|e| VMError::new("read", e.to_string()))?;
+        reader_vm.heap_sticky(exp);
+
+        let result = load_one_expression(reader_vm, state, result, exp, name, doc_string, false);
+
+        reader_vm.heap_unsticky(exp);
+        let new_doc_string = result?;
+        doc_string = new_doc_string;
+    }
+    Ok(())
+}
+
+fn run_script(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    if registers.len() != 1 {
+        return Err(VMError::new_compile(
+            "run-script: wrong number of args, expected one",
+        ));
+    }
+    let name = get_load_name(vm, registers[0].unref(vm))?;
     let olf_line_num = vm.line_num();
     vm.set_line_num(1);
-    let old_ns = vm.env().get_namespace().clone();
-    vm.env_mut().set_namespace(Namespace::default());
-    let i = vm.intern("ROOT");
-    vm.set_named_global("*ns*", Value::Symbol(i));
     let r = load_internal(vm, name);
-    vm.env_mut().set_namespace(old_ns);
     vm.set_line_num(olf_line_num);
     r
 }
@@ -522,23 +555,24 @@ fn add_compiler_builtin(
 pub fn add_load_builtins(env: &mut SloshVm) {
     add_compiler_builtin(
         env,
-        "load",
-        load,
-        r#"Usage: (load path) -> [last form value]
+        "run-script",
+        run_script,
+        r#"Usage: (run-script path) -> [last form value]
 
 Read and eval a file (from path- a string).
 
 Section: scripting
 
 Example:
-(def test-load-one nil)
-(def test-load-two nil)
-(def test-load-fn (fopen "/tmp/slsh-test-load.testing" :create :truncate))
-(fpr test-load-fn "(set! test-load-one \"LOAD TEST\") '(1 2 3)")
-(fclose test-load-fn)
-(set! test-load-two (load "/tmp/slsh-test-load.testing"))
-(test::assert-equal "LOAD TEST" test-load-one)
-(test::assert-equal '(1 2 3) test-load-two)"#,
+(def test-load::test-fn)
+(with-temp-file (fn (tmp)
+    (let (tst-file (fopen tmp :create))
+        (defer (fclose tst-file))
+        (fprn tst-file "(with-ns test-load")
+        (fprn tst-file "    (defn test-fn () '(1 2 3)))"))
+    (run-script tmp)
+    (test::assert-equal '(1 2 3) (test-load::test-fn))))
+"#,
     );
     add_compiler_builtin(
         env,
