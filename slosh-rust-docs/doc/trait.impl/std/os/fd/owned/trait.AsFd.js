@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"shell":[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.79.0/std/os/fd/owned/trait.AsFd.html\" title=\"trait std::os::fd::owned::AsFd\">AsFd</a> for <a class=\"struct\" href=\"shell/platform/unix/struct.UnixFileDesc.html\" title=\"struct shell::platform::unix::UnixFileDesc\">UnixFileDesc</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

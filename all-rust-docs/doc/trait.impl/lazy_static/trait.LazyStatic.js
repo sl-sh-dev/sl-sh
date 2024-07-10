@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"slosh_test":[["impl <a class=\"trait\" href=\"lazy_static/trait.LazyStatic.html\" title=\"trait lazy_static::LazyStatic\">LazyStatic</a> for <a class=\"struct\" href=\"slosh_test/docs/struct.DOC_REGEX.html\" title=\"struct slosh_test::docs::DOC_REGEX\">DOC_REGEX</a>"],["impl <a class=\"trait\" href=\"lazy_static/trait.LazyStatic.html\" title=\"trait lazy_static::LazyStatic\">LazyStatic</a> for <a class=\"struct\" href=\"slosh_test/docs/struct.EXEMPTIONS.html\" title=\"struct slosh_test::docs::EXEMPTIONS\">EXEMPTIONS</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

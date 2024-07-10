@@ -1,0 +1,1 @@
+cargo:rustc-env=VERSION_STRING=slosh_test 0.10.0 (master:6a97283c, debug build, linux [x86_64], Jul 10 2024, 22:16:43 UTC [rustc 1.79.0 (129f3b996 2024-06-10)])

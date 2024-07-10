@@ -1,0 +1,1 @@
+cargo:rustc-env=VERSION_STRING=sl-compiler 0.1.0 (master:6a97283c, debug build, linux [x86_64], Jul 10 2024, 22:16:04 UTC [rustc 1.79.0 (129f3b996 2024-06-10)])
