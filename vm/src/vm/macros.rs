@@ -148,8 +148,8 @@ macro_rules! get_primitive_int {
             $crate::Value::Byte(b) => Ok(b as i64),
             $crate::Value::Int(i) => Ok($crate::from_i56(&i)),
             _ => Err($crate::VMError::new_value(format!(
-                "Not an integer: {:?}",
-                $val
+                "Not an integer: {}",
+                $val.display_value($vm)
             ))),
         }
     }};
