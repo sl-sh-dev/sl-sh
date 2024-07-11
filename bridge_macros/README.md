@@ -223,7 +223,7 @@ implemented and then coerce the rust types into sl-sh Expressions with the
 appropriate errors and call the original function, `int_to_float` with rust
 types.
 - once `builtin_int_to_float` exists, `intern_int_to_float` must be manually
-called in the add_buitlins function like:
+called in the add_builtins function like:
 
 ```rust
 pub fn add_type_builtins<S: BuildHasher>(

@@ -79,7 +79,7 @@ Section: shell
 
 Example:
 (assert-true (sys-command? "ls"))
-(assert-false (sys-command? "rst-not-a-comand-strsnt"))
+(assert-false (sys-command? "rst-not-a-command-strsnt"))
 %#
 (defn sys-command? (com)
     (if (or (str-empty? com)(identical? com.0 \/)(identical? com.0 \.))

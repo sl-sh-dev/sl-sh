@@ -5,7 +5,9 @@
 // you can check which dictionary has a word with `npx cspell trace yourWord`
 {
     "version": "0.2",
-    "ignorePaths": ["target", "legacy", "*.lock"],
+    "ignorePaths": ["target", "legacy", "**/*.lock"],
+    "useGitignore": false,
+    "enableFiletypes": ["*", "Vimscript"],
     "dictionaryDefinitions": [
         {
             "name": "custom-dictionary",
@@ -16,6 +18,6 @@
     "dictionaries": ["custom-dictionary", "rust", "makefile", "softwareTerms"],
     "words": [],
     "flagWords": [],
-    "ignoreWords": ["atwo", "btwo", "ctwo", "dtwo"],
+    "ignoreWords": ["Emmmmm", "atwo", "btwo", "ctwo", "dtwo", "hexy"],
     "import": []
 }

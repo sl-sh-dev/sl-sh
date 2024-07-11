@@ -213,7 +213,7 @@ impl Specials {
             def: add_special(vm, "def", r#"Usage: (def symbol doc_string? expression) -> expression
 
 Adds an expression to the current namespace.  Return the expression that was defined.
-Symbol is not evaluted.  Can take an option doc string (docstrings can only be
+Symbol is not evaluated.  Can take an option doc string (docstrings can only be
 set on namespaced (global) symbols).
 
 Section: core
@@ -226,7 +226,7 @@ Example:
 (test::assert-equal "Two" test-do-two)
 (test::assert-equal "Three" test-do-three)
 (let (test-do-one nil)
-    ; Add this to tthe let's scope (shadow the outer test-do-two).
+    ; Add this to the let's scope (shadow the outer test-do-two).
     (test::assert-equal "Default" (def test-do-four "Default"))
     ; set the currently scoped value.
     (set! test-do-one "1111")
@@ -240,7 +240,7 @@ Example:
             set: add_special(vm, "set!", r#"Usage: (set! symbol expression) -> expression
 
 Sets an existing expression in the current scope(s).  Return the expression that was set.
-Symbol is not evalauted.
+Symbol is not evaluated.
 
 Set will set the first binding it finds starting in the current scope and then
 trying enclosing scopes until exhausted.
@@ -262,7 +262,7 @@ Example:
 (test::assert-equal "One" test-do-one)"#),
             do_: add_special(vm, "do", r#"Usage: (do exp0 ... expN) -> expN
 
-Evaluatate each form and return the last.
+Evaluate each form and return the last.
 
 Section: core
 
@@ -532,7 +532,7 @@ Example:
 
 Destructive form that replaces the cdr (second item) in a pair with a new expression.
 
-If used on a proper list will replace everthing after the first item.
+If used on a proper list will replace everything after the first item.
 Can be used on nil to create a pair (nil . expression).
 
 Section: pair
@@ -680,7 +680,7 @@ recursive call would work in a non-tail position but could blow the stack if
 it is to deep- unlike a recur or tail position recursive call).
 NOTE: potential footgun, the let macro expands to a lambda (fn) and a recur used
 inside the let would bind with the let not the enclosing lambda (this would
-apply to any macro that also expands to a lamda- this is by design with the
+apply to any macro that also expands to a lambda- this is by design with the
 loop macro but would be unexpected with let).
 
 Section: core
@@ -1039,7 +1039,7 @@ Example:
 "#),
             mk_err: add_special(vm, "mk-err", r#"Usage: (mk-err :keyword value)
 
-Create an error object.  This does not raise the error but merly cretes it.
+Create an error object.  This does not raise the error but merely creates it.
 Can use car/cdr to extract the keyword and value.
 
 Section: core

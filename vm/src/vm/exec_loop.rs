@@ -538,7 +538,7 @@ impl<ENV> GVm<ENV> {
                 WIDE => wide = true,
                 MOV => {
                     let (dest, src) = decode2!(self.ip_ptr, wide);
-                    // XXX TODO- figure out proper mov symantics...
+                    // XXX TODO- figure out proper mov semantics...
                     let val = self.register_unref(src as usize);
                     //let val = self.register(src as usize);
                     mov_register!(self, dest as usize, val);
@@ -808,7 +808,7 @@ impl<ENV> GVm<ENV> {
                 }
                 JMPT => {
                     let (test, jmp) = decode2!(self.ip_ptr, wide);
-                    if self.register(test as usize).is_truethy() {
+                    if self.register(test as usize).is_truthy() {
                         self.ip_ptr = get_code_at!(chunk, chunk.jump_table[jmp as usize] as isize);
                     }
                 }

@@ -126,6 +126,7 @@ evaled
 evals
 execvp
 Expandvec
+Falh
 falsey
 fclose
 fcntl
@@ -136,6 +137,7 @@ footgun
 fopen
 fprn
 fract
+frood
 FSIZE
 ftype
 fxhasher
@@ -151,8 +153,11 @@ GOTPCREL
 gpwclark
 greenyellow
 guifg
+Habcdefiklmnpqrstuvx
+hasher
 hashkey
 haskey
+hoopy
 iargs
 idents
 instring
@@ -222,6 +227,7 @@ movsbl
 movzbl
 MSGQUEUE
 mult
+munge
 myfn
 myfun
 namespacemath
@@ -416,6 +422,7 @@ Syscall
 syscall
 sysconf
 tadd
+takek
 targ
 TCALL           # opcode for a tail call
 tcall
@@ -475,6 +482,7 @@ VECPSH
 vecs
 vecvalues
 vhandle
+vimscript
 vlen
 VMEM
 waitpid

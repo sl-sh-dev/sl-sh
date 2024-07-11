@@ -274,7 +274,7 @@ Example:
 
 #%
 Loops over each element in an iterator.
-The bind parameter is bound to the current element of items and is accesible
+The bind parameter is bound to the current element of items and is accessible
 in body. Body is evaluated a number of times equal to the items in the iterator.
 
 Section: iterator
@@ -326,7 +326,7 @@ Example:
 
 
 #%
-reduce is used to amalgamate an iterator and an intitial value,
+reduce is used to amalgamate an iterator and an initial value,
 according to the reducing function provided. The reducing-fcn should be a function
 of two arguments. In the first iteration of reduce, the init-val will be used as
 the first argument to the reducing-fcn and (iter) will be used as the

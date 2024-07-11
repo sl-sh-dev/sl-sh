@@ -4,7 +4,7 @@
 
 ![Rust](https://github.com/sl-sh-dev/sl-sh/workflows/Rust/badge.svg?branch=master)
 
-## Note this is a new expermental version, see ./legacy/ for the original version (slush).
+## Note this is a new experimental version, see ./legacy/ for the original version (slush).
 
 Simple Lisp SHell (slosh) is a lisp based shell written in Rust. It is not POSIX
 compliant and makes no effort to be. Sl-sh should run on any *nix platform as
@@ -160,7 +160,7 @@ Note: These are all compiled to bytecode and once compiled are not dynamic anymo
 ### Features
 
 - Lisp reader (no reader macros yet)
-- Lisp lists (pair/concell based)
+- Lisp lists (pair/conscell based)
 - Vectors
 - Tail call optimization
 - Continuations (call/cc)
@@ -213,5 +213,5 @@ generated from the source code.
 
 All of this is covered in `doc/README.md`
 
-Must be compiled in lisp-test mode for appropriate documenation functions to be present (`cargo build --features lisp-test`).
+Must be compiled in lisp-test mode for appropriate documentation functions to be present (`cargo build --features lisp-test`).
 

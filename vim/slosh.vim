@@ -72,7 +72,7 @@ syn keyword sloshFunc	+	-	*	\
 syn keyword sloshFunc	inc!	dec!	list	list-append
 syn keyword sloshFunc	cons	car	cdr	xar!	xdr!
 syn keyword sloshFunc	=	/=
-" TODO- these dont work...	set!	eq?	equal?
+" TODO- these don't work...	set!	eq?	equal?
 syn keyword sloshFunc	<	>	<=	>=
 syn keyword sloshFunc	pr	prn	load	eval
 

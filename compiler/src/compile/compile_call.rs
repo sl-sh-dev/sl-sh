@@ -88,7 +88,7 @@ pub(crate) fn compile_call_reg(
                 .chunk
                 .encode2(MOV, result as u16 + 1, reg, env.own_line())?;
         }
-        // Lie abpout this being a tail call because we can not emit the BMOV yet.
+        // Lie about this being a tail call because we can not emit the BMOV yet.
         compile_params(env, state, cdr, result + 2, false)?;
         let b_reg = result + cdr.len() + 3;
         if b_reg > state.max_regs {
