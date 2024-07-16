@@ -33,7 +33,7 @@
 (sh "alias vi=nvim")
 (sh "alias vim=nvim")
 
-(sh "export PATH=/bin:/usr/local/bin:~/bin:~/.cargo/bin")
+(sh "export PATH=/bin:/usr/bin:/usr/local/bin:~/bin:~/.cargo/bin")
 
 (sh "export LC_ALL=en_US.UTF-8")
 
