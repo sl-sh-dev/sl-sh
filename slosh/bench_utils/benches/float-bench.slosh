@@ -1,5 +1,7 @@
 #!/usr/bin/env slosh
 
+(load "core.slosh")
+
 (def eval-pol (fn (n x)
   (let (su 0.0
         mu 10.0
