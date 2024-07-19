@@ -15,7 +15,7 @@ jobs:
     steps:
       - id: get_branch
         if: github.event.pull_request.merged == true && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        run: echo "branch_name=master" >> "$GITHUB_OUTPUT"
+        run: echo "branch_name=main" >> "$GITHUB_OUTPUT"
 
   backup_branch:
     runs-on: ubuntu-latest
@@ -37,7 +37,7 @@ jobs:
       BENCHER_PROJECT: sl-sh
       BENCHER_TESTBED: ubuntu-latest
       BENCHER_ADAPTER: rust_iai_callgrind
-      BRANCH: ${{ needs.target_branch.outputs.branch_name || needs.backup_branch.outputs.branch_name || github.event.pull_request.base.ref || 'master' }}
+      BRANCH: ${{ needs.target_branch.outputs.branch_name || needs.backup_branch.outputs.branch_name || github.event.pull_request.base.ref || 'main' }}
     steps:
       - run: sudo apt-get update
       - run: sudo apt install -y valgrind gnuplot
@@ -48,10 +48,10 @@ jobs:
         run: cargo test --benches --no-run
       - name: Track Benchmarks with Bencher
         run: |
-          echo "Running bencher for branch $BRANCH."
+          echo "Running bencher for branch ${BRANCH}."
           bencher run \
-          --if-branch "$BRANCH" \
-          --else-if-branch "master" \
+          --if-branch "${BRANCH}" \
+          --else-if-branch "main" \
           --github-actions "${{ secrets.GITHUB_TOKEN }}" \
           --token "${{ secrets.BENCHER_API_TOKEN }}" \
           --err \
