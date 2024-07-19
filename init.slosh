@@ -68,6 +68,6 @@
 (prn "		We don't have to be mean because,")
 (prn "		remember, no matter where you go,")
 (prn "		there you are.")
-(prn (str "			- Buckaroo Banzai (" (str-trim $(cat ~/.local/share/sl-sh/history | grep -v "<ctx>" | wc -l)) ")"))
+(prn "			- Buckaroo Banzai")
 
 ;; }}}
