@@ -20,7 +20,7 @@ fn check_balanced_delimiters_lisp(input: &str) -> bool {
             double_quote = false;
             continue;
         }
-        if double_quote {
+        if double_quote && ch != '\\' {
             continue;
         }
         match ch {

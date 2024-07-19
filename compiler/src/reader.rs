@@ -515,7 +515,6 @@ impl<'vm> Reader<'vm> {
                         symbol.push(res);
                     }
                     _ => {
-                        println!("XXXXX pushing {ch}");
                         symbol.push_str(&ch);
                     }
                 }
