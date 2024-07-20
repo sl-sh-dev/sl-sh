@@ -1078,7 +1078,7 @@ Example:
 
 Changes to namespace.  This is "open-ended" change and is intended for use with
 the REPL prefer with-ns for scripts.
-THe symbol "::" will return to the "root" namespace (i.e. no namespace prepended to globals).
+The symbol "::" will return to the "root" namespace (i.e. no namespace prepended to globals).
 This will cause all globals defined to have namespace:: prepended.
 This will also clear any existing imports.
 
