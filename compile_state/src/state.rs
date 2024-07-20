@@ -1130,7 +1130,7 @@ Example:
 Read and eval a file (from path- a string).  The load special form executes at compile time.
 This means it's parameter must resolve at compile time.  Most of the time you will want to use
 this in conjuction with 'with-ns' to namespace the contents.
-Note: on it's own does noting with namespaces.
+Note: on it's own does nothing with namespaces.
 
 Section: core
 
