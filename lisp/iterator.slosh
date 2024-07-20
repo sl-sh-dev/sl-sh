@@ -1,3 +1,5 @@
+(with-ns iter
+
 #%
 Helper to create an iterator.  Will make sure it has the correct
 property set.
@@ -17,13 +19,14 @@ Iterator that wraps a vector.
 Section: iterator
 
 Example:
+(import iter)
 (let (test-vec-iter (vec-iter [1 2 3]))
-    (assert-equal 1 (test-vec-iter))
-    (assert-equal 2 (test-vec-iter))
-    (assert-equal 3 (test-vec-iter))
-    (assert-equal :*iter-empty* (test-vec-iter))
+    (test::assert-equal 1 (test-vec-iter))
+    (test::assert-equal 2 (test-vec-iter))
+    (test::assert-equal 3 (test-vec-iter))
+    (test::assert-equal :*iter-empty* (test-vec-iter))
     (set! test-vec-iter (vec-iter (vec)))
-    (assert-equal :*iter-empty* (test-vec-iter)))
+    (test::assert-equal :*iter-empty* (test-vec-iter)))
 %#
 (defn vec-iter (v)
     (let (idx 0, vlen (len v))
@@ -35,13 +38,14 @@ Iterator produces a vector in reverse.
 Section: iterator
 
 Example:
+(import iter)
 (let (test-vec-iter (vec-iter-rev [1 2 3]))
-    (assert-equal 3 (test-vec-iter))
-    (assert-equal 2 (test-vec-iter))
-    (assert-equal 1 (test-vec-iter))
-    (assert-equal :*iter-empty* (test-vec-iter))
+    (test::assert-equal 3 (test-vec-iter))
+    (test::assert-equal 2 (test-vec-iter))
+    (test::assert-equal 1 (test-vec-iter))
+    (test::assert-equal :*iter-empty* (test-vec-iter))
     (set! test-vec-iter (vec-iter-rev (vec)))
-    (assert-equal :*iter-empty* (test-vec-iter)))
+    (test::assert-equal :*iter-empty* (test-vec-iter)))
 %#
 (defn vec-iter-rev (v)
     (let (idx (len v))
@@ -55,15 +59,16 @@ produce the same items).
 Section: iterator
 
 Example:
+(import iter)
 (let ([fwd-iter, rev-iter] (vec-iter-pair [1 2 3]))
-    (assert-equal 1 (fwd-iter))
-    (assert-equal 3 (rev-iter))
-    (assert-equal 2 (fwd-iter))
-    (assert-equal :*iter-empty* (rev-iter))
-    (assert-equal :*iter-empty* (fwd-iter)))
+    (test::assert-equal 1 (fwd-iter))
+    (test::assert-equal 3 (rev-iter))
+    (test::assert-equal 2 (fwd-iter))
+    (test::assert-equal :*iter-empty* (rev-iter))
+    (test::assert-equal :*iter-empty* (fwd-iter)))
 (let ([fwd-iter, rev-iter] (vec-iter-pair (vec)))
-    (assert-equal :*iter-empty* (fwd-iter))
-    (assert-equal :*iter-empty* (rev-iter)))
+    (test::assert-equal :*iter-empty* (fwd-iter))
+    (test::assert-equal :*iter-empty* (rev-iter)))
 %#
 (defn vec-iter-pair (v)
     (let (fidx 0, bidx (len v))
@@ -77,13 +82,14 @@ Iterator that wraps a list.
 Section: iterator
 
 Example:
+(import iter)
 (let (test-list-iter (list-iter '(1 2 3)))
-    (assert-equal 1 (test-list-iter))
-    (assert-equal 2 (test-list-iter))
-    (assert-equal 3 (test-list-iter))
-    (assert-equal :*iter-empty* (test-list-iter))
+    (test::assert-equal 1 (test-list-iter))
+    (test::assert-equal 2 (test-list-iter))
+    (test::assert-equal 3 (test-list-iter))
+    (test::assert-equal :*iter-empty* (test-list-iter))
     (set! test-list-iter (list-iter '()))
-    (assert-equal :*iter-empty* (test-list-iter)))
+    (test::assert-equal :*iter-empty* (test-list-iter)))
 %#
 (defn list-iter (l)
     (mk-iter (if l (let (val (car l)) (set! l (cdr l)) val) :*iter-empty*)))
@@ -95,6 +101,7 @@ trailing newline).
 Section: iterator
 
 Example:
+(import iter)
 (with-temp-file (fn (file-name)
     (let (tst-file (fopen file-name :create :truncate))
         (defer (fclose tst-file))
@@ -104,11 +111,11 @@ Example:
         (fpr tst-file "line 4"))
     (let (tst-file (fopen file-name), test-iter (file-iter tst-file))
         (defer (fclose tst-file))
-        (assert-equal "line 1\\n" (test-iter))
-        (assert-equal "line 2\\n" (test-iter))
-        (assert-equal "line 3\\n" (test-iter))
-        (assert-equal "line 4" (test-iter))
-        (assert-equal :*iter-empty* (test-iter)))))
+        (test::assert-equal "line 1\\n" (test-iter))
+        (test::assert-equal "line 2\\n" (test-iter))
+        (test::assert-equal "line 3\\n" (test-iter))
+        (test::assert-equal "line 4" (test-iter))
+        (test::assert-equal :*iter-empty* (test-iter)))))
 %#
 (defn file-iter (f)
     (mk-iter (let (line (read-line f))(if line line :*iter-empty*))))
@@ -119,11 +126,12 @@ Iterator that wraps a string.  Each element is the next character.
 Section: iterator
 
 Example:
+(import iter)
 (let (test-string-iter (string-iter "123"))
-    (assert-equal \\1 (test-string-iter))
-    (assert-equal \\2 (test-string-iter))
-    (assert-equal \\3 (test-string-iter))
-    (assert-equal :*iter-empty* (test-string-iter)))
+    (test::assert-equal \\1 (test-string-iter))
+    (test::assert-equal \\2 (test-string-iter))
+    (test::assert-equal \\3 (test-string-iter))
+    (test::assert-equal :*iter-empty* (test-string-iter)))
 %#
 (defn string-iter (s)
     (let (idx 0, slen (len s))
@@ -135,8 +143,9 @@ Return true if thing is an iterator, false otherwise.
 Section: iterator
 
 Example:
-(assert-true (iter? (list-iter '(1 2 3))))
-(assert-false (iter? '(1 2 3)))
+(import iter)
+(test::assert-true (iter? (list-iter '(1 2 3))))
+(test::assert-false (iter? '(1 2 3)))
 %#
 (defn iter? (test)
     (if (get-prop test :is-iter) #t #f))
@@ -147,12 +156,13 @@ Iterator that wraps and returns a single object once.
 Section: iterator
 
 Example:
+(import iter)
 (let (test-iter (once-iter 3))
-    (assert-equal 3 (test-iter))
-    (assert-equal :*iter-empty* (test-iter))
+    (test::assert-equal 3 (test-iter))
+    (test::assert-equal :*iter-empty* (test-iter))
     (set! test-iter (once-iter "iter"))
-    (assert-equal "iter" (test-iter))
-    (assert-equal :*iter-empty* (test-iter)))
+    (test::assert-equal "iter" (test-iter))
+    (test::assert-equal :*iter-empty* (test-iter)))
 %#
 (defn once-iter (i)
     (mk-iter (let (val i) (set! i :*iter-empty*) val)))
@@ -163,18 +173,19 @@ Iterator that wraps and returns a single object on each call.
 Section: iterator
 
 Example:
+(import iter)
 (let (test-iter (repeat-iter 3))
-    (assert-equal 3 (test-iter))
-    (assert-equal 3 (test-iter))
-    (assert-equal 3 (test-iter))
-    (assert-equal 3 (test-iter))
-    (assert-equal 3 (test-iter))
+    (test::assert-equal 3 (test-iter))
+    (test::assert-equal 3 (test-iter))
+    (test::assert-equal 3 (test-iter))
+    (test::assert-equal 3 (test-iter))
+    (test::assert-equal 3 (test-iter))
     (set! test-iter (repeat-iter "iter"))
-    (assert-equal "iter" (test-iter))
-    (assert-equal "iter" (test-iter))
-    (assert-equal "iter" (test-iter))
-    (assert-equal "iter" (test-iter))
-    (assert-equal "iter" (test-iter)))
+    (test::assert-equal "iter" (test-iter))
+    (test::assert-equal "iter" (test-iter))
+    (test::assert-equal "iter" (test-iter))
+    (test::assert-equal "iter" (test-iter))
+    (test::assert-equal "iter" (test-iter)))
 %#
 (defn repeat-iter (i)
     (mk-iter i))
@@ -185,10 +196,11 @@ Return thing as an iterator if possible (if it is an iterator just return thing)
 Section: iterator
 
 Example:
-(assert-true (iter? (iter '(1 2 3))))
-(assert-true (iter? (iter [1 2 3])))
-(assert-true (iter? (iter "abc")))
-(assert-true (iter? (iter (iter '(1 2 3)))))
+(import iter)
+(test::assert-true (iter? (iter '(1 2 3))))
+(test::assert-true (iter? (iter [1 2 3])))
+(test::assert-true (iter? (iter "abc")))
+(test::assert-true (iter? (iter (iter '(1 2 3)))))
 %#
 (defn iter (thing)
   (if (iter? thing)
@@ -210,12 +222,13 @@ If not possible then wrap thing in a once iter and return that.
 Section: iterator
 
 Example:
-(assert-true (iter? (iter-or-single '(1 2 3))))
-(assert-true (iter? (iter-or-single [1 2 3])))
-(assert-true (iter? (iter-or-single "abc")))
-(assert-true (iter? (iter-or-single (iter '(1 2 3)))))
-(assert-true (iter? (iter-or-single 1)))
-(assert-true (iter? (iter-or-single \\A)))
+(import iter)
+(test::assert-true (iter? (iter-or-single '(1 2 3))))
+(test::assert-true (iter? (iter-or-single [1 2 3])))
+(test::assert-true (iter? (iter-or-single "abc")))
+(test::assert-true (iter? (iter-or-single (iter '(1 2 3)))))
+(test::assert-true (iter? (iter-or-single 1)))
+(test::assert-true (iter? (iter-or-single \\A)))
 %#
 (defn iter-or-single (thing)
   (if (iter? thing)
@@ -236,11 +249,12 @@ Iterator that generates numbers within a range.
 Section: iterator
 
 Example:
+(import iter)
 (let (test-iter (range 3 6))
-    (assert-equal 3 (test-iter))
-    (assert-equal 4 (test-iter))
-    (assert-equal 5 (test-iter))
-    (assert-equal :*iter-empty* (test-iter)))
+    (test::assert-equal 3 (test-iter))
+    (test::assert-equal 4 (test-iter))
+    (test::assert-equal 5 (test-iter))
+    (test::assert-equal :*iter-empty* (test-iter)))
 %#
 (defn range (start end)
     (mk-iter (if (< start end) (let (tmp start) (inc! start) tmp) :*iter-empty*)))
@@ -253,16 +267,17 @@ index.
 Section: iterator
 
 Example:
+(import iter)
 (let (test-iter (enumerate (vec-iter [:a :b :c])))
-    (let ([i v] (test-iter)) (assert-equal 0 i) (assert-equal :a v))
-    (let ([i v] (test-iter)) (assert-equal 1 i) (assert-equal :b v))
-    (let ([i v] (test-iter)) (assert-equal 2 i) (assert-equal :c v))
-    (assert-equal :*iter-empty* (test-iter)))
+    (let ([i v] (test-iter)) (test::assert-equal 0 i) (test::assert-equal :a v))
+    (let ([i v] (test-iter)) (test::assert-equal 1 i) (test::assert-equal :b v))
+    (let ([i v] (test-iter)) (test::assert-equal 2 i) (test::assert-equal :c v))
+    (test::assert-equal :*iter-empty* (test-iter)))
 (let (test-iter (enumerate (vec-iter [:a :b :c]) 5))
-    (let ([i v] (test-iter)) (assert-equal 5 i) (assert-equal :a v))
-    (let ([i v] (test-iter)) (assert-equal 6 i) (assert-equal :b v))
-    (let ([i v] (test-iter)) (assert-equal 7 i) (assert-equal :c v))
-    (assert-equal :*iter-empty* (test-iter)))
+    (let ([i v] (test-iter)) (test::assert-equal 5 i) (test::assert-equal :a v))
+    (let ([i v] (test-iter)) (test::assert-equal 6 i) (test::assert-equal :b v))
+    (let ([i v] (test-iter)) (test::assert-equal 7 i) (test::assert-equal :c v))
+    (test::assert-equal :*iter-empty* (test-iter)))
 %#
 (defn enumerate (iter % start := 0)
     (let (idx start)
@@ -280,11 +295,12 @@ in body. Body is evaluated a number of times equal to the items in the iterator.
 Section: iterator
 
 Example:
+(import iter)
 (let (i 0)
     (for x in (range 0 11) (set! i (+ 1 i)))
-    (assert-equal 11 i))
+    (test::assert-equal 11 i))
 (let (v [:a :b :c], iter (enumerate (vec-iter v)))
-    (for [idx, val] in iter (assert-equal v.~idx val)))
+    (for [idx, val] in iter (test::assert-equal v.~idx val)))
 %#
 (defmacro for (bind in items & body)
     (if (not (= in 'in)) (err "Invalid for: (for [i] in [iterator] (body))"))
@@ -300,11 +316,12 @@ Iterator that applies a lambda to each element of another iterator- is lazy.
 Section: iterator
 
 Example:
+(import iter)
 (let (test-map-iter (map (list-iter '(1 2 3)) (fn (x) (* x 2))))
-    (assert-equal 2 (test-map-iter))
-    (assert-equal 4 (test-map-iter))
-    (assert-equal 6 (test-map-iter))
-    (assert-equal :*iter-empty* (test-map-iter)))
+    (test::assert-equal 2 (test-map-iter))
+    (test::assert-equal 4 (test-map-iter))
+    (test::assert-equal 6 (test-map-iter))
+    (test::assert-equal :*iter-empty* (test-map-iter)))
 %#
 (defn map (i lambda)
     (mk-iter (let (val (i)) (if (identical? val :*iter-empty*) :*iter-empty* (lambda val)))))
@@ -316,10 +333,10 @@ Iterator that applies a lambda to each element to determine if is returned- is l
 Section: iterator
 
 Example:
-(let (test-iter (filter (vec-iter [1 2 3]) (fn (x) (not (= x 2)))))
-    (assert-equal 1 (test-iter))
-    (assert-equal 3 (test-iter))
-    (assert-equal :*iter-empty* (test-iter)))
+(let (test-iter (iter::filter (iter::vec-iter [1 2 3]) (fn (x) (not (= x 2)))))
+    (test::assert-equal 1 (test-iter))
+    (test::assert-equal 3 (test-iter))
+    (test::assert-equal :*iter-empty* (test-iter)))
 %#
 (defn filter (iter lambda)
     (mk-iter (let (val (iter)) (while (and (not (identical? val :*iter-empty*))(not (lambda val))) (set! val (iter))) val)))
@@ -339,12 +356,13 @@ Section: iterator
 
 Example:
 
-(assert-true (= 15 (reduce (vec-iter [1 2 3 4 5]) 0 +)))
-(assert-true (= 16 (reduce (vec-iter [1 2 3 4 5]) 1 +)))
-(assert-true (= \"one hoopy frood\" (reduce (vec-iter ["one " "hoopy " "frood"]) "" str)))
+(import iter)
+(test::assert-true (= 15 (iter::reduce (iter::vec-iter [1 2 3 4 5]) 0 +)))
+(test::assert-true (= 16 (iter::reduce (iter::vec-iter [1 2 3 4 5]) 1 +)))
+(test::assert-true (= \"one hoopy frood\" (iter::reduce (iter::vec-iter ["one " "hoopy " "frood"]) "" str)))
 %#
 (defn reduce (iter acc reducing-fn)
     ; Use apply so we can seamlessly handle compiled forms (like +, -, etc).
     ; Currently they won't work without apply if passed in as the reducing-fn.
     (for val in iter (set! acc (apply reducing-fn acc val nil)))
-    acc)
+    acc))

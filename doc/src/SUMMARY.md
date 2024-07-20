@@ -7,4 +7,5 @@
 # General
 
 - [Let Bindings and Destructuring](./let.md)
+- [Namespaces](./namespaces.md)
 - [Examples](./end_to_end.md)

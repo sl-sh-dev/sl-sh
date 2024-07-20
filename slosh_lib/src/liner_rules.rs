@@ -10,7 +10,7 @@ fn check_balanced_delimiters_lisp(input: &str) -> bool {
     let mut braces: i32 = 0;
     let mut double_quote = false;
     let mut escape = false;
-    // TODO, should probably handle multiline comments #|...|#
+    // TODO, should probably handle multiline comments #|...|#, docstrings #!...!# and string literals #"X...X"
     for ch in input.chars() {
         if escape {
             escape = false;
@@ -20,7 +20,7 @@ fn check_balanced_delimiters_lisp(input: &str) -> bool {
             double_quote = false;
             continue;
         }
-        if double_quote {
+        if double_quote && ch != '\\' {
             continue;
         }
         match ch {
