@@ -9,14 +9,16 @@ fn compile_params(
     result: usize,
     tail: bool,
 ) -> VMResult<()> {
-    for (i, r) in cdr.iter().enumerate() {
-        compile(env, state, *r, result + i)?;
-    }
-    let line = env.own_line();
-    if tail {
-        state
-            .chunk
-            .encode3(BMOV, 1, result as u16, cdr.len() as u16, line)?;
+    if !cdr.is_empty() {
+        for (i, r) in cdr.iter().enumerate() {
+            compile(env, state, *r, result + i)?;
+        }
+        let line = env.own_line();
+        if tail {
+            state
+                .chunk
+                .encode3(BMOV, 1, result as u16, cdr.len() as u16, line)?;
+        }
     }
     Ok(())
 }

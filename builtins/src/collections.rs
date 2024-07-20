@@ -152,10 +152,10 @@ pub fn occurs(environment: &mut SloshVm, haystack: Value, needle: Value) -> VMRe
 /// Section: collection
 ///
 /// Example:
-/// (assert-true (in? [1 2 3 4 5] 3))
-/// (assert-false (in? [1 2 3 4 5] 9))
-/// (assert-true (in? (list 1 2 3 4 5) 3))
-/// (assert-true (in? '(1 2 3 4 5) 5))
+/// (test::assert-true (in? [1 2 3 4 5] 3))
+/// (test::assert-false (in? [1 2 3 4 5] 9))
+/// (test::assert-true (in? (list 1 2 3 4 5) 3))
+/// (test::assert-true (in? '(1 2 3 4 5) 5))
 #[sl_sh_fn(fn_name = "in?", takes_env = true)]
 pub fn is_in(environment: &mut SloshVm, haystack: Value, needle: Value) -> VMResult<Value> {
     let mut stack = vec![];
@@ -254,12 +254,12 @@ pub fn flatten(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
 ///
 /// Example:
 /// (let (tmap [1 2 3 0])
-///     (assert-false (empty? tmap))
+///     (test::assert-false (empty? tmap))
 ///     (set! tmap (reverse tmap))
-///     (assert-equal 2 (get tmap 2))
-///     (assert-equal 1 (get tmap 3))
-///     (assert-equal 0 (get tmap 0))
-///     (assert-error (reverse "string")))
+///     (test::assert-equal 2 (get tmap 2))
+///     (test::assert-equal 1 (get tmap 3))
+///     (test::assert-equal 0 (get tmap 0))
+///     (test::assert-error (reverse "string")))
 #[sl_sh_fn(fn_name = "reverse", takes_env = true)]
 pub fn reverse(environment: &mut SloshVm, seq: Value) -> VMResult<Value> {
     match seq {
@@ -332,10 +332,10 @@ it into one vector of values.
 Section: collection
 
 Example:
-(assert-equal [1 2 3 1 2 3] (flatten 1 2 3 (list 1 2 3)))
-(assert-equal [1 2 3 1 2 3] (flatten 1 2 3 [1 2 3]))
-(assert-equal [1 2 3 1 2] (flatten 1 2 3 (list 1 2)))
-(assert-equal [1 2 3 1 2 3 1 2] (flatten 1 2 3 (list 1 2 3 (list 1 2))))
+(test::assert-equal [1 2 3 1 2 3] (flatten 1 2 3 (list 1 2 3)))
+(test::assert-equal [1 2 3 1 2 3] (flatten 1 2 3 [1 2 3]))
+(test::assert-equal [1 2 3 1 2] (flatten 1 2 3 (list 1 2)))
+(test::assert-equal [1 2 3 1 2 3 1 2] (flatten 1 2 3 (list 1 2 3 (list 1 2))))
 ",
     );
     add_builtin(
