@@ -1109,7 +1109,7 @@ Example:
 "#),
             import: add_special(vm, "import", r#"Usage: (import namespace [:as symbol])
 
-Will import a namespace.  Without an as then all symbols in the namespace will become available in the current
+Will import a namespace.  Without an :as then all symbols in the namespace will become available in the current
 namespace as if local.  With [:as symbol] then all namespace symbols become available with symbol:: prepended.
 
 Section: core
