@@ -191,7 +191,6 @@ Remainder from dividing first int by the second.
 Section: math
 
 Example:
-(ns-import 'math)
 (test::assert-equal 0 (rem 50 10))
 (test::assert-equal 5 (rem 55 10))
 (test::assert-equal 1 (rem 1 2))

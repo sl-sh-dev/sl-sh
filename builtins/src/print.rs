@@ -153,7 +153,7 @@ pub fn fprn(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     } else {
         Err(VMError::new(
             "io",
-            "fpr: require a writable IO object as first parameter",
+            "fprn: require a writable IO object as first parameter",
         ))
     }
 }

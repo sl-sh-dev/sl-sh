@@ -201,10 +201,17 @@ pub struct Specials {
     pub is_err: Interned,
     pub is_ok: Interned,
     pub ret: Interned,
+    pub ns: Interned,
+    pub with_ns: Interned,
+    pub import: Interned,
+    pub load: Interned,
+    pub comp_time: Interned,
 
     pub rest: Interned,
     pub optional: Interned,
     pub scratch: Interned,
+    pub colon: Interned,
+    pub root: Interned,
 }
 
 impl Specials {
@@ -368,7 +375,6 @@ Add a sequence of numbers.  (+) will return 0.
 Section: math
 
 Example:
-(ns-import 'math)
 (test::assert-equal 0 (+))
 (test::assert-equal 5 (+ 5))
 (test::assert-equal 10 (+ 5 5))
@@ -383,7 +389,6 @@ Subtract a sequence of numbers.  Requires at least one number (negate if only on
 Section: math
 
 Example:
-(ns-import 'math)
 (test::assert-error (- 5 "2"))
 (test::assert-equal -5 (- 5))
 (test::assert-equal -5.0 (- 5.0))
@@ -399,7 +404,6 @@ Multiply a sequence of numbers.  (*) will return 1.
 Section: math
 
 Example:
-(ns-import 'math)
 (test::assert-equal 1 (*))
 (test::assert-equal 5 (* 5))
 (test::assert-equal 5 (* 1 5))
@@ -420,7 +424,6 @@ Divide a sequence of numbers.  Requires at least two numbers.
 
 Section: math
 Example:
-(ns-import 'math)
 (test::assert-equal 5 (/ 50 10))
 (test::assert-equal 5 (/ 50.0 10.0))
 (test::assert-equal 0 (/ 1 5))
@@ -690,12 +693,12 @@ Example:
 (loop (idx) (3) (do
     (set! tot (+ tot 1))
     (if (> idx 1) (recur (- idx 1)))))
-(assert-equal 3 tot)
+(test::assert-equal 3 tot)
 (set! tot 0)
 ((fn (idx) (do
     (set! tot (+ tot 1))
     (if (> idx 1) (recur (- idx 1)))))5)
-(assert-equal 5 tot)",
+(test::assert-equal 5 tot)",
             ),
             this_fn: add_special(vm, "this-fn", ""),
             numeq: add_special(vm, "==", r#"Usage: (== val0 ... valN)
@@ -1071,10 +1074,111 @@ Example:
 (test::assert-true (ok? nil))
 "#),
             ret: add_special(vm, "return", ""),
+            ns: add_special(vm, "ns", r#"Usage: (ns SYMBOL)
+
+Changes to namespace.  This is "open-ended" change and is intended for use with
+the REPL prefer with-ns for scripts.
+The symbol "::" will return to the "root" namespace (i.e. no namespace prepended to globals).
+This will cause all globals defined to have namespace:: prepended.
+This will also clear any existing imports.
+
+Section: core
+
+Example:
+(ns testing)
+(def x #t)
+(test::assert-true x)
+(ns ::)
+(test::assert-true testing::x)
+"#),
+            with_ns: add_special(vm, "with-ns", r#"Usage: (with-ns SYMBOL sexp+)
+
+Create a namespace and compile sexp+ within it.  Restore the previous namespace when scope ends.
+THe symbol "::" will return to the "root" namespace (i.e. no namespace prepended to globals).
+This will cause all globals defined to have namespace:: prepended.
+This will also clear any existing imports.
+
+Section: core
+
+Example:
+(with-ns test-with-ns
+    (def ttf (fn () '(1 2 3)))
+    (test::assert-equal '(1 2 3) (ttf))
+    (test::assert-equal '(1 2 3) (test-out::ttf)))
+(test::assert-equal '(1 2 3) (test-out::ttf))
+"#),
+            import: add_special(vm, "import", r#"Usage: (import namespace [:as symbol])
+
+Will import a namespace.  Without an :as then all symbols in the namespace will become available in the current
+namespace as if local.  With [:as symbol] then all namespace symbols become available with symbol:: prepended.
+
+Section: core
+
+Example:
+(ns testing)
+(def x #t)
+(test::assert-true x)
+(ns ::)
+(test::assert-true testing::x)
+(import testing)
+(test::assert-true x)
+(import testing :as t)
+(test::assert-true t::x)
+"#),
+            load: add_special(vm, "load", r#"Usage: (load path) -> [last form value]
+
+Read and eval a file (from path- a string).  The load special form executes at compile time.
+This means it's parameter must resolve at compile time.  Most of the time you will want to use
+this in conjuction with 'with-ns' to namespace the contents.
+Note: on it's own does nothing with namespaces.
+
+Section: core
+
+Example:
+(comp-time (def test-temp-file (get-temp-file)) nil)
+(defer (fs-rm test-temp-file))
+(let (tst-file (fopen test-temp-file :create))
+    (defer (fclose tst-file))
+    (fprn tst-file "(with-ns test-load")
+    (fprn tst-file "    (defn test-fn () '(1 2 3)))"))
+(load test-temp-file) ; put stuff in it's own namespace
+(test::assert-equal '(1 2 3) (test-load::test-fn))
+
+
+(with-ns test-out2
+    (comp-time
+        (def test-temp-file (get-temp-file))
+        (let (tst-file (fopen test-temp-file :create))
+            (defer (fclose tst-file))
+            (fprn tst-file "(defn test-fn () '(1 2 3))"))
+        nil)
+    (defer (fs-rm test-temp-file))
+    (load test-temp-file) ; put new stuff in current namespace
+    (test::assert-equal '(1 2 3) (test-fn))
+    (test::assert-equal '(1 2 3) (test-out2::test-fn)))
+"#),
+            comp_time: add_special(vm, "comp-time", r#"Usage: (comp-time sexp+)
+
+Compile and execute sexp+ at compile time.  The result of the final sexp will then be compiled into
+the current module being compiled (produce nil to avoid this).
+
+Section: core
+
+Example:
+(with-ns test-out
+    (comp-time '(def ttf (fn () '(1 2 3))))
+    (comp-time (def ttf2 (fn () '(1 2 3))) nil)
+    (test::assert-equal '(1 2 3) (ttf))
+    (test::assert-equal '(1 2 3) (test-out::ttf))
+    (test::assert-equal '(1 2 3) (ttf2))
+    (test::assert-equal '(1 2 3) (test-out::ttf2)))
+"#),
 
             rest: vm.intern_static("&"),
             optional: vm.intern_static("%"),
             scratch: vm.intern_static("[SCRATCH]"),
+            colon: vm.intern_static(":"),
+            root: vm.intern_static("ROOT"),
         }
     }
 }
@@ -1157,12 +1261,42 @@ impl CompileState {
     }
 }
 
+/// Data for the current namespace
+#[derive(Clone, Debug)]
+pub struct Namespace {
+    name: String,
+    imports: Vec<(String, Option<String>)>,
+}
+
+impl Namespace {
+    pub fn new_with_name(name: String) -> Self {
+        Self {
+            name,
+            imports: vec![],
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+impl Default for Namespace {
+    fn default() -> Self {
+        Self {
+            name: "".to_string(),
+            imports: vec![],
+        }
+    }
+}
+
 pub struct CompileEnvironment {
     use_line: bool,
     line: u32,
     specials: Option<Specials>,
     global_map: HashMap<Interned, usize>,
     gensym_idx: usize,
+    namespace: Namespace,
 }
 
 impl Default for CompileEnvironment {
@@ -1179,6 +1313,10 @@ impl CompileEnvironment {
             specials: None,
             global_map: HashMap::new(),
             gensym_idx: 0,
+            namespace: Namespace {
+                name: "".to_string(),
+                imports: vec![],
+            },
         }
     }
 
@@ -1192,8 +1330,22 @@ impl CompileEnvironment {
         self.line
     }
 
-    pub fn global_defined(&self, i: Interned) -> bool {
-        self.global_map.contains_key(&i)
+    pub fn set_namespace(&mut self, namespace: Namespace) {
+        self.namespace = namespace;
+    }
+
+    pub fn add_ns_import(&mut self, ns: String, alias: Option<String>) {
+        for (ns_name, ns_alias) in self.namespace.imports.iter_mut() {
+            if ns_name == &ns {
+                *ns_alias = alias;
+                return;
+            }
+        }
+        self.namespace.imports.push((ns, alias));
+    }
+
+    pub fn get_namespace(&self) -> &Namespace {
+        &self.namespace
     }
 }
 
@@ -1306,6 +1458,56 @@ impl SloshVmTrait for SloshVm {
     }
 
     fn global_intern_slot(&self, symbol: Interned) -> Option<u32> {
+        fn check_global(vm: &SloshVm, ns: &str, sym: &str) -> Option<u32> {
+            let mut ns = ns.to_string();
+            ns.push_str("::");
+            ns.push_str(sym);
+            if let Some(i) = vm.get_if_interned(&ns) {
+                if let Some(global) = vm.env().global_map.get(&i).copied().map(|i| i as u32) {
+                    return Some(global);
+                }
+            }
+            None
+        }
+        fn is_alias(alias: &str, sym: &str) -> bool {
+            let mut a_i = alias.chars();
+            let mut s_i = sym.chars().peekable();
+            let mut is_alias = true;
+            while let (Some(ach), Some(sch)) = (a_i.next(), s_i.peek()) {
+                if ach != *sch {
+                    is_alias = false;
+                    break;
+                }
+                s_i.next();
+            }
+            if is_alias {
+                if let (Some(':'), Some(':')) = (s_i.next(), s_i.next()) {
+                    return true;
+                }
+            }
+            false
+        }
+
+        let sym = self.get_interned(symbol);
+        if let Some(g) = check_global(self, &self.env().namespace.name, sym) {
+            return Some(g);
+        }
+        for (import, alias) in &self.env().namespace.imports {
+            if let Some(alias) = alias {
+                if is_alias(alias, sym) {
+                    let s = sym.replacen(alias, import, 1);
+                    if let Some(i) = self.get_if_interned(&s) {
+                        if let Some(global) =
+                            self.env().global_map.get(&i).copied().map(|i| i as u32)
+                        {
+                            return Some(global);
+                        }
+                    }
+                }
+            } else if let Some(g) = check_global(self, import, sym) {
+                return Some(g);
+            }
+        }
         self.env()
             .global_map
             .get(&symbol)
