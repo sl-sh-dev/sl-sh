@@ -64,7 +64,8 @@ cargo run -p slosh
 - install binary
 
 ```
-sudo install -D -m 755 target/release/slosh /usr/local/bin/
+mkdir -p /usr/local/bin
+sudo install -m 755 target/release/slosh /usr/local/bin/
 ```
 
 - add slosh to /etc/shells and change login shell to slosh
@@ -73,6 +74,11 @@ sudo install -D -m 755 target/release/slosh /usr/local/bin/
 echo /usr/local/bin/slosh | sudo tee -a /etc/shells
 chsh -s /usr/local/bin/slosh
 ```
+### 4. (Optional) Configure slosh
+The slosh configuration file lives at ~/.config/slosh/init.slosh. <br>
+If you run slosh and the file does not exist, a default one will be created for you. <br>
+Review your existing shell configuration files like ~/.bashrc and ~/.bash_profile and manually translate them to slosh syntax and add to your init.slosh file <br>
+For example, `export JAVA_HOME="/usr/local/opt/openjdk@11/bin/java"` becomes `(sh "export JAVA_HOME='/usr/local/opt/openjdk@11/bin/java'")`
 
 ## Compiler
 
