@@ -1,7 +1,7 @@
 # ERRORS
 
 ## Error Type
-The error type consists of an identifying keywork and a data/payload value.  This
+The error type consists of an identifying keyword and a data/payload value.  This
 value is typically a string but can be any valid value.
 
 (type [error]) returns :Error
