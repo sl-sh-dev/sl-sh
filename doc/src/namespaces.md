@@ -2,7 +2,7 @@
 
 ## Description
 
-Namespaces are compiler bookkeeping for organizing global symobols.  When in a namespace then any symbols that are defined will have the current NAMESPACE:: prepended to the symbol.  When symbols are resolved the compiler will also try to prepend the current namespace first in order to find the symbol.
+Namespaces are compiler bookkeeping for organizing global symbols.  When in a namespace then any symbols that are defined will have the current NAMESPACE:: prepended to the symbol.  When symbols are resolved the compiler will also try to prepend the current namespace first in order to find the symbol.
 
 ## Entering a namespace
 
@@ -28,7 +28,7 @@ For instance using ```(import iter)``` will allow any symbols in the iter namesp
 
 ## Loading code
 
-To load new code into your environemt use load or run-script.
+To load new code into your environment use load or run-script.
 
 ### Load
 

@@ -9,7 +9,7 @@
 //! TODO PC ISSUE #7 - returning values via annotated or lifetime?
 //!  To avoid allocations when converting a slosh &Value back to a rust type that was mutated
 //!  don't return anything. If it is necessary for the API to return some value.
-//! ...either use an annotation on an input argument `fn myfun(#[likethis] returnme: &mut String, someotherval: String) -> VMResult<()>`
+//! ...either use an annotation on an input argument `fn myfun(#[likeThis] returnme: &mut String, someotherval: String) -> VMResult<()>`
 //! or a lifetime... might be easier to do the annotation.
 //!
 //!

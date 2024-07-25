@@ -13,11 +13,11 @@ rm -rf ./book/*
 # generated site entrypoint at `./book/index.html`
 ```
 
-TODO PC need md files in a specific folder named after a section to be inlined within the section documetnation
+TODO PC need md files in a specific folder named after a section to be inlined within the section documentation
 
 ## Important information
 
-0. Must be compiled in lisp-test mode for appropriate documenation functions to be present (`cargo build --features lisp-test`).
+0. Must be compiled in lisp-test mode for appropriate documentation functions to be present (`cargo build --features lisp-test`).
 1. To create new documentation files add them in markdown format to the `doc/src/` directory and
    then reference them in `doc/src/SUMMARY.md` when slosh builds the documentation it will create
    an html file in the format specified in the SUMMARY.md table of contents at the provided relative URL.

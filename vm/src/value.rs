@@ -225,7 +225,7 @@ impl Value {
         matches!(self, Value::True)
     }
 
-    pub fn is_truethy(&self) -> bool {
+    pub fn is_truthy(&self) -> bool {
         !matches!(self, Value::False | Value::Nil)
     }
 

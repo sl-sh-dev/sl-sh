@@ -522,7 +522,7 @@ mod tests {
         for val in loose_strings_as_vals {
             let _loose_string: LooseString = val
                 .sl_into_ref(vm)
-                .expect("This value should be convertable to a LooseString");
+                .expect("This value should be convertible to a LooseString");
         }
     }
 
@@ -533,7 +533,7 @@ mod tests {
 
         let sample = LooseString::Owned("hello world".to_string());
         let val: Value =
-            Value::sl_from(sample, vm).expect("This LooseString should be convertable to a Value");
+            Value::sl_from(sample, vm).expect("This LooseString should be convertible to a Value");
         assert!(matches!(val, Value::String(_)));
     }
 }

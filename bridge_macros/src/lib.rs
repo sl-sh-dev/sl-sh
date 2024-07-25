@@ -1044,16 +1044,16 @@ fn generate_parse_fn(
 }
 
 fn num_required_args(params: &[Param]) -> usize {
-    params.iter().fold(0, |accum, nxt| {
+    params.iter().fold(0, |accumulator, nxt| {
         if nxt.handle == TypeHandle::Direct {
-            accum + 1
+            accumulator + 1
         } else {
-            accum
+            accumulator
         }
     })
 }
 
-/// write the builtin_ version of the provided function. This function is the function taht makes
+/// write the builtin_ version of the provided function. This function is the function that makes
 /// a direct call to the original rust native function to which the macro was applied. To accomplish
 /// this the builtin_ function generates takes some number of ArgType structs (the wrapper enum that
 /// enables passing optional and varargs). the body of the function handles unwrapping the ArgType
@@ -1643,7 +1643,7 @@ pub fn sl_sh_fn(
 
 //TODO
 //  - functions that return Values, tuple return types?
-//  - fcns that accept iters?
+//  - functions that accept iters?
 //  - then... compare against inline the function being called... randomize variable names...
 //      and fn names too? could pick some random string and prefix all generated idents.
 //  - ISSUE #119 trybuild!
