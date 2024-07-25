@@ -3,9 +3,6 @@
 (prn "Using default slshrc written to \"~/.config/slosh/init.slosh\".")
 (prn "Edit this file to remove this message and customize your shell")
 
-; load the core lib
-(load "core.slosh")
-
 (defn parse-git-branch () (let (branch ($sh "git rev-parse --abbrev-ref HEAD 2>/dev/null"))
 	(if (= branch "")
 		(str "")
@@ -23,8 +20,6 @@
         (str "\x1b[31m" status "\n\x1b[31m" debug "λ #\x1b[39m ")
         (str "\x1b[32m" status "\n\x1b[32m" debug "λ >\x1b[39m "))))
 
-(def *ns* "SLOSH")
-
 (defn __prompt ()
     (str "\x1b[32m[" *ns* "]:" (env "HOST") ":\x1b[34m" (str-trim! (get-pwd)) "/\x1b[37m" (parse-git-branch) (set-prompt-tail *last-status*)))
 
@@ -33,7 +28,7 @@
 (sh "alias vi=nvim")
 (sh "alias vim=nvim")
 
-(sh "export PATH=/bin:/usr/local/bin:~/bin:~/.cargo/bin")
+(sh "export PATH=/bin:/usr/bin:/usr/local/bin:~/bin:~/.cargo/bin")
 
 (sh "export LC_ALL=en_US.UTF-8")
 
@@ -68,6 +63,6 @@
 (prn "		We don't have to be mean because,")
 (prn "		remember, no matter where you go,")
 (prn "		there you are.")
-(prn (str "			- Buckaroo Banzai (" (str-trim $(cat ~/.local/share/sl-sh/history | grep -v "<ctx>" | wc -l)) ")"))
+(prn "			- Buckaroo Banzai")
 
 ;; }}}

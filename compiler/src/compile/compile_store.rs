@@ -2,6 +2,18 @@ use crate::{compile, CompileState, SloshVm};
 use compile_state::state::SloshVmTrait;
 use slvm::*;
 
+fn get_global_with_ns(env: &mut SloshVm, si: Interned) -> u32 {
+    if env.env().get_namespace().name().is_empty() {
+        env.get_reserve_global(si)
+    } else {
+        let mut ns = env.env().get_namespace().name().to_string();
+        ns.push_str("::");
+        ns.push_str(env.get_interned(si));
+        let i = env.intern(&ns);
+        env.get_reserve_global(i)
+    }
+}
+
 pub(crate) fn compile_def(
     env: &mut SloshVm,
     state: &mut CompileState,
@@ -12,7 +24,7 @@ pub(crate) fn compile_def(
         (_, None) => return Err(VMError::new_compile("def: expected symbol")),
         (1, Some(Value::Symbol(si))) => {
             // 'def symbol' predeclares a symbol to be used later, no bytecode.
-            let si_const = env.get_reserve_global(*si);
+            let si_const = get_global_with_ns(env, *si);
             if let Some(doc_string) = state.doc_string {
                 let key = env.intern("doc-string");
                 env.set_global_property(si_const, key, doc_string);
@@ -20,7 +32,7 @@ pub(crate) fn compile_def(
             }
         }
         (2, Some(Value::Symbol(si))) => {
-            let si_const = env.get_reserve_global(*si);
+            let si_const = get_global_with_ns(env, *si);
             if let Some(doc_string) = state.doc_string {
                 let key = env.intern("doc-string");
                 env.set_global_property(si_const, key, doc_string);

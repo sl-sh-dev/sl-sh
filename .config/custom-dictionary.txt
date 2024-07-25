@@ -1,4 +1,5 @@
 # Custom Dictionary Words
+replacen        # rust string method to replace n occurrences of a substring
 addq
 addressof
 aframe
