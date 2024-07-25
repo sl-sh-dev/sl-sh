@@ -637,7 +637,7 @@ fn rlimit_to_c(rlimit: RLimit) -> Result<RlimitResource, io::Error> {
         #[cfg(not(any(target_os = "android", target_os = "linux")))]
         RLimit::SigPending => Err(Error::new(ErrorKind::Unsupported, "not on platform")),
         #[cfg(target_os = "freebsd")]
-        RLimit::KQueues => Ok(libc::RLIMIT_KQUEUESA),
+        RLimit::KQueues => Ok(libc::RLIMIT_KQUEUES),
         #[cfg(not(target_os = "freebsd"))]
         RLimit::KQueues => Err(Error::new(ErrorKind::Unsupported, "not on platform")),
         #[cfg(any(

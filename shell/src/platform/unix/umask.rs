@@ -302,7 +302,7 @@ pub fn merge_and_set_umask(current_umask: mode_t, mask_string: &str) -> Result<m
     }
 }
 
-/// Cears the current umask and returns the previous umask.
+/// Clears the current umask and returns the previous umask.
 #[allow(clippy::unnecessary_cast)]
 pub fn get_and_clear_umask() -> mode_t {
     nix::sys::stat::umask(Mode::empty()).bits() as mode_t

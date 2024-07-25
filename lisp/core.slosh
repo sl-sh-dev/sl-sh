@@ -300,8 +300,8 @@ Example:
             (inc! ~i-name)))))
 
 #%
-Evaluate body a number of times equal to times' numnrical value. Includes an
-incrementing reference binding, idx-bind, accesible in body.
+Evaluate body a number of times equal to times' numerical value. Includes an
+incrementing reference binding, idx-bind, accessible in body.
 
 Section: core
 
@@ -342,7 +342,7 @@ Example:
 Usage: (dyn key value expression) -> result_of_expression
 
 Creates a dynamic binding for key, assigns value to it and evals expression under it.
-Note that if key must be a symbol and is not evaluted.
+Note that if key must be a symbol and is not evaluated.
 
 The binding is gone once the dyn form ends. This is basically a set! on the
 binding in an unwind protect to reset it when done.  When used on a global will
@@ -543,7 +543,7 @@ Example:
 Usage: (cond ((test form*)*) -> result
 
 Evaluate each test in order.  If it is true then evaluate the form(s) in an
-implicit do and return the result.  Stop evaluting at the first true test.
+implicit do and return the result.  Stop evaluating at the first true test.
 Return nil if no conditions are true.
 
 Section: conditional

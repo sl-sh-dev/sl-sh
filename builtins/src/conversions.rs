@@ -108,7 +108,7 @@ Section: conversion
         env,
         "ref",
         global_ref,
-        r#"Usage: (ref symol) -> Value
+        r#"Usage: (ref symbol) -> Value
 
 If symbol is defined then return the thing it references.
 
@@ -119,7 +119,7 @@ Section: conversion
         env,
         "def?",
         is_def,
-        r#"Usage: (def? symol) -> #t/#f
+        r#"Usage: (def? symbol) -> #t/#f
 
 If symbol is defined then return true else false.
 

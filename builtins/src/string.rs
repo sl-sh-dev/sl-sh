@@ -159,7 +159,7 @@ fn str_map_inner(vm: &mut SloshVm, func: Value, string: Value) -> VMResult<Strin
     let mut res = String::new();
     for ch in UnicodeSegmentation::graphemes(string, true) {
         let param = vm.alloc_char(ch);
-        // Dont use '?' or return early until the heap_unsticky() call below.
+        // Don't use '?' or return early until the heap_unsticky() call below.
         vm.heap_sticky(param);
         let val = match func {
             Value::Lambda(handle) => {
@@ -520,7 +520,7 @@ pub fn add_str_builtins(env: &mut SloshVm) {
         str_replace,
         r#"Usage: (str-replace string old-pattern new-pattern) -> string
 
-Replace occurances of second string with third in the first string.
+Replace occurrences of second string with third in the first string.
 
 Section: string
 

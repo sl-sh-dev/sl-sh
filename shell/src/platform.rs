@@ -63,7 +63,7 @@ pub trait Platform {
     /// If mask_string is a mode string then merge it with umask and set the current umask.
     /// If mask_string is an int then treat it as a umask and set the current umask (no merge)).
     fn merge_and_set_umask(current_umask: mode_t, mask_string: &str) -> Result<mode_t, io::Error>;
-    /// Cears the current umask and returns the previous umask.
+    /// Clears the current umask and returns the previous umask.
     fn get_and_clear_umask() -> mode_t;
     /// Set current umask to umask.
     fn set_umask(umask: mode_t) -> Result<(), io::Error>;
@@ -103,7 +103,7 @@ pub struct RLimitVals {
 
 /// Abstraction over the various rlimits.
 pub enum RLimit {
-    ///-b: The maximum socket buffer size. RLIMIT_SBSIZE (freebsd, drogonfly)
+    ///-b: The maximum socket buffer size. RLIMIT_SBSIZE (freebsd, dragonfly)
     SocketBufferSize,
     /// -c; The maximum size of core files created. RLIMIT_CORE
     /// The maximum size core file that this process can create. If the process terminates and would
