@@ -23,7 +23,6 @@
 //! # fn main() { }
 //! ```
 
-
 use core::convert::TryInto;
 use core::default::Default;
 use core::hash::BuildHasherDefault;
