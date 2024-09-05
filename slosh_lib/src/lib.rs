@@ -490,7 +490,7 @@ fn run_shell_tty() -> i32 {
     //Box::new(keymap::Emacs::new())
     con.set_keymap(Box::new(vi));
 
-    if let Err(e) = con.history.set_file_name_and_load_history(&history_file()) {
+    if let Err(e) = con.history.set_file_name_and_load_history(history_file()) {
         println!("Error loading history: {e}");
     }
     shell::run::setup_shell_tty(STDIN_FILENO);

@@ -23,8 +23,6 @@
 //! # fn main() { }
 //! ```
 
-#[cfg(feature = "std")]
-extern crate std;
 
 use core::convert::TryInto;
 use core::default::Default;
