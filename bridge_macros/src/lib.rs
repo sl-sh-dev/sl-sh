@@ -186,7 +186,7 @@ fn get_generic_argument_from_type_path(
     type_path: &TypePath,
 ) -> Option<(&GenericArgument, &TypePath)> {
     if type_path.path.segments.len() == 1 {
-        for path_segment in &type_path.path.segments.iter().next_back() {
+        if let Some(path_segment) = &type_path.path.segments.iter().next_back() {
             if let PathArguments::AngleBracketed(args) = &path_segment.arguments {
                 if let Some(ty) = args.args.iter().next_back() {
                     return Some((ty, type_path));
@@ -1552,10 +1552,10 @@ fn parse_attributes(
 /// intern_<original_fn_name>
 /// parse_<original_fn_name>
 /// - intern_ is the simplest function, it is generated to be called within sl-sh to avoid writing
-/// boilerplate code to submit a function symbol and the associated code to the runtime.
+///   boilerplate code to submit a function symbol and the associated code to the runtime.
 /// - parse_ has the same function signature as all rust native functions, it takes the environment
-/// and a list of args. It evals those arguments at runtime and converts them to rust types
-/// they can be consumed by the target rust function.
+///   and a list of args. It evals those arguments at runtime and converts them to rust types
+///   they can be consumed by the target rust function.
 fn generate_sl_sh_fn(
     original_item_fn: &ItemFn,
     attr_args: AttributeArgs,

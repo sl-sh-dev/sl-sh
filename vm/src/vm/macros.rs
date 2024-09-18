@@ -1,7 +1,9 @@
 #[macro_export]
 macro_rules! inc_ip {
     ($code_ip:expr) => {{
+        #[allow(clippy::macro_metavars_in_unsafe)]
         unsafe {
+            // SAFETY: `$code_ip` must be a valid pointer to at least 1 byte of memory.
             let r = *$code_ip;
             $code_ip = $code_ip.offset(1);
             r
@@ -33,7 +35,9 @@ macro_rules! decode_u8 {
 #[macro_export]
 macro_rules! decode_u16 {
     ($code:expr) => {{
+        #[allow(clippy::macro_metavars_in_unsafe)]
         unsafe {
+            // SAFETY: `$code` must be a valid pointer to at least 2 bytes of memory.
             let idx1 = *$code;
             let idx2 = *$code.offset(1);
             $code = $code.offset(2);
@@ -45,7 +49,9 @@ macro_rules! decode_u16 {
 #[macro_export]
 macro_rules! decode_u32 {
     ($code:expr) => {{
+        #[allow(clippy::macro_metavars_in_unsafe)]
         unsafe {
+            // SAFETY: `$code` must be a valid pointer to at least 4 bytes of memory.
             let idx1 = *$code;
             let idx2 = *$code.offset(1);
             let idx3 = *$code.offset(2);
@@ -74,7 +80,9 @@ macro_rules! decode2 {
             (decode_u16!($code), decode_u16!($code))
         } else {
             //(crate::inc_ip!($code) as u16, crate::inc_ip!($code) as u16)
+            #[allow(clippy::macro_metavars_in_unsafe)]
             unsafe {
+                // SAFETY: $code must be a valid pointer to at least 2 bytes of memory.
                 let r = (*$code as u16, *$code.offset(1) as u16);
                 $code = $code.offset(2);
                 r
@@ -89,7 +97,9 @@ macro_rules! decode3 {
         if $wide {
             (decode_u16!($code), decode_u16!($code), decode_u16!($code))
         } else {
+            #[allow(clippy::macro_metavars_in_unsafe)]
             unsafe {
+                // SAFETY: $code must be a valid pointer to at least 3 bytes of memory.
                 let r = (
                     *$code as u16,
                     *$code.offset(1) as u16,
