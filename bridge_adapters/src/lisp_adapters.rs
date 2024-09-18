@@ -134,7 +134,7 @@ where
 
 impl<'a, T> SlFromRef<'a, slvm::Value> for Vec<T>
 where
-    T: SlFromRef<'a, Value> + 'a + ?Sized,
+    T: SlFromRef<'a, Value> + 'a,
 {
     fn sl_from_ref(value: slvm::Value, vm: &'a SloshVm) -> VMResult<Self> {
         let mut res = vec![];
