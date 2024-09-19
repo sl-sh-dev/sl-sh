@@ -9,6 +9,7 @@ pub mod conversions;
 pub mod fs_meta;
 pub mod fs_temp;
 pub mod io;
+pub mod math;
 pub mod print;
 pub mod rand;
 pub mod string;
