@@ -23,6 +23,7 @@ use builtins::conversions::add_conv_builtins;
 use builtins::fs_meta::add_fs_meta_builtins;
 use builtins::fs_temp::add_fs_temp_builtins;
 use builtins::io::add_io_builtins;
+use builtins::math::add_math_builtins;
 use builtins::print::{add_print_builtins, display_value};
 use builtins::rand::add_rand_builtins;
 use builtins::string::add_str_builtins;
@@ -376,6 +377,7 @@ pub fn set_builtins(env: &mut SloshVm) {
     add_fs_temp_builtins(env);
     add_rand_builtins(env);
     add_doc_builtins(env);
+    add_math_builtins(env);
 
     env.set_named_global("*int-bits*", (INT_BITS as i64).into());
     env.set_named_global("*int-max*", INT_MAX.into());
