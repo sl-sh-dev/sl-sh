@@ -674,14 +674,14 @@ fn build_doc(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         md.book.push_item(BookItem::Chapter(section_chapter));
     }
 
-    md.build().expect("Building failed");
+    md.build().expect("Building mdbook failed.");
     Ok(Value::Nil)
 }
 
 fn make_file(name: impl AsRef<Path>, content: &str) -> io::Result<PathBuf> {
     //TODO I do not understand why have to both pass the file contents and have a md file
     // and if I do not have the md file i get a no parents error?
-    let filename = format!("{}.md", name.as_ref().display()).into();
+    let filename = format!("src/generated-sections/{}.md", name.as_ref().display()).into();
     let mut file_0 = File::create(&filename)?;
     writeln!(file_0, "{}", content)?;
     File::flush(&mut file_0)?;
