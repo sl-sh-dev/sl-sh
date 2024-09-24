@@ -17,6 +17,7 @@ use slvm::opcodes::*;
 use compile_state::state::*;
 use sl_compiler::reader::*;
 
+use bridge_adapters::add_builtin;
 use builtins::collections::setup_collection_builtins;
 use builtins::conversions::add_conv_builtins;
 use builtins::fs_meta::add_fs_meta_builtins;
@@ -28,7 +29,6 @@ use builtins::string::add_str_builtins;
 use builtins::{add_global_value, add_misc_builtins};
 use sl_liner::vi::AlphanumericAndVariableKeywordRule;
 use sl_liner::{keymap, ColorClosure, Context, Prompt};
-use bridge_adapters::add_builtin;
 
 mod completions;
 pub mod debug;
