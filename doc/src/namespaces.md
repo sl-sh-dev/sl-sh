@@ -20,7 +20,7 @@ This is an open-ended namespace change intended for the repl, prefer with-ns for
 
 ## Imports
 
-Other namespaces can be imported to allow it's symbols to be accessed in a shorter form.  Use the 'import' form for this .
+Other namespaces can be imported to allow its symbols to be accessed in a shorter form.  Use the 'import' form for this .
 ```slosh
 (doc 'import)
 ```

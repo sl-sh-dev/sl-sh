@@ -77,7 +77,7 @@ fn handle_supports(pre: &dyn Preprocessor, sub_args: &ArgMatches) -> ! {
 mod slosh_eval_lib {
     use super::*;
     use pulldown_cmark::CodeBlockKind;
-    use slosh_lib::{new_slosh_vm_with_builtins, run_reader, Reader};
+    use slosh_lib::Reader;
 
     /// Preprocessor to evaluate slosh code
     pub struct EvalSlosh;
@@ -115,9 +115,9 @@ mod slosh_eval_lib {
                                     if name.starts_with("slosh") && !name.contains("no-execute") {
                                         slosh_code_block_num += 1;
                                         log::debug!(
-                                            "Evaluate slosh code block #{} in chapter: {}",
-                                            slosh_code_block_num,
+                                            "File: {}: block #{}",
                                             chapter.name,
+                                            slosh_code_block_num,
                                         );
                                         tracking = true;
                                     }
@@ -142,7 +142,8 @@ mod slosh_eval_lib {
                                     buf += "\n";
                                 }
                                 tracking = false;
-                                log::debug!("New Code Block: {}", buf);
+                                log::debug!("```slosh\n{}", buf);
+                                log::debug!("```");
                                 events.push(Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(
                                     "slosh".into(),
                                 ))));
@@ -185,19 +186,21 @@ mod slosh_eval_lib {
     }
 
     fn exec_code(code: String) -> String {
-        let mut vm = new_slosh_vm_with_builtins();
+        let mut vm = slosh_lib::new_slosh_vm_with_builtins_and_core();
 
-        let mut reader =
-            Reader::from_string(r#"(load "core.slosh")"#.to_string(), &mut vm, "", 1, 0);
-        _ = run_reader(&mut reader);
         let code = format!(
-            r#"(def *prn* "")
-               (dyn prn (fn (&rest) (set! *prn* (str *prn* &rest))) (do {}))"#,
+            r#"(import test)
+                (def *prn* "")
+                (dyn
+                    prn
+                    (fn (&rest) (set! *prn* (str *prn* &rest)))
+                    (do  {}))"#,
             code
         );
+
         let mut reader = Reader::from_string(code, &mut vm, "", 1, 0);
-        let s = run_reader(&mut reader)
-            .map(|x| x.display_value(&mut vm))
+        let s = slosh_lib::run_reader(&mut reader)
+            .map(|x| x.display_value(&vm))
             .map_err(|e| format!("Encountered error: {}", e));
         match s {
             Ok(s) | Err(s) => s,

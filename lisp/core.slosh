@@ -279,7 +279,7 @@ Section: core
         (do
         (if has-usage
           `(prn ~docs)
-          `(prn (usage ~sym) "\n\n" ~docs)))))
+          `(prn (str (usage ~sym) "\n\n" ~docs))))))
 
 #%
 Evaluate body a number of times equal to times' numerical value.

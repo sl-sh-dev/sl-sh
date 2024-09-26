@@ -17,6 +17,7 @@ use slvm::opcodes::*;
 use compile_state::state::*;
 use sl_compiler::reader::*;
 
+use bridge_adapters::add_builtin;
 use builtins::collections::setup_collection_builtins;
 use builtins::conversions::add_conv_builtins;
 use builtins::fs_meta::add_fs_meta_builtins;
@@ -158,13 +159,17 @@ fn get_home_dir() -> Option<PathBuf> {
     }
 }
 
+fn load_core(env: &mut SloshVm) {
+    match load_internal(env, "core.slosh") {
+        Ok(_) => {}
+        Err(err) => eprintln!("ERROR: {err}"),
+    }
+}
+
 fn load_core_slosh() {
     ENV.with(|renv| {
         let mut env = renv.borrow_mut();
-        match load_internal(&mut env, "core.slosh") {
-            Ok(_) => {}
-            Err(err) => println!("ERROR: {err}"),
-        }
+        load_core(&mut env)
     });
 }
 
@@ -199,7 +204,7 @@ fn load_sloshrc() {
                 let script = env.get_interned(script);
                 match load_internal(&mut env, script) {
                     Ok(_) => {}
-                    Err(err) => println!("ERROR: {err}"),
+                    Err(err) => eprintln!("ERROR: {err}"),
                 }
             });
         }
@@ -370,6 +375,7 @@ pub fn set_builtins(env: &mut SloshVm) {
     add_fs_meta_builtins(env);
     add_fs_temp_builtins(env);
     add_rand_builtins(env);
+    add_doc_builtins(env);
 
     env.set_named_global("*int-bits*", (INT_BITS as i64).into());
     env.set_named_global("*int-max*", INT_MAX.into());
@@ -382,6 +388,28 @@ pub fn new_slosh_vm_with_builtins() -> SloshVm {
     let mut env = new_slosh_vm();
     set_builtins(&mut env);
     env
+}
+
+pub fn new_slosh_vm_with_builtins_and_core() -> SloshVm {
+    let mut env = new_slosh_vm();
+    set_builtins(&mut env);
+    load_core(&mut env);
+    env
+}
+
+fn add_doc_builtins(env: &mut SloshVm) {
+    add_builtin(
+        env,
+        "usage",
+        crate::get_usage,
+        r#"Usage: (usage 'symbol)
+
+Provides usage information derived from the bytecode. Documentation can also have it's
+own usage string provided in the doc string but this function returns what the actual
+function's compiled code provides.
+
+Section: core"#,
+    );
 }
 
 pub fn set_builtins_shell(env: &mut SloshVm) {
@@ -491,7 +519,7 @@ fn run_shell_tty() -> i32 {
     con.set_keymap(Box::new(vi));
 
     if let Err(e) = con.history.set_file_name_and_load_history(history_file()) {
-        println!("Error loading history: {e}");
+        eprintln!("Error loading history: {e}");
     }
     shell::run::setup_shell_tty(STDIN_FILENO);
     SHELL_ENV.with(|jobs| {
