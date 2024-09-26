@@ -162,7 +162,7 @@ fn get_home_dir() -> Option<PathBuf> {
 fn load_core(env: &mut SloshVm) {
     match load_internal(env, "core.slosh") {
         Ok(_) => {}
-        Err(err) => println!("ERROR: {err}"),
+        Err(err) => eprintln!("ERROR: {err}"),
     }
 }
 
@@ -204,7 +204,7 @@ fn load_sloshrc() {
                 let script = env.get_interned(script);
                 match load_internal(&mut env, script) {
                     Ok(_) => {}
-                    Err(err) => println!("ERROR: {err}"),
+                    Err(err) => eprintln!("ERROR: {err}"),
                 }
             });
         }
@@ -519,7 +519,7 @@ fn run_shell_tty() -> i32 {
     con.set_keymap(Box::new(vi));
 
     if let Err(e) = con.history.set_file_name_and_load_history(history_file()) {
-        println!("Error loading history: {e}");
+        eprintln!("Error loading history: {e}");
     }
     shell::run::setup_shell_tty(STDIN_FILENO);
     SHELL_ENV.with(|jobs| {

@@ -13,14 +13,21 @@ function.
 For setting key/value pairs on an existing hashmap prefer the reader syntax
 with the `set!` function or pass it the output of `get`.
 ```slosh
-(def m {:one "one", :two "two", "three" 3})
+(def m {:one "one", :two "two", "three" 3, :four 4})
 (set! m.:one "changed1")
 (assert-equal "changed1" m.:one)
 (set! m.:two "changed2")
 (assert-equal "changed2" m.:two)
 (set! (get m "three") "changed3")
 (assert-equal "changed3" (get m "three"))
+
+(def four :four)
+(set! m.~four "changed4")
+(assert-equal "changed4" (get m :four))
 ```
+
+
+
 Clearing all keys is done with the `clear!` function.
 ```slosh
 (def m {:one "one", :two "two", "three" 3})

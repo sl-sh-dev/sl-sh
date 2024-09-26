@@ -25,13 +25,72 @@ and the subsequent children are arguments to the head.
 
 ## Comments
 
-Single-line comments start with a ; character and continue till the end of the line.
-Multi-line comments start with a #| and end with a |#
+Single-line comments start with a `;` character and continue till the end of the line
+```slosh
+; (prn "hello")
+(prn "world")
+```
+Multi-line comments start with the `#|` characters to start and ends with the sample symbols reversed `|#`.
+```slosh
+#|
+(prn "oh")
+(prn "hello")
+|#
+(prn "world")
+```
 
+Single forms can be commented out with `#;` characters. This directive tells the reader to discard the form.
+```slosh
+#;(prn "oh")
+#;(prn "hello")
+(prn "world")
+```
+
+## Documentation
+Any symbol that is used with `def` or `defn` can also bind documentation. Documentation
+is multiline and is delimited with `#%` characters to start and ends with the same symbols reversed `%#`.
+```slosh
+#%
+Usage: (login SECRET)
+
+Returns true if logged in false if not. Must use `SECRET`
+
+Section: secrets
+
+Example:
+(assert-false (login "foo"))
+%#
+(defn login (secret)
+    (if (= secret "helloworld")
+        #t
+        #f))
+
+
+#%
+Usage: (login SECRET)
+
+Returns documentation for given symbol as map. Keyword is a documentation fragment
+(usage, section, description, example) and value is text describing given fragment.
+
+Section: secrets
+
+Example:
+
+(assert-false (login SECRET))
+%#
+(def SECRET "helloworld")
+(prn (login SECRET))
+```
 
 ## Macros
 
-Helper macros syntax exists like in other lips such as quote ('), quasiquote (`), unquote (~), unquote-splice (~@), macro, and defmacro.
+Helper macros syntax exists like in other lips such as:
+quote (`'`),
+quasiquote (``` ` ```),
+unquote (```~```),
+unquote-splice (```~@```),
+macro, and
+defmacro.
 
 
 ```
