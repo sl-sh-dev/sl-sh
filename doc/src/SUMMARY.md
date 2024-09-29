@@ -3,6 +3,9 @@
 # Basics
 - [Data Types in Slosh](./containers.md)
 - [Equality](./equality.md)
+- [Namespaces](./namespaces.md)
+- [Errors](./errors.md)
+- [Syntax and Macros](./syntax-and-macros.md)
 
 # General
 
