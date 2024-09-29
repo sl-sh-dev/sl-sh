@@ -49,8 +49,10 @@ jobs:
         run: |
           echo "Running bencher for branch ${BRANCH}."
           bencher run \
-          --if-branch "${BRANCH}" \
-          --else-if-branch "main" \
+          --branch "${BRANCH}" \
+          --branch-start-point "main" \
+          --reset-branch \
+          --testbed "ubuntu-latest" \
           --github-actions "${{ secrets.GITHUB_TOKEN }}" \
           --token "${{ secrets.BENCHER_API_TOKEN }}" \
           --err \
@@ -78,10 +80,12 @@ jobs:
 
       - name: Track Benchmarks with Bencher
         run: |
-          echo "Running bencher for branch ${BRANCH}."
+          echo "Running bencher for branch ${GITHUB_REF##*/}."
           bencher run \
-          --if-branch "${BRANCH}" \
-          --else-if-branch "main" \
+          --branch "${GITHUB_REF##*/}" \
+          --branch-start-point "main" \
+          --reset-branch \
+          --testbed "ubuntu-latest" \
           --github-actions "${{ secrets.GITHUB_TOKEN }}" \
           --token "${{ secrets.BENCHER_API_TOKEN }}" \
           --err \

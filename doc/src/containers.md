@@ -1,5 +1,12 @@
 # slosh container/complex data types
 
+TODO
+- char/char literal
+- bytes
+- vec
+- numbers / number literals
+- boolean literals
+
 ## String
 A string.  Strings in slosh are UTF8 encoded and are composed of chars that are
 UTF grapheme clusters.  Because of the encoding strings can be indexed but they
