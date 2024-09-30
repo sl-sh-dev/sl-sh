@@ -14,8 +14,8 @@ jobs:
       branch_name: ${{ steps.get_branch.outputs.branch_name }}
     steps:
       - id: get_branch
-        if: github.event.pull_request.merged == true && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        run: echo "branch_name=main" >> "$GITHUB_OUTPUT"
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        run: echo "branch_name=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
 
   backup_branch:
     runs-on: ubuntu-latest
@@ -23,14 +23,14 @@ jobs:
       branch_name: ${{ steps.get_branch.outputs.branch_name }}
     steps:
       - id: get_branch
-        if: github.event.pull_request.merged == true || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        run: echo "branch_name=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+        if: github.event_name != 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        run: echo "branch_name=main" >> "$GITHUB_OUTPUT"
 
   benchmark_pr_with_bencher_iai:
     needs: [target_branch, backup_branch]
     permissions:
       pull-requests: write
-    name: Continuous Benchmarking with Bencher
+    name: Continuous Benchmarking with Bencher Iai
     runs-on: ubuntu-latest
     env:
       BENCHER_PROJECT: sl-sh
@@ -62,7 +62,7 @@ jobs:
     needs: [target_branch, backup_branch]
     permissions:
       pull-requests: write
-    name: Continuous Benchmarking with Bencher
+    name: Continuous Benchmarking with Bencher Criterion
     runs-on: ubuntu-latest
     env:
       BENCHER_PROJECT: sl-sh
@@ -80,9 +80,9 @@ jobs:
 
       - name: Track Benchmarks with Bencher
         run: |
-          echo "Running bencher for branch ${GITHUB_REF##*/}."
+          echo "Running bencher for branch $BRANCH."
           bencher run \
-          --branch "${GITHUB_REF##*/}" \
+          --branch "$BRANCH" \
           --branch-start-point "main" \
           --reset-branch \
           --testbed "ubuntu-latest" \
