@@ -37,6 +37,7 @@ jobs:
       BENCHER_PROJECT: sl-sh
       BENCHER_TESTBED: ubuntu-latest
       BENCHER_ADAPTER: rust_iai_callgrind
+      BENCHER_API_TOKEN: ${{ secrets.BENCHER_API_TOKEN }}
       BRANCH: ${{ needs.target_branch.outputs.branch_name || needs.backup_branch.outputs.branch_name || github.event.pull_request.base.ref || 'main' }}
     steps:
       - run: sudo apt-get update
@@ -51,6 +52,7 @@ jobs:
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
         with:
+          cache-on-failure: true
           cache-all-crates: true
           shared-key: "${{ steps.get-hash.outputs.hash }}"
       - run: cargo install iai-callgrind-runner --version 0.10.2
@@ -59,15 +61,14 @@ jobs:
       - name: Track Benchmarks with Bencher
         run: |
           echo "Running bencher for branch ${BRANCH}."
-          export "BENCHER_API_TOKEN=${{ secrets.BENCHER_API_TOKEN }}"
           bencher run \
-          --branch "${BRANCH}" \
-          --branch-start-point "main" \
-          --reset-branch \
           --testbed "ubuntu-latest" \
           --github-actions "${{ secrets.GITHUB_TOKEN }}" \
           --token "${{ secrets.BENCHER_API_TOKEN }}" \
           --err \
+          --branch "${BRANCH}" \
+          --branch-start-point "main" \
+          --branch-reset \
           "cargo bench --all"
 
   benchmark_pr_with_bencher_criterion:
@@ -80,6 +81,7 @@ jobs:
       BENCHER_PROJECT: sl-sh
       BENCHER_TESTBED: ubuntu-latest
       BENCHER_ADAPTER: rust_criterion
+      BENCHER_API_TOKEN: ${{ secrets.BENCHER_API_TOKEN }}
       BRANCH: ${{ needs.target_branch.outputs.branch_name || needs.backup_branch.outputs.branch_name || github.event.pull_request.base.ref || 'main' }}
     steps:
       - run: sudo apt-get update
@@ -94,6 +96,7 @@ jobs:
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
         with:
+          cache-on-failure: true
           cache-all-crates: true
           shared-key: "${{ steps.get-hash.outputs.hash }}"
       - run: cargo install iai-callgrind-runner --version 0.10.2
@@ -103,13 +106,12 @@ jobs:
       - name: Track Benchmarks with Bencher
         run: |
           echo "Running bencher for branch $BRANCH."
-          export "BENCHER_API_TOKEN=${{ secrets.BENCHER_API_TOKEN }}"
           bencher run \
-          --branch "$BRANCH" \
-          --branch-start-point "main" \
-          --reset-branch \
           --testbed "ubuntu-latest" \
           --github-actions "${{ secrets.GITHUB_TOKEN }}" \
           --token "${{ secrets.BENCHER_API_TOKEN }}" \
           --err \
+          --branch "$BRANCH" \
+          --branch-start-point "main" \
+          --branch-reset \
           "cargo bench --all"
