@@ -16,7 +16,7 @@ jobs:
     steps:
       - id: get_branch
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        run: echo "branch_name=${{ github.base_ref }} >> " | tee "$GITHUB_OUTPUT"
+        run: echo "branch_name=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" | tee $GITHUB_OUTPUT
 
   backup_branch:
     runs-on: ubuntu-latest
