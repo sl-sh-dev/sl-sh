@@ -3,6 +3,7 @@ name: Bencher
 on:
   pull_request:
     types: [opened, reopened, synchronize, closed]
+  workflow_dispatch:
 
 env:
   RUST_BACKTRACE: 1
@@ -15,7 +16,7 @@ jobs:
     steps:
       - id: get_branch
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        run: echo "branch_name=$GITHUB_REF" >> "$GITHUB_OUTPUT"
+        run: echo "branch_name=${{ github.head_ref }} >> " >> "$GITHUB_OUTPUT"
 
   backup_branch:
     runs-on: ubuntu-latest
