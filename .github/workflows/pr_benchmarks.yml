@@ -59,6 +59,7 @@ jobs:
       - name: Track Benchmarks with Bencher
         run: |
           echo "Running bencher for branch ${BRANCH}."
+          export "BENCHER_API_TOKEN=${{ secrets.BENCHER_API_TOKEN }}"
           bencher run \
           --branch "${BRANCH}" \
           --branch-start-point "main" \
@@ -102,6 +103,7 @@ jobs:
       - name: Track Benchmarks with Bencher
         run: |
           echo "Running bencher for branch $BRANCH."
+          export "BENCHER_API_TOKEN=${{ secrets.BENCHER_API_TOKEN }}"
           bencher run \
           --branch "$BRANCH" \
           --branch-start-point "main" \
