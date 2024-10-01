@@ -16,7 +16,7 @@ jobs:
     steps:
       - id: get_branch
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        run: echo "branch_name=${{ github.head_ref }} >> " >> "$GITHUB_OUTPUT"
+        run: echo "branch_name=${{ github.base_ref }} >> " | tee "$GITHUB_OUTPUT"
 
   backup_branch:
     runs-on: ubuntu-latest
@@ -43,6 +43,16 @@ jobs:
       - run: sudo apt install -y valgrind gnuplot
       - uses: actions/checkout@v4
       - uses: bencherdev/bencher@main
+      - run: rustup toolchain install stable --profile minimal
+      - uses: seepine/hash-files@v1
+        id: get-hash
+        with:
+          patterns: 'Cargo.lock'
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: true
+          shared-key: "${{ steps.get-hash.outputs.hash }}"
       - run: cargo install iai-callgrind-runner --version 0.10.2
       - name: cargo test --no-run benches (debug mode) to check compile
         run: cargo test --benches --no-run
@@ -75,6 +85,16 @@ jobs:
       - run: sudo apt install -y valgrind gnuplot
       - uses: actions/checkout@v4
       - uses: bencherdev/bencher@main
+      - run: rustup toolchain install stable --profile minimal
+      - uses: seepine/hash-files@v1
+        id: get-hash
+        with:
+          patterns: 'Cargo.lock'
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: true
+          shared-key: "${{ steps.get-hash.outputs.hash }}"
       - run: cargo install iai-callgrind-runner --version 0.10.2
       - name: cargo test --no-run benches (debug mode) to check compile
         run: cargo test --benches --no-run
