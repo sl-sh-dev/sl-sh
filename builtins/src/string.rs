@@ -522,28 +522,6 @@ fn is_char(target: Value) -> VMResult<bool> {
     }
 }
 
-/// Usage: (codepoints string)
-///
-/// Returns array of unicode scalars for each char in string. Note, a char
-/// is not a grapheme. The hindi word namaste ("नमस्ते")
-/// written in Devanagari script is 4 graphemes, but 6 unicode scalar values,
-/// ("u{928}" "u{92e}" "u{938}" "u{94d}" "u{924}" "u{947}");
-/// [reference](https://doc.rust-lang.org/book/ch08-02-strings.html#bytes-and-scalar-values-and-grapheme-clusters-oh-my).
-///
-/// Section: string
-///(नमस्ते
-/// Example:
-/// #t
-// (test::assert-equal (vec (str "\" "u{2699}")) (codepoints "⚙"))
-// (test::assert-equal (vec (str "\" "u{938}") ((str "\" "u{94d}"))) (codepoints "स्"))
-// (test::assert-equal (vec (str "\" "u{938}") ((str "\" "u{94d}"))) (codepoints #\स्))
-// (test::assert-equal (vec (str "\" "u{61}")) (codepoints "a"))S
-// (test::assert-equal (vec (str "\" "u{61}")) (codepoints \a))
-#[sl_sh_fn(fn_name = "codepoints")]
-fn codepoints(target: LooseString) -> VMResult<Vec<char>> {
-    Ok(target.chars().collect::<Vec<char>>())
-}
-
 pub fn add_str_builtins(env: &mut SloshVm) {
     intern_str_sub(env);
     intern_str_splitn(env);
@@ -555,7 +533,6 @@ pub fn add_str_builtins(env: &mut SloshVm) {
     intern_char_upper(env);
     intern_char_is_whitespace(env);
     intern_is_char(env);
-    intern_codepoints(env);
     add_builtin(
         env,
         "str-replace",
