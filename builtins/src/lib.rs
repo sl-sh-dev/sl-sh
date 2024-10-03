@@ -9,6 +9,7 @@ pub mod conversions;
 pub mod fs_meta;
 pub mod fs_temp;
 pub mod io;
+pub mod math;
 pub mod print;
 pub mod rand;
 pub mod string;
@@ -155,17 +156,6 @@ fn expand_macro(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-fn remainder(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
-    let mut i = registers.iter();
-    if let (Some(val1), Some(val2), None) = (i.next(), i.next(), i.next()) {
-        let i1 = val1.get_int(vm)?;
-        let i2 = val2.get_int(vm)?;
-        Ok((i1 % i2).into())
-    } else {
-        Err(VMError::new_vm("requires two integers".to_string()))
-    }
-}
-
 pub fn add_global_value(env: &mut SloshVm, name: &str, val: Value, doc_string: &str) {
     let si = env.set_named_global(name, val);
     let key = env.intern("doc-string");
@@ -180,26 +170,6 @@ pub fn add_misc_builtins(env: &mut SloshVm) {
     env.set_global_builtin("sizeof-value", sizeof_value);
     env.set_global_builtin("gensym", gensym);
     env.set_global_builtin("expand-macro", expand_macro);
-    bridge_adapters::add_builtin(
-        env,
-        "rem",
-        remainder,
-        "Usage: (rem int int)
-
-Remainder from dividing first int by the second.
-
-Section: math
-
-Example:
-(test::assert-equal 0 (rem 50 10))
-(test::assert-equal 5 (rem 55 10))
-(test::assert-equal 1 (rem 1 2))
-(test::assert-error (rem))
-(test::assert-error (rem 1))
-(test::assert-error (rem 1 2 3))
-(test::assert-error (rem 1 2.0))
-",
-    );
     bridge_adapters::add_builtin(
         env,
         "get-globals",
