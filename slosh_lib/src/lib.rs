@@ -376,6 +376,7 @@ pub fn set_builtins(env: &mut SloshVm) {
     add_fs_meta_builtins(env);
     add_fs_temp_builtins(env);
     add_rand_builtins(env);
+    add_math_builtins(env);
     add_doc_builtins(env);
     add_math_builtins(env);
 
