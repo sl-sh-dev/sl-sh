@@ -57,13 +57,41 @@ pub fn abs(v: Value) -> VMResult<Value> {
 /// (test::assert-error (% 1 2 3))
 /// (test::assert-error (% 1 2.0))
 #[sl_sh_fn(fn_name = "%")]
-pub fn rem(dividend: i64, divisor: i64) -> VMResult<i64> {
+pub fn rem_as_percent(dividend: i64, divisor: i64) -> VMResult<i64> {
     dividend.checked_rem(divisor).ok_or_else(|| {
         VMError::new_vm(format!(
             "rem: division by zero or overflow: {} % {}",
             dividend, divisor
         ))
     })
+}
+
+/// Usage: (rem int int)
+///
+/// Remainder from dividing (arg 1) by (arg 2).
+/// Note: Remainder and Modulo are two similar mathematical operations,
+/// called `rem` and `rem_euclid` in Rust.
+/// This function uses `rem` which is the same as the `%` operator in C.
+/// With `rem`, the sign of the result is the same as the dividend (arg 1).
+/// With `rem_euclid`, the sign of the result is always positive.
+///
+/// Section: math
+///
+/// Example:
+/// (test::assert-equal 0 (rem 50 10))
+/// (test::assert-equal 5 (rem 55 10))
+/// (test::assert-equal 1 (rem 1 2))
+/// (test::assert-equal -1 (rem -10 3))
+/// (test::assert-equal  1 (rem 10 -3))
+/// (test::assert-equal -1 (rem -10 -3))
+///
+/// (test::assert-error (rem))
+/// (test::assert-error (rem 1))
+/// (test::assert-error (rem 1 2 3))
+/// (test::assert-error (rem 1 2.0))
+#[sl_sh_fn(fn_name = "rem")]
+pub fn rem_as_rem(dividend: i64, divisor: i64) -> VMResult<i64> {
+    rem_as_percent(dividend, divisor)
 }
 
 /// Usage: (rem_euclid int int)
@@ -101,6 +129,7 @@ pub fn rem_euclid(dividend: i64, divisor: i64) -> VMResult<i64> {
 
 pub fn add_math_builtins(env: &mut SloshVm) {
     intern_abs(env);
-    intern_rem(env);
+    intern_rem_as_rem(env);
+    intern_rem_as_percent(env);
     intern_rem_euclid(env);
 }
