@@ -14,6 +14,20 @@ Example:
 (def nil? (fn (v) (identical? (type v) :Nil)))
 
 #%
+Usage: (char? expression)
+
+True if the expression is a char, false otherwise.
+
+Section: type
+
+Example:
+(test::assert-true (char? \\a))
+(test::assert-false (char? 1))
+(test::assert-false (char? "a"))
+%#
+(def char? (fn (v) (identical? (type v) :Char)))
+
+#%
 Usage: (pair? expression)
 
 True if the expression is a pair, false otherwise.
