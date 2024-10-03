@@ -79,7 +79,6 @@ lazy_static! {
 
         // slosh specific colors
         exemption_set.insert("get-rgb-seq");
-        exemption_set.insert("bg-color-rgb");
         exemption_set.insert("tok-slsh-form-color");
         exemption_set.insert("tok-slsh-fcn-color");
         exemption_set.insert("tok-default-color");
@@ -115,7 +114,6 @@ lazy_static! {
         exemption_set.insert("get-pwd");
         exemption_set.insert("set-prompt-tail");
         exemption_set.insert("parse-git-branch");
-        exemption_set.insert("block");
 
         // in runtime
         exemption_set.insert("#<remember-me>");
@@ -256,13 +254,18 @@ impl DocStringSection {
             })
             .map(|x| x.as_str().trim().to_string())?;
         let example = cap.get(6).map(|x| x.as_str().trim().to_string());
-
-        Ok(DocStringSection {
-            usage,
-            description,
-            section,
-            example,
-        })
+        if EXEMPTIONS.contains(symbol.as_str()) {
+            Err(DocError::RemoveExemption {
+                symbol: symbol.to_string(),
+            })
+        } else {
+            Ok(DocStringSection {
+                usage,
+                description,
+                section,
+                example,
+            })
+        }
     }
 }
 
@@ -372,6 +375,7 @@ impl SloshDoc {
 enum DocError {
     NoSymbol { symbol: String },
     NoDocString { symbol: String },
+    RemoveExemption { symbol: String },
     DocStringMissingSection { symbol: String, section: String },
     ExemptFromProperDocString { symbol: String },
 }
@@ -402,6 +406,9 @@ impl Display for DocError {
             }
             DocError::DocStringMissingSection { symbol, section } => {
                 format!("Invalid documentation string for symbol {symbol}, missing required section {section:?}")
+            }
+            DocError::RemoveExemption { symbol} => {
+                format!("Documentation has been added for {symbol}, remove it from EXEMPTIONS list in slosh_test::docs::EXEMPTIONS.")
             }
         }
             .to_string();

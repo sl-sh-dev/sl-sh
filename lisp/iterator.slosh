@@ -148,7 +148,7 @@ Example:
 (test::assert-false (iter? '(1 2 3)))
 %#
 (defn iter? (test)
-    (if (get-prop test :is-iter) #t #f))
+    (get-prop test :is-iter))
 
 #%
 Iterator that wraps and returns a single object once.
