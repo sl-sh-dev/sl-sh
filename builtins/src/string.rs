@@ -164,6 +164,7 @@ fn str_map_inner(vm: &mut SloshVm, func: Value, string: Value) -> VMResult<Strin
         let val = match func {
             Value::Lambda(handle) => {
                 let func = vm.get_lambda(handle);
+                // TODO PC example of how you call a slosh lambda in rust!
                 vm.do_call(func, &[param], None)
             }
             Value::Closure(handle) => {
@@ -504,24 +505,6 @@ fn char_is_whitespace(target: SloshChar) -> VMResult<bool> {
     }
 }
 
-/// Usage: (char? char) -> #t/#f
-///
-/// Returns true if a character is whitespace, false/nil otherwise.
-///
-///  Section: type
-///
-///  Example:
-///  (test::assert-true (char? \a))
-///  (test::assert-false (char? 1))
-///  (test::assert-false (char? "a"))
-#[sl_sh_fn(fn_name = "char?")]
-fn is_char(target: Value) -> VMResult<bool> {
-    match &target {
-        Value::CodePoint(_) | Value::CharCluster(_, _) | Value::CharClusterLong(_) => Ok(true),
-        _ => Ok(false),
-    }
-}
-
 pub fn add_str_builtins(env: &mut SloshVm) {
     intern_str_sub(env);
     intern_str_splitn(env);
@@ -532,7 +515,6 @@ pub fn add_str_builtins(env: &mut SloshVm) {
     intern_char_lower(env);
     intern_char_upper(env);
     intern_char_is_whitespace(env);
-    intern_is_char(env);
     add_builtin(
         env,
         "str-replace",
