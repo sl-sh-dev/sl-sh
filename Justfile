@@ -8,8 +8,35 @@
 default:
     @just --list --unsorted
 
-# For all the recipes in this file, don't echo the commands to the terminal
-set quiet
+# Run all the necessary tests: clippy, unit tests, and integration tests
+test:
+    sh scripts/check-clippy-version.sh
+    cargo fmt
+    cargo clippy
+    cargo test --workspace
+
+# Generate and open the slosh docs
+sloshdoc:
+    cd doc && ./mk-site.sh
+    open doc/book/index.html
+
+# Generate and open the rust docs
+rustdoc:
+    cargo doc --workspace --no-deps --open
+
+
+# The remaining commands in the project are less commonly used
+
+# These tests are a subset of 'cargo test --workspace'
+# It runs ./slosh_test/tests/slosh-tests.rs which loads /slosh_test/run-tests.slosh which loads up all the globals and executes the Example block of each docstring
+# Test docstring examples of slosh globals defined with add_builtin or add_special
+test-globals:
+    cargo test --package slosh_test --test slosh-tests run_slosh_tests -- --exact --nocapture
+
+# These tests are a subset of 'cargo test --workspace'
+# Test slosh tests defined in /slosh/tests/*.slosh
+test-lisp:
+    cargo test --package slosh --test lisp-scripts -- --nocapture
 
 # Run the most recently built slosh executable
 slosh:
@@ -27,24 +54,7 @@ slosh:
         cargo build && ./target/debug/slosh; \
     fi
 
-# Run all the necessary tests: clippy, unit tests, and integration tests
-test:
-    sh scripts/check-clippy-version.sh
-    cargo fmt
-    cargo clippy
-    cargo test --workspace
-
-# These tests are a subset of 'cargo test --workspace'
-# It runs ./slosh_test/tests/slosh-tests.rs which loads /slosh_test/run-tests.slosh which loads up all the globals and executes the Example block of each docstring
-# Test docstring examples of slosh globals defined with add_builtin or add_special
-test-slosh-globals:
-     cargo test --package slosh_test --test slosh-tests run_slosh_tests -- --exact --nocapture
-
-# These tests are a subset of 'cargo test --workspace'
-# Test slosh tests defined in /slosh/tests/*.slosh
-test-slosh-tests:
-    cargo test --package slosh --test lisp-scripts -- --nocapture
-
-# Use cspell to spellcheck the codebase
+# Using `npx` requires installing `npm` which comes with `nodejs` from https://nodejs.org/en/download/
+# Use javascript cspell tool to spellcheck the codebase
 spellcheck:
     npx cspell .
