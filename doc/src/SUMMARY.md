@@ -6,6 +6,7 @@
 - [Namespaces](./namespaces.md)
 - [Errors](./errors.md)
 - [Syntax and Macros](./syntax-and-macros.md)
+- [Iterators](./iterators.md)
 
 # General
 

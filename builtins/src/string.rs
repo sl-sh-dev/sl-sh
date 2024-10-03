@@ -164,6 +164,7 @@ fn str_map_inner(vm: &mut SloshVm, func: Value, string: Value) -> VMResult<Strin
         let val = match func {
             Value::Lambda(handle) => {
                 let func = vm.get_lambda(handle);
+                // TODO PC example of how you call a slosh lambda in rust!
                 vm.do_call(func, &[param], None)
             }
             Value::Closure(handle) => {
