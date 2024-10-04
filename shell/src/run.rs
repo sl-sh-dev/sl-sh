@@ -96,7 +96,7 @@ pub fn run_job(run: &Run, jobs: &mut Jobs, force_background: bool) -> Result<i32
             let mut job = jobs.new_job();
             job.set_stealth(force_background);
             match run_pipe(&pipe[..], &mut job, jobs) {
-                Ok(background) => finish_run(background, job, jobs),
+                Ok(background) => finish_run(force_background || background, job, jobs),
                 Err(err) => {
                     // Make sure we restore the terminal...
                     jobs.restore_terminal();
