@@ -10,34 +10,49 @@ use std::io::{BufRead, ErrorKind};
 use std::{env, io};
 
 fn sh(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
-    let pipe_key = vm.intern_static(">");
-    let mut reg_start = 0;
-    let mut reg_end = registers.len();
-    let pipe_in = match registers.first() {
-        Some(Value::Keyword(k)) if *k == pipe_key => {
-            reg_start = 1;
-            true
-        }
-        _ => false,
-    };
-    let pipe_out = match registers.last() {
-        Some(Value::Keyword(k)) if *k == pipe_key => {
-            if reg_end > reg_start {
-                reg_end -= 1;
+    let mut result = Vec::new();
+    let mut new_regs = Vec::with_capacity(registers.len());
+    new_regs.extend_from_slice(registers);
+    let mut fds_close = Vec::new();
+    for r in new_regs.iter_mut() {
+        if let Value::Keyword(i) = r {
+            let key = vm.get_interned(*i);
+            if key.ends_with("<") {
+                match Sys::anon_pipe() {
+                    Ok((inp, outp)) => {
+                        let mut key = key.to_string();
+                        key.push_str(&format!("&{inp}"));
+                        fds_close.push(inp);
+                        *r = vm.alloc_string(key);
+                        let file = HeapIo::from_file(unsafe { File::from_file_desc(outp) });
+                        result.push(vm.alloc_io(file));
+                    }
+                    Err(e) => return Err(VMError::new_compile(format!("sh: pipe failed {e}"))),
+                }
             }
-            true
+            if key.ends_with(">") {
+                match Sys::anon_pipe() {
+                    Ok((inp, outp)) => {
+                        let mut key = key.to_string();
+                        key.push_str(&format!("&{outp}"));
+                        fds_close.push(outp);
+                        *r = vm.alloc_string(key);
+                        let file = HeapIo::from_file(unsafe { File::from_file_desc(inp) });
+                        file.to_buf_reader().map_err(|e| {
+                            VMError::new_compile(format!("sh: to buf reader failed {e:?}"))
+                        })?;
+                        result.push(vm.alloc_io(file));
+                    }
+                    Err(e) => return Err(VMError::new_compile(format!("sh: pipe failed {e}"))),
+                }
+            }
         }
-        _ => false,
-    };
-    /*let pipe_err = match registers.last() {
-        Some(Value::Keyword(k)) if *k == pipe_key => true,
-        _ => false,
-    };*/
+    }
     let mut command = String::new();
-    for exp in registers[reg_start..reg_end].iter() {
+    for exp in new_regs {
         match exp {
-            Value::String(h) => command.push_str(vm.get_string(*h)),
-            Value::StringConst(i) => command.push_str(vm.get_interned(*i)),
+            Value::String(h) => command.push_str(vm.get_string(h)),
+            Value::StringConst(i) => command.push_str(vm.get_interned(i)),
             _ => command.push_str(&exp.display_value(vm)),
         }
         command.push(' ');
@@ -51,69 +66,26 @@ fn sh(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         let jobs = &mut jobs_ref.borrow_mut();
         run_res = shell::parse::parse_line(jobs, &command)
     });
-    let mut run = run_res
+    let run = run_res
         .map_err(|e| VMError::new_compile(format!("sh: {e}")))?
         .into_run();
-    let (stdinp, stdoutp) = match (pipe_in, pipe_out) {
-        (true, true) => {
-            let stdinp = match Sys::anon_pipe() {
-                Ok((inp, outp)) => {
-                    run.push_stdin_front(Some(inp));
-                    unsafe { File::from_file_desc(outp) }
-                }
-                Err(e) => return Err(VMError::new_compile(format!("sh: pipe failed {e}"))),
-            };
-            match Sys::anon_pipe() {
-                Ok((inp, outp)) => {
-                    run.push_stdout_front(Some(outp));
-                    (Some(stdinp), Some(unsafe { File::from_file_desc(inp) }))
-                }
-                Err(e) => return Err(VMError::new_compile(format!("sh: pipe failed {e}"))),
-            }
-        }
-        (true, false) => match Sys::anon_pipe() {
-            Ok((inp, outp)) => {
-                run.push_stdin_front(Some(inp));
-                (Some(unsafe { File::from_file_desc(outp) }), None)
-            }
-            Err(e) => return Err(VMError::new_compile(format!("sh: pipe failed {e}"))),
-        },
-        (false, true) => match Sys::anon_pipe() {
-            Ok((inp, outp)) => {
-                run.push_stdout_front(Some(outp));
-                (None, Some(unsafe { File::from_file_desc(inp) }))
-            }
-            Err(e) => return Err(VMError::new_compile(format!("sh: pipe failed {e}"))),
-        },
-        (false, false) => (None, None),
-    };
-    let background = stdinp.is_some() || stdoutp.is_some();
+    let background = !result.is_empty(); //stdinp.is_some() || stdoutp.is_some();
     SHELL_ENV.with(|jobs_ref| {
         let jobs = &mut jobs_ref.borrow_mut();
         fork_res = shell::run::run_job(&run, jobs, background);
     });
-    match (stdinp, stdoutp) {
-        (None, None) => fork_res
-            .map(|i| i.into())
-            .map_err(|e| VMError::new_compile(format!("sh: {e}"))),
-        (Some(stdinp), None) => {
-            let v = vec![vm.alloc_io(HeapIo::from_file(stdinp))];
-            Ok(vm.alloc_vector(v))
+    // Close the file descriptors for the subshell end of the pipes.
+    for fd in fds_close {
+        if let Err(e) = Sys::close_fd(fd) {
+            eprintln!("error closing subshell pipe: {e}");
         }
-        (None, Some(stdoutp)) => {
-            let outp = HeapIo::from_file(stdoutp);
-            outp.to_buf_reader()
-                .map_err(|e| VMError::new_compile(format!("sh: to buf reader failed {e:?}")))?;
-            let v = vec![vm.alloc_io(outp)];
-            Ok(vm.alloc_vector(v))
-        }
-        (Some(stdinp), Some(stdoutp)) => {
-            let v = vec![
-                vm.alloc_io(HeapIo::from_file(stdinp)),
-                vm.alloc_io(HeapIo::from_file(stdoutp)),
-            ];
-            Ok(vm.alloc_vector(v))
-        }
+    }
+    let fork_res = fork_res.map_err(|e| VMError::new_compile(format!("sh: {e}")))?;
+    if result.is_empty() {
+        Ok(fork_res.into())
+    } else {
+        result.insert(0, fork_res.into());
+        Ok(vm.alloc_vector(result))
     }
 }
 
