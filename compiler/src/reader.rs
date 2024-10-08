@@ -1071,17 +1071,17 @@ impl<'vm> Reader<'vm> {
                 //}
                 // Read an octal int
                 "o" => {
-                    let exp = self.read_num_radix(buffer, 8, &read_table_term)?;
+                    let exp = self.read_num_radix(buffer, 8, read_table_term)?;
                     Ok(Some(exp.into()))
                 }
                 // Read a hex int
                 "x" => {
-                    let exp = self.read_num_radix(buffer, 16, &read_table_term)?;
+                    let exp = self.read_num_radix(buffer, 16, read_table_term)?;
                     Ok(Some(exp.into()))
                 }
                 // Read a binary int
                 "b" => {
-                    let exp = self.read_num_radix(buffer, 2, &read_table_term)?;
+                    let exp = self.read_num_radix(buffer, 2, read_table_term)?;
                     Ok(Some(exp.into()))
                 }
                 ";" => {
