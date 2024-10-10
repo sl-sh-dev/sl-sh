@@ -289,11 +289,11 @@ Section: core
 %#
 (defmacro doc (sym)
     (let (docs `(get-prop ~sym :doc-string)
-         has-usage (str-starts-with "Usage:" (str-trim (str docs))))
+         has-usage `(str-starts-with (str-trim (str ~docs)) "Usage:"))
         (do
-        (if has-usage
-          `(prn ~docs)
-          `(prn (str (usage ~sym) "\n\n" ~docs))))))
+        `(if ~has-usage
+          (prn ~docs)
+          (prn (str (usage ~sym) "\n\n" ~docs))))))
 
 #%
 Evaluate body a number of times equal to times' numerical value.
