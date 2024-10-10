@@ -221,3 +221,19 @@ All of this is covered in `doc/README.md`
 
 Must be compiled in lisp-test mode for appropriate documentation functions to be present (`cargo build --features lisp-test`).
 
+# Dev Notes
+## Development Tools
+### Just and the Justfile
+[Just](https://github.com/casey/just) is a command runner much like make, but with a simpler syntax.
+
+Optionally, you can [install Just](https://github.com/casey/just?tab=readme-ov-file#packages) and use it to help easily test or build slosh.
+
+You can also read the Justfile in the root directory to see the common commands that we use to test and build the project.
+
+<br>
+
+To verify you've installed Just, run `just` in the project root which should list all available commands.
+
+Now you can run `just test` instead of the verbose `sh scripts/check-clippy-version.sh && cargo fmt && cargo clippy && cargo test --workspace`.
+
+It's also possible to [set up shell completion scripts](https://github.com/casey/just?tab=readme-ov-file#shell-completion-scripts) which makes it quite quick to find the right command.
