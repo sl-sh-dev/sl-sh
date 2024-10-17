@@ -4,6 +4,7 @@ use compile_state::state::SloshVm;
 use shell::platform::{FromFileDesc, Platform, Sys};
 use slvm::io::HeapIo;
 use slvm::{VMError, VMResult, Value};
+use std::collections::HashSet;
 use std::env::VarError;
 use std::fs::File;
 use std::io::{BufRead, ErrorKind};
@@ -13,7 +14,7 @@ fn sh(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut result = Vec::new();
     let mut new_regs = Vec::with_capacity(registers.len());
     new_regs.extend_from_slice(registers);
-    let mut fds_close = Vec::new();
+    let mut fds_close = HashSet::new();
     for r in new_regs.iter_mut() {
         if let Value::Keyword(i) = r {
             let key = vm.get_interned(*i);
@@ -22,7 +23,7 @@ fn sh(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
                     Ok((inp, outp)) => {
                         let mut key = key.to_string();
                         key.push_str(&format!("&{inp}"));
-                        fds_close.push(inp);
+                        fds_close.insert(inp);
                         *r = vm.alloc_string(key);
                         let file = HeapIo::from_file(unsafe { File::from_file_desc(outp) });
                         result.push(vm.alloc_io(file));
@@ -35,7 +36,7 @@ fn sh(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
                     Ok((inp, outp)) => {
                         let mut key = key.to_string();
                         key.push_str(&format!("&{outp}"));
-                        fds_close.push(outp);
+                        fds_close.insert(outp);
                         *r = vm.alloc_string(key);
                         let file = HeapIo::from_file(unsafe { File::from_file_desc(inp) });
                         file.to_buf_reader().map_err(|e| {
@@ -66,21 +67,18 @@ fn sh(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         let jobs = &mut jobs_ref.borrow_mut();
         run_res = shell::parse::parse_line(jobs, &command)
     });
-    let run = run_res
+    let mut run = run_res
         .map_err(|e| VMError::new_compile(format!("sh: {e}")))?
         .into_run();
-    let background = !result.is_empty(); //stdinp.is_some() || stdoutp.is_some();
+    if !fds_close.is_empty() {
+        run.fds_to_internal(&fds_close);
+    }
+    let background = false; // !result.is_empty();
     SHELL_ENV.with(|jobs_ref| {
         let jobs = &mut jobs_ref.borrow_mut();
         fork_res = shell::run::run_job(&run, jobs, background);
     });
-    // Close the file descriptors for the subshell end of the pipes.
-    for fd in fds_close {
-        if let Err(e) = Sys::close_fd(fd) {
-            eprintln!("error closing subshell pipe: {e}");
-        }
-    }
-    let fork_res = fork_res.map_err(|e| VMError::new_compile(format!("sh: {e}")))?;
+    let fork_res = fork_res.map_err(|e| VMError::new_compile(format!("sh 2: {e}")))?;
     if result.is_empty() {
         Ok(fork_res.into())
     } else {

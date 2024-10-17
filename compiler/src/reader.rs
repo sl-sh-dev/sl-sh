@@ -871,6 +871,72 @@ impl<'vm> Reader<'vm> {
         }
     }
 
+    fn read_shell_list(
+        &mut self,
+        buffer: &mut String,
+        in_back_quote: bool,
+    ) -> Result<Value, ReadError> {
+        let mut closed = false;
+        let mut list = Vec::new();
+        list.push(Value::Symbol(self.vm().intern_static("sh")));
+        let line = self.line() as u32;
+        let column = self.column() as u32;
+        let mut open_parens: u32 = 0;
+        buffer.clear();
+
+        while let Some(ch) = self.chars().next() {
+            let ch = ch?;
+            match &*ch {
+                ")" if open_parens == 0 => {
+                    closed = true;
+                    if !buffer.is_empty() {
+                        list.push(self.vm().alloc_string(buffer.clone()));
+                        buffer.clear();
+                    }
+                    break;
+                }
+                ")" => open_parens -= 1,
+                "(" => open_parens += 1,
+                ":" => {
+                    if !buffer.is_empty() {
+                        list.push(self.vm().alloc_string(buffer.clone()));
+                    }
+                    if let Some(Value::Symbol(i)) =
+                        self.read_inner(buffer, in_back_quote, ReadReturn::List)?
+                    {
+                        list.push(Value::Keyword(i));
+                        buffer.clear();
+                    } else {
+                        return Err(ReadError {
+                            reason: "Invalid keyword".to_string(),
+                        });
+                    }
+                }
+                "~" => {
+                    if !buffer.is_empty() {
+                        list.push(self.vm().alloc_string(buffer.clone()));
+                    }
+                    if let Some(exp) = self.read_inner(buffer, in_back_quote, ReadReturn::List)? {
+                        list.push(exp);
+                        buffer.clear();
+                    }
+                }
+                _ => buffer.push_str(&ch),
+            }
+        }
+        if !closed {
+            Err(ReadError {
+                reason: "Unclosed list".to_string(),
+            })
+        } else if list.is_empty() {
+            Err(ReadError {
+                reason: "Empty shell command".to_string(),
+            })
+        } else {
+            Ok(self.alloc_list(list, line, column))
+        }
+    }
+
     fn read_list(&mut self, buffer: &mut String, in_back_quote: bool) -> Result<Value, ReadError> {
         let mut cont = true;
         let mut dot = false;
@@ -1200,6 +1266,11 @@ impl<'vm> Reader<'vm> {
                     {
                         return Ok(Some(v));
                     }
+                }
+                "$" if self.peek_is("(")? => {
+                    self.chars().next();
+                    let exp = self.read_shell_list(buffer, in_back_quote)?;
+                    return Ok(Some(exp));
                 }
                 "(" => {
                     let exp = self.read_list(buffer, in_back_quote)?;
