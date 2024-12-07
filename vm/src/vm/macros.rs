@@ -21,7 +21,9 @@ macro_rules! get_code {
 #[macro_export]
 macro_rules! get_code_at {
     ($chunk:expr, $idx:expr) => {{
-        unsafe { $chunk.code.as_ptr().offset($idx) }
+        let code = $chunk.code.as_ptr();
+        let idx: isize = $idx as isize;
+        unsafe { code.offset(idx) }
     }};
 }
 
