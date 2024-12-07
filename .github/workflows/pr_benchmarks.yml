@@ -55,7 +55,7 @@ jobs:
           cache-on-failure: true
           cache-all-crates: true
           shared-key: "${{ steps.get-hash.outputs.hash }}"
-      - run: cargo install iai-callgrind-runner --version 0.10.2
+      - run: cargo install iai-callgrind-runner --version 0.14.0
       - name: cargo test --no-run benches (debug mode) to check compile
         run: cargo test --benches --no-run
       - name: Track Benchmarks with Bencher
@@ -99,7 +99,7 @@ jobs:
           cache-on-failure: true
           cache-all-crates: true
           shared-key: "${{ steps.get-hash.outputs.hash }}"
-      - run: cargo install iai-callgrind-runner --version 0.10.2
+      - run: cargo install iai-callgrind-runner --version 0.14.0
       - name: cargo test --no-run benches (debug mode) to check compile
         run: cargo test --benches --no-run
 
