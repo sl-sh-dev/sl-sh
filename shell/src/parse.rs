@@ -350,13 +350,9 @@ impl ParseState {
             self.last_ch = ' ';
             return Ok(());
         }
-        let mut amp = false;
+        let amp = self.last_ch == '&';
         let out_fd = if let Some(token) = &self.token {
-            if token == "&" {
-                self.take_token();
-                amp = true;
-                STDOUT_FILENO
-            } else if let Ok(fd) = FileDesc::from_str(token) {
+            if let Ok(fd) = FileDesc::from_str(token) {
                 if fd >= STDIN_FILENO {
                     self.take_token();
                     fd
