@@ -815,12 +815,12 @@ mod test {
     use slosh_lib::{run_reader, set_builtins_shell, set_initial_load_path, ENV};
     use std::collections::BTreeMap;
     use std::ops::DerefMut;
-    use tempdir::TempDir;
+    use tempfile::TempDir;
 
     #[test]
     fn exec_global_slosh_tests_in_rust() {
         // create home dir
-        let tmp_dir = TempDir::new("test_load_path").unwrap();
+        let tmp_dir = TempDir::with_prefix("test_load_path").unwrap();
         let home_dir = tmp_dir.path().to_str();
         let home_path = home_dir.unwrap().to_string();
 

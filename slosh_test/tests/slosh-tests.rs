@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 use std::process::Command;
-use tempdir::TempDir;
+use tempfile::TempDir;
 
 pub fn get_slosh_exe() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_slosh_test"))
@@ -26,7 +26,7 @@ fn run_slosh_tests() {
     let slosh_path = get_slosh_exe().into_os_string();
     let slosh_path = slosh_path.to_str();
 
-    let tmp_dir = TempDir::new("test_load_path").unwrap();
+    let tmp_dir = TempDir::with_prefix("test_load_path").unwrap();
     let home_dir = tmp_dir.path().to_str();
 
     let output = temp_env::with_var("HOME", home_dir, || {

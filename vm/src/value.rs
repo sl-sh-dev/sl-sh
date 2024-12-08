@@ -59,7 +59,7 @@ impl<'vm, ENV> PairIter<'vm, ENV> {
     }
 }
 
-impl<'vm, ENV> Iterator for PairIter<'vm, ENV> {
+impl<ENV> Iterator for PairIter<'_, ENV> {
     type Item = Value;
 
     fn next(&mut self) -> Option<Self::Item> {

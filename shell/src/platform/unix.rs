@@ -46,9 +46,10 @@ impl Platform for Sys {
         term_settings: &UnixTermSettings,
         shell_pid: UnixPid,
     ) -> Result<(), io::Error> {
-        termios::tcsetattr(UnixFileDesc(0), termios::SetArg::TCSANOW, &term_settings.0)?;
+        let stdin = UnixFileDesc(0);
+        termios::tcsetattr(stdin, termios::SetArg::TCSANOW, &term_settings.0)?;
         // XXX TODO- be more specific if the next line fails (ie only turn off tty if that is the error)?
-        unistd::tcsetpgrp(0, unistd::Pid::from_raw(shell_pid.0))?;
+        unistd::tcsetpgrp(stdin, unistd::Pid::from_raw(shell_pid.0))?;
         Ok(())
     }
 
@@ -57,7 +58,7 @@ impl Platform for Sys {
     fn terminal_foreground(terminal: UnixFileDesc) {
         /* Loop until we are in the foreground.  */
         let mut shell_pgid = unistd::getpgrp();
-        while unistd::tcgetpgrp(terminal.0) != Ok(shell_pgid) {
+        while unistd::tcgetpgrp(terminal) != Ok(shell_pgid) {
             if let Err(err) = signal::kill(shell_pgid, Signal::SIGTTIN) {
                 eprintln!("Error sending sigttin: {}.", err);
             }
@@ -84,7 +85,7 @@ impl Platform for Sys {
     fn grab_terminal(terminal: UnixFileDesc) -> Result<(), io::Error> {
         /* Grab control of the terminal.  */
         let pgid = unistd::getpid();
-        Ok(unistd::tcsetpgrp(terminal.0, pgid)?)
+        Ok(unistd::tcsetpgrp(terminal, pgid)?)
     }
 
     /// Return the input and output file descriptors for an anonymous pipe.
@@ -322,7 +323,7 @@ impl Platform for Sys {
             let ppgid = unistd::Pid::from_raw(-pgid.0);
             signal::kill(ppgid, Signal::SIGCONT)?;
             let ppgid = unistd::Pid::from_raw(pgid.0);
-            unistd::tcsetpgrp(libc::STDIN_FILENO, ppgid)?;
+            unistd::tcsetpgrp(UnixFileDesc(libc::STDIN_FILENO), ppgid)?;
             job.mark_running();
             Self::wait_job(job);
             if let Some(term_settings) = term_settings {
@@ -331,7 +332,7 @@ impl Platform for Sys {
         } else {
             let ppgid = unistd::Pid::from_raw(pgid.0);
             // The job is running, so no sig cont needed...
-            unistd::tcsetpgrp(libc::STDIN_FILENO, ppgid)?;
+            unistd::tcsetpgrp(UnixFileDesc(libc::STDIN_FILENO), ppgid)?;
             Self::wait_job(job);
             if let Some(term_settings) = term_settings {
                 Self::restore_terminal(term_settings, job.shell_pid())?;
@@ -617,7 +618,7 @@ fn setup_group_term(pid: UnixPid, job: &Job) {
             // Ignore, do in parent and child.
         }
         // XXXX only if foreground
-        if let Err(_err) = unistd::tcsetpgrp(libc::STDIN_FILENO, pgid) {
+        if let Err(_err) = unistd::tcsetpgrp(UnixFileDesc(libc::STDIN_FILENO), pgid) {
             // Ignore, do in parent and child.
         }
     } else {

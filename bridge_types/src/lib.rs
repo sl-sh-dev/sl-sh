@@ -1,9 +1,8 @@
 use std::borrow::Cow;
 use std::fmt::Display;
 
-/// Marker traits
-
 /// A slosh [`Value`] that can potentially be represented as a rust value.
+/// Marker traits
 pub trait BridgedType {}
 
 /// An [`Option`] value that contains a [`BridgedType`] can be represented as a rust value.

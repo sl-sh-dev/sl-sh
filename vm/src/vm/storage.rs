@@ -1,3 +1,5 @@
+//! Vm code to access storage, heap, stack, globals, etc.
+
 use crate::heap::Error;
 use crate::{CallFrame, Chunk, Continuation, Handle, Heap, Interned, MutState, VMResult, Value};
 use std::sync::Arc;
@@ -5,8 +7,6 @@ use std::sync::Arc;
 use crate::io::HeapIo;
 use crate::vm_hashmap::VMHashMap;
 use crate::GVm;
-
-/// Vm code to access storage, heap, stack, globals, etc.
 
 pub struct CallStackIter<'vm, ENV> {
     vm: &'vm GVm<ENV>,
