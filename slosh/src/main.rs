@@ -30,8 +30,6 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    extern crate tempdir;
-
     use compiler_test_utils::exec;
     use slosh_lib::{set_builtins_shell, set_initial_load_path, ENV};
     use slvm::{from_i56, Value};
@@ -39,12 +37,12 @@ mod tests {
     use std::io::Write;
     use std::ops::DerefMut;
     use temp_env;
-    use tempdir::TempDir;
+    use tempfile::TempDir;
 
     #[test]
     fn test_load_path_no_home() {
         // create home dir
-        let tmp_dir = TempDir::new("test_load_path").unwrap();
+        let tmp_dir = TempDir::with_prefix("test_load_path").unwrap();
         let home_dir = tmp_dir.path().to_str();
         let home_path = home_dir.unwrap().to_string();
 

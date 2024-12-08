@@ -9,7 +9,7 @@ default = []
 lisp-test = ["dep:regex", "dep:lazy_static", "dep:mdbook", "dep:env_logger"]
 
 [dependencies]
-unicode_reader = "1"
+unicode_reader = { workspace = true }
 sl-compiler = { workspace = true }
 bridge_adapters = { path = "../bridge_adapters" }
 slosh_lib = { path = "../slosh_lib" }
@@ -18,27 +18,27 @@ slvm = { workspace = true }
 builtins = { path = "../builtins" }
 compile_state = { workspace = true }
 shell = { path = "../shell" }
-unicode-width = "0.1"
-glob = "0.3"
+unicode-width = { workspace = true }
+glob = { workspace = true }
 
 # lisp-test dependencies
 regex = { workspace = true, optional = true }
 lazy_static = { workspace = true, optional = true }
 mdbook = { workspace = true, optional = true }
-env_logger = { version = "0.11.3", optional = true }
+env_logger = { workspace = true, optional = true }
 
 [dev-dependencies]
-tempdir = "0.3.7"
-temp-env = "0.3.6"
-criterion = "0.5"
-iai-callgrind = "0.10.2"
+tempfile = { workspace = true }
+temp-env = { workspace = true }
+criterion = { workspace = true }
+iai-callgrind = { workspace = true }
 bench_utils = { path = "bench_utils" }
 compiler_test_utils = { workspace = true }
 mdbook = { workspace = true }
 
 
 [build-dependencies]
-chrono = "0.4.7"
+chrono = { workspace = true }
 
 [[bench]]
 name = "criterion"

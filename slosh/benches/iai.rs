@@ -71,7 +71,7 @@ fn continuation_vec_search_ten_thousand() {
 library_benchmark_group!(
     name = recursion_and_continuations;
     config = LibraryBenchmarkConfig::default()
-        .raw_callgrind_args(["--cache-sim=yes"]);
+        .callgrind_args(["--cache-sim=yes"]);
     benchmarks = recursive_vec_search_one_hundred,
     recursive_vec_search_one_thousand,
     recursive_vec_search_ten_thousand,
@@ -83,7 +83,7 @@ library_benchmark_group!(
 library_benchmark_group!(
     name = float;
     config = LibraryBenchmarkConfig::default()
-        .raw_callgrind_args(["--cache-sim=yes"]);
+        .callgrind_args(["--cache-sim=yes"]);
     benchmarks = float_one_hundred,
     float_one_thousand,
     float_ten_thousand,

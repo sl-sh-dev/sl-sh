@@ -1,8 +1,8 @@
+//! Vm functions to handle runtime calling of anything callable.
+
 use std::sync::Arc;
 
 use crate::{mov_register, CallFrame, Chunk, Continuation, GVm, VMError, VMResult, Value};
-
-/// Vm functions to handle runtime calling of anything callable.
 
 impl<ENV> GVm<ENV> {
     /// Setup the rest (&) arguments for a callable.

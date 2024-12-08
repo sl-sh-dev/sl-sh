@@ -93,13 +93,13 @@ pub struct IoGuard<'a> {
     io: MutexGuard<'a, Io>,
 }
 
-impl<'a> Read for IoGuard<'a> {
+impl Read for IoGuard<'_> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.io.read(buf)
     }
 }
 
-impl<'a> Write for IoGuard<'a> {
+impl Write for IoGuard<'_> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         self.io.write(buf)
     }
@@ -109,7 +109,7 @@ impl<'a> Write for IoGuard<'a> {
     }
 }
 
-impl<'a> Seek for IoGuard<'a> {
+impl Seek for IoGuard<'_> {
     fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
         self.io.seek(pos)
     }

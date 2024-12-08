@@ -16,9 +16,9 @@ shell = { workspace = true }
 mdbook = "0.4"
 
 [dev-dependencies]
-tempdir = "0.3.7"
-temp-env = "0.3.6"
+tempfile = { workspace = true }
+temp-env = { workspace = true }
 compiler_test_utils = { workspace = true }
 
 [build-dependencies]
-chrono = "0.4.7"
+chrono = { workspace = true }

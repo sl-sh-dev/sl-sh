@@ -175,7 +175,7 @@ pub struct VMHashMapIter<'a> {
     iter: std::collections::hash_map::Iter<'a, ValHash, Value>,
 }
 
-impl<'a> Iterator for VMHashMapIter<'a> {
+impl Iterator for VMHashMapIter<'_> {
     type Item = (Value, Value);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -188,7 +188,7 @@ pub struct VMMapKeys<'a> {
     keys: Keys<'a, ValHash, Value>,
 }
 
-impl<'a> Iterator for VMMapKeys<'a> {
+impl Iterator for VMMapKeys<'_> {
     type Item = Value;
 
     fn next(&mut self) -> Option<Self::Item> {

@@ -86,7 +86,7 @@ pub struct Reader<'vm> {
     file_name: &'static str,
 }
 
-impl<'vm> Iterator for Reader<'vm> {
+impl Iterator for Reader<'_> {
     type Item = Result<Value, ReadError>;
 
     fn next(&mut self) -> Option<Self::Item> {
