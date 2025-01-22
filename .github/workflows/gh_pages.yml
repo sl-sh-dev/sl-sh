@@ -2,8 +2,7 @@ name: GitHub Pages
 on:
   push:
     branches:
-      - master
-      - more-std-lib
+      - main
 
 jobs:
   deploy:
