@@ -17,6 +17,12 @@ TODO PC need md files in a specific folder named after a section to be inlined w
 
 ## Important information
 
+### Adding a new doc
+0. Create a md file somewhere in ./doc/src/
+1. Make sure the SUMMARY.md file in ./doc/ references the new md file.
+
+### How does this work?
+
 0. Must be compiled in lisp-test mode for appropriate documentation functions to be present (`cargo build --features lisp-test`).
 1. To create new documentation files add them in markdown format to the `doc/src/` directory and
    then reference them in `doc/src/SUMMARY.md` when slosh builds the documentation it will create
