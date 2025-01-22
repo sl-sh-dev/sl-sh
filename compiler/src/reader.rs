@@ -173,6 +173,7 @@ fn is_digit(ch: &str) -> bool {
     )
 }
 
+#[derive(Copy, Clone, Debug)]
 enum ReadReturn {
     None,
     List,
@@ -870,6 +871,72 @@ impl<'vm> Reader<'vm> {
         }
     }
 
+    fn read_shell_list(
+        &mut self,
+        buffer: &mut String,
+        in_back_quote: bool,
+    ) -> Result<Value, ReadError> {
+        let mut closed = false;
+        let mut list = Vec::new();
+        list.push(Value::Symbol(self.vm().intern_static("sh")));
+        let line = self.line() as u32;
+        let column = self.column() as u32;
+        let mut open_parens: u32 = 0;
+        buffer.clear();
+
+        while let Some(ch) = self.chars().next() {
+            let ch = ch?;
+            match &*ch {
+                ")" if open_parens == 0 => {
+                    closed = true;
+                    if !buffer.is_empty() {
+                        list.push(self.vm().alloc_string(buffer.clone()));
+                        buffer.clear();
+                    }
+                    break;
+                }
+                ")" => open_parens -= 1,
+                "(" => open_parens += 1,
+                ":" => {
+                    if !buffer.is_empty() {
+                        list.push(self.vm().alloc_string(buffer.clone()));
+                    }
+                    if let Some(Value::Symbol(i)) =
+                        self.read_inner(buffer, in_back_quote, ReadReturn::List)?
+                    {
+                        list.push(Value::Keyword(i));
+                        buffer.clear();
+                    } else {
+                        return Err(ReadError {
+                            reason: "Invalid keyword".to_string(),
+                        });
+                    }
+                }
+                "~" => {
+                    if !buffer.is_empty() {
+                        list.push(self.vm().alloc_string(buffer.clone()));
+                    }
+                    if let Some(exp) = self.read_inner(buffer, in_back_quote, ReadReturn::List)? {
+                        list.push(exp);
+                        buffer.clear();
+                    }
+                }
+                _ => buffer.push_str(&ch),
+            }
+        }
+        if !closed {
+            Err(ReadError {
+                reason: "Unclosed list".to_string(),
+            })
+        } else if list.is_empty() {
+            Err(ReadError {
+                reason: "Empty shell command".to_string(),
+            })
+        } else {
+            Ok(self.alloc_list(list, line, column))
+        }
+    }
+
     fn read_list(&mut self, buffer: &mut String, in_back_quote: bool) -> Result<Value, ReadError> {
         let mut cont = true;
         let mut dot = false;
@@ -1018,6 +1085,95 @@ impl<'vm> Reader<'vm> {
         }
     }
 
+    /// Reader for the '#' builtin reader macro.
+    ///
+    /// If it returns Ok(Some(...)) then that value should be returned while Ok(None) should be ignored.
+    fn hash_macro(
+        &mut self,
+        buffer: &mut String,
+        in_back_quote: bool,
+        return_close: ReadReturn,
+        read_table_term: &HashMap<&'static str, Value>,
+    ) -> Result<Option<Value>, ReadError> {
+        let next = self.chars().next();
+        let (line, column) = (self.line(), self.column());
+        if let Some(Ok(peek_ch)) = &next {
+            match &**peek_ch {
+                "|" => {
+                    self.consume_block_comment()?;
+                    Ok(None)
+                }
+                "!" => {
+                    // This is an alternate line comment for shebang in a script.
+                    self.consume_line_comment()?;
+                    Ok(None)
+                }
+                "%" => {
+                    let line = self.line() as u32;
+                    let column = self.column() as u32;
+                    match self.read_doc_string(buffer) {
+                        Ok(s) => {
+                            let doc_sym = Value::Symbol(self.vm.intern("doc-string"));
+                            let doc_string = s;
+                            let list = self.alloc_list(vec![doc_sym, doc_string], line, column);
+                            Ok(Some(list))
+                        }
+                        Err(e) => Err(e),
+                    }
+                }
+                "<" => {
+                    let reason =
+                        format!("Found an unreadable token: line {}, col: {}", line, column);
+                    Err(ReadError { reason })
+                }
+                "t" => Ok(Some(Value::True)),
+                "f" => Ok(Some(Value::False)),
+                "\"" => match self.read_string_literal(buffer) {
+                    Ok(s) => Ok(Some(Value::StringConst(self.vm.intern(s)))),
+                    Err(e) => Err(e),
+                },
+                //"." => {
+                //    return prep_reader_macro(environment, chars, "reader-macro-dot", ".");
+                //}
+                // Read an octal int
+                "o" => {
+                    let exp = self.read_num_radix(buffer, 8, read_table_term)?;
+                    Ok(Some(exp.into()))
+                }
+                // Read a hex int
+                "x" => {
+                    let exp = self.read_num_radix(buffer, 16, read_table_term)?;
+                    Ok(Some(exp.into()))
+                }
+                // Read a binary int
+                "b" => {
+                    let exp = self.read_num_radix(buffer, 2, read_table_term)?;
+                    Ok(Some(exp.into()))
+                }
+                ";" => {
+                    match self.read_inner(buffer, in_back_quote, ReadReturn::None) {
+                        Ok(_) => {
+                            // Consumed and threw away one form so return the next.
+                            self.read_inner(buffer, in_back_quote, return_close)
+                        }
+                        Err(err) => Err(err),
+                    }
+                }
+                _ => {
+                    let reason = format!(
+                        "Found # with invalid char {}: line {}, col: {}",
+                        peek_ch, line, column
+                    );
+                    Err(ReadError { reason })
+                }
+            }
+        } else {
+            Err(ReadError {
+                reason: "Floating '#'".to_string(),
+            })
+        }
+    }
+
     fn read_inner(
         &mut self,
         buffer: &mut String,
@@ -1105,91 +1261,16 @@ impl<'vm> Reader<'vm> {
                     return Ok(Some(self.do_char(buffer, &read_table_term)?));
                 }
                 "#" => {
-                    let next = self.chars().next();
-                    let (line, column) = (self.line(), self.column());
-                    if let Some(Ok(peek_ch)) = &next {
-                        match &**peek_ch {
-                            "|" => self.consume_block_comment()?,
-                            "!" => {
-                                // This is an alternate line comment for shebang in a script.
-                                self.consume_line_comment()?;
-                            }
-                            "%" => {
-                                let line = self.line() as u32;
-                                let column = self.column() as u32;
-                                match self.read_doc_string(buffer) {
-                                    Ok(s) => {
-                                        let doc_sym = Value::Symbol(self.vm.intern("doc-string"));
-                                        let doc_string = s;
-                                        let list = self.alloc_list(
-                                            vec![doc_sym, doc_string],
-                                            line,
-                                            column,
-                                        );
-                                        return Ok(Some(list));
-                                    }
-                                    Err(e) => return Err(e),
-                                };
-                            }
-                            "<" => {
-                                let reason = format!(
-                                    "Found an unreadable token: line {}, col: {}",
-                                    line, column
-                                );
-                                return Err(ReadError { reason });
-                            }
-                            "t" => {
-                                return Ok(Some(Value::True));
-                            }
-                            "f" => {
-                                return Ok(Some(Value::False));
-                            }
-                            "\"" => match self.read_string_literal(buffer) {
-                                Ok(s) => return Ok(Some(Value::StringConst(self.vm.intern(s)))),
-                                Err(e) => return Err(e),
-                            },
-                            //"." => {
-                            //    return prep_reader_macro(environment, chars, "reader-macro-dot", ".");
-                            //}
-                            // Read an octal int
-                            "o" => {
-                                let exp = self.read_num_radix(buffer, 8, &read_table_term)?;
-                                return Ok(Some(exp.into()));
-                            }
-                            // Read a hex int
-                            "x" => {
-                                let exp = self.read_num_radix(buffer, 16, &read_table_term)?;
-                                return Ok(Some(exp.into()));
-                            }
-                            // Read a binary int
-                            "b" => {
-                                let exp = self.read_num_radix(buffer, 2, &read_table_term)?;
-                                return Ok(Some(exp.into()));
-                            }
-                            ";" => {
-                                match self.read_inner(buffer, in_back_quote, ReadReturn::None) {
-                                    Ok(_) => {
-                                        // Consumed and threw away one form so return the next.
-                                        return self.read_inner(
-                                            buffer,
-                                            in_back_quote,
-                                            return_close,
-                                        );
-                                    }
-                                    Err(err) => {
-                                        return Err(err);
-                                    }
-                                }
-                            }
-                            _ => {
-                                let reason = format!(
-                                    "Found # with invalid char {}: line {}, col: {}",
-                                    peek_ch, line, column
-                                );
-                                return Err(ReadError { reason });
-                            }
-                        }
+                    if let Some(v) =
+                        self.hash_macro(buffer, in_back_quote, return_close, &read_table_term)?
+                    {
+                        return Ok(Some(v));
                     }
+                }
+                "$" if self.peek_is("(")? => {
+                    self.chars().next();
+                    let exp = self.read_shell_list(buffer, in_back_quote)?;
+                    return Ok(Some(exp));
                 }
                 "(" => {
                     let exp = self.read_list(buffer, in_back_quote)?;

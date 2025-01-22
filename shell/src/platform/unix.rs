@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::convert::Infallible;
 use std::ffi::{c_char, CString, OsStr, OsString};
 use std::fmt::{Display, Formatter};
 use std::fs::File;
@@ -433,6 +434,14 @@ pub struct UnixPid(i32);
 impl Display for UnixPid {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+impl TryFrom<UnixPid> for i32 {
+    type Error = Infallible;
+
+    fn try_from(value: UnixPid) -> Result<Self, Self::Error> {
+        Ok(value.0)
     }
 }
 

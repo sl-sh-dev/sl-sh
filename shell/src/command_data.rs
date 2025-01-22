@@ -60,6 +60,29 @@ impl Arg {
     }
 }
 
+impl TryFrom<&mut Arg> for FileDesc {
+    type Error = ();
+
+    fn try_from(arg: &mut Arg) -> Result<Self, Self::Error> {
+        if let Arg::Str(targ) = arg {
+            let fd = targ.to_string_lossy();
+            if fd.ends_with('-') {
+                match FileDesc::from_str(&fd[0..fd.len() - 1]) {
+                    Ok(fd) => Ok(fd),
+                    Err(_) => Err(()),
+                }
+            } else {
+                match FileDesc::from_str(&fd) {
+                    Ok(fd) => Ok(fd),
+                    Err(_) => Err(()),
+                }
+            }
+        } else {
+            Err(())
+        }
+    }
+}
+
 impl Display for Arg {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -368,6 +391,46 @@ impl Redirects {
             }
         }
     }
+
+    fn fds_to_internal(&mut self, fd_set: &HashSet<FileDesc>) {
+        for r in self.redir_stack.iter_mut() {
+            match r {
+                RedirType::In(ifd, RedirArg::Fd(fd_arg)) => {
+                    if let Ok(fd) = fd_arg.try_into() {
+                        if fd_set.contains(&fd) {
+                            *r = RedirType::In(*ifd, RedirArg::InternalFd(fd));
+                        }
+                    }
+                }
+                RedirType::In(_, _) => {}
+                RedirType::InDirect(_, _) => {}
+                RedirType::Out(ofd, RedirArg::Fd(fd_arg)) => {
+                    if let Ok(fd) = fd_arg.try_into() {
+                        if fd_set.contains(&fd) {
+                            *r = RedirType::Out(*ofd, RedirArg::InternalFd(fd));
+                        }
+                    }
+                }
+                RedirType::Out(_, _) => {}
+                RedirType::OutTrunc(ofd, RedirArg::Fd(fd_arg)) => {
+                    if let Ok(fd) = fd_arg.try_into() {
+                        if fd_set.contains(&fd) {
+                            *r = RedirType::OutTrunc(*ofd, RedirArg::InternalFd(fd));
+                        }
+                    }
+                }
+                RedirType::OutTrunc(_, _) => {}
+                RedirType::InOut(iofd, RedirArg::Fd(fd_arg)) => {
+                    if let Ok(fd) = fd_arg.try_into() {
+                        if fd_set.contains(&fd) {
+                            *r = RedirType::InOut(*iofd, RedirArg::InternalFd(fd));
+                        }
+                    }
+                }
+                RedirType::InOut(_, _) => {}
+            }
+        }
+    }
 }
 
 impl Default for Redirects {
@@ -508,6 +571,12 @@ impl CommandWithArgs {
     fn collect_internal_fds(&self, fd_set: &mut HashSet<FileDesc>) {
         if let Some(stdios) = &self.stdios {
             stdios.collect_internal_fds(fd_set);
+        }
+    }
+
+    pub fn fds_to_internal(&mut self, fd_set: &HashSet<FileDesc>) {
+        if let Some(stdios) = &mut self.stdios {
+            stdios.fds_to_internal(fd_set);
         }
     }
 
@@ -732,6 +801,23 @@ impl Run {
                 }
             }
             Run::Subshell(ref current) => current.collect_internal_fds(fd_set),
+            Run::Empty => {}
+        }
+    }
+
+    pub fn fds_to_internal(&mut self, fd_set: &HashSet<FileDesc>) {
+        match self {
+            Run::Command(current) => current.fds_to_internal(fd_set),
+            Run::BackgroundCommand(current) => current.fds_to_internal(fd_set),
+            Run::Pipe(ref mut seq)
+            | Run::Sequence(ref mut seq)
+            | Run::And(ref mut seq)
+            | Run::Or(ref mut seq) => {
+                for run in seq {
+                    run.fds_to_internal(fd_set);
+                }
+            }
+            Run::Subshell(ref mut current) => current.fds_to_internal(fd_set),
             Run::Empty => {}
         }
     }

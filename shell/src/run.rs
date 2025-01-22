@@ -25,6 +25,13 @@ pub fn setup_shell_tty(shell_terminal: FileDesc) {
     }
 }
 
+/// Finish a job run.
+///
+/// If not a background job will wait for proc to end and return the exit status
+/// or -66 if the wait fails.  If it is a background job then return the pid of
+/// the last proc in the job.
+/// Also sets the LAST_STATUS env var to the exit status (if not background) or
+/// 0 if a background job.
 fn finish_run(background: bool, mut job: Job, jobs: &mut Jobs) -> i32 {
     job.mark_running();
     let status = if !background {
@@ -38,8 +45,13 @@ fn finish_run(background: bool, mut job: Job, jobs: &mut Jobs) -> i32 {
         }
     } else {
         env::set_var("LAST_STATUS", format!("{}", 0));
+        let pid = if let Some(p) = job.pids().last() {
+            p.pid().try_into().unwrap_or(0)
+        } else {
+            0
+        };
         jobs.push_job(job);
-        0
+        pid
     };
     jobs.restore_terminal();
     status
@@ -96,7 +108,7 @@ pub fn run_job(run: &Run, jobs: &mut Jobs, force_background: bool) -> Result<i32
             let mut job = jobs.new_job();
             job.set_stealth(force_background);
             match run_pipe(&pipe[..], &mut job, jobs) {
-                Ok(background) => finish_run(background, job, jobs),
+                Ok(background) => finish_run(force_background || background, job, jobs),
                 Err(err) => {
                     // Make sure we restore the terminal...
                     jobs.restore_terminal();
