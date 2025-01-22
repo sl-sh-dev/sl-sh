@@ -2,7 +2,7 @@
 
 # Simple Lisp Shell (pronounced slosh)
 
-![Rust](https://github.com/sl-sh-dev/sl-sh/workflows/Rust/badge.svg?branch=master)
+![Rust](https://github.com/sl-sh-dev/sl-sh/workflows/Rust/badge.svg?branch=main)
 
 ## Note this is a new experimental version, see ./legacy/ for the original version (slush).
 
