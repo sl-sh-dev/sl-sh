@@ -14,6 +14,7 @@ members = [
     "bridge_types",
     "bridge_adapters",
     "slosh_test",
+    "slosh_test_lib",
 ]
 
 exclude = ["legacy"]
@@ -27,6 +28,9 @@ panic = "abort"
 
 [profile.bench]
 debug = true
+
+[workspace.package]
+version = "0.11.0"
 
 [workspace.dependencies]
 bridge_types = { path = "bridge_types" }
