@@ -158,7 +158,7 @@ dependencies = [
 
 [[package]]
 name = "bridge_adapters"
-version = "0.1.0"
+version = "0.11.0"
 dependencies = [
  "bridge_types",
  "compile_state",
@@ -167,7 +167,7 @@ dependencies = [
 
 [[package]]
 name = "bridge_macros"
-version = "0.1.0"
+version = "0.11.0"
 dependencies = [
  "bridge_types",
  "quote",
@@ -178,7 +178,7 @@ dependencies = [
 
 [[package]]
 name = "bridge_types"
-version = "0.1.0"
+version = "0.11.0"
 
 [[package]]
 name = "bstr"
@@ -193,7 +193,7 @@ dependencies = [
 
 [[package]]
 name = "builtins"
-version = "0.1.0"
+version = "0.11.0"
 dependencies = [
  "bridge_adapters",
  "bridge_macros",
@@ -312,7 +312,7 @@ checksum = "acbf1af155f9b9ef647e42cdc158db4b64a1b61f743629225fde6f3e0be2a7c7"
 
 [[package]]
 name = "compile_state"
-version = "0.1.0"
+version = "0.11.0"
 dependencies = [
  "slvm",
 ]
@@ -994,6 +994,7 @@ dependencies = [
  "semver",
  "serde_json",
  "slosh_lib",
+ "slosh_test_lib",
  "toml",
 ]
 
@@ -1577,7 +1578,7 @@ dependencies = [
 
 [[package]]
 name = "shell"
-version = "0.1.0"
+version = "0.11.0"
 dependencies = [
  "cfg-if",
  "chrono",
@@ -1600,7 +1601,7 @@ checksum = "38b58827f4464d87d377d175e90bf58eb00fd8716ff0a62f80356b5e61555d0d"
 
 [[package]]
 name = "sl-compiler"
-version = "0.1.0"
+version = "0.11.0"
 dependencies = [
  "chrono",
  "compile_state",
@@ -1646,7 +1647,7 @@ dependencies = [
 
 [[package]]
 name = "slosh_lib"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "bridge_adapters",
  "builtins",
@@ -1662,8 +1663,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "slosh_test_lib"
+version = "0.11.0"
+dependencies = [
+ "bridge_adapters",
+ "chrono",
+ "compile_state",
+ "lazy_static",
+ "mdbook",
+ "regex",
+ "shell",
+ "sl-compiler",
+ "slosh_lib",
+ "slvm",
+]
+
+[[package]]
 name = "slvm"
-version = "0.1.0"
+version = "0.11.0"
 dependencies = [
  "bridge_types",
  "unicode-segmentation",

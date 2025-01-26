@@ -45,4 +45,6 @@ export PATH="$PATH:./mdbook-slosh-eval/target/debug"
 #
 #../target/debug/slosh -c "(build-doc \"${PWD}\")"
 
+# doing this because im tryingto use the mk-site.slosh script but don't
+# see a need to re-write this shell script in slosh at this moment too.
 ./search-hack-patch.sh

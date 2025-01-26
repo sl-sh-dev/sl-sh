@@ -2192,6 +2192,7 @@ dependencies = [
  "shell",
  "sl-compiler",
  "slosh_lib",
+ "slosh_test_lib",
  "slvm",
  "temp-env",
  "tempfile",

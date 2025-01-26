@@ -361,9 +361,9 @@ impl Value {
     /// Returns an empty iterator if the value is nil.
     /// If the item is not one of the above it returns a once iter of the value.
     ///
-    /// Particularly useful  if iterating over a Vec<Value> that contains a heterogeneous
+    /// Particularly useful  if iterating over a [`Vec<Value>`] that contains a heterogeneous
     /// mix of List(s), Vector(s), Pair(s), and potentially other values, rather than
-    /// returning an empty list for any non iterable thing, return a once iter so
+    /// returning an empty list for any non-iterable thing, return a once iter so
     /// the item is not missed.
     pub fn iter_all<'vm, ENV>(&self, vm: &'vm GVm<ENV>) -> Box<dyn Iterator<Item = Value> + 'vm> {
         match &self.unref(vm) {

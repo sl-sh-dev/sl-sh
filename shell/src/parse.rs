@@ -222,7 +222,7 @@ impl ParseState {
     }
 
     /// Expand ~ into home directory.
-    /// TODO support other tilde expansions from https://www.gnu.org/software/bash/manual/html_node/Tilde-Expansion.html
+    /// TODO support other tilde expansions from <https://www.gnu.org/software/bash/manual/html_node/Tilde-Expansion.html>
     fn expand_tildes(&mut self, jobs: &mut Jobs, token: &str) -> Result<(), io::Error> {
         let ptok = expand_tilde(token.into());
         let token = ptok.to_string_lossy();
@@ -230,7 +230,7 @@ impl ParseState {
     }
 
     /// Expand {..} expressions in arguments into multiple arguments.
-    /// TODO Add range expressions, see https://www.gnu.org/software/bash/manual/html_node/Brace-Expansion.html
+    /// TODO Add range expressions, see <https://www.gnu.org/software/bash/manual/html_node/Brace-Expansion.html>
     fn expand_braces(&mut self, jobs: &mut Jobs, token: &str) -> Result<(), io::Error> {
         let mut well_formed = false;
         let mut open = 0;

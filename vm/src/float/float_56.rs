@@ -4,12 +4,13 @@
 //!
 //! There are open questions about the benefits of using F56 over f32 that will depend on some peformance benchmarking.
 //! f32 is simpler and faster.
-//! Additionally, there are questions about whether to impl the Eq and Hash Traits https://github.com/sl-sh-dev/sl-sh/issues/125
+//! Additionally, there are questions about whether to impl the Eq and Hash Traits <https://github.com/sl-sh-dev/sl-sh/issues/125>
 
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 
+#[allow(rustdoc::broken_intra_doc_links)]
 /// The F56 struct represents a 56-bit floating point number using 7 bytes.
 /// Most operations on F56 are done by converting to f64, performing the operation, and then converting back to F56
 ///
@@ -17,7 +18,7 @@ use std::str::FromStr;
 /// Compared to f32, it has +2 exponent bits and +22 mantissa bits.
 /// Compared to f64, it has -1 exponent bit and -7 mantissa bits.
 ///   Byte 0    Byte 1    Byte 2    Byte 3    Byte 4    Byte 5    Byte 6
-/// [sEEEEEEE][EEEmmmmm][mmmmmmmm][mmmmmmmm][mmmmmmmm][mmmmmmmm][mmmmmmmm]
+/// [sEEEEEEE][EEEmmmmm][mmmmmmmm][mmmmmmmm][mmmmmmmm][mmmmmmmm][mmmmmmmm]]
 ///
 /// Exponent bits range from 0 to 1023
 /// they represent -511 to +512 but are stored biased by +511

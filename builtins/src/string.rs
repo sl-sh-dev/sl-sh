@@ -1,7 +1,7 @@
 use crate::SloshVm;
 use bridge_adapters::add_builtin;
 use bridge_macros::sl_sh_fn;
-use bridge_types::{ErrorStrings, LooseString, SloshChar};
+use bridge_types::{LooseString, SloshChar};
 use slvm::{Handle, VMError, VMResult, Value};
 use std::borrow::Cow;
 use unicode_segmentation::UnicodeSegmentation;
@@ -315,6 +315,7 @@ fn char_whitespace(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
+#[allow(rustdoc::broken_intra_doc_links)]
 /// Usage: (str-sub string start [length]) -> string
 ///
 /// Return a substring from a string given start (0 based) and optional length.

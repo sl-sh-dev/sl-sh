@@ -73,8 +73,6 @@ impl SlFrom<char> for Value {
 }
 
 /// This delegates to [`SlAsRef`] appropriately.
-/// 
-/// [src]
 impl<'a> SlFromRef<'a, Value> for &'a str {
     fn sl_from_ref(value: Value, vm: &'a SloshVm) -> VMResult<Self> {
         (&value).sl_as_ref(vm)

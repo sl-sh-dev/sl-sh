@@ -26,7 +26,9 @@
 //!
 //!
 //! ## For regular borrows, copy this pattern used for &str
+//!
 //! ```ignore
+//!
 //! impl<'a> SlFromRef<'a, Value> for &'a str {
 //!     fn sl_from_ref(value: Value, vm: &'a SloshVm) -> VMResult<Self> {
 //!         (&value).sl_as_ref(vm)
@@ -52,8 +54,11 @@
 //! }
 //! ```
 //!
+//!
 //! # Mutale borrowing when a rust type does not implement copy
+//!
 //! ```ignore
+//!
 //! impl<'a> SlFromRefMut<'a, Value> for &'a mut String {
 //!     fn sl_from_ref_mut(value: Value, vm: &'a mut SloshVm) -> VMResult<Self> {
 //!         (&value).sl_as_mut(vm)
@@ -75,20 +80,22 @@
 //! }
 //! ```
 //!
-//! # If you need to (this section needs more clarity on when users should worry about borrowing or not???
-//! # am i returning owned values?borrowed values? how can i avoid needless cloning when going to/from rust/slosh boundary
-//! # w/ procedural macro etc. etc.
-//!     1.
-//!         To convert a rust value to a slosh type `impl SlFrom<T> for Value`,
-//!     2.
-//!         To convert a slosh &Value to an owned type implement `impl SlFromRef<'a, &Value> for RustType`,
+//!
+//!  # More explanation
+//!     - this section needs more clarity on when users should worry about borrowing or not???
+//!     - am i returning owned values? borrowed values?
+//!     - how can i avoid needless cloning when going to/from rust/slosh boundary w/ procedural macro etc. etc.
+//!     - To convert a rust value to a slosh type
+//! `impl SlFrom<T> for Value { ... }`
+//!     - To convert a slosh &Value to an owned type implement
+//! `impl SlFromRef<'a, &Value> for RustType { ... }`
 //!         this allows rust native functions annotated with the bridge macro to receive normal
 //!         rust types.
-//!     3.
-//!         To convert a slosh &Value to a mutable reference type implement `impl SlAsMut<&Value> for MutRefType`.
-//!     4.
-//!         To convert some rust type back to a value that the rust native function
-//!         annotated by the bridge macro returns implement `impl SlFrom<&Value> for RustType`.
+//!     - To convert a slosh &Value to a mutable reference type implement.
+//! `impl SlAsMut<&Value> for MutRefType { ... }`
+//!     - To convert some rust type back to a value that the rust native function
+//!         annotated by the bridge macro returns implement.
+//! `impl SlFrom<&Value> for RustType { ... }`
 //!
 //!
 //! TODO PC ISSUE #7 - returning values via annotated or lifetime?
@@ -165,8 +172,8 @@
 //!                             |                             | R -> S
 //!                             |                             |     &emsp;- [`SlFrom`] `&`[`Value`] for [`i8`]
 //!                             |                             |
-//! [`u32`]/[`i32`]/[`u64`]/[`i64`]/[`usize`]                             | [`Value`]::Int([[u8;7]])          |
-//! TODO PC *current behavior overflows* |  [`Value`]::Int([u8; 7]), // Store a 7 byte int (i56...).                           |
+//! [`u32`]/[`i32`]/[`u64`]/[`i64`]/[`usize`]                             | [`Value`]::Int          |
+//! TODO PC *current behavior overflows* |  [`Value`]::Int([[u8; 7]]), // Store a 7 byte int (i56...).                           |
 //!                             |                             |
 //!                             |                             |
 //!                             |                             |

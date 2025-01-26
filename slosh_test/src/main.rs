@@ -1,12 +1,11 @@
-pub mod docs;
-
+use slosh_test_lib::docs;
 use bridge_adapters::add_builtin;
 use compile_state::state::SloshVm;
 use sl_compiler::load_eval::run_reader;
 use sl_compiler::Reader;
 use slosh_lib::run;
-use slvm::{VMError, VMResult, Value};
 use std::process;
+use slvm::{VMError, VMResult, Value};
 
 pub const VERSION_STRING: &str = env!("VERSION_STRING");
 
@@ -16,6 +15,7 @@ fn version(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
     Ok(vm.alloc_string(VERSION_STRING.to_string()))
 }
+
 
 fn modify_vm(vm: &mut SloshVm) {
     docs::add_builtins(vm);
