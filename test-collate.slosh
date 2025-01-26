@@ -1,0 +1,88 @@
+#!/usr/bin/env slosh_test
+
+
+#%
+Takes a file or directory to watch and returns a function that encloses the
+state of the file or directory (and all its contents). When the resultant
+function is called it returns a map whose keys are the types of change: :created
+, :deleted, and :modified and values are vectors of files subject to the change.
+Each invocation encloses the state of the previous invocation and can be called
+at any time to report change sets since the last invocation.
+
+sample return value:
+(make-hash
+    ((:modified . #(\"/tmp/collate-fs-changes\"))
+    (:deleted . #())
+    (:created . #(\"/tmp/collate-fs-changes/foo1.txt\"))))
+
+
+Section: file
+
+Example:
+(defn test-collate (collate-test-dir)
+    (let ((collate-test-file0 (with-temp-file collate-test-dir))
+        (collator (collate-fs-changes collate-test-dir))
+        (collate-test-file1 (with-temp-file collate-test-dir))
+        (slp (sleep 100))
+        (changes (collator)))
+    (test::assert-equal (vec collate-test-file1) (hash-get changes :created))
+    (test::assert-equal (make-vec) (hash-get changes :deleted))
+
+    (let ((tst-file (open collate-test-file0 :truncate)))
+            (write-string tst-file \"boop\")
+            (flush tst-file)
+            (close tst-file))
+    (sleep 100)
+    (set! changes (collator))
+    (test::assert-equal (vec collate-test-file0) (hash-get changes :modified))
+    (test::assert-equal (make-vec) (hash-get changes :deleted))
+    (test::assert-equal (make-vec) (hash-get changes :created))
+
+    (fs-rm collate-test-dir)
+    (sleep 100)
+    (set! changes (collator))
+    (test::assert-equal (make-vec) (hash-get changes :created))
+    (test::assert-equal (make-vec) (hash-get changes :modified))
+    (let ((del-items (hash-get changes :deleted)))
+        (test::assert-equal 3 (length del-items))
+        (test::assert-includes collate-test-dir del-items)
+        (test::assert-includes collate-test-file0 del-items)
+        (test::assert-includes collate-test-file1 del-items))))
+
+(with-temp (fn (tmp-dir)
+    (let ((a-dir (with-temp tmp-dir)))
+        (test-collate a-dir))))
+%#
+(defn collate-fs-changes
+	(file-or-dir-to-watch)
+	(if (not (fs-exists? file-or-dir-to-watch))
+	  (err (str "fs-collate: Requires a valid file or directory."))
+	(let ((get-file-md (fn (file)
+					(chain (make-hash) (hash-set! _ :modified (fs-modified file)))))
+			(add-file-md (fn (file-map file) (hash-set! file-map file (get-file-md file))))
+			(get-file-map (fn (file)
+le				(let ((file-map (make-hash)))
+					(fs-crawl file (fn (x) (add-file-md file-map x)))
+					 file-map)))
+			(prev-map (get-file-map file-or-dir-to-watch)))
+	 (fn ()
+		(let ((new-map (get-file-map file-or-dir-to-watch))
+			   (changes (chain (make-hash)
+						  (hash-set! _ :created (make-vec))
+						  (hash-set! _ :modified (make-vec))
+						  (hash-set! _ :deleted (make-vec)))))
+			(iterator::for file in (hash-keys new-map)
+				(let ((prev-file-md (hash-remove! prev-map file)))
+					(if (nil? prev-file-md) ;; file not in previous scan, it's new!
+						(vec-push! (hash-get changes :created) (str file))
+						(let ((new-file-md (hash-get new-map file)))
+							(when (> (hash-get new-file-md :modified)
+								(hash-get prev-file-md :modified))
+								;; modified time increased, file was changed.
+								(vec-push! (hash-get changes :modified) (str file)))))))
+			;; prev-map will now only have keys that were not in new-map indicating
+			;; files were deleted.
+			(iterator::for file in (hash-keys prev-map)
+				(vec-push! (hash-get changes :deleted) (str file)))
+			(set! prev-map new-map)
+			changes))))))

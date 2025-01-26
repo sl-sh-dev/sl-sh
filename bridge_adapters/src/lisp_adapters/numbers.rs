@@ -81,6 +81,27 @@ impl<'a> SlFromRef<'a, Value> for f64 {
     }
 }
 
+impl SlFrom<u8> for Value {
+    fn sl_from(value: u8, _vm: &mut SloshVm) -> VMResult<Self> {
+        Ok(Value::Byte(value))
+    }
+}
+
+impl<'a> SlFromRef<'a, Value> for u8 {
+    fn sl_from_ref(value: Value, vm: &'a SloshVm) -> VMResult<Self> {
+        match value {
+            Value::Byte(i) => Ok(i),
+            _ => Err(VMError::new_conversion(
+                ErrorStrings::fix_me_mismatched_type(
+                    String::from(ValueTypes::from([ValueType::Byte])),
+                    value.display_type(vm),
+                ),
+            )),
+        }
+    }
+}
+
+
 impl SlFrom<usize> for Value {
     fn sl_from(value: usize, _vm: &mut SloshVm) -> VMResult<Self> {
         Ok(to_i56(value as i64))

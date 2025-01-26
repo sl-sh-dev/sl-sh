@@ -1,0 +1,7 @@
+#!/usr/bin/env slosh_test
+
+;; TODO sls need help this script actually loads a repl
+
+(def *prn* "")
+(dyn prn (fn (&rest) (set! *prn* (str *prn* &rest))) (prn (get-globals-sorted)))
+(prn "prn: " *prn*)
