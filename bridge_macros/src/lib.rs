@@ -29,10 +29,9 @@ use std::fmt::{Display, Formatter};
 use syn::__private::{Span, TokenStream2};
 use syn::spanned::Spanned;
 use syn::{
-    parse::Parse, LitStr, Token,
-    parse_macro_input, AttributeArgs, Error, FnArg, GenericArgument, Generics, Ident, Item,
-    ItemFn, Lit, Meta, NestedMeta, PathArguments, ReturnType, Type, TypeBareFn, TypePath,
-    TypeReference, TypeTuple,
+    parse::Parse, parse_macro_input, AttributeArgs, Error, FnArg, GenericArgument, Generics, Ident,
+    Item, ItemFn, Lit, LitStr, Meta, NestedMeta, PathArguments, ReturnType, Token, Type,
+    TypeBareFn, TypePath, TypeReference, TypeTuple,
 };
 extern crate static_assertions;
 
@@ -1657,7 +1656,7 @@ impl Parse for StrRange {
             _comma1: input.parse()?,
             start: input.parse()?,
             _comma2: input.parse()?,
-            end: input.parse()?
+            end: input.parse()?,
         })
     }
 }
@@ -1669,8 +1668,14 @@ pub fn include_str_range(input: proc_macro::TokenStream) -> proc_macro::TokenStr
     let content = std::fs::read_to_string(input.file.value()).unwrap();
     let lines: Vec<_> = content.lines().collect();
 
-    let start_idx = lines.iter().position(|l| l.contains(&input.start.value())).unwrap();
-    let end_idx = lines.iter().position(|l| l.contains(&input.end.value())).unwrap();
+    let start_idx = lines
+        .iter()
+        .position(|l| l.contains(&input.start.value()))
+        .unwrap();
+    let end_idx = lines
+        .iter()
+        .position(|l| l.contains(&input.end.value()))
+        .unwrap();
 
     let selected = lines[start_idx..end_idx].join("\n");
 

@@ -1,9 +1,9 @@
+use crate::docs::legacy_docs;
+use compile_state::state::{SloshVm, SloshVmTrait};
+use slvm::{VMResult, Value};
 use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 use std::iter;
-use compile_state::state::{SloshVm, SloshVmTrait};
-use slvm::{VMResult, Value};
-use crate::docs::legacy_docs;
 
 pub const UNNECESSARY_IN_SLOSH: &str = "Not necessary in slosh.";
 
@@ -45,11 +45,7 @@ pub struct StatusEntry {
 }
 
 impl StatusEntry {
-    fn new(
-        resolved: ImplStatus,
-        sl_sh_form: String,
-        notes: String,
-    ) -> Self {
+    fn new(resolved: ImplStatus, sl_sh_form: String, notes: String) -> Self {
         Self {
             resolved,
             sl_sh_form,
@@ -58,37 +54,52 @@ impl StatusEntry {
     }
 }
 
-pub(crate) fn build_report(vm: &mut SloshVm) -> VMResult<String > {
+pub(crate) fn build_report(vm: &mut SloshVm) -> VMResult<String> {
     let report = unimplemented_report(vm)?;
-    let longest_old = report.status_entries.iter()
+    let longest_old = report
+        .status_entries
+        .iter()
         .map(|e| e.sl_sh_form.len())
         .max()
         .unwrap_or(0);
-    let longest_notes = report.status_entries.iter()
+    let longest_notes = report
+        .status_entries
+        .iter()
         .map(|e| e.notes.len())
         .max()
         .unwrap_or(0);
     let status_len = 3;
-    let mut out = format!(r#"# tracking function Parity Between sl-sh and slosh
+    let mut out = format!(
+        r#"# tracking function Parity Between sl-sh and slosh
 ## Forms yet to be implemented: {}
-## Forms implemented or skipped: {}"#, report.yet_to_be_implemented, report.completed);
-    out = format!("{}\n{:<status_len$} | {:<longest_old$} | {:<longest_notes$}|",
-                           out,
-                          "?",
-                          "Slosh Form",
-                          "Notes");
-    out = format!("{out}\n{:<status_len$} | {:<longest_old$} | {:<longest_notes$}|",
-                          iter::repeat("-".to_string()).take(status_len - 1).collect::<Vec<String>>().join(""),
-                          iter::repeat("-".to_string()).take(longest_old - 1).collect::<Vec<String>>().join(""),
-                          iter::repeat("-".to_string()).take(longest_notes - 1).collect::<Vec<String>>().join(""),
+## Forms implemented or skipped: {}"#,
+        report.yet_to_be_implemented, report.completed
+    );
+    out = format!(
+        "{}\n{:<status_len$} | {:<longest_old$} | {:<longest_notes$}|",
+        out, "?", "Slosh Form", "Notes"
+    );
+    out = format!(
+        "{out}\n{:<status_len$} | {:<longest_old$} | {:<longest_notes$}|",
+        iter::repeat("-".to_string())
+            .take(status_len - 1)
+            .collect::<Vec<String>>()
+            .join(""),
+        iter::repeat("-".to_string())
+            .take(longest_old - 1)
+            .collect::<Vec<String>>()
+            .join(""),
+        iter::repeat("-".to_string())
+            .take(longest_notes - 1)
+            .collect::<Vec<String>>()
+            .join(""),
     );
 
     for entry in report.status_entries {
-        out = format!("{}\n{:<status_len$} | `{:<longest_old$}` | {:<longest_notes$}|",
-                 out,
-                 entry.resolved,
-                 entry.sl_sh_form,
-                 entry.notes);
+        out = format!(
+            "{}\n{:<status_len$} | `{:<longest_old$}` | {:<longest_notes$}|",
+            out, entry.resolved, entry.sl_sh_form, entry.notes
+        );
     }
     Ok(out)
 }
@@ -106,25 +117,53 @@ pub(crate) fn unimplemented_report(vm: &mut SloshVm) -> VMResult<StatusReport> {
     let mut status_entries = Vec::new();
     for (old_sym_name, will_implement, notes) in metadata {
         let (impl_status, form_name, notes) = match (will_implement, notes.is_empty()) {
-            (true, true) => { // will implement and name is/has not yet been changed.
+            (true, true) => {
+                // will implement and name is/has not yet been changed.
                 if slosh_forms.contains(*old_sym_name) {
-                    (ImplStatus::Implemented, old_sym_name.to_string(), "".to_string())
+                    (
+                        ImplStatus::Implemented,
+                        old_sym_name.to_string(),
+                        "".to_string(),
+                    )
                 } else {
-                    (ImplStatus::NotYetImplemented, old_sym_name.to_string(), "".to_string())
+                    (
+                        ImplStatus::NotYetImplemented,
+                        old_sym_name.to_string(),
+                        "".to_string(),
+                    )
                 }
             }
-            (true, false) => { // will implement but with alternate name
+            (true, false) => {
+                // will implement but with alternate name
                 if slosh_forms.contains(*notes) {
-                    (ImplStatus::Implemented, old_sym_name.to_string(), format!("Renamed to: `{}`", notes) )
+                    (
+                        ImplStatus::Implemented,
+                        old_sym_name.to_string(),
+                        format!("Renamed to: `{}`", notes),
+                    )
                 } else {
-                    (ImplStatus::NotYetImplemented, old_sym_name.to_string(), "".to_string())
+                    (
+                        ImplStatus::NotYetImplemented,
+                        old_sym_name.to_string(),
+                        "".to_string(),
+                    )
                 }
             }
-            (false, true) => { // will not implement and explanation is NOT provided
-                (ImplStatus::WillNotImplement, old_sym_name.to_string(), "".to_string())
+            (false, true) => {
+                // will not implement and explanation is NOT provided
+                (
+                    ImplStatus::WillNotImplement,
+                    old_sym_name.to_string(),
+                    "".to_string(),
+                )
             }
-            (false, false) => { // will not implement and explanation is provided
-                (ImplStatus::WillNotImplement, old_sym_name.to_string(), notes.to_string())
+            (false, false) => {
+                // will not implement and explanation is provided
+                (
+                    ImplStatus::WillNotImplement,
+                    old_sym_name.to_string(),
+                    notes.to_string(),
+                )
             }
         };
         status_entries.push(StatusEntry::new(impl_status, form_name, notes));
@@ -134,8 +173,7 @@ pub(crate) fn unimplemented_report(vm: &mut SloshVm) -> VMResult<StatusReport> {
             ImplStatus::NotYetImplemented => {
                 yet_to_be_implemented += 1;
             }
-            ImplStatus::Implemented |
-            ImplStatus::WillNotImplement => {
+            ImplStatus::Implemented | ImplStatus::WillNotImplement => {
                 completed += 1;
             }
         }
@@ -167,8 +205,8 @@ pub fn get_legacy_sl_sh_form_syms(vm: &mut SloshVm, _registers: &[Value]) -> VMR
 ///             the name has changed.
 ///         If 2 is false:
 ///             a note a helpful explanation as to why the function is no longer needed or will not be implemented.
-/// ** all values in .0 (or .3 if .2 is true) are assumed to match to some function in (get-globals-sorted) any missing
-///     values for elements where .2 is true are assumed to be unimplemented.
+/// ** all values in .0 (or values in .2 if .1 is true) are assumed to match to some member of the set returned by
+///     (get-globals-sorted), any values not found in this set are assumed to be unimplemented.
 pub(crate) fn full_legacy_sl_sh_forms_metadata() -> &'static [(&'static str, bool, &'static str)] {
     [
         ("%", true, ""),
@@ -313,13 +351,25 @@ pub(crate) fn full_legacy_sl_sh_forms_metadata() -> &'static [(&'static str, boo
         ("def?", true, ""),
         ("defmacro", true, ""),
         ("defn", true, ""),
-        ("defstruct", false, "Will consider other implementations if struct-like functionality if desired."),
-        ("deftrait", false, "Will consider other implementations if trait-like functionality is desired."),
+        (
+            "defstruct",
+            false,
+            "Will consider other implementations if struct-like functionality if desired.",
+        ),
+        (
+            "deftrait",
+            false,
+            "Will consider other implementations if trait-like functionality is desired.",
+        ),
         ("dirs", true, ""),
         ("do", true, ""),
         ("do-unstr", true, ":>"),
         ("doc", true, ""),
-        ("doc-raw", false, "Possible now with command: (get-prop 'symbol :doc-string)"),
+        (
+            "doc-raw",
+            false,
+            "Possible now with command: (get-prop 'symbol :doc-string)",
+        ),
         ("dotimes", true, ""),
         ("dotimes-i", true, ""),
         ("double-ended-iter?", false, UNNECESSARY_IN_SLOSH),
@@ -332,9 +382,9 @@ pub(crate) fn full_legacy_sl_sh_forms_metadata() -> &'static [(&'static str, boo
         ("eprint", true, "epr"),
         ("eprintln", true, "eprn"),
         ("err", true, ""),
-        ("err>", true, ":2>"), // TODO SLS what is it now?
+        ("err>", true, ":2>"),   // TODO SLS what is it now?
         ("err>>", true, ":2>>"), // TODO SLS what is it now?
-        ("err>null", true, ""), // TODO SLS what is it now?
+        ("err>null", true, ""),  // TODO SLS what is it now?
         ("error-stack-off", true, ""),
         ("error-stack-on", true, ""),
         ("eval", true, ""),
@@ -496,7 +546,11 @@ pub(crate) fn full_legacy_sl_sh_forms_metadata() -> &'static [(&'static str, boo
         ("ns-create", true, ""),
         ("ns-enter", true, ""),
         ("ns-exists?", true, ""),
-        ("ns-export", false, "Everything in slosh is exported by default."),
+        (
+            "ns-export",
+            false,
+            "Everything in slosh is exported by default.",
+        ),
         ("ns-import", true, "import"),
         ("ns-list", true, ""),
         ("ns-pop", false, UNNECESSARY_IN_SLOSH),
@@ -509,13 +563,17 @@ pub(crate) fn full_legacy_sl_sh_forms_metadata() -> &'static [(&'static str, boo
         ("occurs", true, ""),
         ("open", true, "fopen"),
         ("or", true, ""),
-        ("out-err>", true, ""), // TODO SLS what is it now?
-        ("out-err>>", true, ""), // TODO SLS what is it now?
+        ("out-err>", true, ""),     // TODO SLS what is it now?
+        ("out-err>>", true, ""),    // TODO SLS what is it now?
         ("out-err>null", true, ""), // TODO SLS what is it now?
-        ("out>", true, ""), // TODO SLS what is it now?
-        ("out>>", true, ""), // TODO SLS what is it now?
-        ("out>null", true, ""), // TODO SLS what is it now?
-        ("pair=", false, "Do not need separate equals specifier for pair."),
+        ("out>", true, ""),         // TODO SLS what is it now?
+        ("out>>", true, ""),        // TODO SLS what is it now?
+        ("out>null", true, ""),     // TODO SLS what is it now?
+        (
+            "pair=",
+            false,
+            "Do not need separate equals specifier for pair.",
+        ),
         ("pair?", true, ""),
         ("path_list_trunc", true, ""),
         ("pid", true, ""),
@@ -524,7 +582,11 @@ pub(crate) fn full_legacy_sl_sh_forms_metadata() -> &'static [(&'static str, boo
         ("popd", true, ""),
         ("pow", true, ""),
         ("print", true, "pr"),
-        ("print-error", false, "Now one drops in to the debugger when an error occurs."),
+        (
+            "print-error",
+            false,
+            "Now one drops in to the debugger when an error occurs.",
+        ),
         ("println", true, "prn"),
         ("probool", true, ""),
         ("process?", true, ""),
@@ -680,8 +742,16 @@ pub(crate) fn full_legacy_sl_sh_forms_metadata() -> &'static [(&'static str, boo
         ("vec-set!", true, ""),
         ("vec-slice", true, ""),
         ("vec?", true, ""),
-        ("verify-all-options-valid", false, "Leftover from getopts implementation."),
-        ("verify-arity", false, "Leftover from getopts implementation."),
+        (
+            "verify-all-options-valid",
+            false,
+            "Leftover from getopts implementation.",
+        ),
+        (
+            "verify-arity",
+            false,
+            "Leftover from getopts implementation.",
+        ),
         ("version", true, ""),
         ("wait", true, ""),
         ("when", true, ""),

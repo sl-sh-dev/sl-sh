@@ -101,7 +101,6 @@ impl<'a> SlFromRef<'a, Value> for u8 {
     }
 }
 
-
 impl SlFrom<usize> for Value {
     fn sl_from(value: usize, _vm: &mut SloshVm) -> VMResult<Self> {
         Ok(to_i56(value as i64))

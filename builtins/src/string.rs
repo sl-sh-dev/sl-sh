@@ -506,7 +506,6 @@ fn char_is_whitespace(target: SloshChar) -> VMResult<bool> {
     }
 }
 
-
 ///  Usage: (str->int string) -> int
 ///
 ///  If string is a valid representation of an integer return that int.  Error if not.
@@ -522,12 +521,11 @@ fn char_is_whitespace(target: SloshChar) -> VMResult<bool> {
 ///  (test::assert-error (str->int "--10"))
 #[sl_sh_fn(fn_name = "str->int")]
 fn str_to_int(target: &str) -> VMResult<i64> {
-    target.parse::<i64>().map_err(|_e| {
-        VMError::new_conversion("Not a valid integer.")
-    })
+    target
+        .parse::<i64>()
+        .map_err(|_e| VMError::new_conversion("Not a valid integer."))
 }
 
-// TODO SL what should this be?
 ///  Usage: (str->float string) -> float
 ///
 ///  If string is a valid representation of a float return that float.  Error if not.
@@ -544,9 +542,9 @@ fn str_to_int(target: &str) -> VMResult<i64> {
 ///  (test::assert-error (str->float "--10"))
 #[sl_sh_fn(fn_name = "str->float")]
 fn str_to_float(target: &str) -> VMResult<f64> {
-    target.parse::<f64>().map_err(|_e| {
-        VMError::new_conversion("Not a valid float.")
-    })
+    target
+        .parse::<f64>()
+        .map_err(|_e| VMError::new_conversion("Not a valid float."))
 }
 
 pub fn add_str_builtins(env: &mut SloshVm) {
