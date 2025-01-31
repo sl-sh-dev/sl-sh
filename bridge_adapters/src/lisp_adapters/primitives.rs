@@ -18,8 +18,7 @@ impl SlFromRef<'_, Value> for bool {
             Value::True => Ok(true),
             Value::False => Ok(false),
             Value::Nil => Ok(false),
-            //TODO XXX should undefined be included here? sls what say you?
-            Value::Undefined => Ok(false),
+            Value::Undefined => panic!("Undefined is the default initialized state of a value and its presence in actual code is a VM logical error."),
             _ => Ok(true),
         }
     }
