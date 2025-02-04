@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::fmt::Display;
+use derive_more::{From, Into};
 
 /// A slosh [`Value`](../slvm/value/enum.Value.html) that can potentially be represented as a rust value.
 /// Marker traits
@@ -42,6 +43,50 @@ pub type VarArgs<T> = Vec<T>;
 ///
 /// Always does an allocation and returns a [`Value`]`::String` type.
 pub type LooseString<'a> = Cow<'a, str>;
+
+/// [`Value`]: /slvm/value/enum.Value.html // TODO PC these links are broken!
+/// Type to hold anything in Slosh that can be represented as a slosh float value: `[u8; 7]`.
+///
+/// Public type used by rust native -> slosh bridge macro to represent
+/// arguments that can be loosely cast to an int.
+///
+/// Can represent SlRefInto [`Value`] types:
+/// - Byte
+/// - Int
+/// - Float
+/// - String
+/// - CodePoint
+/// - CharCluster
+/// - CharClusterLong
+/// - Symbol
+/// - Keyword
+/// - StringConst
+///
+/// Always returns a [`Value`]`::Float` type.
+#[derive(From, Into)]
+pub struct LooseFloat(pub [u8; 7]);
+
+/// [`Value`]: /slvm/value/enum.Value.html
+/// Type to hold anything in Slosh that can be represented as slosh int value: `[u8; 7]`.
+///
+/// Public type used by rust native -> slosh bridge macro to represent
+/// arguments that can be loosely cast to an int.
+///
+/// Can represent SlRefInto [`Value`] types:
+/// - Byte
+/// - Int
+/// - Float
+/// - String
+/// - CodePoint
+/// - CharCluster
+/// - CharClusterLong
+/// - Symbol
+/// - Keyword
+/// - StringConst
+///
+/// Always returns a [`Value`]`::Int` type.
+#[derive(From, Into)]
+pub struct LooseInt(pub [u8; 7]);
 
 /// [`Value`]: /slvm/value/enum.Value.html
 /// Type to hold Slosh's notion of a char.
@@ -121,6 +166,10 @@ impl ErrorStrings {
                 additional.as_ref(),
             )
         }
+    }
+
+    pub fn fix_me_invalid_string(expected: impl AsRef<str>, got: impl AsRef<str>) -> String {
+        Self::mismatched_type("fixme_invalid_string", expected, got, "")
     }
 
     pub fn fix_me_mismatched_type(expected: impl AsRef<str>, got: impl AsRef<str>) -> String {

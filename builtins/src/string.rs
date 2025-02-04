@@ -1,10 +1,11 @@
 use crate::SloshVm;
 use bridge_adapters::add_builtin;
 use bridge_macros::sl_sh_fn;
-use bridge_types::{LooseString, SloshChar};
-use slvm::{Handle, VMError, VMResult, Value};
+use bridge_types::{LooseFloat, LooseInt, LooseString, SloshChar};
+use slvm::{from_i56, Handle, VMError, VMResult, Value, I56};
 use std::borrow::Cow;
 use unicode_segmentation::UnicodeSegmentation;
+use slvm::float::F56;
 
 fn str_trim(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();
@@ -506,45 +507,52 @@ fn char_is_whitespace(target: SloshChar) -> VMResult<bool> {
     }
 }
 
-///  Usage: (str->int string) -> int
+///  Usage: (->int ?int) -> int
 ///
-///  If string is a valid representation of an integer return that int.  Error if not.
+///  If string or other value is a valid representation of an integer return that int.  Error if not.
 ///
-///  Section: char
-///
-///  Example:
-///  (test::assert-equal 0 (str->int "0"))
-///  (test::assert-equal 101 (str->int "101"))
-///  (test::assert-equal -101 (str->int "-101"))
-///  (test::assert-error (str->int "not int"))
-///  (test::assert-error (str->int "10.0"))
-///  (test::assert-error (str->int "--10"))
-#[sl_sh_fn(fn_name = "str->int")]
-fn str_to_int(target: &str) -> VMResult<i64> {
-    target
-        .parse::<i64>()
-        .map_err(|_e| VMError::new_conversion("Not a valid integer."))
-}
-
-///  Usage: (str->float string) -> float
-///
-///  If string is a valid representation of a float return that float.  Error if not.
+///  Note, if value is a float (or is a string that casts initially to a float) and it is NaN,
+/// +/- infinity, < i56::MIN, or > i56::MAX the function will error.
 ///
 ///  Section: type
 ///
 ///  Example:
-///  (test::assert-equal 0.0 (str->float "0"))
-///  (test::assert-equal 10.0 (str->float "10.0"))
-///  (test::assert-equal 10.5 (str->float "10.5"))
-///  (test::assert-equal 101.0 (str->float "101"))
-///  (test::assert-equal -101.95 (str->float "-101.95"))
-///  (test::assert-error (str->float "not int"))
-///  (test::assert-error (str->float "--10"))
-#[sl_sh_fn(fn_name = "str->float")]
-fn str_to_float(target: &str) -> VMResult<f64> {
-    target
-        .parse::<f64>()
-        .map_err(|_e| VMError::new_conversion("Not a valid float."))
+///  (test::assert-equal 0 (->int "0"))
+///  (test::assert-equal 101 (->int "101"))
+///  (test::assert-equal 1101 (->int :1101))
+///  (test::assert-equal 8 (->int 8.1))
+///  (test::assert-equal -111 (->int "-111"))
+///  (test::assert-equal 10 (->int "10.0"))
+///  (test::assert-error (->int "not int"))
+///  (test::assert-error (->int "--10"))
+/// ;; for some reason this ->sym test case must be last or else there's an error w/ load
+///  (test::assert-equal 1102 (->int (->sym 1102)))
+#[sl_sh_fn(fn_name = "->int")]
+fn to_int(target: LooseInt) -> VMResult<Value> {
+    Ok(Value::Int(target.0))
+}
+
+///  Usage: (->float ?float) -> float
+///
+///  If string or other value is a valid representation of a float return that float.  Error if not.
+///
+///  Section: type
+///
+///  Example:
+///  (test::assert-equal 0.0 (->float "0"))
+///  (test::assert-equal 11.0 (->float 11))
+///  (test::assert-equal 10.0 (->float "10.0"))
+///  (test::assert-equal 13.0 (->float :13))
+///  (test::assert-equal 10.5 (->float "10.5"))
+///  (test::assert-equal 101.0 (->float "101"))
+///  (test::assert-equal -101.95 (->float "-101.95"))
+///  (test::assert-error (->float "not int"))
+///  (test::assert-error (->float "--10"))
+///  ;; for some reason this ->sym test case must be last or else there's an error w/ load
+///  (test::assert-equal 12.0 (->float (->sym 12)))
+#[sl_sh_fn(fn_name = "->float")]
+fn to_float(target: LooseFloat) -> VMResult<Value> {
+    Ok(Value::Float(F56(target.0)))
 }
 
 pub fn add_str_builtins(env: &mut SloshVm) {
@@ -557,8 +565,8 @@ pub fn add_str_builtins(env: &mut SloshVm) {
     intern_char_lower(env);
     intern_char_upper(env);
     intern_char_is_whitespace(env);
-    intern_str_to_int(env);
-    intern_str_to_float(env);
+    intern_to_int(env);
+    intern_to_float(env);
     add_builtin(
         env,
         "str-replace",

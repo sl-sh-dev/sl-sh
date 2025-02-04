@@ -39,6 +39,7 @@ sl-compiler = { path = "compiler" }
 compiler_test_utils = { path = "compiler/test_utils" }
 slvm = { path = "vm" }
 shell = { path = "shell" }
+derive_more = {  version = "1.0.0", features = ["into", "from"]}
 regex = "1"
 lazy_static = "1"
 mdbook = "0.4.37"

@@ -52,6 +52,10 @@ impl VMError {
         VMError::new("conversion", reason)
     }
 
+    pub fn new_string_conversion<S: Into<String>>(reason: S) -> Self {
+        VMError::new("string_conversion", reason)
+    }
+
     pub fn new_vm<S: Into<String>>(reason: S) -> Self {
         VMError::new("rt", reason)
     }
