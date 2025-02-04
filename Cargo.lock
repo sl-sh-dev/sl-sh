@@ -206,6 +206,9 @@ dependencies = [
 [[package]]
 name = "bridge_types"
 version = "0.11.0"
+dependencies = [
+ "derive_more",
+]
 
 [[package]]
 name = "bstr"

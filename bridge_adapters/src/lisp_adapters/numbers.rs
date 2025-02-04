@@ -1,8 +1,9 @@
 use crate::lisp_adapters::{SlFrom, SlFromRef};
-use bridge_types::ErrorStrings;
+use bridge_types::{ErrorStrings, LooseFloat, LooseInt, LooseString};
 use compile_state::state::SloshVm;
 use slvm::value::ValueType;
-use slvm::{from_i56, to_i56, VMError, VMResult, Value, ValueTypes};
+use slvm::{from_i56, to_i56_raw, to_i56, VMError, VMResult, Value, ValueTypes, I56};
+use slvm::float::F56;
 
 impl SlFrom<()> for Value {
     fn sl_from(_value: (), _vm: &mut SloshVm) -> VMResult<Self> {
@@ -21,6 +22,100 @@ impl<'a> SlFromRef<'a, Value> for () {
                 ),
             )),
         }
+    }
+}
+
+impl<'a> SlFromRef<'a, Value> for LooseFloat {
+    fn sl_from_ref(value: Value, vm: &'a SloshVm) -> VMResult<Self> {
+        let res = match value {
+            Value::Byte(byte) => {
+                let i = [0u8, 0u8, 0u8, 0u8, 0u8, 0u8, byte];
+                let f = I56::from_inner(&i) as f64;
+                let f = F56::from(f);
+                Ok(f.0)
+            }
+            Value::Int(i) => {
+                let i = I56::from_inner(&i);
+                let f = F56::from(i as f64);
+                Ok(f.0)
+            }
+            Value::Float(f) => {
+                Ok(f.0)
+            }
+            (v @ (Value::CodePoint(_) |
+            Value::CharCluster(_, _) |
+            Value::CharClusterLong(_) |
+            Value::String(_) |
+            Value::Symbol(_) |
+            Value::Keyword(_) |
+            Value::StringConst(_))) => {
+                let f =    LooseString::sl_from_ref(v, vm)?.parse::<f64>()
+                        .map_err(|_e| VMError::new_string_conversion("Not a valid float."))?;
+                Ok(F56::from(f).0)
+            }
+            _ => Err(VMError::new_conversion(
+                ErrorStrings::fix_me_invalid_string(
+                    <&'static str>::from(ValueType::Int),
+                    value.display_type(vm),
+                ),
+            )),
+        };
+        res.map(|x| LooseFloat::from(x))
+    }
+}
+
+impl SlFrom<LooseFloat> for Value {
+    fn sl_from(value: LooseFloat, vm: &mut SloshVm) -> VMResult<Self> {
+        let v = value.0;
+        Ok(Value::Float(F56(v)))
+    }
+}
+
+
+impl<'a> SlFromRef<'a, Value> for LooseInt {
+    fn sl_from_ref(value: Value, vm: &'a SloshVm) -> VMResult<Self> {
+        let res = match value {
+            Value::Byte(byte) => {
+                Ok([0u8, 0u8, 0u8, 0u8, 0u8, 0u8, byte])
+            }
+            Value::Int(i) => {
+                Ok(i)
+            }
+            Value::Float(f) => {
+                let f = f64::from(f);
+                let i56 = I56::to_i56_fallible(f)?;
+                Ok(to_i56_raw(i56))
+            }
+            (v @ (Value::CodePoint(_) |
+            Value::Symbol(_) |
+            Value::CharCluster(_, _) |
+            Value::CharClusterLong(_) |
+            Value::String(_) |
+            Value::Keyword(_) |
+            Value::StringConst(_))) => {
+                LooseString::sl_from_ref(v, vm)?.parse::<i64>()
+                    .or(
+                        LooseString::sl_from_ref(v, vm)?.parse::<f64>()
+                            .map_err(|_e| VMError::new_string_conversion("Not a valid integer."))
+                            .and_then(I56::to_i56_fallible)
+                    )
+                    .map(|i| to_i56_raw(i))
+                    .map_err(|_e| VMError::new_string_conversion("Not a valid integer."))
+            }
+            _ => Err(VMError::new_conversion(
+                ErrorStrings::fix_me_mismatched_type(
+                    <&'static str>::from(ValueType::Int),
+                    value.display_type(vm),
+                ),
+            )),
+        };
+        res.map(LooseInt::from)
+    }
+}
+
+impl SlFrom<LooseInt> for Value {
+    fn sl_from(value: LooseInt, _vm: &mut SloshVm) -> VMResult<Self> {
+        Ok(Value::Int(value.0))
     }
 }
 
@@ -44,7 +139,7 @@ impl<'a> SlFromRef<'a, Value> for i32 {
     fn sl_from_ref(value: Value, vm: &'a SloshVm) -> VMResult<i32> {
         match value {
             Value::Int(num) => {
-                let num = from_i56(&num);
+                let num = I56::from_inner(&num);
                 num.try_into().map_err(|_| {
                     VMError::new_conversion(
                         "Provided slosh value too small to fit desired type.".to_string(),
@@ -116,7 +211,7 @@ impl SlFrom<u64> for Value {
 impl<'a> SlFromRef<'a, Value> for usize {
     fn sl_from_ref(value: Value, vm: &'a SloshVm) -> VMResult<Self> {
         match value {
-            Value::Int(i) => usize::try_from(from_i56(&i)).map_err(|_| {
+            Value::Int(i) => usize::try_from(I56::from_inner(&i)).map_err(|_| {
                 VMError::new_conversion(ErrorStrings::fix_me_mismatched_type(
                     <&'static str>::from(ValueType::Int),
                     value.display_type(vm),
@@ -135,7 +230,7 @@ impl<'a> SlFromRef<'a, Value> for usize {
 impl<'a> SlFromRef<'a, Value> for i64 {
     fn sl_from_ref(value: Value, vm: &'a SloshVm) -> VMResult<Self> {
         match value {
-            Value::Int(i) => Ok(from_i56(&i)),
+            Value::Int(i) => Ok(I56::from_inner(&i)),
             _ => Err(VMError::new_conversion(
                 ErrorStrings::fix_me_mismatched_type(
                     <&'static str>::from(ValueType::Int),
