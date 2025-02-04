@@ -1,8 +1,8 @@
 use crate::SloshVm;
 use bridge_adapters::add_builtin;
 use bridge_macros::sl_sh_fn;
-use bridge_types::{LooseString, SloshChar};
-use slvm::{Handle, VMError, VMResult, Value};
+use bridge_types::{LooseInt, LooseString, SloshChar};
+use slvm::{from_i56, Handle, VMError, VMResult, Value};
 use std::borrow::Cow;
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -519,11 +519,9 @@ fn char_is_whitespace(target: SloshChar) -> VMResult<bool> {
 ///  (test::assert-error (str->int "not int"))
 ///  (test::assert-error (str->int "10.0"))
 ///  (test::assert-error (str->int "--10"))
-#[sl_sh_fn(fn_name = "str->int")]
-fn str_to_int(target: &str) -> VMResult<i64> {
-    target
-        .parse::<i64>()
-        .map_err(|_e| VMError::new_conversion("Not a valid integer."))
+#[sl_sh_fn(fn_name = "->int")]
+fn str_to_int(target: LooseInt) -> VMResult<i64> {
+    Ok(from_i56(&target.0))
 }
 
 ///  Usage: (str->float string) -> float
@@ -533,10 +531,10 @@ fn str_to_int(target: &str) -> VMResult<i64> {
 ///  Section: type
 ///
 ///  Example:
-///  (test::assert-equal 0 (str->float "0"))
+///  (test::assert-equal 0.0 (str->float "0"))
 ///  (test::assert-equal 10.0 (str->float "10.0"))
 ///  (test::assert-equal 10.5 (str->float "10.5"))
-///  (test::assert-equal 101 (str->float "101"))
+///  (test::assert-equal 101.0 (str->float "101"))
 ///  (test::assert-equal -101.95 (str->float "-101.95"))
 ///  (test::assert-error (str->float "not int"))
 ///  (test::assert-error (str->float "--10"))
