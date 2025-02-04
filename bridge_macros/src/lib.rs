@@ -1661,27 +1661,6 @@ impl Parse for StrRange {
     }
 }
 
-#[proc_macro]
-pub fn include_str_range(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let input = syn::parse_macro_input!(input as StrRange);
-
-    let content = std::fs::read_to_string(input.file.value()).unwrap();
-    let lines: Vec<_> = content.lines().collect();
-
-    let start_idx = lines
-        .iter()
-        .position(|l| l.contains(&input.start.value()))
-        .unwrap();
-    let end_idx = lines
-        .iter()
-        .position(|l| l.contains(&input.end.value()))
-        .unwrap();
-
-    let selected = lines[start_idx..end_idx].join("\n");
-
-    quote!(#selected).into()
-}
-
 //TODO
 //  - functions that return Values, tuple return types?
 //  - functions that accept iters?

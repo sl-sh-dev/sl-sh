@@ -1,5 +1,5 @@
 use crate::{float, FxHasher, Handle, Heap, Interned, VMError, VMResult};
-use bridge_types::BridgedType;
+use bridge_types::{BridgedType, ErrorStrings};
 use std::collections::{BTreeSet, HashMap};
 use std::fmt;
 use std::fmt::{Display, Formatter};
@@ -89,6 +89,54 @@ pub const INT_BITS: u8 = 56;
 pub const INT_MAX: i64 = 2_i64.pow(INT_BITS as u32 - 1) - 1;
 pub const INT_MIN: i64 = -(2_i64.pow(INT_BITS as u32 - 1));
 
+#[derive(Copy, Clone)]
+pub struct I56(pub [u8; 7]);
+
+impl I56 {
+    pub fn max() -> i64 {
+        INT_MAX
+    }
+
+    pub fn max_i56() -> I56 {
+        I56(to_i56_raw(Self::max()))
+    }
+
+    pub fn min() -> i64 {
+        INT_MIN
+    }
+
+    pub fn min_i56() -> I56 {
+        I56(to_i56_raw(Self::min()))
+    }
+
+    /// Take the inner representation of [`Value`]::Int, and turn it into an [`i64`].
+    pub fn from_inner(arr: &[u8; 7]) -> i64 {
+        from_i56(arr)
+    }
+
+    /// Turn an [`i64`] into the inner representation of [`Value`]::Int
+    pub fn to_inner(i: i64) -> [u8; 7] {
+        to_i56_raw(i)
+    }
+
+    pub fn to_i56_fallible(f: f64) -> VMResult<i64> {
+        if !f.is_finite() {
+            Err(VMError::new_conversion("Can not represent NaN or infinity as int."))
+        } else if f > i64::MAX as f64 || f > I56::max() as f64 {
+            Err(VMError::new_conversion("Can not represent number greater than max i56."))
+        } else if f < i64::MIN as f64 || f < I56::min() as f64 {
+            Err(VMError::new_conversion("Can not represent number less than max i56."))
+        } else {
+            Ok(f.round() as i64)
+        }
+    }
+
+    pub fn from_byte(byte: u8) -> i64 {
+        let i = [0u8, 0u8, 0u8, 0u8, 0u8, 0u8, byte];
+        from_i56(&i)
+    }
+}
+
 pub fn from_i56(arr: &[u8; 7]) -> i64 {
     let mut bytes = [0x00, arr[0], arr[1], arr[2], arr[3], arr[4], arr[5], arr[6]];
     if (arr[0] & 0x80) > 0 {
@@ -99,12 +147,16 @@ pub fn from_i56(arr: &[u8; 7]) -> i64 {
     }
 }
 
-pub fn to_i56(i: i64) -> Value {
+pub fn to_i56_raw(i: i64) -> [u8; 7] {
     let bytes = i.to_be_bytes();
     let bytes7 = [
         bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
     ];
-    Value::Int(bytes7)
+    bytes7
+}
+
+pub fn to_i56(i: i64) -> Value {
+    Value::Int(to_i56_raw(i))
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
