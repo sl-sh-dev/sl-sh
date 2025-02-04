@@ -142,11 +142,13 @@ impl From<f64> for F56 {
         ])
     }
 }
+
 impl From<f32> for F56 {
     fn from(f: f32) -> F56 {
         f64::from(f).into()
     }
 }
+
 impl From<F56> for f64 {
     fn from(f: F56) -> f64 {
         // f64 has 1 sign bit, 11 exponent bits, and 52 mantissa bits
@@ -189,17 +191,20 @@ impl From<F56> for f64 {
         f64::from_be_bytes(word.to_be_bytes())
     }
 }
+
 impl From<F56> for f32 {
     fn from(f: F56) -> f32 {
         f64::from(f) as f32
     }
 }
+
 impl FromStr for F56 {
     type Err = std::num::ParseFloatError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         f64::from_str(s).map(F56::from)
     }
 }
+
 impl F56 {
     // Largest finite F56, roughly 1.34e154
     pub const MAX: F56 = F56([0x7F, 0xDF, 0xff, 0xff, 0xff, 0xff, 0xff]);
@@ -216,9 +221,7 @@ impl F56 {
     // We could round up if the 7th bit is 1, but this is might cause issues.
     // Mantissas like 0xFFFF_FFFF_... can catastrophically round to 0x0000_0000_...
     pub const ROUNDUP_ENABLED: bool = false;
-}
 
-impl F56 {
     pub fn round_f64_to_7_sig_figs(raw_f64: f64) -> f64 {
         if raw_f64.is_nan() || raw_f64.is_infinite() || raw_f64 == 0.0 {
             return raw_f64;
@@ -229,6 +232,7 @@ impl F56 {
         let scaled_and_rounded = (raw_f64 * scale_factor).round();
         scaled_and_rounded / scale_factor
     }
+
     pub fn round_f64_to_f56_precision(raw_f64: f64) -> f64 {
         if raw_f64.is_nan() || raw_f64.is_infinite() || raw_f64 == 0.0 {
             return raw_f64;
@@ -241,6 +245,7 @@ impl F56 {
 
         scaled_and_rounded / scale_factor
     }
+
     /// Returns true if the two F56s's decimal forms are equal to 7 significant figures
     /// This is a lenient type of equality suitable for human use
     /// It preserves transitivity, reflexivity, and symmetry
@@ -255,6 +260,7 @@ impl F56 {
         }
         F56::round_f64_to_7_sig_figs(self_as_f64) == F56::round_f64_to_7_sig_figs(other_as_f64)
     }
+
     /// Returns true if the relative difference between the two F56s is less than F56::EPSILON
     /// This is a lenient type of equality suitable for human use
     /// It preserves reflexivity, and symmetry but not transitivity
@@ -279,6 +285,7 @@ impl F56 {
         let relative_difference = (self_as_f64 - other_as_f64).abs() / larger;
         relative_difference < F56::EPSILON
     }
+
     /// Returns true if the two F56s are bitwise identical
     pub fn strictest_equal(&self, other: &F56) -> bool {
         self.0 == other.0
@@ -288,6 +295,7 @@ impl F56 {
             0, self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5], self.0[6],
         ])
     }
+
     /// Returns true if the two F56s are bitwise identical OR if they are both NaN or both 0
     pub fn strictly_equal_except_nan_and_0(&self, other: &F56) -> bool {
         // if the bit patterns are identical, then they are equal

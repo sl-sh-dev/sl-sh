@@ -1,4 +1,5 @@
 # Equality
+$
 
 The most common way to test equality is with `=`
 For numeric equality (IEEE) use `==`
