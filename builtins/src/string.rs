@@ -533,10 +533,10 @@ fn str_to_int(target: &str) -> VMResult<i64> {
 ///  Section: type
 ///
 ///  Example:
-///  (test::assert-equal 0 (str->float "0"))
+///  (test::assert-equal 0.0 (str->float "0"))
 ///  (test::assert-equal 10.0 (str->float "10.0"))
 ///  (test::assert-equal 10.5 (str->float "10.5"))
-///  (test::assert-equal 101 (str->float "101"))
+///  (test::assert-equal 101.0 (str->float "101"))
 ///  (test::assert-equal -101.95 (str->float "-101.95"))
 ///  (test::assert-error (str->float "not int"))
 ///  (test::assert-error (str->float "--10"))

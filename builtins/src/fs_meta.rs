@@ -48,9 +48,10 @@ fn cd_expand_all_dots(cd: String) -> String {
 ///
 /// Section: system
 ///
-/// Example:
-/// (def test-sleep-var (time (sleep 1000)))
-/// (assert-true (> test-sleep-var 1.0))
+// Example:
+// ;; TODO sls implement time
+// (def test-sleep-var (time (sleep 1000)))
+// (assert-true (> test-sleep-var 1.0))
 #[sl_sh_fn(fn_name = "sleep")]
 fn sleep(millis: i64) -> VMResult<()> {
     if millis > 0 {
