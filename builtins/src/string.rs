@@ -2,10 +2,10 @@ use crate::SloshVm;
 use bridge_adapters::add_builtin;
 use bridge_macros::sl_sh_fn;
 use bridge_types::{LooseFloat, LooseInt, LooseString, SloshChar};
+use slvm::float::F56;
 use slvm::{from_i56, Handle, VMError, VMResult, Value, I56};
 use std::borrow::Cow;
 use unicode_segmentation::UnicodeSegmentation;
-use slvm::float::F56;
 
 fn str_trim(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();

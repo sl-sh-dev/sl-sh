@@ -4,14 +4,17 @@
 
 (sh "export RUST_LOG=DEBUG")
 
-;; clone in the legacy docs
+(prn "clone in the legacy gh pages docs")
 (sh "git clone -b gh-pages-legacy-html https://github.com/sl-sh-dev/sl-sh src/legacy/")
 
+(prn "Remove legacy/.git submodule directory")
 ;; don't want git submodules
 $(rm -rf src/legacy/.git)
+(prn "Make rust docs pages")
 $(mkdir src/all-rust-docs)
 $(mkdir src/slosh-rust-docs)
 
+(prn "Build rust docs")
 ;; build rust documentation
 $(cargo doc --features lisp-test --target-dir src/all-rust-docs)
 $(cargo doc --no-deps --document-private-items --features lisp-test --target-dir src/slosh-rust-docs)
