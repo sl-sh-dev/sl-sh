@@ -3,7 +3,7 @@ use bridge_types::{ErrorStrings, LooseFloat, LooseInt, LooseString};
 use compile_state::state::SloshVm;
 use slvm::float::F56;
 use slvm::value::ValueType;
-use slvm::{from_i56, to_i56, to_i56_raw, VMError, VMResult, Value, ValueTypes, I56};
+use slvm::{to_i56, to_i56_raw, VMError, VMResult, Value, ValueTypes, I56};
 
 impl SlFrom<()> for Value {
     fn sl_from(_value: (), _vm: &mut SloshVm) -> VMResult<Self> {
@@ -40,13 +40,13 @@ impl<'a> SlFromRef<'a, Value> for LooseFloat {
                 Ok(f.0)
             }
             Value::Float(f) => Ok(f.0),
-            (v @ (Value::CodePoint(_)
+            v @ (Value::CodePoint(_)
             | Value::CharCluster(_, _)
             | Value::CharClusterLong(_)
             | Value::String(_)
             | Value::Symbol(_)
             | Value::Keyword(_)
-            | Value::StringConst(_))) => {
+            | Value::StringConst(_)) => {
                 let f = LooseString::sl_from_ref(v, vm)?
                     .parse::<f64>()
                     .map_err(|_e| VMError::new_string_conversion("Not a valid float."))?;
@@ -59,12 +59,12 @@ impl<'a> SlFromRef<'a, Value> for LooseFloat {
                 ),
             )),
         };
-        res.map(|x| LooseFloat::from(x))
+        res.map(LooseFloat::from)
     }
 }
 
 impl SlFrom<LooseFloat> for Value {
-    fn sl_from(value: LooseFloat, vm: &mut SloshVm) -> VMResult<Self> {
+    fn sl_from(value: LooseFloat, _vm: &mut SloshVm) -> VMResult<Self> {
         let v = value.0;
         Ok(Value::Float(F56(v)))
     }
@@ -80,19 +80,19 @@ impl<'a> SlFromRef<'a, Value> for LooseInt {
                 let i56 = I56::to_i56_fallible(f)?;
                 Ok(to_i56_raw(i56))
             }
-            (v @ (Value::CodePoint(_)
+            v @ (Value::CodePoint(_)
             | Value::Symbol(_)
             | Value::CharCluster(_, _)
             | Value::CharClusterLong(_)
             | Value::String(_)
             | Value::Keyword(_)
-            | Value::StringConst(_))) => LooseString::sl_from_ref(v, vm)?
+            | Value::StringConst(_)) => LooseString::sl_from_ref(v, vm)?
                 .parse::<i64>()
                 .or(LooseString::sl_from_ref(v, vm)?
                     .parse::<f64>()
                     .map_err(|_e| VMError::new_string_conversion("Not a valid integer."))
                     .and_then(I56::to_i56_fallible))
-                .map(|i| to_i56_raw(i))
+                .map(to_i56_raw)
                 .map_err(|_e| VMError::new_string_conversion("Not a valid integer.")),
             _ => Err(VMError::new_conversion(
                 ErrorStrings::fix_me_mismatched_type(

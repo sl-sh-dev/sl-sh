@@ -29,9 +29,9 @@ use std::fmt::{Display, Formatter};
 use syn::__private::{Span, TokenStream2};
 use syn::spanned::Spanned;
 use syn::{
-    parse::Parse, parse_macro_input, AttributeArgs, Error, FnArg, GenericArgument, Generics, Ident,
-    Item, ItemFn, Lit, LitStr, Meta, NestedMeta, PathArguments, ReturnType, Token, Type,
-    TypeBareFn, TypePath, TypeReference, TypeTuple,
+    parse_macro_input, AttributeArgs, Error, FnArg, GenericArgument, Generics, Ident, Item, ItemFn,
+    Lit, Meta, NestedMeta, PathArguments, ReturnType, Type, TypeBareFn, TypePath, TypeReference,
+    TypeTuple,
 };
 extern crate static_assertions;
 
@@ -1639,26 +1639,6 @@ pub fn sl_sh_fn(
     };
 
     proc_macro::TokenStream::from(tokens)
-}
-
-struct StrRange {
-    file: LitStr,
-    _comma1: Token![,],
-    start: LitStr,
-    _comma2: Token![,],
-    end: LitStr,
-}
-
-impl Parse for StrRange {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        Ok(StrRange {
-            file: input.parse()?,
-            _comma1: input.parse()?,
-            start: input.parse()?,
-            _comma2: input.parse()?,
-            end: input.parse()?,
-        })
-    }
 }
 
 //TODO

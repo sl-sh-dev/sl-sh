@@ -1,5 +1,5 @@
 use crate::{float, FxHasher, Handle, Heap, Interned, VMError, VMResult};
-use bridge_types::{BridgedType, ErrorStrings};
+use bridge_types::BridgedType;
 use std::collections::{BTreeSet, HashMap};
 use std::fmt;
 use std::fmt::{Display, Formatter};
@@ -155,10 +155,9 @@ pub fn from_i56(arr: &[u8; 7]) -> i64 {
 
 pub fn to_i56_raw(i: i64) -> [u8; 7] {
     let bytes = i.to_be_bytes();
-    let bytes7 = [
+    [
         bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
-    ];
-    bytes7
+    ]
 }
 
 pub fn to_i56(i: i64) -> Value {
