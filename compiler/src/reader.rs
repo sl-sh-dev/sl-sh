@@ -524,7 +524,7 @@ impl<'vm> Reader<'vm> {
                 if self.end_string(&ch, doc_string)? {
                     break;
                 }
-                if ch == "{" && !docstring {
+                if ch == "{" && !doc_string {
                     if args.is_empty() {
                         args.push(Value::Symbol(self.vm.intern("str")));
                     }
