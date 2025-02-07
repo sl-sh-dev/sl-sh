@@ -2,14 +2,17 @@
 
 # Basics
 - [Welcome](./welcome.md)
+
+# Shell Basics
+- [Shell Commands in Lisp](./shell-vs-lisp.md)
+- [Shell Redirects](./shell-redirects.md)
+
+# Language Basics
 - [Data Types in Slosh](./containers.md)
 - [Equality](./equality.md)
-- [Namespaces](./namespaces.md)
 - [Errors](./errors.md)
 - [Syntax and Macros](./syntax-and-macros.md)
 - [Iterators](./iterators.md)
-- [Shell Redirects](./shell-redirects.md)
-- [Shell Commands in Lisp](./shell-vs-lisp.md)
 
 # General
 

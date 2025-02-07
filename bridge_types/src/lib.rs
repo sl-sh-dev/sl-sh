@@ -1,6 +1,6 @@
+use derive_more::{From, Into};
 use std::borrow::Cow;
 use std::fmt::Display;
-use derive_more::{From, Into};
 
 /// A slosh [`Value`](../slvm/value/enum.Value.html) that can potentially be represented as a rust value.
 /// Marker traits

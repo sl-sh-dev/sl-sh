@@ -2,10 +2,10 @@ use crate::SloshVm;
 use bridge_adapters::add_builtin;
 use bridge_macros::sl_sh_fn;
 use bridge_types::{LooseFloat, LooseInt, LooseString, SloshChar};
+use slvm::float::F56;
 use slvm::{from_i56, Handle, VMError, VMResult, Value, I56};
 use std::borrow::Cow;
 use unicode_segmentation::UnicodeSegmentation;
-use slvm::float::F56;
 
 fn str_trim(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();
@@ -510,7 +510,7 @@ fn char_is_whitespace(target: SloshChar) -> VMResult<bool> {
 ///  Usage: (->int ?int) -> int
 ///
 ///  If string or other value is a valid representation of an integer return that int.  Error if not.
-/// 
+///
 ///  Note, if value is a float (or is a string that casts initially to a float) and it is NaN,
 /// +/- infinity, < i56::MIN, or > i56::MAX the function will error.
 ///

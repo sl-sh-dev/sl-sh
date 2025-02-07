@@ -1,16 +1,22 @@
 #!/bin/bash
-#
+
 export RUST_LOG="DEBUG"
 
 # clone in the legacy docs
-git clone -b gh-pages-legacy-html https://github.com/sl-sh-dev/sl-sh src/legacy/
+git clone -b gh-pages-legacy-html https://github.com/sl-sh-dev/sl-sh src/legacy/ || true
 
 # don't want git submodules
-rm -rf src/legacy/.git
-mkdir src/rust-docs
+rm -rf src/legacy/.git || true
+mkdir src/slosh-rust-docs || true
+mkdir src/all-rust-docs || true
 
-cargo doc --features lisp-test --target-dir src/all-rust-docs
-cargo doc --no-deps --document-private-items --features lisp-test --target-dir src/slosh-rust-docs
+if [ "${SKIP_DOCS}" != "SKIP_DOCS" ]; then
+    echo "Building docs."
+    cargo doc --features lisp-test --target-dir src/all-rust-docs
+    cargo doc --no-deps --document-private-items --features lisp-test --target-dir src/slosh-rust-docs
+else
+    echo "Skipped doc building"
+fi
 
 # make the symlinks work
 pushd "mdbook-slosh-eval"

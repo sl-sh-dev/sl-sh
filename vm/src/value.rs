@@ -121,11 +121,17 @@ impl I56 {
 
     pub fn to_i56_fallible(f: f64) -> VMResult<i64> {
         if !f.is_finite() {
-            Err(VMError::new_conversion("Can not represent NaN or infinity as int."))
+            Err(VMError::new_conversion(
+                "Can not represent NaN or infinity as int.",
+            ))
         } else if f > i64::MAX as f64 || f > I56::max() as f64 {
-            Err(VMError::new_conversion("Can not represent number greater than max i56."))
+            Err(VMError::new_conversion(
+                "Can not represent number greater than max i56.",
+            ))
         } else if f < i64::MIN as f64 || f < I56::min() as f64 {
-            Err(VMError::new_conversion("Can not represent number less than max i56."))
+            Err(VMError::new_conversion(
+                "Can not represent number less than max i56.",
+            ))
         } else {
             Ok(f.round() as i64)
         }

@@ -604,7 +604,7 @@ fn build_each_docs_section_chapter(
         let file = format!("src/section-docs/{}.md", section);
         // If there is a section file header include it for preprocessing.
         if fs::metadata(&file).is_ok() {
-            content = content + &format!("{{{{ #include section-docs/{}.md }}}}\n\n\n", section);
+            content = content + &format!("{{{{#include src/section-docs/{}.md}}}}\n\n\n", section);
         }
 
         let header = "\n\nList of symbols: \n\n".to_string();
