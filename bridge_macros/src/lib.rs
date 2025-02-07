@@ -29,9 +29,9 @@ use std::fmt::{Display, Formatter};
 use syn::__private::{Span, TokenStream2};
 use syn::spanned::Spanned;
 use syn::{
-    parse_macro_input, AttributeArgs, Error, FnArg, GenericArgument, Generics, Ident,
-    Item, ItemFn, Lit, Meta, NestedMeta, PathArguments, ReturnType, Type,
-    TypeBareFn, TypePath, TypeReference, TypeTuple,
+    parse_macro_input, AttributeArgs, Error, FnArg, GenericArgument, Generics, Ident, Item, ItemFn,
+    Lit, Meta, NestedMeta, PathArguments, ReturnType, Type, TypeBareFn, TypePath, TypeReference,
+    TypeTuple,
 };
 extern crate static_assertions;
 
