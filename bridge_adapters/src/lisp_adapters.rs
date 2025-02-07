@@ -78,10 +78,10 @@
 //!         }
 //!     }
 //! }
+//! 
 //! ```
-//!
-//!
-//!  # More explanation
+//! 
+//! # More explanation
 //!     - this section needs more clarity on when users should worry about borrowing or not???
 //!     - am i returning owned values? borrowed values?
 //!     - how can i avoid needless cloning when going to/from rust/slosh boundary w/ procedural macro etc. etc.
