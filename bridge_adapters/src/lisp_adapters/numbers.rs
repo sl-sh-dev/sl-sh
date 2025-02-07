@@ -65,8 +65,7 @@ impl<'a> SlFromRef<'a, Value> for LooseFloat {
 
 impl SlFrom<LooseFloat> for Value {
     fn sl_from(value: LooseFloat, _vm: &mut SloshVm) -> VMResult<Self> {
-        let v = value.0;
-        Ok(Value::Float(F56(v)))
+        Ok(Value::Float(F56(value.0)))
     }
 }
 
