@@ -1,4 +1,4 @@
-use crate::docs::legacy::get_legacy_sl_sh_forms;
+use crate::docs::legacy as legacy_docs;
 use bridge_adapters::add_builtin;
 use bridge_adapters::lisp_adapters::SlFrom;
 use compile_state::state::{SloshVm, SloshVmTrait};
@@ -216,7 +216,7 @@ impl DocStringSection {
         Self::parse_doc_string(Cow::Owned(sym_str), raw_doc_string, backup_usage)
     }
 
-    /// Given the rules for parsing slosh docstrings, parse one! See [`DOC_REGEX`]
+    /// Given the rules for parsing slosh docstrings, parse one! See [`static@DOC_REGEX`]
     /// for the specification.
     pub fn parse_doc_string(
         symbol: Cow<'_, String>,
@@ -619,6 +619,16 @@ fn build_each_docs_section_chapter(
     Ok(chapters)
 }
 
+fn build_sl_sh_transition_chapter(vm: &mut SloshVm) -> VMResult<Chapter> {
+    let report = legacy::build_report(vm)?;
+    let name = "sl-sh -> slosh port";
+    let path = make_file(name, &report)
+        .map_err(|e| VMError::new_vm(format!("Failed to write to file: {e}.")))?;
+
+    let section_chapter = Chapter::new(name, report, &path, vec![]);
+    Ok(section_chapter)
+}
+
 fn build_doc(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();
     let next = i.next();
@@ -670,6 +680,19 @@ fn build_doc(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     md.book.push_item(BookItem::Separator);
     md.book
         .push_item(BookItem::PartTitle("Supplemental Material".to_string()));
+    {
+        let mut reader = Reader::from_string(
+            r#"(do (load "core.slosh") (load "sh-color.slosh"))"#.to_string(),
+            vm,
+            "",
+            1,
+            0,
+        );
+        _ = run_reader(&mut reader).unwrap();
+    }
+    // Transition section!
+    md.book
+        .push_item(BookItem::Chapter(build_sl_sh_transition_chapter(vm)?));
     let sections = vec![
         ("Slosh Rust Docs", "slosh-rust-docs/doc/slosh/index.html"),
         ("All Rust Docs", "all-rust-docs/doc/slosh/index.html"),
@@ -754,25 +777,10 @@ Example:
     add_builtin(
         env,
         "legacy_forms",
-        get_legacy_sl_sh_forms,
+        legacy_docs::get_legacy_sl_sh_form_syms,
         "Usage: (legacy_forms)
 
 Gets list of all forms that were used in the previous version of sl_sh.
-
-Section: doc
-
-Example:
-#t
-",
-    );
-
-    add_builtin(
-        env,
-        "build-doc",
-        build_doc,
-        "Usage: (build-doc valid-filepath)
-
-Uses mdbook to build the documentation for the given book.
 
 Section: doc
 
@@ -803,6 +811,21 @@ Return a vector containing all the symbols currently exempted from docs
 (so the build passes), Ideally this will be 0.
 
 Section: doc
+",
+    );
+
+    add_builtin(
+        env,
+        "build-doc",
+        build_doc,
+        "Usage: (build-doc valid-filepath)
+
+Uses mdbook to build the documentation for the given book.
+
+Section: doc
+
+Example:
+#t
 ",
     );
 }

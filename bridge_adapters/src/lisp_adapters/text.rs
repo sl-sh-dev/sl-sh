@@ -72,11 +72,13 @@ impl SlFrom<char> for Value {
     }
 }
 
+/// This delegates to [`SlAsRef`] appropriately.
 impl<'a> SlFromRef<'a, Value> for &'a str {
     fn sl_from_ref(value: Value, vm: &'a SloshVm) -> VMResult<Self> {
         (&value).sl_as_ref(vm)
     }
 }
+
 impl<'a> SlAsRef<'a, str> for &Value {
     fn sl_as_ref(&self, vm: &'a SloshVm) -> VMResult<&'a str> {
         match self {
@@ -118,6 +120,7 @@ impl<'a> SlFromRef<'a, Value> for SloshChar<'a> {
     }
 }
 
+/// This delegates to [`SlAsMut`] appropriately.
 impl<'a> SlFromRefMut<'a, Value> for &'a mut String {
     fn sl_from_ref_mut(value: Value, vm: &'a mut SloshVm) -> VMResult<Self> {
         (&value).sl_as_mut(vm)

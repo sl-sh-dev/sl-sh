@@ -1,3 +1,7 @@
+//! As of now for casting slosh value types to a boolean with the sl_sh_fn macro,
+//! Value::* and Value::True map to bool true rust values
+//! and Value::False, Value::Nil, and Value::Undefined map to bool false.
+
 use crate::lisp_adapters::{SlFrom, SlFromRef};
 use compile_state::state::SloshVm;
 use slvm::{VMResult, Value};
@@ -14,8 +18,7 @@ impl SlFromRef<'_, Value> for bool {
             Value::True => Ok(true),
             Value::False => Ok(false),
             Value::Nil => Ok(false),
-            //TODO XXX should undefined be included here?
-            Value::Undefined => Ok(false),
+            Value::Undefined => panic!("Undefined is the default initialized state of a value and its presence in actual code is a VM logical error."),
             _ => Ok(true),
         }
     }

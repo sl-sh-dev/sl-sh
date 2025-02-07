@@ -5,7 +5,7 @@ use shell::builtins::expand_tilde;
 use sl_compiler::load_eval::apply_callable;
 use slvm::{from_i56, VMError, VMResult, Value};
 use std::path::{Path, PathBuf};
-use std::{env, fs, io};
+use std::{env, fs, io, time};
 
 use glob::glob;
 
@@ -13,6 +13,7 @@ use bridge_adapters::add_builtin;
 use same_file;
 use slvm::vm_hashmap::VMHashMap;
 use std::fs::{File, Metadata};
+use std::thread;
 use std::time::SystemTime;
 use walkdir::{DirEntry, WalkDir};
 
@@ -38,6 +39,26 @@ fn cd_expand_all_dots(cd: String) -> String {
     } else {
         cd
     }
+}
+
+/// Usage: (sleep milliseconds) -> nil
+///
+/// Sleep for *at least* the provided milliseconds (must be a positive integer),
+/// otherwise function will no-op.
+///
+/// Section: system
+///
+// Example:
+// ;; TODO sls implement time
+// (def test-sleep-var (time (sleep 1000)))
+// (assert-true (> test-sleep-var 1.0))
+#[sl_sh_fn(fn_name = "sleep")]
+fn sleep(millis: i64) -> VMResult<()> {
+    if millis > 0 {
+        let millis = time::Duration::from_millis(millis as u64);
+        thread::sleep(millis);
+    }
+    Ok(())
 }
 
 /// Usage: (cd dir-to-change-to)
@@ -663,6 +684,7 @@ pub fn add_fs_meta_builtins(env: &mut SloshVm) {
     intern_fs_len(env);
     intern_fs_modified(env);
     intern_fs_accessed(env);
+    intern_sleep(env);
 
     add_builtin(
         env,

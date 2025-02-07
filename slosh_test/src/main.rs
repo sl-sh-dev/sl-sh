@@ -1,10 +1,9 @@
-pub mod docs;
-
 use bridge_adapters::add_builtin;
 use compile_state::state::SloshVm;
 use sl_compiler::load_eval::run_reader;
 use sl_compiler::Reader;
 use slosh_lib::run;
+use slosh_test_lib::docs;
 use slvm::{VMError, VMResult, Value};
 use std::process;
 

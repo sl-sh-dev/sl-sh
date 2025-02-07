@@ -184,7 +184,7 @@ dependencies = [
 
 [[package]]
 name = "bridge_adapters"
-version = "0.1.0"
+version = "0.11.0"
 dependencies = [
  "bridge_types",
  "compile_state",
@@ -193,7 +193,7 @@ dependencies = [
 
 [[package]]
 name = "bridge_macros"
-version = "0.1.0"
+version = "0.11.0"
 dependencies = [
  "bridge_types",
  "quote",
@@ -205,7 +205,7 @@ dependencies = [
 
 [[package]]
 name = "bridge_types"
-version = "0.1.0"
+version = "0.11.0"
 
 [[package]]
 name = "bstr"
@@ -220,7 +220,7 @@ dependencies = [
 
 [[package]]
 name = "builtins"
-version = "0.1.0"
+version = "0.11.0"
 dependencies = [
  "bridge_adapters",
  "bridge_macros",
@@ -376,7 +376,7 @@ checksum = "5b63caa9aa9397e2d9480a9b13673856c78d8ac123288526c37d7839f2a86990"
 
 [[package]]
 name = "compile_state"
-version = "0.1.0"
+version = "0.11.0"
 dependencies = [
  "slvm",
 ]
@@ -2060,7 +2060,7 @@ dependencies = [
 
 [[package]]
 name = "shell"
-version = "0.1.0"
+version = "0.11.0"
 dependencies = [
  "cfg-if",
  "chrono",
@@ -2083,7 +2083,7 @@ checksum = "38b58827f4464d87d377d175e90bf58eb00fd8716ff0a62f80356b5e61555d0d"
 
 [[package]]
 name = "sl-compiler"
-version = "0.1.0"
+version = "0.11.0"
 dependencies = [
  "chrono",
  "compile_state",
@@ -2130,7 +2130,7 @@ dependencies = [
 
 [[package]]
 name = "slosh"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "bench_utils",
  "bridge_adapters",
@@ -2158,7 +2158,7 @@ dependencies = [
 
 [[package]]
 name = "slosh_lib"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "bridge_adapters",
  "builtins",
@@ -2180,7 +2180,27 @@ dependencies = [
 
 [[package]]
 name = "slosh_test"
-version = "0.10.0"
+version = "0.11.0"
+dependencies = [
+ "bridge_adapters",
+ "chrono",
+ "compile_state",
+ "compiler_test_utils",
+ "lazy_static",
+ "mdbook",
+ "regex",
+ "shell",
+ "sl-compiler",
+ "slosh_lib",
+ "slosh_test_lib",
+ "slvm",
+ "temp-env",
+ "tempfile",
+]
+
+[[package]]
+name = "slosh_test_lib"
+version = "0.11.0"
 dependencies = [
  "bridge_adapters",
  "chrono",
@@ -2199,7 +2219,7 @@ dependencies = [
 
 [[package]]
 name = "slvm"
-version = "0.1.0"
+version = "0.11.0"
 dependencies = [
  "bridge_types",
  "unicode-segmentation",

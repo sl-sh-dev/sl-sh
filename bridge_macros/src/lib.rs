@@ -29,9 +29,9 @@ use std::fmt::{Display, Formatter};
 use syn::__private::{Span, TokenStream2};
 use syn::spanned::Spanned;
 use syn::{
-    parse, parse_macro_input, AttributeArgs, Error, FnArg, GenericArgument, Generics, Ident, Item,
-    ItemFn, Lit, Meta, NestedMeta, PathArguments, ReturnType, Type, TypeBareFn, TypePath,
-    TypeReference, TypeTuple,
+    parse_macro_input, AttributeArgs, Error, FnArg, GenericArgument, Generics, Ident, Item, ItemFn,
+    Lit, Meta, NestedMeta, PathArguments, ReturnType, Type, TypeBareFn, TypePath, TypeReference,
+    TypeTuple,
 };
 extern crate static_assertions;
 
@@ -694,7 +694,7 @@ fn parse_variadic_args_type(
     }
 }
 
-/// for Option<Value> values the ref_exp must first be parsed as an
+/// for [`Option<Value>`] values the ref_exp must first be parsed as an
 /// Option, and only in the case that the option is Some will it be
 /// necessary to match against every ExpEnum variant.
 #[allow(clippy::too_many_arguments)]
@@ -1422,7 +1422,7 @@ fn get_param_from_type(ty: Type, span: Span, pos: usize) -> MacroResult<Param> {
     Ok(param)
 }
 
-/// Create a Vec<Arg> from the original fn's signature. Information is needed at compile and
+/// Create a [`Vec<Param>`] from the original fn's signature. Information is needed at compile and
 /// run time to translate the list of sl_sh expressions to rust native types. This Arg types
 /// stores the information about the rust native type (Value/Option/Var) as well as whether it's moved, passed
 /// by reference, or passed by mutable reference.
@@ -1617,7 +1617,7 @@ pub fn sl_sh_fn(
 ) -> proc_macro::TokenStream {
     let attr_args = parse_macro_input!(attr as AttributeArgs);
 
-    let tokens = match parse::<Item>(input) {
+    let tokens = match syn::parse::<Item>(input) {
         Ok(item) => match &item {
             Item::Fn(original_item_fn) => {
                 let generated_code = match generate_sl_sh_fn(original_item_fn, attr_args) {

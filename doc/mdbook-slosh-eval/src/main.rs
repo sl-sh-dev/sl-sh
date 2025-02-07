@@ -2,6 +2,7 @@ extern crate pulldown_cmark;
 extern crate pulldown_cmark_to_cmark;
 
 use crate::slosh_eval_lib::EvalSlosh;
+use slosh_test_lib::docs;
 use clap::{Arg, ArgMatches, Command};
 use mdbook::book::{Book, BookItem};
 use mdbook::errors::Error;
@@ -11,6 +12,8 @@ use pulldown_cmark_to_cmark::cmark;
 use semver::{Version, VersionReq};
 use std::io;
 use std::process;
+
+pub const SLOSH_AS_CODE_BLOCK_TAG: &str = "slosh";
 
 pub fn make_app() -> Command {
     Command::new("mdbook-slosh-eval")
@@ -112,7 +115,7 @@ mod slosh_eval_lib {
                         match event {
                             Event::Start(Tag::CodeBlock(ref kind)) => match kind {
                                 CodeBlockKind::Fenced(name) if !tracking => {
-                                    if name.starts_with("slosh") && !name.contains("no-execute") {
+                                    if name.starts_with(SLOSH_AS_CODE_BLOCK_TAG) && !name.contains("no-execute") {
                                         slosh_code_block_num += 1;
                                         log::debug!(
                                             "File: {}: block #{}",
@@ -142,10 +145,10 @@ mod slosh_eval_lib {
                                     buf += "\n";
                                 }
                                 tracking = false;
-                                log::debug!("```slosh\n{}", buf);
+                                log::debug!("```{}\n{}", SLOSH_AS_CODE_BLOCK_TAG, buf);
                                 log::debug!("```");
                                 events.push(Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(
-                                    "slosh".into(),
+                                    SLOSH_AS_CODE_BLOCK_TAG.into(),
                                 ))));
                                 events.push(Event::Text(buf.clone().into()));
                                 events.push(Event::End(TagEnd::CodeBlock));
@@ -187,6 +190,7 @@ mod slosh_eval_lib {
 
     fn exec_code(code: String) -> String {
         let mut vm = slosh_lib::new_slosh_vm_with_builtins_and_core();
+        docs::add_builtins(&mut vm);
 
         let code = format!(
             r#"(import test)

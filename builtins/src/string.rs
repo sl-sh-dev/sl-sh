@@ -315,6 +315,7 @@ fn char_whitespace(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
+#[allow(rustdoc::broken_intra_doc_links)]
 /// Usage: (str-sub string start [length]) -> string
 ///
 /// Return a substring from a string given start (0 based) and optional length.
@@ -505,6 +506,47 @@ fn char_is_whitespace(target: SloshChar) -> VMResult<bool> {
     }
 }
 
+///  Usage: (str->int string) -> int
+///
+///  If string is a valid representation of an integer return that int.  Error if not.
+///
+///  Section: char
+///
+///  Example:
+///  (test::assert-equal 0 (str->int "0"))
+///  (test::assert-equal 101 (str->int "101"))
+///  (test::assert-equal -101 (str->int "-101"))
+///  (test::assert-error (str->int "not int"))
+///  (test::assert-error (str->int "10.0"))
+///  (test::assert-error (str->int "--10"))
+#[sl_sh_fn(fn_name = "str->int")]
+fn str_to_int(target: &str) -> VMResult<i64> {
+    target
+        .parse::<i64>()
+        .map_err(|_e| VMError::new_conversion("Not a valid integer."))
+}
+
+///  Usage: (str->float string) -> float
+///
+///  If string is a valid representation of a float return that float.  Error if not.
+///
+///  Section: type
+///
+///  Example:
+///  (test::assert-equal 0.0 (str->float "0"))
+///  (test::assert-equal 10.0 (str->float "10.0"))
+///  (test::assert-equal 10.5 (str->float "10.5"))
+///  (test::assert-equal 101.0 (str->float "101"))
+///  (test::assert-equal -101.95 (str->float "-101.95"))
+///  (test::assert-error (str->float "not int"))
+///  (test::assert-error (str->float "--10"))
+#[sl_sh_fn(fn_name = "str->float")]
+fn str_to_float(target: &str) -> VMResult<f64> {
+    target
+        .parse::<f64>()
+        .map_err(|_e| VMError::new_conversion("Not a valid float."))
+}
+
 pub fn add_str_builtins(env: &mut SloshVm) {
     intern_str_sub(env);
     intern_str_splitn(env);
@@ -515,6 +557,8 @@ pub fn add_str_builtins(env: &mut SloshVm) {
     intern_char_lower(env);
     intern_char_upper(env);
     intern_char_is_whitespace(env);
+    intern_str_to_int(env);
+    intern_str_to_float(env);
     add_builtin(
         env,
         "str-replace",

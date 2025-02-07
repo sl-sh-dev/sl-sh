@@ -1,26 +1,23 @@
 [package]
-name = "slosh_lib"
+name = "slosh_test_lib"
 version.workspace = true
 edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-unicode_reader = { workspace = true }
-sl-compiler = { workspace = true }
+slosh_lib = { path = "../slosh_lib" }
+regex = { workspace = true }
+lazy_static = { workspace = true }
 bridge_adapters = { path = "../bridge_adapters" }
-sl-liner = { git = "https://github.com/sl-sh-dev/sl-liner.git" }
 slvm = { workspace = true }
-builtins = { path = "../builtins" }
+sl-compiler = { workspace = true }
 compile_state = { workspace = true }
-shell = { path = "../shell" }
-unicode-width = { workspace = true }
-glob = { workspace = true }
+shell = { workspace = true }
+mdbook = "0.4"
 
 [dev-dependencies]
 tempfile = { workspace = true }
 temp-env = { workspace = true }
-criterion = { workspace = true }
-iai-callgrind = { workspace = true }
 compiler_test_utils = { workspace = true }
 
 [build-dependencies]

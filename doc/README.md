@@ -66,3 +66,7 @@ Troubleshooting:
 For more information about how the docs are generated see [mdBook](https://rust-lang.github.io/mdBook/index.html)
 crate and related documentation.
 
+### Running a REPL with the test build (access to mdbook features)
+```
+cargo run --features lisp-test --bin slosh_test
+```

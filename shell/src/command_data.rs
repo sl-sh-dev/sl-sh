@@ -442,6 +442,7 @@ impl Default for Redirects {
 /// An individual command with args.
 #[derive(Clone, Debug)]
 pub struct CommandWithArgs {
+    #[allow(rustdoc::broken_intra_doc_links)]
     /// args[0] is the command.
     args: Vec<Arg>,
     stdios: Option<Redirects>,
