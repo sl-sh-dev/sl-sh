@@ -500,7 +500,8 @@ fn run_slosh(modify_vm: fn(&mut SloshVm) -> ()) -> i32 {
             if Sys::is_tty(STDIN_FILENO) {
                 shell::run::setup_shell_tty(STDIN_FILENO);
             }
-            status = if command.trim_start().starts_with('(') {
+            let tcommand = command.trim_start();
+            status = if tcommand.starts_with('(') || tcommand.starts_with("$(") {
                 ENV.with(|env| {
                     exec_expression(command, &mut env.borrow_mut());
                 });
@@ -521,6 +522,9 @@ fn run_slosh(modify_vm: fn(&mut SloshVm) -> ()) -> i32 {
         } else if let Some(script) = config.script {
             load_core_slosh();
             load_sloshrc();
+            if Sys::is_tty(STDIN_FILENO) {
+                shell::run::setup_shell_tty(STDIN_FILENO);
+            }
             status = ENV.with(|renv| {
                 let mut env = renv.borrow_mut();
                 let script = env.intern(&script);
