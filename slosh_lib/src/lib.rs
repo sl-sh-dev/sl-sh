@@ -415,6 +415,40 @@ Section: core"#,
     );
 }
 
+fn export_args(env: &mut SloshVm) {
+    let mut v = Vec::new();
+    for a in std::env::args() {
+        let s = env.alloc_string(a);
+        v.push(s);
+    }
+    // We should always have at least one arg, the shell executable, so this should be fine (won't panic).
+    let first = v.remove(0);
+    let si = env.set_named_global("*shell-exe*", first);
+    let key = env.intern("doc-string");
+    let s = env.alloc_string(
+        r#"Usage: *shell-exe*
+
+A string that contains the executable that is running the script.
+
+Section: shell"#
+            .to_string(),
+    );
+    env.set_global_property(si, key, s);
+
+    let v = env.alloc_vector(v);
+    let si = env.set_named_global("*args*", v);
+    let s = env.alloc_string(
+        r#"Usage: *args*
+
+A vector of the argumants passed to the script.
+The first argument will be the name of the script.
+
+Section: shell"#
+            .to_string(),
+    );
+    env.set_global_property(si, key, s);
+}
+
 pub fn set_builtins_shell(env: &mut SloshVm) {
     set_builtins(env);
     add_shell_builtins(env);
@@ -433,6 +467,7 @@ pub fn set_builtins_shell(env: &mut SloshVm) {
     if let Ok(dir) = env::current_dir() {
         env::set_var("PWD", dir);
     }
+    export_args(env);
 }
 
 pub fn run(modify_vm: fn(&mut SloshVm) -> ()) -> i32 {
@@ -444,8 +479,10 @@ fn run_slosh(modify_vm: fn(&mut SloshVm) -> ()) -> i32 {
     if let Some(config) = get_config() {
         ENV.with(|renv| {
             let mut env = renv.borrow_mut();
+            env.pause_gc();
             set_builtins_shell(&mut env);
             modify_vm(&mut env);
+            env.unpause_gc();
         });
         if config.command.is_none() && config.script.is_none() {
             load_core_slosh();
@@ -463,7 +500,8 @@ fn run_slosh(modify_vm: fn(&mut SloshVm) -> ()) -> i32 {
             if Sys::is_tty(STDIN_FILENO) {
                 shell::run::setup_shell_tty(STDIN_FILENO);
             }
-            status = if command.trim_start().starts_with('(') {
+            let tcommand = command.trim_start();
+            status = if tcommand.starts_with('(') || tcommand.starts_with("$(") {
                 ENV.with(|env| {
                     exec_expression(command, &mut env.borrow_mut());
                 });
@@ -484,6 +522,9 @@ fn run_slosh(modify_vm: fn(&mut SloshVm) -> ()) -> i32 {
         } else if let Some(script) = config.script {
             load_core_slosh();
             load_sloshrc();
+            if Sys::is_tty(STDIN_FILENO) {
+                shell::run::setup_shell_tty(STDIN_FILENO);
+            }
             status = ENV.with(|renv| {
                 let mut env = renv.borrow_mut();
                 let script = env.intern(&script);
@@ -571,7 +612,7 @@ fn run_shell_tty() -> i32 {
 }
 
 fn exec_expr_or_run_command(res: &String, mut status: i32) -> i32 {
-    if res.starts_with('(') {
+    if res.starts_with('(') || res.starts_with("$(") {
         ENV.with(|env| {
             exec_expression(res.clone(), &mut env.borrow_mut());
         });

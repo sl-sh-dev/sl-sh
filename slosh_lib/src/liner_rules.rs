@@ -36,7 +36,6 @@ fn check_balanced_delimiters_lisp(input: &str) -> bool {
         }
     }
 
-    //println!("XXXX {parens}, {brackets}, {braces}, {single_quote}, {double_quote}");
     parens <= 0 && brackets <= 0 && braces <= 0 && !double_quote
 }
 
@@ -75,7 +74,6 @@ fn check_balanced_delimiters_shell(input: &str) -> bool {
         }
     }
 
-    //println!("XXXX {parens}, {braces}, {single_quote}, {double_quote}");
     parens <= 0 && braces <= 0 && !single_quote && !double_quote
 }
 
