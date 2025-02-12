@@ -512,7 +512,8 @@ fn read_all(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         Ok(reader.vm().alloc_vector(vals))
     }
     if let (Some(exp), None) = (registers.first(), registers.get(1)) {
-        match exp {
+        vm.pause_gc();
+        let r = match exp {
             Value::StringConst(i) => {
                 let string_as_code = vm.get_interned(*i);
                 let reader = Reader::from_static_string(string_as_code, vm, "", 1, 0);
@@ -532,7 +533,9 @@ fn read_all(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
                 "read",
                 "read-all: only accepts strings or IO objects as arguments.",
             )),
-        }
+        };
+        vm.unpause_gc();
+        r
     } else {
         Err(VMError::new_compile(
             "read-all: wrong number of args, expected one",

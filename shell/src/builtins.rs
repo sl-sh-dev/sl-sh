@@ -386,10 +386,8 @@ where
         "export" => {
             fn split_export<S: AsRef<str>>(arg: S) -> i32 {
                 let arg = arg.as_ref();
-                let mut key_val = arg.split('=');
-                if let (Some(key), Some(val), None) =
-                    (key_val.next(), key_val.next(), key_val.next())
-                {
+                let mut key_val = arg.splitn(2, '=');
+                if let (Some(key), Some(val)) = (key_val.next(), key_val.next()) {
                     export(key.into(), val.into())
                 } else {
                     eprintln!("export: VAR_NAME=VALUE");

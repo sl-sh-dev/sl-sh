@@ -180,7 +180,7 @@ Example:
 (def io? (fn (v) (identical? (type v) :Io)))
 
 #%
-Usage: (defmacro name doc_string? argument_list body)
+Usage: (defmacro name argument_list body)
 
 Create a macro and bind it to a symbol in the current scope.
 
@@ -288,7 +288,7 @@ Print the documentation for provided symbol.
 Section: core
 %#
 (defmacro doc (sym)
-    (let (docs `(get-prop ~sym :doc-string)
+    (let (docs `(eval (get-prop ~sym :doc-string))
          has-usage `(str-starts-with (str-trim (str ~docs)) "Usage:"))
         (do
         `(if ~has-usage
