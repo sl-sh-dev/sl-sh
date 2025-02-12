@@ -8,70 +8,10 @@ use slvm::{
     Chunk, VMError, VMResult, Value, Vm, ADD, CONST, DIV, GET, INC, JMPLT, MUL, RET, SETCOL, VECMKD,
 };
 use std::sync::Arc;
-
-// TODO PC would be nice to not have to copy load_one_expression and run_reader.
-// the refactor in issue #143 should help with this as both of these functions could
-// be moved to a crate all.rs and the slosh crate depend on so they can be referenced.
-// ALSO. might be nice to get more clarity on their usage. Is this the best way to be using them?
-// are they only used in test and if so does it make sense to use them here or should we actually be
-// using something else?
-pub fn load_one_expression(
-    vm: &mut SloshVm,
-    exp: Value,
-    name: &'static str,
-    doc_string: Option<Value>,
-) -> VMResult<(Arc<Chunk>, Option<Value>)> {
-    let line_num = vm.line_num();
-    let mut state = CompileState::new_state(name, line_num, None);
-    state.chunk.dbg_args = Some(Vec::new());
-    state.doc_string = doc_string;
-    if let Err(e) = pass1(vm, &mut state, exp) {
-        println!(
-            "Compile error (pass one), {}, line {}: {}",
-            name,
-            vm.line_num(),
-            e
-        );
-        return Err(e);
-    }
-    if let Err(e) = compile(vm, &mut state, exp, 0) {
-        println!(
-            "Compile error, {} line {}: {} exp: {}",
-            name,
-            vm.line_num(),
-            e,
-            exp.display_value(vm)
-        );
-        return Err(e);
-    }
-    if let Err(e) = state.chunk.encode0(RET, vm.own_line()) {
-        println!("Compile error, {} line {}: {}", name, vm.line_num(), e);
-        return Err(e);
-    }
-    state.chunk.extra_regs = state.max_regs;
-    Ok((Arc::new(state.chunk), state.doc_string))
-}
+use slosh_test_lib::run_reader;
 
 pub fn run_float_bench(n: usize, m: f32) -> String {
     format!("(eval-pol {} {})", n, m)
-}
-
-pub fn run_reader(reader: &mut Reader) -> VMResult<Value> {
-    let mut last = Value::False;
-    while let Some(exp) = reader.next() {
-        let reader_vm = reader.vm();
-        let exp = exp
-            .map_err(|e| VMError::new("read", e.to_string()))
-            .unwrap();
-        reader_vm.heap_sticky(exp);
-
-        let result = load_one_expression(reader_vm, exp, "", None);
-
-        reader_vm.heap_unsticky(exp);
-        let (chunk, _new_doc_string) = result.unwrap();
-        last = reader_vm.execute(chunk)?;
-    }
-    Ok(last)
 }
 
 /// returns ./slosh/benches/ PathBuf
@@ -89,7 +29,7 @@ pub fn load_file(fname: PathBuf, vm: &mut SloshVm) {
     match std::fs::File::open(fname) {
         Ok(file) => {
             let mut reader = Reader::from_file(file, vm, "", 1, 0);
-            let _ = run_reader(&mut reader);
+            let _ = slosh_test_lib::run_reader(&mut reader);
         }
         Err(e) => {
             panic!("Could not open file: {:?}", e);

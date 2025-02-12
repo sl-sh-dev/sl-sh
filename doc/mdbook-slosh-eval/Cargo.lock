@@ -1009,6 +1009,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "compile_state",
  "env_logger",
  "log",
  "mdbook",

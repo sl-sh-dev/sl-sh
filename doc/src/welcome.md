@@ -16,7 +16,7 @@ as long as you ported her prompt verbatim she probably would not notice.
 Slosh is inspired by clojure and scheme. It is a type 1 lisp.
 
 
-# Motication
+# Motivation
 
 Lisp is a truly novel family of languages. Every year new developers
 discover [what many people have discovered long before

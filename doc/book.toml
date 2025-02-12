@@ -7,9 +7,4 @@ title = "Slosh Documentation"
 
 [preprocessor.slosh-eval]
 after = ["links"]
-
-[preprocessor.slosh]
-after = ["links"]
-
-[slosh]
-blow-up = "blow-up"
+blow-up = "boom"
