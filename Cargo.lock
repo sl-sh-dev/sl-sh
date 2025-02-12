@@ -149,6 +149,7 @@ dependencies = [
  "compile_state",
  "sl-compiler",
  "slosh_lib",
+ "slosh_test_lib",
  "slvm",
 ]
 

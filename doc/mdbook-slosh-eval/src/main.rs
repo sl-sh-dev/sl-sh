@@ -2,14 +2,19 @@ extern crate pulldown_cmark;
 extern crate pulldown_cmark_to_cmark;
 
 use crate::slosh_eval_lib::EvalSlosh;
-use slosh_test_lib::docs;
 use clap::{Arg, ArgMatches, Command};
+use compile_state::state::new_slosh_vm;
+use compile_state::state::SloshVm;
 use mdbook::book::{Book, BookItem};
 use mdbook::errors::Error;
-use mdbook::preprocess::{CmdPreprocessor, Preprocessor, PreprocessorContext};
+use mdbook::preprocess::{
+    CmdPreprocessor, IndexPreprocessor, LinkPreprocessor, Preprocessor, PreprocessorContext,
+};
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 use pulldown_cmark_to_cmark::cmark;
 use semver::{Version, VersionReq};
+use slosh_test_lib::docs;
+use std::cell::RefCell;
 use std::io;
 use std::process;
 
@@ -58,6 +63,8 @@ fn handle_preprocessing(pre: &dyn Preprocessor) -> Result<(), Error> {
     }
 
     let processed_book = pre.run(&ctx, book)?;
+    //let processed_book = LinkPreprocessor::new().run(&ctx, processed_book)?;
+    //let processed_book = IndexPreprocessor::new().run(&ctx, processed_book)?;
     serde_json::to_writer(io::stdout(), &processed_book)?;
 
     Ok(())
@@ -75,6 +82,11 @@ fn handle_supports(pre: &dyn Preprocessor, sub_args: &ArgMatches) -> ! {
     } else {
         process::exit(1);
     }
+}
+
+thread_local! {
+    /// Env (job control status, etc) for the shell.
+    pub static ENV: RefCell<SloshVm> = RefCell::new(new_slosh_vm());
 }
 
 mod slosh_eval_lib {
@@ -97,12 +109,37 @@ mod slosh_eval_lib {
         }
 
         fn run(&self, ctx: &PreprocessorContext, mut book: Book) -> Result<Book, Error> {
-            if let Some(slosh_eval_cfg) = ctx.config.get_preprocessor(self.name()) {
-                // custom config exists even if it's not being used right now.
-                if slosh_eval_cfg.contains_key("blow-up") {
-                    anyhow::bail!("Boom!!1!");
+            //if let Some(slosh_eval_cfg) = ctx.config.get_preprocessor(self.name()) {
+            //    // custom config exists even if it's not being used right now.
+            //    if slosh_eval_cfg.contains_key("build-forms") {
+            //        let v = slosh_eval_cfg.get("build-forms");
+            //    }
+            //}
+
+            ENV.with(|renv| {
+                let mut env = renv.borrow_mut();
+                let vm = &mut env;
+                docs::add_builtins(vm);
+                // TODO PC put reader inside this slosh_lib fn?
+                // TODO PC move this slosh_lib fn inside slosh_test_lib
+                // TODO PC is there some duplication?
+                //  running slosh_vm for the run-tests.slosh script
+                //  getting slosh_vm for EvalSlosh pre-processor
+                slosh_lib::new_slosh_vm_with_builtins_and_core(vm);
+
+                {
+                    let mut reader = Reader::from_string(
+                        r#"(do (load "core.slosh") (load "sh-color.slosh"))"#.to_string(),
+                        vm,
+                        "",
+                        1,
+                        0,
+                    );
+                    _ = slosh_test_lib::run_reader(&mut reader);
                 }
-            }
+
+                _ = docs::add_forms_and_supplementary_docs(vm, &mut book);
+            });
 
             book.for_each_mut(|bi: &mut BookItem| match bi {
                 BookItem::Separator | BookItem::PartTitle(_) => {}
@@ -115,7 +152,9 @@ mod slosh_eval_lib {
                         match event {
                             Event::Start(Tag::CodeBlock(ref kind)) => match kind {
                                 CodeBlockKind::Fenced(name) if !tracking => {
-                                    if name.starts_with(SLOSH_AS_CODE_BLOCK_TAG) && !name.contains("no-execute") {
+                                    if name.starts_with(SLOSH_AS_CODE_BLOCK_TAG)
+                                        && !name.contains("no-execute")
+                                    {
                                         slosh_code_block_num += 1;
                                         log::debug!(
                                             "File: {}: block #{}",
@@ -131,7 +170,31 @@ mod slosh_eval_lib {
                                 buf += c.as_ref();
                             }
                             Event::End(TagEnd::CodeBlock) if tracking => {
-                                let eval = exec_code(buf.clone());
+                                let eval = ENV.with(|renv| {
+                                    let mut env = renv.borrow_mut();
+                                    let vm = &mut env;
+                                    docs::add_builtins(vm);
+                                    // TODO PC put reader inside this slosh_lib fn?
+                                    // TODO PC move this slosh_lib fn inside slosh_test_lib
+                                    // TODO PC is there some duplication?
+                                    //  running slosh_vm for the run-tests.slosh script
+                                    //  getting slosh_vm for EvalSlosh pre-processor
+                                    slosh_lib::new_slosh_vm_with_builtins_and_core(vm);
+
+                                    {
+                                        let mut reader = Reader::from_string(
+                                            r#"(do (load "core.slosh") (load "sh-color.slosh"))"#.to_string(),
+                                            vm,
+                                            "",
+                                            1,
+                                            0,
+                                        );
+                                        _ = slosh_test_lib::run_reader(&mut reader);
+                                    }
+
+                                    let eval = exec_code(vm, buf.clone());
+                                    eval
+                                });
                                 let mut first = true;
                                 buf += "\n";
                                 for line in eval.lines() {
@@ -188,10 +251,7 @@ mod slosh_eval_lib {
         }
     }
 
-    fn exec_code(code: String) -> String {
-        let mut vm = slosh_lib::new_slosh_vm_with_builtins_and_core();
-        docs::add_builtins(&mut vm);
-
+    fn exec_code(vm: &mut SloshVm, code: String) -> String {
         let code = format!(
             r#"(import test)
                 (def *prn* "")
@@ -202,8 +262,8 @@ mod slosh_eval_lib {
             code
         );
 
-        let mut reader = Reader::from_string(code, &mut vm, "", 1, 0);
-        let s = slosh_lib::run_reader(&mut reader)
+        let mut reader = Reader::from_string(code, vm, "", 1, 0);
+        let s = slosh_test_lib::run_reader(&mut reader)
             .map(|x| x.display_value(&vm))
             .map_err(|e| format!("Encountered error: {}", e));
         match s {

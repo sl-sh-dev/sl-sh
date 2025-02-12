@@ -499,7 +499,7 @@ pub(crate) fn full_legacy_sl_sh_forms_metadata() -> &'static [(&'static str, boo
         ("len>0?", true, ""),
         ("length", true, ""),
         ("let", true, ""),
-        ("let*", true, ""),
+        ("let*", true, "let"),
         ("let-env", true, ""),
         ("list", true, ""),
         ("list-iter", true, ""),

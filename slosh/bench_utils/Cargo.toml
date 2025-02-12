@@ -9,3 +9,4 @@ sl-compiler = { workspace = true }
 slvm = { workspace = true }
 compile_state = { workspace = true }
 slosh_lib = { path = "../../slosh_lib" }
+slosh_test_lib = { path = "../../slosh_test_lib" }

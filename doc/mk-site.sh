@@ -3,17 +3,17 @@
 export RUST_LOG="DEBUG"
 
 # clone in the legacy docs
-git clone -b gh-pages-legacy-html https://github.com/sl-sh-dev/sl-sh src/legacy/ || true
+git clone -b gh-pages-legacy-html https://github.com/sl-sh-dev/sl-sh legacy/ || true
 
 # don't want git submodules
-rm -rf src/legacy/.git || true
-mkdir src/slosh-rust-docs || true
-mkdir src/all-rust-docs || true
+rm -rf legacy/.git || true
+mkdir slosh-rust-docs || true
+mkdir all-rust-docs || true
 
 if [ "${SKIP_DOCS}" != "SKIP_DOCS" ]; then
     echo "Building docs."
-    cargo doc --features lisp-test --target-dir src/all-rust-docs
-    cargo doc --no-deps --document-private-items --features lisp-test --target-dir src/slosh-rust-docs
+    cargo doc --features lisp-test --target-dir all-rust-docs
+    cargo doc --no-deps --document-private-items --features lisp-test --target-dir slosh-rust-docs
 else
     echo "Skipped doc building"
 fi

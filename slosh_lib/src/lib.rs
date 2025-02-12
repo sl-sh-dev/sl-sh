@@ -160,6 +160,13 @@ fn get_home_dir() -> Option<PathBuf> {
     }
 }
 
+fn load_shell_color(env: &mut SloshVm) {
+    match load_internal(env, "sh-color.slosh") {
+        Ok(_) => {}
+        Err(err) => eprintln!("ERROR: {err}"),
+    }
+}
+
 fn load_core(env: &mut SloshVm) {
     match load_internal(env, "core.slosh") {
         Ok(_) => {}
@@ -393,11 +400,11 @@ pub fn new_slosh_vm_with_builtins() -> SloshVm {
     env
 }
 
-pub fn new_slosh_vm_with_builtins_and_core() -> SloshVm {
-    let mut env = new_slosh_vm();
-    set_builtins(&mut env);
-    load_core(&mut env);
-    env
+pub fn new_slosh_vm_with_builtins_and_core(env: &mut SloshVm) {
+    set_builtins(env);
+    set_builtins_shell(env);
+    //load_core(env);
+    //load_shell_color(env);
 }
 
 fn add_doc_builtins(env: &mut SloshVm) {
