@@ -7,4 +7,4 @@ title = "Slosh Documentation"
 
 [preprocessor.slosh-eval]
 after = ["links"]
-blow-up = "boom"
+sections = ["doc-forms", "doc-supplementary"]
