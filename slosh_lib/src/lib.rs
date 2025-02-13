@@ -160,15 +160,15 @@ fn get_home_dir() -> Option<PathBuf> {
     }
 }
 
-fn load_shell_color(env: &mut SloshVm) {
-    match load_internal(env, "sh-color.slosh") {
+fn load_core(env: &mut SloshVm) {
+    match load_internal(env, "core.slosh") {
         Ok(_) => {}
         Err(err) => eprintln!("ERROR: {err}"),
     }
 }
 
-fn load_core(env: &mut SloshVm) {
-    match load_internal(env, "core.slosh") {
+fn load_color(env: &mut SloshVm) {
+    match load_internal(env, "sh-color.slosh") {
         Ok(_) => {}
         Err(err) => eprintln!("ERROR: {err}"),
     }
@@ -183,38 +183,42 @@ fn load_core_slosh() {
 
 /// Expected that the user's init.slosh will be in the user's home directory
 /// at `$HOME/.config/slosh/` otherwise the directory structure will be created.
-fn load_sloshrc() {
+fn load_sloshrc_inner() {
+    ENV.with(|renv| {
+        let mut env = renv.borrow_mut();
+        load_sloshrc(env.deref_mut())
+    });
+}
+
+fn load_sloshrc(env: &mut SloshVm) {
     if let Some(home_dir) = get_home_dir() {
         let slosh_path = home_dir.join(".config").join("slosh");
         if let Some(slosh_dir) = make_path_dir_if_possible(slosh_path.as_path()) {
-            ENV.with(|renv| {
-                let mut env = renv.borrow_mut();
-                set_initial_load_path(
-                    env.deref_mut(),
-                    vec![slosh_dir.as_os_str().to_string_lossy().as_ref()],
-                );
-                let init = slosh_dir.join("init.slosh");
-                if fs::metadata::<&Path>(init.as_ref()).is_err() {
-                    match File::create::<&Path>(init.as_ref()) {
-                        Ok(mut f) => match f.write_all(SLSHRC.as_bytes()) {
-                            Ok(_) => {}
-                            Err(e) => {
-                                eprintln!("error writing default config {:?}: {e}", init.as_path())
-                            }
-                        },
+            set_initial_load_path(
+                env,
+                vec![slosh_dir.as_os_str().to_string_lossy().as_ref()],
+            );
+            let init = slosh_dir.join("init.slosh");
+            if fs::metadata::<&Path>(init.as_ref()).is_err() {
+                match File::create::<&Path>(init.as_ref()) {
+                    Ok(mut f) => match f.write_all(SLSHRC.as_bytes()) {
+                        Ok(_) => {}
                         Err(e) => {
-                            eprintln!("error creating default config {:?}: {e}", init.as_path())
+                            eprintln!("error writing default config {:?}: {e}", init.as_path())
                         }
+                    },
+                    Err(e) => {
+                        eprintln!("error creating default config {:?}: {e}", init.as_path())
                     }
                 }
-                let init = init.as_os_str().to_string_lossy();
-                let script = env.intern(init.as_ref());
-                let script = env.get_interned(script);
-                match load_internal(&mut env, script) {
-                    Ok(_) => {}
-                    Err(err) => eprintln!("ERROR: {err}"),
-                }
-            });
+            }
+            let init = init.as_os_str().to_string_lossy();
+            let script = env.intern(init.as_ref());
+            let script = env.get_interned(script);
+            match load_internal(env, script) {
+                Ok(_) => {}
+                Err(err) => eprintln!("ERROR: {err}"),
+            }
         }
     }
 }
@@ -400,14 +404,61 @@ pub fn new_slosh_vm_with_builtins() -> SloshVm {
     env
 }
 
-pub fn new_slosh_vm_with_builtins_and_core(env: &mut SloshVm) {
+fn fake_version(vm: &mut SloshVm, registers: &[slvm::Value]) -> VMResult<slvm::Value> {
+    if !registers.is_empty() {
+        return Err(VMError::new_compile("version: requires no argument"));
+    }
+    Ok(vm.alloc_string("fake-book".to_string()))
+}
+
+pub fn new_slosh_vm_with_builtins_and_core_slim() -> SloshVm {
+    let mut env = new_slosh_vm();
     env.pause_gc();
-    set_builtins(env);
-    set_builtins_shell(env);
-    load_sloshrc();
-    load_core(env);
-    load_shell_color(env);
+    add_shell_builtins(&mut env);
+    set_builtins(&mut env);
+    //bridge_adapters::add_builtin(&mut env, "version", fake_version, r#"Return the software version string."#);
+    //load_core(&mut env);
+    //load_color(&mut env);
+    //load_sloshrc(&mut env);
     env.unpause_gc();
+
+    {
+        let mut reader = Reader::from_string(
+            r#"(do
+                        (load "core.slosh"))"#.to_string(),
+            &mut env,
+            "",
+            1,
+            0,
+        );
+        _ = run_reader(&mut reader);
+    }
+    env
+}
+
+pub fn new_slosh_vm_with_builtins_and_core() -> SloshVm {
+    let mut env = new_slosh_vm();
+    //add_shell_builtins(&mut env);
+    env.pause_gc();
+    set_builtins_shell(&mut env);
+    bridge_adapters::add_builtin(&mut env, "version", fake_version, r#"Return the software version string."#);
+    load_core(&mut env);
+    load_color(&mut env);
+    //load_sloshrc(&mut env);
+    env.unpause_gc();
+
+    //{
+    //    let mut reader = Reader::from_string(
+    //        r#"(do
+    //                    (load "init.slosh"))"#.to_string(),
+    //        &mut env,
+    //        "",
+    //        1,
+    //        0,
+    //    );
+    //    _ = run_reader(&mut reader);
+    //}
+    env
 }
 
 fn add_doc_builtins(env: &mut SloshVm) {
@@ -432,7 +483,7 @@ fn export_args(env: &mut SloshVm) {
         v.push(s);
     }
     // We should always have at least one arg, the shell executable, so this should be fine (won't panic).
-    let first = v.remove(0);
+    let first = if v.is_empty() { Value::Nil } else { v.remove(0) };
     let si = env.set_named_global("*shell-exe*", first);
     let key = env.intern("doc-string");
     let s = env.alloc_string(
@@ -496,7 +547,7 @@ fn run_slosh(modify_vm: fn(&mut SloshVm) -> ()) -> i32 {
         });
         if config.command.is_none() && config.script.is_none() {
             load_core_slosh();
-            load_sloshrc();
+            load_sloshrc_inner();
             if Sys::is_tty(STDIN_FILENO) {
                 status = run_shell_tty();
             } else {
@@ -531,7 +582,7 @@ fn run_slosh(modify_vm: fn(&mut SloshVm) -> ()) -> i32 {
             });
         } else if let Some(script) = config.script {
             load_core_slosh();
-            load_sloshrc();
+            load_sloshrc_inner();
             if Sys::is_tty(STDIN_FILENO) {
                 shell::run::setup_shell_tty(STDIN_FILENO);
             }

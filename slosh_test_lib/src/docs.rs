@@ -607,10 +607,8 @@ fn build_each_docs_section_chapter(
             content = content + &file_str;
             // could never get it to work right w/ the #include directive...
             //content = content + &format!("{{{{#include section-docs/{}.md}}}}\n\n\n", section);
-        } else {
-            if fs::metadata(&file).is_ok() {
-                eprintln!("Error processing file: {}", file);
-            }
+        } else if fs::metadata(&file).is_ok() {
+            eprintln!("Error processing file: {}", file);
         }
 
         let header = "\n\nList of symbols: \n\n".to_string();
