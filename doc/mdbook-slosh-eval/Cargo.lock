@@ -985,6 +985,7 @@ name = "mdbook-slosh-eval"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bridge_adapters",
  "clap",
  "compile_state",
  "env_logger",
@@ -996,6 +997,7 @@ dependencies = [
  "serde_json",
  "slosh_lib",
  "slosh_test_lib",
+ "slvm",
  "toml",
 ]
 

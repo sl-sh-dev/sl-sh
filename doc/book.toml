@@ -7,4 +7,6 @@ title = "Slosh Documentation"
 
 [preprocessor.slosh-eval]
 after = ["links"]
-add_sections = ["doc-forms", "doc-supplementary"]
+doc-forms = true
+doc-supplementary = true
+code-block-label = "slosh"
