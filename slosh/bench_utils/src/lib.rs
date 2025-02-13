@@ -1,11 +1,10 @@
 use std::path::PathBuf;
 
-use compile_state::state::{CompileState, SloshVm, SloshVmTrait};
-use sl_compiler::pass1::pass1;
-use sl_compiler::{compile, Reader};
+use compile_state::state::SloshVm;
+use sl_compiler::Reader;
 use slosh_lib::new_slosh_vm_with_builtins;
 use slvm::{
-    Chunk, VMError, VMResult, Value, Vm, ADD, CONST, DIV, GET, INC, JMPLT, MUL, RET, SETCOL, VECMKD,
+    Chunk, VMResult, Value, Vm, ADD, CONST, DIV, GET, INC, JMPLT, MUL, RET, SETCOL, VECMKD,
 };
 use std::sync::Arc;
 use slosh_test_lib::run_reader;

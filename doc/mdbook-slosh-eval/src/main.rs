@@ -8,7 +8,7 @@ use compile_state::state::SloshVm;
 use mdbook::book::{Book, BookItem};
 use mdbook::errors::Error;
 use mdbook::preprocess::{
-    CmdPreprocessor, IndexPreprocessor, LinkPreprocessor, Preprocessor, PreprocessorContext,
+    CmdPreprocessor, Preprocessor, PreprocessorContext,
 };
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 use pulldown_cmark_to_cmark::cmark;
@@ -63,8 +63,6 @@ fn handle_preprocessing(pre: &dyn Preprocessor) -> Result<(), Error> {
     }
 
     let processed_book = pre.run(&ctx, book)?;
-    //let processed_book = LinkPreprocessor::new().run(&ctx, processed_book)?;
-    //let processed_book = IndexPreprocessor::new().run(&ctx, processed_book)?;
     serde_json::to_writer(io::stdout(), &processed_book)?;
 
     Ok(())
@@ -109,12 +107,13 @@ mod slosh_eval_lib {
         }
 
         fn run(&self, ctx: &PreprocessorContext, mut book: Book) -> Result<Book, Error> {
-            //if let Some(slosh_eval_cfg) = ctx.config.get_preprocessor(self.name()) {
-            //    // custom config exists even if it's not being used right now.
-            //    if slosh_eval_cfg.contains_key("build-forms") {
-            //        let v = slosh_eval_cfg.get("build-forms");
-            //    }
-            //}
+            if let Some(slosh_eval_cfg) = ctx.config.get_preprocessor(self.name()) {
+                // custom config exists even if it's not being used right now.
+                if slosh_eval_cfg.contains_key("add_sections") {
+                    let v = slosh_eval_cfg.get("add-sections");
+                    println!("SECTIONS: {:?}", v)
+                }
+            }
 
             ENV.with(|renv| {
                 let mut env = renv.borrow_mut();

@@ -97,16 +97,16 @@ impl I56 {
         INT_MAX
     }
 
-    pub fn max_i56() -> I56 {
-        I56(to_i56_raw(Self::max()))
+    pub fn max_i56() -> Self {
+        I56(Self::into_inner(Self::max()))
     }
 
     pub fn min() -> i64 {
         INT_MIN
     }
 
-    pub fn min_i56() -> I56 {
-        I56(to_i56_raw(Self::min()))
+    pub fn min_i56() -> Self {
+        I56(Self::into_inner(Self::min()))
     }
 
     /// Take the inner representation of [`Value`]::Int, and turn it into an [`i64`].
@@ -115,11 +115,11 @@ impl I56 {
     }
 
     /// Turn an [`i64`] into the inner representation of [`Value`]::Int
-    pub fn to_inner(i: i64) -> [u8; 7] {
+    pub fn into_inner(i: i64) -> [u8; 7] {
         to_i56_raw(i)
     }
 
-    pub fn to_i56_fallible(f: f64) -> VMResult<i64> {
+    pub fn into_i56_fallible(f: f64) -> VMResult<i64> {
         if !f.is_finite() {
             Err(VMError::new_conversion(
                 "Can not represent NaN or infinity as int.",
@@ -137,9 +137,8 @@ impl I56 {
         }
     }
 
-    pub fn from_byte(byte: u8) -> i64 {
-        let i = [0u8, 0u8, 0u8, 0u8, 0u8, 0u8, byte];
-        from_i56(&i)
+    pub fn from_byte(byte: u8) -> Self {
+        Self(Self::into_inner(byte as i64))
     }
 }
 
