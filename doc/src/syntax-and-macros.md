@@ -78,8 +78,8 @@ Example:
 
 (assert-false (login SECRET))
 %#
-(prn (login SECRET))
 (def SECRET "helloworld")
+(prn (login SECRET))
 ```
 
 ## Macros

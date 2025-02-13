@@ -3,7 +3,7 @@ use bridge_types::{ErrorStrings, LooseFloat, LooseInt, LooseString};
 use compile_state::state::SloshVm;
 use slvm::float::F56;
 use slvm::value::ValueType;
-use slvm::{to_i56, to_i56_raw, VMError, VMResult, Value, ValueTypes, I56};
+use slvm::{to_i56, VMError, VMResult, Value, ValueTypes, I56};
 
 impl SlFrom<()> for Value {
     fn sl_from(_value: (), _vm: &mut SloshVm) -> VMResult<Self> {
@@ -29,8 +29,7 @@ impl<'a> SlFromRef<'a, Value> for LooseFloat {
     fn sl_from_ref(value: Value, vm: &'a SloshVm) -> VMResult<Self> {
         let res = match value {
             Value::Byte(byte) => {
-                let i = [0u8, 0u8, 0u8, 0u8, 0u8, 0u8, byte];
-                let f = I56::from_inner(&i) as f64;
+                let f = byte as f64;
                 let f = F56::from(f);
                 Ok(f.0)
             }
@@ -72,12 +71,14 @@ impl SlFrom<LooseFloat> for Value {
 impl<'a> SlFromRef<'a, Value> for LooseInt {
     fn sl_from_ref(value: Value, vm: &'a SloshVm) -> VMResult<Self> {
         let res = match value {
-            Value::Byte(byte) => Ok([0u8, 0u8, 0u8, 0u8, 0u8, 0u8, byte]),
+            Value::Byte(byte) => {
+                Ok(I56::into_inner(byte as i64))
+            },
             Value::Int(i) => Ok(i),
             Value::Float(f) => {
                 let f = f64::from(f);
-                let i56 = I56::to_i56_fallible(f)?;
-                Ok(to_i56_raw(i56))
+                let i56 = I56::into_i56_fallible(f)?;
+                Ok(I56::into_inner(i56))
             }
             v @ (Value::CodePoint(_)
             | Value::Symbol(_)
@@ -90,8 +91,8 @@ impl<'a> SlFromRef<'a, Value> for LooseInt {
                 .or(LooseString::sl_from_ref(v, vm)?
                     .parse::<f64>()
                     .map_err(|_e| VMError::new_string_conversion("Not a valid integer."))
-                    .and_then(I56::to_i56_fallible))
-                .map(to_i56_raw)
+                    .and_then(I56::into_i56_fallible))
+                .map(I56::into_inner)
                 .map_err(|_e| VMError::new_string_conversion("Not a valid integer.")),
             _ => Err(VMError::new_conversion(
                 ErrorStrings::fix_me_mismatched_type(

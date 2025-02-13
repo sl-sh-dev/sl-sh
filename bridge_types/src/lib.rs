@@ -1,4 +1,3 @@
-use derive_more::{From, Into};
 use std::borrow::Cow;
 use std::fmt::Display;
 
@@ -63,8 +62,19 @@ pub type LooseString<'a> = Cow<'a, str>;
 /// - StringConst
 ///
 /// Always returns a [`Value`]`::Float` type.
-#[derive(From, Into)]
 pub struct LooseFloat(pub [u8; 7]);
+
+impl From<LooseFloat> for [u8; 7] {
+    fn from(value: LooseFloat) -> Self {
+        value.0
+    }
+}
+
+impl From<[u8; 7]> for LooseFloat {
+    fn from(value: [u8; 7]) -> Self {
+        LooseFloat(value)
+    }
+}
 
 /// [`Value`]: /slvm/value/enum.Value.html
 /// Type to hold anything in Slosh that can be represented as slosh int value: `[u8; 7]`.
@@ -85,8 +95,19 @@ pub struct LooseFloat(pub [u8; 7]);
 /// - StringConst
 ///
 /// Always returns a [`Value`]`::Int` type.
-#[derive(From, Into)]
 pub struct LooseInt(pub [u8; 7]);
+
+impl From<LooseInt> for [u8; 7] {
+    fn from(value: LooseInt) -> Self {
+        value.0
+    }
+}
+
+impl From<[u8; 7]> for LooseInt {
+    fn from(value: [u8; 7]) -> Self {
+        LooseInt(value)
+    }
+}
 
 /// [`Value`]: /slvm/value/enum.Value.html
 /// Type to hold Slosh's notion of a char.

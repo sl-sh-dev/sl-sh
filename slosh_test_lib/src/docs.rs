@@ -21,9 +21,6 @@ use std::io::{self, Write};
 use std::path::Path;
 use std::path::PathBuf;
 use std::string::ToString;
-use mdbook::preprocess::{IndexPreprocessor, LinkPreprocessor};
-use mdbook::renderer::HtmlHandlebars;
-use slosh_lib::set_builtins_shell;
 
 pub mod legacy;
 
@@ -717,7 +714,7 @@ fn build_doc(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         _ = run_reader(&mut reader)?;
     }
 
-    let mut md_book = MDBook::load(PathBuf::from(path)).map_err(|e| VMError::new("mdbook", "Unable to load the book at provided path."))?;
+    let mut md_book = MDBook::load(PathBuf::from(path)).map_err(|_e| VMError::new("mdbook", "Unable to load the book at provided path."))?;
     add_forms_and_supplementary_docs(vm, &mut md_book.book)?;
     //let renderer = HtmlHandlebars::new();
     //let l = LinkPreprocessor::new();

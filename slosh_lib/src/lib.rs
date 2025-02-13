@@ -401,10 +401,13 @@ pub fn new_slosh_vm_with_builtins() -> SloshVm {
 }
 
 pub fn new_slosh_vm_with_builtins_and_core(env: &mut SloshVm) {
+    env.pause_gc();
     set_builtins(env);
     set_builtins_shell(env);
-    //load_core(env);
-    //load_shell_color(env);
+    load_sloshrc();
+    load_core(env);
+    load_shell_color(env);
+    env.unpause_gc();
 }
 
 fn add_doc_builtins(env: &mut SloshVm) {
