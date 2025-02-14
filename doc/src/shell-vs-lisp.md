@@ -38,7 +38,7 @@ $(echo ~v)
            - ($sh "git rev-parse --abbrev-ref HEAD 2>/dev/null")
                 - this returns a string, does more work for you
                 - (sh "git rev-parse --abbrev-ref HEAD 2>/dev/null")
-                     - this returns a pid (we think)
+                  - Returns the exit status if foreground and the PID if background. Add the '&' to the string to background it.
 
 ```
 NOTE:
