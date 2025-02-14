@@ -32,7 +32,7 @@ export PATH="$PATH:./mdbook-slosh-eval/target/debug"
 #./list-slosh-forms.sh | tail -n +4 > slosh-forms.csv
 #./list-slosh-doc-exemptions.sh | tail -n +4 > src/slosh-doc-exemptions.csv
 #./list-slosh-doc-exemptions.sh | tail -n +4 > slosh-doc-exemptions.csvAk
-../target/debug/slosh_test -c "(build-doc \"${PWD}\")"
+mdbook build
 # from old pr, might actually be what I want?
 #
 # how come "the new way" doesn't need the lisp-test feature?
