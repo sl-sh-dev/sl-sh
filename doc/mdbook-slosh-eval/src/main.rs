@@ -16,6 +16,7 @@ use pulldown_cmark_to_cmark::cmark;
 use semver::{Version, VersionReq};
 use slosh_test_lib::docs;
 use std::cell::RefCell;
+use std::mem;
 use std::io;
 use std::process;
 use slosh_test_lib::docs::{add_slosh_docs_to_mdbook, link_supplementary_docs};
@@ -119,7 +120,8 @@ mod slosh_eval_lib {
         val
     }
 
-    fn eval_code_blocks(book: &mut Book, code_block_label: &str, vm: &mut SloshVm) {
+    fn eval_code_blocks(book: &mut Book, code_block_label: &str) {
+        let vm = &mut slosh_test_lib::new_slosh_vm_with_doc_builtins_and_core();
         book.for_each_mut(|bi: &mut BookItem| match bi {
             BookItem::Separator | BookItem::PartTitle(_) => {}
             BookItem::Chapter(chapter) => {
@@ -154,14 +156,11 @@ mod slosh_eval_lib {
                             // TODO PC is there some duplication?
                             //  running slosh_vm for the run-tests.slosh script
                             //  getting slosh_vm for EvalSlosh pre-processor
-                            let vm = &mut slosh_lib::new_slosh_vm_with_builtins_and_core_slim();
-                            //docs::add_builtins(vm);
                             let eval = exec_code(vm, buf.clone());
                             let mut first = true;
-                            buf += "\n";
                             for line in eval.lines() {
                                 if first {
-                                    buf += ";; => ";
+                                    buf += "\n;; => ";
                                     first = false;
                                 } else {
                                     buf += ";;    ";
@@ -173,8 +172,7 @@ mod slosh_eval_lib {
                             log::debug!("```{}\n{}", code_block_label, buf);
                             log::debug!("```");
                             events.push(Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(
-                                code_block_label.into(),
-                            ))));
+                                code_block_label.into(), ))));
                             events.push(Event::Text(buf.clone().into()));
                             events.push(Event::End(TagEnd::CodeBlock));
                             buf.clear();
@@ -244,12 +242,13 @@ mod slosh_eval_lib {
             // TODO PC is there some duplication?
             //  running slosh_vm for the run-tests.slosh script
             //  getting slosh_vm for EvalSlosh pre-processor
-            let vm = &mut slosh_lib::new_slosh_vm_with_builtins_and_core();
-            docs::add_builtins(vm);
-
             if let Some(slosh_eval_cfg) = ctx.config.get_preprocessor(self.name()) {
                 let key = "doc-forms";
                 if key_is_boolean_true(key, slosh_eval_cfg) {
+                    let mut env = slosh_lib::new_slosh_vm_with_builtins_and_core();
+                    let vm = &mut env;
+                    docs::add_builtins(vm);
+
                     log::debug!("Add key {}.", key);
                     _ = add_slosh_docs_to_mdbook(vm, &mut book);
                 } else {
@@ -258,6 +257,10 @@ mod slosh_eval_lib {
 
                 let key = "doc-supplementary";
                 if key_is_boolean_true(key, slosh_eval_cfg) {
+                    let mut env = slosh_lib::new_slosh_vm_with_builtins_and_core();
+                    let vm = &mut env;
+                    docs::add_builtins(vm);
+
                     log::debug!("Add key {}.", key);
                     _ = link_supplementary_docs(vm, &mut book);
                 } else {
@@ -267,7 +270,7 @@ mod slosh_eval_lib {
                 let key = "code-block-label";
                 if let Some(block) = key_is_string(key, slosh_eval_cfg) {
                     log::debug!("Use key {}, evaluate code blocks labeled: {}", key, block);
-                    eval_code_blocks(&mut book, &block, vm);
+                    eval_code_blocks(&mut book, &block);
                 } else {
                     panic!("Missing required key '{}' must be string of label used after ``` to eval..", key)
                 }

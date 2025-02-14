@@ -411,29 +411,28 @@ fn fake_version(vm: &mut SloshVm, registers: &[slvm::Value]) -> VMResult<slvm::V
     Ok(vm.alloc_string("fake-book".to_string()))
 }
 
-pub fn new_slosh_vm_with_builtins_and_core_slim() -> SloshVm {
-    let mut env = new_slosh_vm();
-    env.pause_gc();
-    add_shell_builtins(&mut env);
-    set_builtins(&mut env);
-    //bridge_adapters::add_builtin(&mut env, "version", fake_version, r#"Return the software version string."#);
-    //load_core(&mut env);
-    //load_color(&mut env);
+pub fn new_slosh_vm_with_builtins_and_core_slim(env: &mut SloshVm) {
+    //env.pause_gc();
+    //add_shell_builtins(env);
+    set_builtins(env);
+    //set_builtins_shell(env);
+    //bridge_adapters::add_builtin(env, "version", fake_version, r#"Return the software version string."#);
     //load_sloshrc(&mut env);
-    env.unpause_gc();
+    //env.unpause_gc();
 
-    {
-        let mut reader = Reader::from_string(
-            r#"(do
-                        (load "core.slosh"))"#.to_string(),
-            &mut env,
-            "",
-            1,
-            0,
-        );
-        _ = run_reader(&mut reader);
-    }
-    env
+    //{
+    //    let mut reader = Reader::from_string(
+    //        r#"(do
+    //                    (load "core.slosh")
+    //                    (load "sh-color.slosh")
+    //                    )"#.to_string(),
+    //        env,
+    //        "",
+    //        1,
+    //        0,
+    //    );
+    //    _ = run_reader(&mut reader);
+    //}
 }
 
 pub fn new_slosh_vm_with_builtins_and_core() -> SloshVm {
