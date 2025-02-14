@@ -45,6 +45,6 @@ The run-script form loads each form in the file, compiles and executes it at run
 - It can take any parameter since it is resolved at runtime.
 - Globals it defines will NOT be known until after it runs at runtime.
 
-```slosh
+```sloshignore
 (doc 'run-script)
 ```
