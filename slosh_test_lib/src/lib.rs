@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use compile_state::state::{CompileState, SloshVm, SloshVmTrait};
+use compile_state::state::{self, CompileState, SloshVm, SloshVmTrait};
 use sl_compiler::pass1::pass1;
 use sl_compiler::{compile, Reader};
 use slvm::{Chunk, VMError, VMResult, Value, RET};
@@ -24,6 +24,13 @@ pub fn run_reader(reader: &mut Reader) -> VMResult<Value> {
         last = reader_vm.execute(chunk)?;
     }
     Ok(last)
+}
+
+pub fn new_slosh_vm_with_doc_builtins_and_core() -> SloshVm {
+    let mut vm = state::new_slosh_vm();
+    docs::add_builtins(&mut vm);
+    slosh_lib::new_slosh_vm_with_builtins_and_core_slim(&mut vm);
+    vm
 }
 
 pub fn load_one_expression(
