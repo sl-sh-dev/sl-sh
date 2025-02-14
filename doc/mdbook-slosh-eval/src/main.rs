@@ -93,7 +93,6 @@ mod slosh_eval_lib {
     use pulldown_cmark::CodeBlockKind;
     use slosh_lib::Reader;
     use toml::Value;
-    use toml::value::Table;
 
     /// Preprocessor to evaluate slosh code
     pub struct EvalSlosh;
@@ -104,24 +103,7 @@ mod slosh_eval_lib {
         }
     }
 
-    fn key_is_string(key: &str, slosh_eval_cfg: &Table) -> Option<String> {
-        if let Some(Value::String(s)) = slosh_eval_cfg.get(key) {
-            Some(s.to_string())
-        } else {
-            None
-        }
-    }
-
-    fn key_is_boolean_true(key: &str, slosh_eval_cfg: &Table) -> bool {
-        let mut val = false;
-        if let Some(Value::Boolean(v)) = slosh_eval_cfg.get(key) {
-            val = *v;
-        }
-        val
-    }
-
     fn eval_code_blocks(book: &mut Book, code_block_label: &str) {
-        let vm = &mut slosh_test_lib::new_slosh_vm_with_doc_builtins_and_core();
         book.for_each_mut(|bi: &mut BookItem| match bi {
             BookItem::Separator | BookItem::PartTitle(_) => {}
             BookItem::Chapter(chapter) => {
@@ -135,6 +117,8 @@ mod slosh_eval_lib {
                             CodeBlockKind::Fenced(name) if !tracking => {
                                 if name.starts_with(code_block_label)
                                     && !name.contains("no-execute")
+                                    && !name.contains("ignore")
+                                    && !name.contains("skip")
                                 {
                                     slosh_code_block_num += 1;
                                     log::debug!(
@@ -156,11 +140,19 @@ mod slosh_eval_lib {
                             // TODO PC is there some duplication?
                             //  running slosh_vm for the run-tests.slosh script
                             //  getting slosh_vm for EvalSlosh pre-processor
-                            let eval = exec_code(vm, buf.clone());
+                            let eval = ENV.with(|renv| {
+                                // should i be getting it this way or no?
+                                let mut env = renv.borrow_mut();
+                                let vm = &mut env;
+                                slosh_test_lib::new_slosh_vm_with_doc_builtins_and_core(vm);
+                                exec_code(vm, buf.clone())
+                            });
+
                             let mut first = true;
+                            buf += "\n";
                             for line in eval.lines() {
                                 if first {
-                                    buf += "\n;; => ";
+                                    buf += ";; => ";
                                     first = false;
                                 } else {
                                     buf += ";;    ";
@@ -172,7 +164,8 @@ mod slosh_eval_lib {
                             log::debug!("```{}\n{}", code_block_label, buf);
                             log::debug!("```");
                             events.push(Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(
-                                code_block_label.into(), ))));
+                                code_block_label.into(),
+                            ))));
                             events.push(Event::Text(buf.clone().into()));
                             events.push(Event::End(TagEnd::CodeBlock));
                             buf.clear();
@@ -208,6 +201,7 @@ mod slosh_eval_lib {
         let code = format!(
             r#"(import test)
                 (def *prn* "")
+                (def *stdout* "")
                 (dyn
                     prn
                     (fn (&rest) (set! *prn* (str *prn* &rest)))
@@ -244,31 +238,35 @@ mod slosh_eval_lib {
             //  getting slosh_vm for EvalSlosh pre-processor
             if let Some(slosh_eval_cfg) = ctx.config.get_preprocessor(self.name()) {
                 let key = "doc-forms";
-                if key_is_boolean_true(key, slosh_eval_cfg) {
-                    let mut env = slosh_lib::new_slosh_vm_with_builtins_and_core();
-                    let vm = &mut env;
-                    docs::add_builtins(vm);
+                if let Some(Value::Boolean(b)) = slosh_eval_cfg.get(key) {
+                    if *b {
+                        let mut env = slosh_lib::new_slosh_vm_with_builtins_and_core();
+                        let vm = &mut env;
+                        docs::add_builtins(vm);
 
-                    log::debug!("Add key {}.", key);
-                    _ = add_slosh_docs_to_mdbook(vm, &mut book);
+                        log::debug!("Add key {}.", key);
+                        _ = add_slosh_docs_to_mdbook(vm, &mut book);
+                    }
                 } else {
                     panic!("Missing required key '{}' must be true or false.", key)
                 }
 
                 let key = "doc-supplementary";
-                if key_is_boolean_true(key, slosh_eval_cfg) {
-                    let mut env = slosh_lib::new_slosh_vm_with_builtins_and_core();
-                    let vm = &mut env;
-                    docs::add_builtins(vm);
+                if let Some(Value::Boolean(b)) = slosh_eval_cfg.get(key) {
+                    if *b {
+                        let mut env = slosh_lib::new_slosh_vm_with_builtins_and_core();
+                        let vm = &mut env;
+                        docs::add_builtins(vm);
 
-                    log::debug!("Add key {}.", key);
-                    _ = link_supplementary_docs(vm, &mut book);
+                        log::debug!("Add key {}.", key);
+                        _ = link_supplementary_docs(vm, &mut book);
+                    }
                 } else {
                     panic!("Missing required key '{}' must be true or false.", key)
                 }
 
                 let key = "code-block-label";
-                if let Some(block) = key_is_string(key, slosh_eval_cfg) {
+                if let Some(Value::String(block)) = slosh_eval_cfg.get(key) {
                     log::debug!("Use key {}, evaluate code blocks labeled: {}", key, block);
                     eval_code_blocks(&mut book, &block);
                 } else {

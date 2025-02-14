@@ -26,11 +26,9 @@ pub fn run_reader(reader: &mut Reader) -> VMResult<Value> {
     Ok(last)
 }
 
-pub fn new_slosh_vm_with_doc_builtins_and_core() -> SloshVm {
-    let mut vm = state::new_slosh_vm();
-    docs::add_builtins(&mut vm);
-    slosh_lib::new_slosh_vm_with_builtins_and_core_slim(&mut vm);
-    vm
+pub fn new_slosh_vm_with_doc_builtins_and_core(vm: &mut SloshVm) {
+    docs::add_builtins(vm);
+    slosh_lib::new_slosh_vm_with_builtins_and_core_slim(vm);
 }
 
 pub fn load_one_expression(

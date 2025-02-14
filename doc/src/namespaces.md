@@ -7,12 +7,12 @@ Namespaces are compiler bookkeeping for organizing global symbols.  When in a na
 ## Entering a namespace
 
 From code use the 'with-ns' form.
-```slosh
+```sloshignore
 (doc 'with-ns)
 ```
 
 From the top-level REPL you can use 'ns'.
-```slosh
+```sloshignore
 (doc 'ns)
 ```
 
@@ -21,7 +21,7 @@ This is an open-ended namespace change intended for the repl, prefer with-ns for
 ## Imports
 
 Other namespaces can be imported to allow its symbols to be accessed in a shorter form.  Use the 'import' form for this .
-```slosh
+```sloshignore
 (doc 'import)
 ```
 For instance using ```(import iter)``` will allow any symbols in the iter namespace to be used without prepending 'iter::'.  You can also use the ```(import iter :as i)```, the :as form allows the namespace to be given a different name.  In this case the iter namespace could be replaced with 'i', (i::for ...) instead of (iter::for ...) for example.  Imports are resolved in the order they are compiled in case of conflict (i.e. the first import that resolves a symbol wins).  Imports are attached to the current namespace, changing namespaces will clear imports (note that 'with-ns' saves and restores the previous namespace with imports).
@@ -36,7 +36,7 @@ The load form should generally be preferred.  It will compile the code at compil
 - The path parameter has to be known at compile time: a string const, defined global or form that does not need local inputs.
 - Any symbols defined in the loaded code will be known to the compiler at compile time and available for use.
 
-```slosh
+```sloshignore
 (doc 'load)
 ```
 

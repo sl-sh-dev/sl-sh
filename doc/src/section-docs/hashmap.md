@@ -4,7 +4,7 @@ reader macro with the added support of some generic collection functions, `get`,
 
 For retrieving items from a hashmap prefer the reader syntax (<object>.<keyword>) or use the `get`
 function.
-```slosh
+```sloshignore
 (def m {:one "one", :two "two", "three" 3})
 (and (= "one" m.:one)
     (= "two" m.:two)
@@ -12,7 +12,7 @@ function.
 ```
 For setting key/value pairs on an existing hashmap prefer the reader syntax
 with the `set!` function or pass it the output of `get`.
-```slosh
+```sloshignore
 (def m {:one "one", :two "two", "three" 3, :four 4})
 (set! m.:one "changed1")
 (set! m.:two "changed2")
@@ -29,7 +29,7 @@ with the `set!` function or pass it the output of `get`.
 
 
 Clearing all keys is done with the `clear!` function.
-```slosh
+```sloshignore
 (def m {:one "one", :two "two", "three" 3})
 (clear! m)
 (= (make-hash) m)

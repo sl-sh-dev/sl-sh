@@ -1690,7 +1690,7 @@ mod test {
             }
             _ => {
                 //macro
-                println!("macro")
+                //println!("macro")
             }
         }
         Ok(())
