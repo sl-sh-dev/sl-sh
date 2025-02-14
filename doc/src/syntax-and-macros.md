@@ -1,16 +1,16 @@
 # Slosh/Lisp syntax and macros
 
 The core unit of a Lisp is a form:
-```slosh
+```sloshignoreignore
 42
 ```
-```slosh
+```sloshignoreignore
 +
 ```
-```slosh
+```sloshignoreignore
 (list 1 2)
 ```
-```slosh
+```sloshignoreignore
 ;; The quote symbol means return the literal form after the character
 ;; This is identical to the form above.
 '(1 2)
@@ -26,12 +26,12 @@ and the subsequent children are arguments to the head.
 ## Comments
 
 Single-line comments start with a `;` character and continue till the end of the line
-```slosh
+```sloshignoreignore
 ; (prn "hello")
 (prn "world")
 ```
 Multi-line comments start with the `#|` characters to start and ends with the sample symbols reversed `|#`.
-```slosh
+```sloshignoreignore
 #|
 (prn "oh")
 (prn "hello")
@@ -40,7 +40,7 @@ Multi-line comments start with the `#|` characters to start and ends with the sa
 ```
 
 Single forms can be commented out with `#;` characters. This directive tells the reader to discard the form.
-```slosh
+```sloshignoreignore
 #;(prn "oh")
 #;(prn "hello")
 (prn "world")
@@ -49,7 +49,7 @@ Single forms can be commented out with `#;` characters. This directive tells the
 ## Documentation
 Any symbol that is used with `def` or `defn` can also bind documentation. Documentation
 is multiline and is delimited with `#%` characters to start and ends with the same symbols reversed `%#`.
-```slosh
+```sloshignoreignore
 #%
 Usage: (login SECRET)
 

@@ -19,6 +19,6 @@ slosh_test_lib = { path = "../../slosh_test_lib" }
 compile_state = { path = "../../compile_state" }
 bridge_adapters = { path = "../../bridge_adapters" }
 slvm = { path = "../../vm" }
-toml = "*"
+toml = "=0.5.11"
 
 [workspace]

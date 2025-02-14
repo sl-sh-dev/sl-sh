@@ -20,25 +20,25 @@ will be used not the new one in the let.
 
 ### Examples
 
-```slosh
+```sloshignore
 (let (a 1, b 2, c 3) `(~a ~b ~c))
 ```
 
 Produces (1 2 3)
 
-```slosh
+```sloshignore
 (let (a 1, b 2, c 3) (let (b 20, c (+ b 10)) `(~a ~b ~c)))
 ```
 
 Produces (1 20 30)
 
-```slosh
+```sloshignore
 (let (a 1, b 2, c 3) (let (x (+ b 1), b 20, c (+ b 10)) `(~a ~x ~b ~c)))
 ```
 
 Produces (1 3 20 30)
 
-```slosh
+```sloshignore
 (let (fnx (fn (x) (if (= x 0) #t (fny (- x 1))))
       fny (fn (y) (if (= y 0) #t (fnx (- y 1)))))
     (fnx 10))
@@ -46,7 +46,7 @@ Produces (1 3 20 30)
 
 Example of recursive references (a dumb one). It will produce #t (true) after ping ponging between fnx and fny.
 
-```slosh
+```sloshignore
 (let (fny (fn (y) y))
     (let (fnx (fn (x) (if (= x 0) #t (fny (- x 1))))
           fny (fn (y) (if (= y 0) #t (fnx (- y 1)))))
@@ -74,20 +74,20 @@ Note that destructures can be applied recursively and sequence destructure can c
 
 ### Examples
 
-```slosh
+```sloshignore
 (def x '(1 2 3))
 (let ([a b c] x) `(~a ~b ~c))
 ```
 
 Produces (1 2 3).
 
-```slosh
+```sloshignore
 (let ([a b % c d] '(1 2)) (list a b c d))
 ```
 
 Produces (1 2 nil nil).
 
-```slosh
+```sloshignore
 (let ({a :one, b 'two, c "three" [d e] :vec} {:one 1, 'two 2, "three" 3, :vec [4 5]}) (list a b c d e))
 ```
 
