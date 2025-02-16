@@ -71,9 +71,7 @@ impl SlFrom<LooseFloat> for Value {
 impl<'a> SlFromRef<'a, Value> for LooseInt {
     fn sl_from_ref(value: Value, vm: &'a SloshVm) -> VMResult<Self> {
         let res = match value {
-            Value::Byte(byte) => {
-                Ok(I56::into_inner(byte as i64))
-            },
+            Value::Byte(byte) => Ok(I56::into_inner(byte as i64)),
             Value::Int(i) => Ok(i),
             Value::Float(f) => {
                 let f = f64::from(f);

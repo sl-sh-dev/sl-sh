@@ -636,7 +636,7 @@ fn build_sl_sh_transition_chapter(vm: &mut SloshVm) -> VMResult<Chapter> {
 /// Convention is that the section that enumerates all of the forms by section
 /// ([`add_slosh_docs_to_mdbook`]) is added to [`MDBook`] and then the supplementary materials
 /// ([`link_supplementary_docs`]).
-pub fn add_forms_and_supplementary_docs(vm: &mut SloshVm, md_book: &mut Book)-> VMResult<()> {
+pub fn add_forms_and_supplementary_docs(vm: &mut SloshVm, md_book: &mut Book) -> VMResult<()> {
     add_slosh_docs_to_mdbook(vm, md_book)?;
     link_supplementary_docs(vm, md_book)?;
     Ok(())
@@ -706,13 +706,19 @@ fn build_doc(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         },
     }?;
 
-
     {
-        let mut reader = Reader::from_string(r#"(do (load "core.slosh") (load "sh-color.slosh"))"#.to_string(), vm, "", 1, 0);
+        let mut reader = Reader::from_string(
+            r#"(do (load "core.slosh") (load "sh-color.slosh"))"#.to_string(),
+            vm,
+            "",
+            1,
+            0,
+        );
         _ = run_reader(&mut reader)?;
     }
 
-    let mut md_book = MDBook::load(PathBuf::from(path)).map_err(|_e| VMError::new("mdbook", "Unable to load the book at provided path."))?;
+    let mut md_book = MDBook::load(PathBuf::from(path))
+        .map_err(|_e| VMError::new("mdbook", "Unable to load the book at provided path."))?;
     add_forms_and_supplementary_docs(vm, &mut md_book.book)?;
     //let renderer = HtmlHandlebars::new();
     //let l = LinkPreprocessor::new();
@@ -721,9 +727,9 @@ fn build_doc(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     //md_book.with_preprocessor(i);
     ////md_book.with_renderer(renderer);
     //md_book.preprocess_book(&renderer).unwrap();
-    md_book.build().map_err(|e| {
-        VMError::new("mdbook", format!("Failed to build book: {e}"))
-    })?;
+    md_book
+        .build()
+        .map_err(|e| VMError::new("mdbook", format!("Failed to build book: {e}")))?;
     Ok(Value::Nil)
 }
 
