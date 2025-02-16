@@ -1,8 +1,8 @@
-use std::sync::Arc;
-use compile_state::state::{self, CompileState, SloshVm, SloshVmTrait};
+use compile_state::state::{CompileState, SloshVm, SloshVmTrait};
 use sl_compiler::pass1::pass1;
 use sl_compiler::{compile, Reader};
 use slvm::{Chunk, VMError, VMResult, Value, RET};
+use std::sync::Arc;
 
 pub mod docs;
 
@@ -13,8 +13,7 @@ pub fn run_reader(reader: &mut Reader) -> VMResult<Value> {
     let mut last = Value::False;
     while let Some(exp) = reader.next() {
         let reader_vm = reader.vm();
-        let exp = exp
-            .map_err(|e| VMError::new("read", e.to_string()))?;
+        let exp = exp.map_err(|e| VMError::new("read", e.to_string()))?;
         reader_vm.heap_sticky(exp);
 
         let result = load_one_expression(reader_vm, exp, "", None);

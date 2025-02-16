@@ -194,10 +194,7 @@ fn load_sloshrc(env: &mut SloshVm) {
     if let Some(home_dir) = get_home_dir() {
         let slosh_path = home_dir.join(".config").join("slosh");
         if let Some(slosh_dir) = make_path_dir_if_possible(slosh_path.as_path()) {
-            set_initial_load_path(
-                env,
-                vec![slosh_dir.as_os_str().to_string_lossy().as_ref()],
-            );
+            set_initial_load_path(env, vec![slosh_dir.as_os_str().to_string_lossy().as_ref()]);
             let init = slosh_dir.join("init.slosh");
             if fs::metadata::<&Path>(init.as_ref()).is_err() {
                 match File::create::<&Path>(init.as_ref()) {
@@ -416,7 +413,12 @@ pub fn new_slosh_vm_with_builtins_and_core_slim(env: &mut SloshVm) {
     add_shell_builtins(env);
     set_builtins(env);
     //set_builtins_shell(env);
-    bridge_adapters::add_builtin(env, "version", fake_version, r#"Return the software version string."#);
+    bridge_adapters::add_builtin(
+        env,
+        "version",
+        fake_version,
+        r#"Return the software version string."#,
+    );
     //load_core(env);
     //load_sloshrc(env);
 
@@ -425,7 +427,8 @@ pub fn new_slosh_vm_with_builtins_and_core_slim(env: &mut SloshVm) {
             r#"(do
                         (load "core.slosh")
                         ;;(load "sh-color.slosh")
-                        )"#.to_string(),
+                        )"#
+            .to_string(),
             env,
             "",
             1,
@@ -443,7 +446,12 @@ pub fn new_slosh_vm_with_builtins_and_core() -> SloshVm {
     // TODO PC is the pauce necessary still?
     env.pause_gc();
     set_builtins_shell(&mut env);
-    add_builtin(&mut env, "version", fake_version, r#"Return the software version string."#);
+    add_builtin(
+        &mut env,
+        "version",
+        fake_version,
+        r#"Return the software version string."#,
+    );
     load_core(&mut env);
     load_color(&mut env);
     // TODO PC is this possible?
@@ -474,7 +482,11 @@ fn export_args(env: &mut SloshVm) {
         v.push(s);
     }
     // We should always have at least one arg, the shell executable, so this should be fine (won't panic).
-    let first = if v.is_empty() { Value::Nil } else { v.remove(0) };
+    let first = if v.is_empty() {
+        Value::Nil
+    } else {
+        v.remove(0)
+    };
     let si = env.set_named_global("*shell-exe*", first);
     let key = env.intern("doc-string");
     let s = env.alloc_string(
