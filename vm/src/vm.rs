@@ -28,6 +28,7 @@ struct VmState {
     current_ip: *const u8,
     this_fn: Option<Value>,
     on_error: Option<Value>,
+    defers: Vec<Value>,
 }
 
 pub struct GVm<ENV> {
@@ -419,7 +420,7 @@ impl<ENV> GVm<ENV> {
     }
 
     /// Return the current VM state (for re-entrant VM calls).
-    fn save_state(&self) -> VmState {
+    fn save_state(&mut self) -> VmState {
         VmState {
             stack_top: self.stack_top,
             stack_max: self.stack_max,
@@ -427,17 +428,19 @@ impl<ENV> GVm<ENV> {
             current_ip: self.current_ip_ptr,
             this_fn: self.this_fn,
             on_error: self.on_error,
+            defers: std::mem::take(&mut self.defers),
         }
     }
 
     /// Restore saved VM state (for cleaning up after re-entrant VM calls).
-    fn restore_state(&mut self, state: &VmState) {
+    fn restore_state(&mut self, state: &mut VmState) {
         self.stack_top = state.stack_top;
         self.stack_max = state.stack_max;
         self.ip_ptr = state.ip;
         self.current_ip_ptr = state.current_ip;
         self.this_fn = state.this_fn;
         self.on_error = state.on_error;
+        self.defers = std::mem::take(&mut state.defers);
     }
 
     /// Runs a lambda.  Will save and restore the VM state even on error, chunk is expected to be a
@@ -450,7 +453,7 @@ impl<ENV> GVm<ENV> {
         params: &[Value],
         caps: Option<&[Handle]>,
     ) -> VMResult<Value> {
-        let vm_state = self.save_state();
+        let mut vm_state = self.save_state();
         self.this_fn = None;
         self.on_error = None;
         self.stack_top = self.stack_max + 1;
@@ -480,7 +483,7 @@ impl<ENV> GVm<ENV> {
             }
         }
         let res = self.execute2(chunk).map(|_| self.stack(self.stack_top));
-        self.restore_state(&vm_state);
+        self.restore_state(&mut vm_state);
         res
     }
 
