@@ -218,13 +218,6 @@ mod slosh_eval_lib {
         }
     }
 
-    fn fake_version(vm: &mut SloshVm, registers: &[slvm::Value]) -> VMResult<slvm::Value> {
-        if !registers.is_empty() {
-            return Err(VMError::new_compile("version: requires no argument"));
-        }
-        Ok(vm.alloc_string("mdbook-slosh-eval".to_string()))
-    }
-
     impl Preprocessor for EvalSlosh {
         fn name(&self) -> &str {
             "slosh-eval"

@@ -125,8 +125,7 @@ lazy_static! {
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
 enum Namespace {
     Global,
-    // Can be adapted when namespaces are added.
-    // Other(String),
+    Other(String),
 }
 
 impl Display for Namespace {
@@ -136,6 +135,7 @@ impl Display for Namespace {
             "{}",
             match self {
                 Namespace::Global => "global".to_string(),
+                Namespace::Other(s) => s.to_string(),
             }
         )
     }
@@ -162,6 +162,7 @@ impl Namespace {
                     }
                 }
             }
+            Namespace::Other(_) => {}
         }
         docs.sort();
         Ok(())

@@ -176,9 +176,11 @@
 //! TODO PC *current behavior overflows* |  [`Value`]::Int([[u8; 7]]), // Store a 7 byte int (i56...).                           |
 //!                             |                             |
 //!                             |                             |
-//!                             |                             |
-//!                             |                             |
-//!                             |                             |
+//! [`Symbol`]                   | [`Value`]::Symbol(Interned)       |                             |
+//!                             |                             | S -> R
+//!                             |                             |     &emsp;- [`SlIntoRef`] [`Symbol`] for `&`[`Value`]
+//!                             |                             | R -> S
+//!                             |                             |     &emsp;- [`SlFrom`] `&`[`Value`] for [`Symbol`]
 //!                             |                             |
 //!                             |                             |
 //!                             |                             |
@@ -195,9 +197,6 @@
 //!                             |                             |
 //!                             |                             |
 //!                             | [`Value`]::Map(Handle)       |                             |
-//!                             |                             |
-//!                             |                             |
-//!                             | [`Value`]::Symbol(Interned)       |                             |
 //!                             |                             |
 //!                             |                             |
 //!                             | [`Value`]::Keyword(Interned)       |                             |
@@ -238,7 +237,7 @@
 
 use bridge_types::BridgedType;
 #[cfg(doc)]
-use bridge_types::{LooseString, SloshChar};
+use bridge_types::{LooseString, SloshChar, Symbol};
 use compile_state::state::SloshVm;
 
 use slvm::{VMResult, Value};

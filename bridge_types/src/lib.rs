@@ -76,6 +76,30 @@ impl From<[u8; 7]> for LooseFloat {
     }
 }
 
+/// [`Value`]: /slvm/value/enum.Value.html // TODO PC these links are broken!
+/// Type to hold anything in Slosh that can be represented as a slosh symbol: u32.
+///
+/// Public type used by rust native -> slosh bridge macro to represent
+/// arguments that reference a valid symbol.
+///
+/// Can represent SlRefInto [`Value`] types:
+/// - Symbol
+///
+/// Always returns a [`Value`]`::Symbol` type.
+pub struct Symbol(u32);
+
+impl From<u32> for Symbol {
+    fn from(value: u32) -> Self {
+        Self(value)
+    }
+}
+
+impl From<Symbol> for u32 {
+    fn from(value: Symbol) -> Self {
+        value.0
+    }
+}
+
 /// [`Value`]: /slvm/value/enum.Value.html
 /// Type to hold anything in Slosh that can be represented as slosh int value: `[u8; 7]`.
 ///

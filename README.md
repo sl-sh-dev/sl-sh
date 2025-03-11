@@ -14,12 +14,19 @@ scripting language, and it is a REPL.
 
 Some of the more prominent features:
 
-* The contains both a shell and a lisp reader so familiar bash-isms like
-    ```bash
+* The terminal contains both a shell and a lisp reader so familiar bash-isms like
+    ```
     cat file | tr -s " " | cut -d " " -f 2,4
     ```
-  "just work"
-* Support for an rc file, ```~/.config/slosh/init.slosh```, to set up environment and fully customize your prompt.
+  "just work", but starting a command with a lisp form (i.e. a balanced parenthesized s-expression) allows:
+    ```
+    (dotimes 10 (prn "hello world"))
+    ```
+  and the "boundary" can be easily crossed, the `$()` syntax calls out to the shell from within slosh code.
+    ```
+    (let ([pid, out] $(ls :>)) (iter::for l in (iter::iter out) (pr l)))
+    ```
+* Support for an rc/init file, ```~/.config/slosh/init.slosh```, to set up environment and fully customize your prompt.
 * Common Lisp style macro system with support for quote and backquote (with clojure style ~ and ~@ expansion).
 * Dynamically Typed
 * Note lacks many features from legacy sl-sh but catching up (std lib is currently tiny).

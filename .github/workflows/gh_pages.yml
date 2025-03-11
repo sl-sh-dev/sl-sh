@@ -16,6 +16,7 @@ jobs:
         fetch-depth: 0
     - name: Deploy GitHub Pages
       run: |
+        cargo install --force mdbook
         # change to documentation directory
         cd doc
         # mk-site.sh writes the static site to the book directory

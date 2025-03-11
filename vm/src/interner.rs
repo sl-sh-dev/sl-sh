@@ -1,10 +1,25 @@
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::mem;
+use bridge_types::Symbol;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Interned {
     pub id: u32,
+}
+
+impl From<Symbol> for Interned {
+    fn from(value: Symbol) -> Self {
+        Self {
+            id: u32::from(value)
+        }
+    }
+}
+
+impl From<Interned> for Symbol {
+    fn from(value: Interned) -> Self {
+        Symbol::from(value.id)
+    }
 }
 
 impl PartialEq for Interned {
