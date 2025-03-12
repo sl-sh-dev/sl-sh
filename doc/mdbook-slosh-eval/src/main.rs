@@ -135,11 +135,6 @@ mod slosh_eval_lib {
                             buf += c.as_ref();
                         }
                         Event::End(TagEnd::CodeBlock) if tracking => {
-                            // TODO PC put reader inside this slosh_lib fn?
-                            // TODO PC move this slosh_lib fn inside slosh_test_lib
-                            // TODO PC is there some duplication?
-                            //  running slosh_vm for the run-tests.slosh script
-                            //  getting slosh_vm for EvalSlosh pre-processor
                             let eval = ENV.with(|renv| {
                                 // should i be getting it this way or no?
                                 let mut env = renv.borrow_mut();
@@ -224,16 +219,11 @@ mod slosh_eval_lib {
         }
 
         fn run(&self, ctx: &PreprocessorContext, mut book: Book) -> Result<Book, Error> {
-            // TODO PC put reader inside this slosh_lib fn?
-            // TODO PC move this slosh_lib fn inside slosh_test_lib
-            // TODO PC is there some duplication?
-            //  running slosh_vm for the run-tests.slosh script
-            //  getting slosh_vm for EvalSlosh pre-processor
             if let Some(slosh_eval_cfg) = ctx.config.get_preprocessor(self.name()) {
                 let key = "doc-forms";
                 if let Some(Value::Boolean(b)) = slosh_eval_cfg.get(key) {
                     if *b {
-                        let mut env = slosh_lib::new_slosh_vm_with_builtins_and_core();
+                        let mut env = slosh_test_lib::new_slosh_vm_with_builtins_and_core();
                         let vm = &mut env;
                         docs::add_builtins(vm);
 
@@ -247,7 +237,7 @@ mod slosh_eval_lib {
                 let key = "doc-supplementary";
                 if let Some(Value::Boolean(b)) = slosh_eval_cfg.get(key) {
                     if *b {
-                        let mut env = slosh_lib::new_slosh_vm_with_builtins_and_core();
+                        let mut env = slosh_test_lib::new_slosh_vm_with_builtins_and_core();
                         let vm = &mut env;
                         docs::add_builtins(vm);
 

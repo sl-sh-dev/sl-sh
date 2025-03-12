@@ -160,14 +160,14 @@ fn get_home_dir() -> Option<PathBuf> {
     }
 }
 
-fn load_core(env: &mut SloshVm) {
+pub fn load_core(env: &mut SloshVm) {
     match load_internal(env, "core.slosh") {
         Ok(_) => {}
         Err(err) => eprintln!("ERROR: {err}"),
     }
 }
 
-fn load_color(env: &mut SloshVm) {
+pub fn load_color(env: &mut SloshVm) {
     match load_internal(env, "sh-color.slosh") {
         Ok(_) => {}
         Err(err) => eprintln!("ERROR: {err}"),
@@ -398,65 +398,6 @@ pub fn set_builtins(env: &mut SloshVm) {
 pub fn new_slosh_vm_with_builtins() -> SloshVm {
     let mut env = new_slosh_vm();
     set_builtins(&mut env);
-    env
-}
-
-fn fake_version(vm: &mut SloshVm, registers: &[slvm::Value]) -> VMResult<slvm::Value> {
-    if !registers.is_empty() {
-        return Err(VMError::new_compile("version: requires no argument"));
-    }
-    Ok(vm.alloc_string("fake-book".to_string()))
-}
-
-pub fn new_slosh_vm_with_builtins_and_core_slim(env: &mut SloshVm) {
-    env.pause_gc();
-    add_shell_builtins(env);
-    set_builtins(env);
-    //set_builtins_shell(env);
-    bridge_adapters::add_builtin(
-        env,
-        "version",
-        fake_version,
-        r#"Return the software version string."#,
-    );
-    //load_core(env);
-    //load_sloshrc(env);
-
-    {
-        let mut reader = Reader::from_string(
-            r#"(do
-                        (load "core.slosh")
-                        ;;(load "sh-color.slosh")
-                        )"#
-            .to_string(),
-            env,
-            "",
-            1,
-            0,
-        );
-        _ = run_reader(&mut reader);
-    }
-
-    env.unpause_gc();
-}
-
-pub fn new_slosh_vm_with_builtins_and_core() -> SloshVm {
-    let mut env = new_slosh_vm();
-
-    // TODO PC is the pauce necessary still?
-    env.pause_gc();
-    set_builtins_shell(&mut env);
-    add_builtin(
-        &mut env,
-        "version",
-        fake_version,
-        r#"Return the software version string."#,
-    );
-    load_core(&mut env);
-    load_color(&mut env);
-    // TODO PC is this possible?
-    //load_sloshrc(&mut env);
-    env.unpause_gc();
     env
 }
 
