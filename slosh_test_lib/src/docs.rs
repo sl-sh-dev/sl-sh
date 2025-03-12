@@ -125,7 +125,7 @@ lazy_static! {
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
 enum Namespace {
     Global,
-    Other(String),
+    Other(Interned),
 }
 
 impl Display for Namespace {
@@ -135,7 +135,7 @@ impl Display for Namespace {
             "{}",
             match self {
                 Namespace::Global => "global".to_string(),
-                Namespace::Other(s) => s.to_string(),
+                Namespace::Other(s) => s.id.to_string(),
             }
         )
     }
@@ -162,9 +162,30 @@ impl Namespace {
                     }
                 }
             }
-            Namespace::Other(_) => {}
+            Namespace::Other(i) => {
+                let value = builtins::retrieve_in_namespace(vm, &i);
+                for v in value {
+                    if let Value::Symbol(sym) = v {
+                        let slosh_doc = SloshDoc::new(sym, vm, self.clone());
+                        match slosh_doc {
+                            Ok(slosh_doc) => {
+                                docs.push(slosh_doc);
+                            }
+                            Err(e) => match e {
+                                DocError::ExemptFromProperDocString { symbol } => {
+                                    eprintln!("Exempt from proper doc string: {symbol}");
+                                }
+                                _ => {
+                                    return Err(e);
+                                }
+                            },
+                        }
+                    }
+                }
+            }
         }
         docs.sort();
+        docs.dedup();
         Ok(())
     }
 }
@@ -295,7 +316,7 @@ impl AsMd for SloshDoc {
     }
 }
 
-#[derive(Eq, Debug, Clone)]
+#[derive(Eq, Debug, Clone, Hash)]
 struct SloshDoc {
     symbol: String,
     symbol_type: String,
@@ -482,6 +503,7 @@ fn doc_map(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
             // Pause GC so that we don't wind up collecting any strings used to build the doc map
             // before they get rooted via the map.
             vm.pause_gc();
+
             let res = match SloshDoc::new(*g, vm, Namespace::Global) {
                 Ok(slosh_doc) => Value::sl_from(slosh_doc, vm),
                 Err(DocError::ExemptFromProperDocString { symbol: _ }) => {
@@ -505,7 +527,13 @@ fn get_docs_by_section(vm: &mut SloshVm) -> HashMap<String, Vec<SloshDoc>> {
     let mut docs_by_section: HashMap<String, Vec<SloshDoc>> = HashMap::new();
     let mut docs: Vec<SloshDoc> = vec![];
     Namespace::Global.add_docs(&mut docs, vm).unwrap();
+    let namespaces = builtins::get_namespaces_interned(vm);
+    for i in namespaces {
+        let namespace = Namespace::Other(i);
+        namespace.add_docs(&mut docs, vm).unwrap();
+    }
     docs.sort();
+    docs.dedup();
     for d in docs {
         let d = d.clone();
         let section = d.doc_string.section.clone();
@@ -885,6 +913,7 @@ mod test {
                 _ = run_reader(&mut reader).unwrap();
 
                 let mut docs: Vec<SloshDoc> = vec![];
+                //TODO PC way to run non global namespace examples?
                 Namespace::Global.add_docs(&mut docs, &mut vm).unwrap();
                 docs.sort();
                 for d in docs {

@@ -1257,6 +1257,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bridge_adapters",
+ "builtins",
  "clap",
  "compile_state",
  "env_logger",
@@ -1970,6 +1971,7 @@ name = "slosh_test_lib"
 version = "0.11.0"
 dependencies = [
  "bridge_adapters",
+ "builtins",
  "chrono",
  "compile_state",
  "lazy_static",

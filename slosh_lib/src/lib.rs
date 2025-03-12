@@ -190,7 +190,7 @@ fn load_sloshrc_inner() {
     });
 }
 
-fn load_sloshrc(env: &mut SloshVm) {
+pub fn load_sloshrc(env: &mut SloshVm) {
     if let Some(home_dir) = get_home_dir() {
         let slosh_path = home_dir.join(".config").join("slosh");
         if let Some(slosh_dir) = make_path_dir_if_possible(slosh_path.as_path()) {

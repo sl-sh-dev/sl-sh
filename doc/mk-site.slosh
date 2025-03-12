@@ -1,4 +1,4 @@
-#!/usr/bin/env slosh
+#!/usr/bin/env slosh_test
 
 ;; what is a possible set -e equivalent?
 
@@ -45,6 +45,7 @@ $(cd ${PWD}/mdbook-slosh-eval)
 (sh "cd -")
 
 (sh "export PATH=$PATH:./mdbook-slosh-eval/target/debug")
+(build-doc ${PWD})
 (sh "mdbook build")
 
 

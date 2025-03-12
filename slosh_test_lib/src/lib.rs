@@ -28,7 +28,7 @@ pub fn run_reader(reader: &mut Reader) -> VMResult<Value> {
     Ok(last)
 }
 
-pub fn new_slosh_vm_with_doc_builtins_and_core() -> SloshVm {
+pub fn new_slosh_vm_with_builtins_and_core() -> SloshVm {
     let mut env = new_slosh_vm();
     docs::add_builtins(&mut env);
 
@@ -44,7 +44,7 @@ pub fn new_slosh_vm_with_doc_builtins_and_core() -> SloshVm {
     slosh_lib::load_core(&mut env);
     slosh_lib::load_color(&mut env);
     // TODO PC is this possible?
-    //load_sloshrc(&mut env);
+    slosh_lib::load_sloshrc(&mut env);
     env.unpause_gc();
     env
 }

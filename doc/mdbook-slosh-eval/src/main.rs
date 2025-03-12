@@ -1,7 +1,6 @@
 extern crate pulldown_cmark;
 extern crate pulldown_cmark_to_cmark;
 
-use slvm::{VMResult, VMError};
 use crate::slosh_eval_lib::EvalSlosh;
 use clap::{Arg, ArgMatches, Command};
 use compile_state::state::new_slosh_vm;
@@ -16,7 +15,6 @@ use pulldown_cmark_to_cmark::cmark;
 use semver::{Version, VersionReq};
 use slosh_test_lib::docs;
 use std::cell::RefCell;
-use std::mem;
 use std::io;
 use std::process;
 use slosh_test_lib::docs::{add_slosh_docs_to_mdbook, link_supplementary_docs};
@@ -135,13 +133,8 @@ mod slosh_eval_lib {
                             buf += c.as_ref();
                         }
                         Event::End(TagEnd::CodeBlock) if tracking => {
-                            let eval = ENV.with(|renv| {
-                                // should i be getting it this way or no?
-                                let mut env = renv.borrow_mut();
-                                let vm = &mut env;
-                                slosh_test_lib::new_slosh_vm_with_doc_builtins_and_core(vm);
-                                exec_code(vm, buf.clone())
-                            });
+                            let mut vm = slosh_test_lib::new_slosh_vm_with_builtins_and_core();
+                            let eval = exec_code(&mut vm, buf.clone());
 
                             let mut first = true;
                             buf += "\n";
