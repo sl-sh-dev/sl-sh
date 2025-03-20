@@ -1,15 +1,15 @@
-#!/usr/bin/env slosh_test
+#!/usr/bin/env slosh
 
 ;; what is a possible set -e equivalent?
 
-(def *skip-supplemental* #f)
+(def *do-supplemental* #t)
 
 (prn "args: " *args*)
 
 (def args-local *args*)
 
-(when (and (>= (len *args*) 2) (= args-local.0 "skip-supplemental"))
-    (set! *skip-supplemental* #t))
+(when (and (>= (len *args*) 2) (= args-local.1 "skip-supplemental"))
+    (set! *do-supplemental* #f))
 
 ;; (def *skip-remove* #f)
 ;; (when (and (>= (len *args*) 2) (= args-local.0 "remove-static-files"))
@@ -18,7 +18,9 @@
 
 (sh "export RUST_LOG=DEBUG")
 
-(when *skip-supplemental*
+(prn "do supplemental: " *do-supplemental*)
+
+(when *do-supplemental*
     (do
         (prn "clone in the legacy gh pages docs")
         (sh "git clone -b gh-pages-legacy-html https://github.com/sl-sh-dev/sl-sh src/legacy/")
@@ -45,7 +47,6 @@ $(cd ${PWD}/mdbook-slosh-eval)
 (sh "cd -")
 
 (sh "export PATH=$PATH:./mdbook-slosh-eval/target/debug")
-(build-doc ${PWD})
 (sh "mdbook build")
 
 

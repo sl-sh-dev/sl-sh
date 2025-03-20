@@ -17,7 +17,6 @@ use slosh_test_lib::docs;
 use std::cell::RefCell;
 use std::io;
 use std::process;
-use slosh_test_lib::docs::{add_slosh_docs_to_mdbook, link_supplementary_docs};
 
 pub fn make_app() -> Command {
     Command::new("mdbook-slosh-eval")
@@ -213,15 +212,24 @@ mod slosh_eval_lib {
 
         fn run(&self, ctx: &PreprocessorContext, mut book: Book) -> Result<Book, Error> {
             if let Some(slosh_eval_cfg) = ctx.config.get_preprocessor(self.name()) {
+                let key = "code-block-label";
+                if let Some(Value::String(block)) = slosh_eval_cfg.get(key) {
+                    log::debug!("Use key {}, evaluate code blocks labeled: {}", key, block);
+                    eval_code_blocks(&mut book, &block);
+                } else {
+                    panic!("Missing required key '{}' must be string of label used after ``` to eval..", key)
+                }
+
                 let key = "doc-forms";
                 if let Some(Value::Boolean(b)) = slosh_eval_cfg.get(key) {
                     if *b {
-                        let mut env = slosh_test_lib::new_slosh_vm_with_builtins_and_core();
-                        let vm = &mut env;
-                        docs::add_builtins(vm);
+                        log::info!("Evaluate docs.");
+                        let mut vm = slosh_test_lib::new_slosh_vm_with_builtins_and_core();
+                        docs::add_builtins(&mut vm);
 
                         log::debug!("Add key {}.", key);
-                        _ = add_slosh_docs_to_mdbook(vm, &mut book);
+                        _ = docs::add_slosh_docs_to_mdbook(&mut vm, &mut book);
+                        log::info!("Docs evaluated.");
                     }
                 } else {
                     panic!("Missing required key '{}' must be true or false.", key)
@@ -235,18 +243,10 @@ mod slosh_eval_lib {
                         docs::add_builtins(vm);
 
                         log::debug!("Add key {}.", key);
-                        _ = link_supplementary_docs(vm, &mut book);
+                        _ = docs::link_supplementary_docs(vm, &mut book);
                     }
                 } else {
                     panic!("Missing required key '{}' must be true or false.", key)
-                }
-
-                let key = "code-block-label";
-                if let Some(Value::String(block)) = slosh_eval_cfg.get(key) {
-                    log::debug!("Use key {}, evaluate code blocks labeled: {}", key, block);
-                    eval_code_blocks(&mut book, &block);
-                } else {
-                    panic!("Missing required key '{}' must be string of label used after ``` to eval..", key)
                 }
             }
 

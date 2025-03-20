@@ -44,43 +44,32 @@ pub fn new_slosh_vm_with_builtins_and_core() -> SloshVm {
     slosh_lib::load_core(&mut env);
     slosh_lib::load_color(&mut env);
     // TODO PC is this possible?
-    slosh_lib::load_sloshrc(&mut env);
+    //slosh_lib::load_sloshrc(&mut env);
+
+    let code =
+        r#"(do (load "core.slosh") (load "sh-color.slosh") (load "~/.config/slosh/init.slosh"))"#.to_string();
+        //r#"(do (load "core.slosh") (load "sh-color.slosh"))"#.to_string();
+    let code = format!(
+        r#"(import test)
+                (def *prn* "")
+                (def *stdout* "")
+                (dyn
+                    prn
+                    (fn (&rest) (set! *prn* (str *prn* &rest)))
+                    (do  {}))"#,
+        code
+    );
+    let mut reader = Reader::from_string(
+        code,
+        &mut env,
+        "",
+        1,
+        0,
+    );
+    _ = run_reader(&mut reader).expect("should be able to run this code.");
     env.unpause_gc();
     env
 }
-
-fn new_slosh_vm_with_builtins_and_core_slim(env: &mut SloshVm) {
-    env.pause_gc();
-    //slosh_lib::add_shell_builtins(env);
-    set_builtins(env);
-    //set_builtins_shell(env);
-    bridge_adapters::add_builtin(
-        env,
-        "version",
-        fake_version,
-        r#"Return the software version string."#,
-    );
-    //load_core(env);
-    //load_sloshrc(env);
-
-    {
-        let mut reader = Reader::from_string(
-            r#"(do
-                        (load "core.slosh")
-                        ;;(load "sh-color.slosh")
-                        )"#
-                .to_string(),
-            env,
-            "",
-            1,
-            0,
-        );
-        _ = run_reader(&mut reader);
-    }
-
-    env.unpause_gc();
-}
-
 
 fn fake_version(vm: &mut SloshVm, registers: &[slvm::Value]) -> VMResult<slvm::Value> {
     if !registers.is_empty() {

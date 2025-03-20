@@ -76,6 +76,8 @@ lazy_static! {
         exemption_set.insert("*int-bits*");
         exemption_set.insert("get-prop");
         exemption_set.insert("expand-macro");
+        exemption_set.insert("*stdout*");
+        exemption_set.insert("*prn*");
 
         // slosh specific colors
         exemption_set.insert("get-rgb-seq");
