@@ -542,7 +542,11 @@ pub(crate) fn full_legacy_sl_sh_forms_metadata() -> &'static [(&'static str, boo
         ("non-empty-seq?", true, ""),
         ("none?", true, ""),
         ("not", true, ""),
-        ("ns-auto-export", true, "All symbols defined in a namespace are exported in slosh."),
+        (
+            "ns-auto-export",
+            true,
+            "All symbols defined in a namespace are exported in slosh.",
+        ),
         ("ns-create", true, "with-ns"),
         ("ns-enter", true, "ns"),
         ("ns-exists?", true, ""),

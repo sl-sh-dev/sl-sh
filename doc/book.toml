@@ -8,5 +8,6 @@ title = "Slosh Documentation"
 [preprocessor.slosh-eval]
 after = ["links"]
 doc-forms = true
+user-doc-forms = true
 doc-supplementary = true
 code-block-label = "slosh"

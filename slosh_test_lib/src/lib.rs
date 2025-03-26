@@ -1,10 +1,10 @@
+use bridge_adapters::add_builtin;
 use compile_state::state::{new_slosh_vm, CompileState, SloshVm, SloshVmTrait};
 use sl_compiler::pass1::pass1;
 use sl_compiler::{compile, Reader};
+use slosh_lib::set_builtins_shell;
 use slvm::{Chunk, VMError, VMResult, Value, RET};
 use std::sync::Arc;
-use bridge_adapters::add_builtin;
-use slosh_lib::{set_builtins, set_builtins_shell};
 
 pub mod docs;
 
@@ -43,12 +43,18 @@ pub fn new_slosh_vm_with_builtins_and_core() -> SloshVm {
     );
     slosh_lib::load_core(&mut env);
     slosh_lib::load_color(&mut env);
-    // TODO PC is this possible?
-    //slosh_lib::load_sloshrc(&mut env);
 
+    env.unpause_gc();
+    env
+}
+
+pub fn add_user_builtins(env: &mut SloshVm) {
+    // TODO PC is the pause necessary still?
+    env.pause_gc();
     let code =
-        r#"(do (load "core.slosh") (load "sh-color.slosh") (load "~/.config/slosh/init.slosh"))"#.to_string();
-        //r#"(do (load "core.slosh") (load "sh-color.slosh"))"#.to_string();
+        r#"(do (load "core.slosh") (load "sh-color.slosh") (load "~/.config/slosh/init.slosh"))"#
+            .to_string();
+    //r#"(do (load "core.slosh") (load "sh-color.slosh"))"#.to_string();
     let code = format!(
         r#"(import test)
                 (def *prn* "")
@@ -59,16 +65,9 @@ pub fn new_slosh_vm_with_builtins_and_core() -> SloshVm {
                     (do  {}))"#,
         code
     );
-    let mut reader = Reader::from_string(
-        code,
-        &mut env,
-        "",
-        1,
-        0,
-    );
+    let mut reader = Reader::from_string(code, env, "", 1, 0);
     _ = run_reader(&mut reader).expect("should be able to run this code.");
     env.unpause_gc();
-    env
 }
 
 fn fake_version(vm: &mut SloshVm, registers: &[slvm::Value]) -> VMResult<slvm::Value> {

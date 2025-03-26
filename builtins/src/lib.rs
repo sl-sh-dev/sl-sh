@@ -1,9 +1,9 @@
 extern crate core;
 
-use std::collections::HashSet;
 use bridge_macros::sl_sh_fn;
 use compile_state::state::{SloshVm, SloshVmTrait};
 use slvm::{Interned, VMError, VMResult, Value};
+use std::collections::HashSet;
 
 pub mod bridge_macro_tests;
 pub mod collections;
@@ -87,7 +87,7 @@ pub fn retrieve_in_namespace(vm: &mut SloshVm, interned: &Interned) -> Vec<Value
     result
 }
 
-/// "sage: (get-in-namespace 'SYMBOL)
+/// Usage: (get-in-namespace 'SYMBOL)
 ///
 /// Return a vector containing all the globals currently defined namespace SYMBOL.
 ///
@@ -254,4 +254,5 @@ Section: core
 ",
     );
     intern_get_in_namespace(env);
+    intern_get_namespaces(env);
 }

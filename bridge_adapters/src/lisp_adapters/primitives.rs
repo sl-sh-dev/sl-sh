@@ -2,8 +2,8 @@
 //! Value::* and Value::True map to bool true rust values
 //! and Value::False, Value::Nil, and Value::Undefined map to bool false.
 
-use bridge_types::{ErrorStrings, Symbol};
 use crate::lisp_adapters::{SlFrom, SlFromRef};
+use bridge_types::{ErrorStrings, Symbol};
 use compile_state::state::SloshVm;
 use slvm::{VMError, VMResult, Value, ValueType, ValueTypes};
 
@@ -44,14 +44,10 @@ impl SlFrom<Symbol> for Value {
 impl SlFromRef<'_, Value> for Symbol {
     fn sl_from_ref(value: Value, vm: &'_ SloshVm) -> VMResult<Self> {
         match value {
-            Value::Symbol(i) => {
-                Ok(Symbol::from(i.id))
-            }
+            Value::Symbol(i) => Ok(Symbol::from(i.id)),
             _ => Err(VMError::new_conversion(
                 ErrorStrings::fix_me_mismatched_type(
-                    String::from(ValueTypes::from([
-                        ValueType::Symbol,
-                    ])),
+                    String::from(ValueTypes::from([ValueType::Symbol])),
                     value.display_type(vm),
                 ),
             )),

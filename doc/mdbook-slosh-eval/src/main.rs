@@ -221,6 +221,7 @@ mod slosh_eval_lib {
                 }
 
                 let key = "doc-forms";
+                let mut existing_doc_forms = None;
                 if let Some(Value::Boolean(b)) = slosh_eval_cfg.get(key) {
                     if *b {
                         log::info!("Evaluate docs.");
@@ -228,11 +229,34 @@ mod slosh_eval_lib {
                         docs::add_builtins(&mut vm);
 
                         log::debug!("Add key {}.", key);
-                        _ = docs::add_slosh_docs_to_mdbook(&mut vm, &mut book);
+                        let forms = docs::add_slosh_docs_to_mdbook(&mut vm, &mut book, true)?;
+                        existing_doc_forms = Some(forms);
                         log::info!("Docs evaluated.");
                     }
                 } else {
                     panic!("Missing required key '{}' must be true or false.", key)
+                }
+
+                let key = "user-doc-forms";
+                let mut existing_doc_forms = None;
+                if let Some(Value::Boolean(b)) = slosh_eval_cfg.get(key) {
+                    if *b {
+                        let mut vm = slosh_test_lib::new_slosh_vm_with_builtins_and_core();
+                        docs::add_builtins(&mut vm);
+
+                        // first get provided sections
+                        let provided_sections = if let Some(existing_doc_forms) = existing_doc_forms {
+                            existing_doc_forms
+                        } else {
+                            docs::add_slosh_docs_to_mdbook(&mut vm, &mut book, false)?
+                        };
+
+                        // then load init.slosh
+                        slosh_test_lib::add_user_builtins(&mut vm);
+                        docs::add_user_docs_to_mdbook_less_provided_sections(&mut vm, &mut book, provided_sections)?;
+                    } else {
+                        panic!("Missing required key '{}' must be true or false.", key)
+                    }
                 }
 
                 let key = "doc-supplementary";

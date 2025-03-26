@@ -1,7 +1,7 @@
+use bridge_types::Symbol;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::mem;
-use bridge_types::Symbol;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Interned {
@@ -11,7 +11,7 @@ pub struct Interned {
 impl From<Symbol> for Interned {
     fn from(value: Symbol) -> Self {
         Self {
-            id: u32::from(value)
+            id: u32::from(value),
         }
     }
 }
