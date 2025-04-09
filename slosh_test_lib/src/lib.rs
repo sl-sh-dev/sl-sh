@@ -1,8 +1,5 @@
-use bridge_adapters::add_builtin;
-use compile_state::state::{new_slosh_vm, CompileState, SloshVm, SloshVmTrait};
-use sl_compiler::pass1::pass1;
-use sl_compiler::{compile, Reader};
-use slosh_lib::set_builtins_shell;
+use compile_state::state::{self, CompileState, SloshVm, SloshVmTrait};
+use sl_compiler::{compile, pass1, Reader};
 use slvm::{Chunk, VMError, VMResult, Value, RET};
 use std::sync::Arc;
 
@@ -29,13 +26,13 @@ pub fn run_reader(reader: &mut Reader) -> VMResult<Value> {
 }
 
 pub fn new_slosh_vm_with_builtins_and_core() -> SloshVm {
-    let mut env = new_slosh_vm();
+    let mut env = state::new_slosh_vm();
     docs::add_builtins(&mut env);
 
     // TODO PC is the pause necessary still?
     env.pause_gc();
-    set_builtins_shell(&mut env);
-    add_builtin(
+    slosh_lib::set_builtins_shell(&mut env);
+    bridge_adapters::add_builtin(
         &mut env,
         "version",
         fake_version,
@@ -49,12 +46,9 @@ pub fn new_slosh_vm_with_builtins_and_core() -> SloshVm {
 }
 
 pub fn add_user_builtins(env: &mut SloshVm) {
-    // TODO PC is the pause necessary still?
     env.pause_gc();
-    let code =
-        r#"(do (load "core.slosh") (load "sh-color.slosh") (load "~/.config/slosh/init.slosh"))"#
-            .to_string();
-    //r#"(do (load "core.slosh") (load "sh-color.slosh"))"#.to_string();
+    //r#"(do (load "core.slosh") (load-rc))"#
+    let code = r#"(do (load "core.slosh") (load "sh-color.slosh") (load-rc))"#.to_string();
     let code = format!(
         r#"(import test)
                 (def *prn* "")
@@ -87,7 +81,7 @@ pub fn load_one_expression(
     let mut state = CompileState::new_state(name, line_num, None);
     state.chunk.dbg_args = Some(Vec::new());
     state.doc_string = doc_string;
-    if let Err(e) = pass1(vm, &mut state, exp) {
+    if let Err(e) = pass1::pass1(vm, &mut state, exp) {
         println!(
             "Compile error (pass one), {}, line {}: {}",
             name,

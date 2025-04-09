@@ -608,7 +608,7 @@ fn build_all_slosh_forms_listing_chapter(
         all_content += &(header + &content);
     }
 
-    let p = make_file("all", &all_content)
+    let p = make_file(format!("all-{}", name), &all_content)
         .map_err(|e| VMError::new_vm(format!("Failed to write to file: {e}.")))?;
 
     Ok(Chapter::new("All", all_content, p, vec![]))
@@ -732,7 +732,7 @@ pub fn add_user_docs_to_mdbook_less_provided_sections(
 ) -> VMResult<()> {
     let docs_by_section_unsorted = get_docs_by_section(vm);
     let mut docs_by_section = BTreeMap::new();
-    for (s, mut all_docs) in docs_by_section_unsorted {
+    for (s, all_docs) in docs_by_section_unsorted {
         let mut set = HashSet::new();
         // to set
         for d in all_docs {

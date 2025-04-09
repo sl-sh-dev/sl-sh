@@ -1,5 +1,6 @@
 extern crate sl_liner;
 
+use bridge_macros::sl_sh_fn;
 use std::cell::RefCell;
 use std::ffi::OsString;
 use std::fmt::Debug;
@@ -18,6 +19,7 @@ use compile_state::state::*;
 use sl_compiler::reader::*;
 
 use bridge_adapters::add_builtin;
+use bridge_types::LooseString;
 use builtins::collections::setup_collection_builtins;
 use builtins::conversions::add_conv_builtins;
 use builtins::fs_meta::add_fs_meta_builtins;
@@ -186,16 +188,30 @@ fn load_core_slosh() {
 fn load_sloshrc_inner() {
     ENV.with(|renv| {
         let mut env = renv.borrow_mut();
-        load_sloshrc(env.deref_mut())
+        load_sloshrc(env.deref_mut(), None)
     });
 }
 
-pub fn load_sloshrc(env: &mut SloshVm) {
+/// Usage: (load-rc) | (load-rc "init.slosh)
+///
+/// Read and eval user's rc file, by default "init.slosh" or a user provided file path
+/// found in '$HOME/.config/slosh/'.
+///
+/// Section: core
+#[sl_sh_fn(fn_name = "load-rc", takes_env = true)]
+pub fn load_sloshrc(environment: &mut SloshVm, path: Option<LooseString>) {
     if let Some(home_dir) = get_home_dir() {
         let slosh_path = home_dir.join(".config").join("slosh");
         if let Some(slosh_dir) = make_path_dir_if_possible(slosh_path.as_path()) {
-            set_initial_load_path(env, vec![slosh_dir.as_os_str().to_string_lossy().as_ref()]);
-            let init = slosh_dir.join("init.slosh");
+            let path = path
+                .clone()
+                .map(|x| x.to_string())
+                .unwrap_or_else(|| "init.slosh".to_string());
+            set_initial_load_path(
+                environment,
+                vec![slosh_dir.as_os_str().to_string_lossy().as_ref()],
+            );
+            let init = slosh_dir.join(path);
             if fs::metadata::<&Path>(init.as_ref()).is_err() {
                 match File::create::<&Path>(init.as_ref()) {
                     Ok(mut f) => match f.write_all(SLSHRC.as_bytes()) {
@@ -210,9 +226,9 @@ pub fn load_sloshrc(env: &mut SloshVm) {
                 }
             }
             let init = init.as_os_str().to_string_lossy();
-            let script = env.intern(init.as_ref());
-            let script = env.get_interned(script);
-            match load_internal(env, script) {
+            let script = environment.intern(init.as_ref());
+            let script = environment.get_interned(script);
+            match load_internal(environment, script) {
                 Ok(_) => {}
                 Err(err) => eprintln!("ERROR: {err}"),
             }
@@ -387,6 +403,7 @@ pub fn set_builtins(env: &mut SloshVm) {
     add_math_builtins(env);
     add_doc_builtins(env);
     add_math_builtins(env);
+    intern_load_sloshrc(env);
 
     env.set_named_global("*int-bits*", (INT_BITS as i64).into());
     env.set_named_global("*int-max*", INT_MAX.into());

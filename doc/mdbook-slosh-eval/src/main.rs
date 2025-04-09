@@ -7,9 +7,7 @@ use compile_state::state::new_slosh_vm;
 use compile_state::state::SloshVm;
 use mdbook::book::{Book, BookItem};
 use mdbook::errors::Error;
-use mdbook::preprocess::{
-    CmdPreprocessor, Preprocessor, PreprocessorContext,
-};
+use mdbook::preprocess::{CmdPreprocessor, Preprocessor, PreprocessorContext};
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 use pulldown_cmark_to_cmark::cmark;
 use semver::{Version, VersionReq};
@@ -119,10 +117,10 @@ mod slosh_eval_lib {
                                 {
                                     slosh_code_block_num += 1;
                                     log::debug!(
-                                            "File: {}: block #{}",
-                                            chapter.name,
-                                            slosh_code_block_num,
-                                        );
+                                        "File: {}: block #{}",
+                                        chapter.name,
+                                        slosh_code_block_num,
+                                    );
                                     tracking = true;
                                 }
                             }
@@ -238,14 +236,14 @@ mod slosh_eval_lib {
                 }
 
                 let key = "user-doc-forms";
-                let mut existing_doc_forms = None;
                 if let Some(Value::Boolean(b)) = slosh_eval_cfg.get(key) {
                     if *b {
                         let mut vm = slosh_test_lib::new_slosh_vm_with_builtins_and_core();
                         docs::add_builtins(&mut vm);
 
                         // first get provided sections
-                        let provided_sections = if let Some(existing_doc_forms) = existing_doc_forms {
+                        let provided_sections = if let Some(existing_doc_forms) = existing_doc_forms
+                        {
                             existing_doc_forms
                         } else {
                             docs::add_slosh_docs_to_mdbook(&mut vm, &mut book, false)?
@@ -253,7 +251,11 @@ mod slosh_eval_lib {
 
                         // then load init.slosh
                         slosh_test_lib::add_user_builtins(&mut vm);
-                        docs::add_user_docs_to_mdbook_less_provided_sections(&mut vm, &mut book, provided_sections)?;
+                        docs::add_user_docs_to_mdbook_less_provided_sections(
+                            &mut vm,
+                            &mut book,
+                            provided_sections,
+                        )?;
                     } else {
                         panic!("Missing required key '{}' must be true or false.", key)
                     }
