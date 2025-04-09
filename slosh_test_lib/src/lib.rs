@@ -29,7 +29,6 @@ pub fn new_slosh_vm_with_builtins_and_core() -> SloshVm {
     let mut env = state::new_slosh_vm();
     docs::add_builtins(&mut env);
 
-    // TODO PC is the pause necessary still?
     env.pause_gc();
     slosh_lib::set_builtins_shell(&mut env);
     bridge_adapters::add_builtin(
@@ -45,10 +44,13 @@ pub fn new_slosh_vm_with_builtins_and_core() -> SloshVm {
     env
 }
 
+// TODO PC 1. iter is duplicated in All and User section
+// TODO PC 2. reduce::iter is repeated twice
+// TODO PC 3. MAYBE we should change to allow N entrypoint scripts to load additional things from?
 pub fn add_user_builtins(env: &mut SloshVm) {
     env.pause_gc();
-    //r#"(do (load "core.slosh") (load-rc))"#
-    let code = r#"(do (load "core.slosh") (load "sh-color.slosh") (load-rc))"#.to_string();
+    //let code = r#"(do (load "core.slosh") (load "sh-color.slosh") (load-rc))"#.to_string();
+    let code = r#"(do (load "core.slosh") (load "sh-color.slosh") (load "~/.config/slosh/init.slosh"))"#.to_string();
     let code = format!(
         r#"(import test)
                 (def *prn* "")

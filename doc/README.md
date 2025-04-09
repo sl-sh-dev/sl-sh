@@ -13,8 +13,6 @@ rm -rf ./book/*
 # generated site entrypoint at `./book/index.html`
 ```
 
-TODO PC need md files in a specific folder named after a section to be inlined within the section documentation
-
 ## Important information
 
 ### Adding a new doc

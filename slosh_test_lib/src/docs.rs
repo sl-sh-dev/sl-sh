@@ -17,6 +17,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 use std::fs::{self, File};
+use std::hash::{Hash, Hasher};
 use std::io::{self, Write};
 use std::path::Path;
 use std::path::PathBuf;
@@ -318,7 +319,7 @@ impl AsMd for SloshDoc {
     }
 }
 
-#[derive(Eq, Debug, Clone, Hash)]
+#[derive(Eq, Debug, Clone)]
 pub struct SloshDoc {
     symbol: String,
     symbol_type: String,
@@ -342,7 +343,13 @@ impl Display for SloshDoc {
 impl PartialEq for SloshDoc {
     fn eq(&self, other: &Self) -> bool {
         self.fully_qualified_name()
-            .eq_ignore_ascii_case(&other.fully_qualified_name())
+            .eq(&other.fully_qualified_name())
+    }
+}
+
+impl Hash for SloshDoc {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write(self.fully_qualified_name().as_bytes());
     }
 }
 
@@ -608,7 +615,7 @@ fn build_all_slosh_forms_listing_chapter(
         all_content += &(header + &content);
     }
 
-    let p = make_file(format!("all-{}", name), &all_content)
+    let p = make_file(format!("all-{}", name.to_ascii_lowercase()), &all_content)
         .map_err(|e| VMError::new_vm(format!("Failed to write to file: {e}.")))?;
 
     Ok(Chapter::new("All", all_content, p, vec![]))
@@ -733,21 +740,19 @@ pub fn add_user_docs_to_mdbook_less_provided_sections(
     let docs_by_section_unsorted = get_docs_by_section(vm);
     let mut docs_by_section = BTreeMap::new();
     for (s, all_docs) in docs_by_section_unsorted {
-        let mut set = HashSet::new();
-        // to set
-        for d in all_docs {
-            set.insert(d);
-        }
-        if let Some(included_sections) = provided_sections.get(&s) {
-            for item in included_sections {
-                // anything that was already included should be removed from the source
-                _ = set.remove(item);
+        if !provided_sections.contains_key(&s) {
+            let mut set = HashSet::new();
+            // to set
+            for d in all_docs {
+                if !matches!(d.namespace, Namespace::Global) {
+                    set.insert(d);
+                }
             }
-        }
-        let all_docs = set.into_iter().collect::<Vec<SloshDoc>>();
+            let all_docs = set.into_iter().collect::<Vec<SloshDoc>>();
 
-        if !all_docs.is_empty() {
-            docs_by_section.insert(s, all_docs);
+            if !all_docs.is_empty() {
+                docs_by_section.insert(s, all_docs);
+            }
         }
     }
 
@@ -970,7 +975,6 @@ mod test {
                 _ = run_reader(&mut reader).unwrap();
 
                 let mut docs: Vec<SloshDoc> = vec![];
-                //TODO PC way to run non global namespace examples?
                 Namespace::Global.add_docs(&mut docs, &mut vm).unwrap();
                 docs.sort();
                 for d in docs {

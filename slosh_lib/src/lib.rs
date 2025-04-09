@@ -1,5 +1,6 @@
 extern crate sl_liner;
 
+use shell::builtins::expand_tilde;
 use bridge_macros::sl_sh_fn;
 use std::cell::RefCell;
 use std::ffi::OsString;
@@ -47,7 +48,7 @@ use crate::shell_builtins::add_shell_builtins;
 use debug::*;
 use shell::config::get_config;
 use shell::platform::{Platform, Sys, STDIN_FILENO};
-use sl_compiler::load_eval::{add_load_builtins, load_internal, SLSHRC};
+use sl_compiler::load_eval::{add_load_builtins, get_load_name, load_internal, SLSHRC};
 use sl_compiler::pass1::pass1;
 use slvm::{VMError, VMResult, Value, INT_BITS, INT_MAX, INT_MIN};
 
@@ -158,7 +159,7 @@ fn get_home_dir() -> Option<PathBuf> {
     if let Ok(home_dir) = env::var("HOME") {
         make_path_dir_if_possible(home_dir)
     } else {
-        None
+        make_path_dir_if_possible(expand_tilde(PathBuf::from("~")))
     }
 }
 
@@ -232,7 +233,11 @@ pub fn load_sloshrc(environment: &mut SloshVm, path: Option<LooseString>) {
                 Ok(_) => {}
                 Err(err) => eprintln!("ERROR: {err}"),
             }
+        } else {
+            let _ = load_internal(environment, "init.slosh");
         }
+    } else {
+        let _ = load_internal(environment, "init.slosh");
     }
 }
 

@@ -288,3 +288,59 @@ pub fn builtin_dump_regs(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Valu
     }
     Ok(Value::Nil)
 }
+
+/// A macro similar to println! that writes output to a file in /tmp
+///
+/// # Examples
+///
+/// ```ignore
+/// file_println!("debug.log", "Hello, world!"); // Writes to /tmp/debug.log
+/// file_println!("debug.log", "The value is: {}", 42); // Supports format args
+/// ```
+/// TODO PC cross platform /tmp?
+#[macro_export]
+#[expect(unused)]
+macro_rules! file_println {
+    // Version with just the filename and a literal string
+    ($filename:expr, $msg:expr) => {
+        {
+            let path = format!("/tmp/{}.log", $filename);
+            let mut file = match std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&path) {
+                    Ok(f) => f,
+                    Err(e) => {
+                        eprintln!("Error opening file {}: {}", path, e);
+                        File::create(&path).expect("Failed to create file")
+                    }
+                };
+
+            if let Err(e) = writeln!(file, "{}", $msg) {
+                eprintln!("Error writing to file {}: {}", path, e);
+            }
+        }
+    };
+
+    // Version with filename and format string + args (like println!)
+    ($filename:expr, $fmt:expr, $($arg:tt)*) => {
+        {
+            let path = format!("/tmp/{}", $filename);
+            let mut file = match std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&path) {
+                    Ok(f) => f,
+                    Err(e) => {
+                        eprintln!("Error opening file {}: {}", path, e);
+                        File::create(&path).expect("Failed to create file")
+                    }
+                };
+
+            if let Err(e) = writeln!(file, $fmt, $($arg)*) {
+                eprintln!("Error writing to file {}: {}", path, e);
+            }
+        }
+    };
+}
+

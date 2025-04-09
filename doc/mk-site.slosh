@@ -1,4 +1,4 @@
-#!/usr/bin/env slosh
+#!/usr/bin/env slosh_test
 
 ;; TODO PC you should be able to remove mdbook from slosh_test, slosh_test binary
 ;; might be unnecessary and fcns inside slosh-test might be able to move to slosh

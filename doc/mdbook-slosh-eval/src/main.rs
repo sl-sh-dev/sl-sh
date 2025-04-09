@@ -214,12 +214,9 @@ mod slosh_eval_lib {
                 if let Some(Value::String(block)) = slosh_eval_cfg.get(key) {
                     log::debug!("Use key {}, evaluate code blocks labeled: {}", key, block);
                     eval_code_blocks(&mut book, &block);
-                } else {
-                    panic!("Missing required key '{}' must be string of label used after ``` to eval..", key)
                 }
 
                 let key = "doc-forms";
-                let mut existing_doc_forms = None;
                 if let Some(Value::Boolean(b)) = slosh_eval_cfg.get(key) {
                     if *b {
                         log::info!("Evaluate docs.");
@@ -227,12 +224,9 @@ mod slosh_eval_lib {
                         docs::add_builtins(&mut vm);
 
                         log::debug!("Add key {}.", key);
-                        let forms = docs::add_slosh_docs_to_mdbook(&mut vm, &mut book, true)?;
-                        existing_doc_forms = Some(forms);
+                        docs::add_slosh_docs_to_mdbook(&mut vm, &mut book, true)?;
                         log::info!("Docs evaluated.");
                     }
-                } else {
-                    panic!("Missing required key '{}' must be true or false.", key)
                 }
 
                 let key = "user-doc-forms";
@@ -242,12 +236,7 @@ mod slosh_eval_lib {
                         docs::add_builtins(&mut vm);
 
                         // first get provided sections
-                        let provided_sections = if let Some(existing_doc_forms) = existing_doc_forms
-                        {
-                            existing_doc_forms
-                        } else {
-                            docs::add_slosh_docs_to_mdbook(&mut vm, &mut book, false)?
-                        };
+                        let provided_sections = docs::add_slosh_docs_to_mdbook(&mut vm, &mut book, false)?;
 
                         // then load init.slosh
                         slosh_test_lib::add_user_builtins(&mut vm);
@@ -256,8 +245,6 @@ mod slosh_eval_lib {
                             &mut book,
                             provided_sections,
                         )?;
-                    } else {
-                        panic!("Missing required key '{}' must be true or false.", key)
                     }
                 }
 
@@ -271,8 +258,6 @@ mod slosh_eval_lib {
                         log::debug!("Add key {}.", key);
                         _ = docs::link_supplementary_docs(vm, &mut book);
                     }
-                } else {
-                    panic!("Missing required key '{}' must be true or false.", key)
                 }
             }
 
