@@ -150,7 +150,7 @@ impl<ENV> GVm<ENV> {
         let result = match lambda {
             Value::Builtin(f_idx) => {
                 let last_reg = (first_reg + num_args + 1) as usize;
-                let f = &self.buitins[f_idx as usize];
+                let f = &self.builtins[f_idx as usize];
                 let regs = self.register_slice();
 
                 let res =

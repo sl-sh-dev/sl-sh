@@ -1,6 +1,5 @@
 extern crate sl_liner;
 
-use shell::builtins::expand_tilde;
 use bridge_macros::sl_sh_fn;
 use std::cell::RefCell;
 use std::ffi::OsString;
@@ -48,7 +47,7 @@ use crate::shell_builtins::add_shell_builtins;
 use debug::*;
 use shell::config::get_config;
 use shell::platform::{Platform, Sys, STDIN_FILENO};
-use sl_compiler::load_eval::{add_load_builtins, get_load_name, load_internal, SLSHRC};
+use sl_compiler::load_eval::{add_load_builtins, load_internal, SLSHRC};
 use sl_compiler::pass1::pass1;
 use slvm::{VMError, VMResult, Value, INT_BITS, INT_MAX, INT_MIN};
 
@@ -63,6 +62,7 @@ thread_local! {
 }
 
 const PROMPT_FN: &str = "prompt";
+const SLSHRC_NAME: &str = "init.slosh";
 
 fn get_prompt(env: &mut SloshVm) -> String {
     let i_val = env.intern("__prompt");
@@ -120,7 +120,7 @@ pub fn set_initial_load_path(env: &mut SloshVm, load_paths: Vec<&str>) {
         env,
         "*load-path*",
         path,
-        "Usage: (set '*load-path* '(\"/path/one\" \"/path/two\"))
+        "Usage: (set! '*load-path* '(\"/path/one\" \"/path/two\"))
 
 Set the a list of paths to search for loading scripts with the load form.
 Paths are a vector and are searched in index order for the file name of
@@ -159,7 +159,7 @@ fn get_home_dir() -> Option<PathBuf> {
     if let Ok(home_dir) = env::var("HOME") {
         make_path_dir_if_possible(home_dir)
     } else {
-        make_path_dir_if_possible(expand_tilde(PathBuf::from("~")))
+        None
     }
 }
 
@@ -231,13 +231,16 @@ pub fn load_sloshrc(environment: &mut SloshVm, path: Option<LooseString>) {
             let script = environment.get_interned(script);
             match load_internal(environment, script) {
                 Ok(_) => {}
-                Err(err) => eprintln!("ERROR: {err}"),
+                Err(e) => eprintln!("Failed to load script: {e}"),
             }
         } else {
-            let _ = load_internal(environment, "init.slosh");
+            // home doesn't have slosh config dirk
+            load_internal(environment, SLSHRC_NAME).expect("Fallback init file should be baked in to binary if user lacks `~/.config/slosh directory.");
         }
     } else {
-        let _ = load_internal(environment, "init.slosh");
+        // no home
+        load_internal(environment, SLSHRC_NAME)
+            .expect("Fallback init file should be baked in to binary.");
     }
 }
 

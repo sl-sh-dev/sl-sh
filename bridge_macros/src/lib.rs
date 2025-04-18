@@ -10,8 +10,8 @@
 //!    VarArgs, this can be addressed in the macro.
 //! 7. Port tuple tests: <https://github.com/sl-sh-dev/sl-sh/blob/83cd1c93d1eea726ba138a83610155bdbfcab7aa/src/builtins_types.rs#L628>
 //! 8. To avoid needing to do lifetimes, if the return value is one of the INPUT values have
-//!     that marked in the annotation... OTHERWISE data may be copied!
-//!     OR allow for simple lifetimes?
+//!    that marked in the annotation... OTHERWISE data may be copied!
+//!    OR allow for simple lifetimes?
 //! 9. VMError should not be new_vm
 //! 10. Optional duplicates code. With the ownership model from SlFromRef, being *the* primary mechanism
 //!     for crossing the boundary, it's possible having Some and None blocks multiple times is not necessary.

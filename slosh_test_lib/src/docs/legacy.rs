@@ -81,16 +81,13 @@ pub(crate) fn build_report(vm: &mut SloshVm) -> VMResult<String> {
     );
     out = format!(
         "{out}\n{:<status_len$} | {:<longest_old$} | {:<longest_notes$}|",
-        iter::repeat("-".to_string())
-            .take(status_len - 1)
+        iter::repeat_n("-".to_string(), status_len - 1)
             .collect::<Vec<String>>()
             .join(""),
-        iter::repeat("-".to_string())
-            .take(longest_old - 1)
+        iter::repeat_n("-".to_string(), longest_old - 1)
             .collect::<Vec<String>>()
             .join(""),
-        iter::repeat("-".to_string())
-            .take(longest_notes - 1)
+        iter::repeat_n("-".to_string(), longest_notes - 1)
             .collect::<Vec<String>>()
             .join(""),
     );

@@ -3,11 +3,11 @@ extern crate pulldown_cmark_to_cmark;
 
 use crate::slosh_eval_lib::EvalSlosh;
 use clap::{Arg, ArgMatches, Command};
-use compile_state::state::new_slosh_vm;
 use compile_state::state::SloshVm;
 use mdbook::book::{Book, BookItem};
 use mdbook::errors::Error;
 use mdbook::preprocess::{CmdPreprocessor, Preprocessor, PreprocessorContext};
+use compile_state::state;
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 use pulldown_cmark_to_cmark::cmark;
 use semver::{Version, VersionReq};
@@ -80,7 +80,7 @@ fn handle_supports(pre: &dyn Preprocessor, sub_args: &ArgMatches) -> ! {
 
 thread_local! {
     /// Env (job control status, etc) for the shell.
-    pub static ENV: RefCell<SloshVm> = RefCell::new(new_slosh_vm());
+    pub static ENV: RefCell<SloshVm> = RefCell::new(state::new_slosh_vm());
 }
 
 mod slosh_eval_lib {
@@ -130,7 +130,10 @@ mod slosh_eval_lib {
                             buf += c.as_ref();
                         }
                         Event::End(TagEnd::CodeBlock) if tracking => {
-                            let mut vm = slosh_test_lib::new_slosh_vm_with_builtins_and_core();
+                            let mut vm = state::new_slosh_vm();
+                            vm.pause_gc();
+                            slosh_test_lib::vm_with_builtins_and_core();
+                            vm.unpause_gc();
                             let eval = exec_code(&mut vm, buf.clone());
 
                             let mut first = true;
@@ -196,7 +199,7 @@ mod slosh_eval_lib {
 
         let mut reader = Reader::from_string(code, vm, "", 1, 0);
         let s = slosh_test_lib::run_reader(&mut reader)
-            .map(|x| x.display_value(&vm))
+            .map(|x| x.display_value(vm))
             .map_err(|e| format!("Encountered error: {}", e));
         match s {
             Ok(s) | Err(s) => s,
@@ -210,50 +213,104 @@ mod slosh_eval_lib {
 
         fn run(&self, ctx: &PreprocessorContext, mut book: Book) -> Result<Book, Error> {
             if let Some(slosh_eval_cfg) = ctx.config.get_preprocessor(self.name()) {
+                let mut gen_std_lib_docs = false;
+                let mut gen_user_docs = false;
+                let mut user_files = vec![];
+                let mut user_load_paths = vec![];
+                let key = "doc-forms";
+                if let Some(Value::Table(table)) = slosh_eval_cfg.get(key) {
+                    for (k, v) in table {
+                        match k.as_str() {
+                            "std-lib" => {
+                                if let Value::Boolean(b) = v {
+                                    gen_std_lib_docs = *b;
+                                }
+                            }
+                            "user" => {
+                                if let Value::Boolean(b) = v {
+                                    gen_user_docs = *b;
+                                }
+                            }
+                            "user-doc-files" => {
+                                if let Value::Array(arr) = v {
+                                    for s in arr {
+                                        if let Value::String(s) = s {
+                                            user_files.push(s.to_string());
+                                        }
+                                    }
+                                }
+                            }
+                            "user-doc-load-paths" => {
+                                if let Value::Array(arr) = v {
+                                    for s in arr {
+                                        if let Value::String(s) = s {
+                                            user_load_paths.push(s.to_string());
+                                        }
+                                    }
+                                }
+                            }
+                            _ => {
+                                panic!("Invalid config key,value pair: {}, {:?}", k, v.as_str())
+                            }
+                        }
+                    }
+                }
+
+                if gen_std_lib_docs {
+                    log::info!("Evaluate docs.");
+                    let mut vm = state::new_slosh_vm();
+                    vm.pause_gc();
+                    slosh_test_lib::vm_with_builtins_and_core(&mut vm);
+                    vm.unpause_gc();
+
+                    log::debug!("Add key {}.", key);
+                    docs::add_slosh_docs_to_mdbook(&mut vm, &mut book, true)?;
+                    log::info!("Docs evaluated.");
+                }
+
+                if gen_user_docs {
+                    if user_files.is_empty() {
+                        user_files = vec!["~/.config/slosh/init.slosh".to_string()];
+                    }
+                    if user_load_paths.is_empty() {
+                        user_load_paths = vec!["~/.config/slosh/".to_string()];
+                    }
+
+                    let mut vm = state::new_slosh_vm();
+                    vm.pause_gc();
+                    slosh_test_lib::vm_with_builtins_and_core(&mut vm);
+
+                    // first get provided sections
+                    let provided_sections =
+                        docs::add_slosh_docs_to_mdbook(&mut vm, &mut book, false)?;
+
+                    // then load init.slosh
+                    slosh_test_lib::add_user_builtins(
+                        &mut vm,
+                        user_load_paths.as_slice(),
+                        user_files.as_slice(),
+                    );
+                    vm.unpause_gc();
+                    docs::add_user_docs_to_mdbook_less_provided_sections(
+                        &mut vm,
+                        &mut book,
+                        provided_sections,
+                    )?;
+                }
+
                 let key = "code-block-label";
                 if let Some(Value::String(block)) = slosh_eval_cfg.get(key) {
                     log::debug!("Use key {}, evaluate code blocks labeled: {}", key, block);
-                    eval_code_blocks(&mut book, &block);
-                }
-
-                let key = "doc-forms";
-                if let Some(Value::Boolean(b)) = slosh_eval_cfg.get(key) {
-                    if *b {
-                        log::info!("Evaluate docs.");
-                        let mut vm = slosh_test_lib::new_slosh_vm_with_builtins_and_core();
-                        docs::add_builtins(&mut vm);
-
-                        log::debug!("Add key {}.", key);
-                        docs::add_slosh_docs_to_mdbook(&mut vm, &mut book, true)?;
-                        log::info!("Docs evaluated.");
-                    }
-                }
-
-                let key = "user-doc-forms";
-                if let Some(Value::Boolean(b)) = slosh_eval_cfg.get(key) {
-                    if *b {
-                        let mut vm = slosh_test_lib::new_slosh_vm_with_builtins_and_core();
-                        docs::add_builtins(&mut vm);
-
-                        // first get provided sections
-                        let provided_sections = docs::add_slosh_docs_to_mdbook(&mut vm, &mut book, false)?;
-
-                        // then load init.slosh
-                        slosh_test_lib::add_user_builtins(&mut vm);
-                        docs::add_user_docs_to_mdbook_less_provided_sections(
-                            &mut vm,
-                            &mut book,
-                            provided_sections,
-                        )?;
-                    }
+                    eval_code_blocks(&mut book, block);
                 }
 
                 let key = "doc-supplementary";
                 if let Some(Value::Boolean(b)) = slosh_eval_cfg.get(key) {
                     if *b {
-                        let mut env = slosh_test_lib::new_slosh_vm_with_builtins_and_core();
-                        let vm = &mut env;
-                        docs::add_builtins(vm);
+                        let mut vm = state::new_slosh_vm();
+                        vm.pause_gc();
+                        slosh_test_lib::vm_with_builtins_and_core(&mut vm);
+                        vm.unpause_gc();
 
                         log::debug!("Add key {}.", key);
                         _ = docs::link_supplementary_docs(vm, &mut book);

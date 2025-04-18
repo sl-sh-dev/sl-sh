@@ -27,43 +27,49 @@ pub fn run_reader(reader: &mut Reader) -> VMResult<Value> {
 
 pub fn new_slosh_vm_with_builtins_and_core() -> SloshVm {
     let mut env = state::new_slosh_vm();
-    docs::add_builtins(&mut env);
 
-    env.pause_gc();
-    slosh_lib::set_builtins_shell(&mut env);
+    vm_with_builtins_and_core(&mut env);
+
+    env
+}
+
+pub fn vm_with_builtins_and_core(env: &mut SloshVm) {
+    docs::add_builtins(env);
+    slosh_lib::set_builtins_shell(env);
     bridge_adapters::add_builtin(
-        &mut env,
+        env,
         "version",
         fake_version,
         r#"Return the software version string."#,
     );
-    slosh_lib::load_core(&mut env);
-    slosh_lib::load_color(&mut env);
-
-    env.unpause_gc();
-    env
+    slosh_lib::load_core(env);
+    slosh_lib::load_color(env);
 }
 
-// TODO PC 1. iter is duplicated in All and User section
-// TODO PC 2. reduce::iter is repeated twice
-// TODO PC 3. MAYBE we should change to allow N entrypoint scripts to load additional things from?
-pub fn add_user_builtins(env: &mut SloshVm) {
-    env.pause_gc();
-    //let code = r#"(do (load "core.slosh") (load "sh-color.slosh") (load-rc))"#.to_string();
-    let code = r#"(do (load "core.slosh") (load "sh-color.slosh") (load "~/.config/slosh/init.slosh"))"#.to_string();
-    let code = format!(
-        r#"(import test)
+pub fn add_user_builtins(env: &mut SloshVm, load_paths: &[String], files_to_load: &[String]) {
+    let code = r#"(do (load "core.slosh") (load "sh-color.slosh"))"#.to_string();
+    let mut reader = Reader::from_string(code, env, "", 1, 0);
+    _ = run_reader(&mut reader).expect("should be able to run this code.");
+
+    let load_paths: Vec<&str> = load_paths.iter().map(AsRef::as_ref).collect();
+    slosh_lib::set_initial_load_path(env, load_paths);
+
+    if !files_to_load.is_empty() {
+        let code = files_to_load.join("\" \"");
+        let code = format!("(load \"{}\")", code);
+        let code = format!(
+            r#"(import test)
                 (def *prn* "")
                 (def *stdout* "")
                 (dyn
                     prn
                     (fn (&rest) (set! *prn* (str *prn* &rest)))
-                    (do  {}))"#,
-        code
-    );
-    let mut reader = Reader::from_string(code, env, "", 1, 0);
-    _ = run_reader(&mut reader).expect("should be able to run this code.");
-    env.unpause_gc();
+                    (do {}))"#,
+            code
+        );
+        let mut reader = Reader::from_string(code, env, "", 1, 0);
+        _ = run_reader(&mut reader).expect("should be able to run this code.");
+    }
 }
 
 fn fake_version(vm: &mut SloshVm, registers: &[slvm::Value]) -> VMResult<slvm::Value> {
