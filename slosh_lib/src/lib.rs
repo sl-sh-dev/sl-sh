@@ -234,7 +234,7 @@ pub fn load_sloshrc(environment: &mut SloshVm, path: Option<LooseString>) {
                 Err(e) => eprintln!("Failed to load script: {e}"),
             }
         } else {
-            // home doesn't have slosh config dirk
+            // home doesn't have slosh config dir
             load_internal(environment, SLSHRC_NAME).expect("Fallback init file should be baked in to binary if user lacks `~/.config/slosh directory.");
         }
     } else {

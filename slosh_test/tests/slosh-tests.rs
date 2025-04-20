@@ -21,7 +21,7 @@ pub fn get_slosh_exe() -> PathBuf {
 ///
 fn run_slosh_tests() {
     let test_script = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("run-tests.slosh");
-    println!("Slosh doc test script: {test_script:?}");
+    eprintln!("Slosh doc test script: {test_script:?}");
 
     let slosh_path = get_slosh_exe().into_os_string();
     let slosh_path = slosh_path.to_str();
