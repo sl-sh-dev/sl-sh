@@ -45,6 +45,7 @@ use crate::completions::ShellCompleter;
 use crate::liner_rules::make_editor_rules;
 use crate::shell_builtins::add_shell_builtins;
 use debug::*;
+use shell::builtins::expand_tilde;
 use shell::config::get_config;
 use shell::platform::{Platform, Sys, STDIN_FILENO};
 use sl_compiler::load_eval::{add_load_builtins, load_internal, SLSHRC};
@@ -112,7 +113,9 @@ fn get_prompt(env: &mut SloshVm) -> String {
 pub fn set_initial_load_path(env: &mut SloshVm, load_paths: Vec<&str>) {
     let mut v = vec![];
     for path in load_paths {
-        let i_path = env.intern(path);
+        let p = expand_tilde(PathBuf::from(path));
+        let p = p.to_string_lossy();
+        let i_path = env.intern(p.as_ref());
         v.push(Value::StringConst(i_path));
     }
     let path = env.alloc_vector(v);
