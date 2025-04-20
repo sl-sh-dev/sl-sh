@@ -18,7 +18,7 @@ Some of the more prominent features:
     ```
     cat file | tr -s " " | cut -d " " -f 2,4
     ```
-  "just work", but starting a command with a lisp form (i.e. a balanced parenthesized s-expression) allows:
+  "just work", but starting a command with a lisp form (an s-expression) allows:
     ```
     (dotimes 10 (prn "hello world"))
     ```
