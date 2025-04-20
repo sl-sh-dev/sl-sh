@@ -30,3 +30,7 @@ export PATH="$PATH:./mdbook-slosh-eval/target/debug"
 mdbook build
 
 ./search-hack-patch.sh
+
+if [ "${SERVE}" = "TRUE" ]; then
+    mdbook serve
+fi

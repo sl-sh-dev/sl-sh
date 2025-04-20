@@ -38,7 +38,7 @@ lazy_static! {
             .crlf(true)
             .build()
             .unwrap();
-    // TODO PC save off list of EXEMPTIONS triggered and write to a md file for docs.
+    // TODO #229 save off list of EXEMPTIONS triggered and write to a md file for docs.
     pub static ref EXEMPTIONS: HashSet<&'static str> = {
         let mut exemption_set = HashSet::new();
         exemption_set.insert("version");
@@ -303,7 +303,7 @@ impl DocStringSection {
     }
 
     /// Just write everything that was in the doc section to the description section.
-    /// TODO PC track incomplete documenntation in a page.
+    /// TODO #229 track incomplete documenntation in a page.
     pub fn new_incomplete(slot: u32, sym: &Value, vm: &mut SloshVm) -> Self {
         let description = Self::raw_docstring(slot, vm);
         let usage = Some(slosh_lib::usage(vm, slot, sym));
@@ -874,8 +874,6 @@ fn build_doc(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
 }
 
 fn make_file(name: impl AsRef<Path>, content: &str) -> io::Result<PathBuf> {
-    //TODO PC I do not understand why have to both pass the file contents and have a md file
-    // and if I do not have the md file i get a no parents error?
     let filename = format!("src/generated-sections/{}.md", name.as_ref().display()).into();
     let mut file_0 = File::create(&filename)?;
     writeln!(file_0, "{}", content)?;

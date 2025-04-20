@@ -30,7 +30,6 @@ fn modify_vm(vm: &mut SloshVm) {
     _ = run_reader(&mut reader);
 }
 
-//TODO PC what is actually here now?
 fn main() {
     let exit_code = run(modify_vm);
     process::exit(exit_code)

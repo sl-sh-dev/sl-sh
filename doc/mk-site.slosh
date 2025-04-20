@@ -4,8 +4,6 @@
 ;; might be unnecessary and fcns inside slosh-test might be able to move to slosh
 ;; behind a feature flag or something EITHER WAY, just keep the deps out of the main bin.
 
-;; TODO PC write docs about mdbook vs. mdbook serve vs. building w/ and w/o the supplemental stuff etc.etc.
-
 ;; what is a possible set -e equivalent?
 
 (def *do-supplemental* #t)

@@ -1,5 +1,4 @@
-//! TODO PC ISSUE #9
-//! macro crate wish list
+//! TODO PC macro crate wish list
 //! 1. The macro should fail if the structure of the docs is not as expected. e.g. Type/Namespace/.../Usage/Example/
 //! 2. type aliasing, need a gensym type macro so I do not conflict with names.
 //! 3. trybuild tests!
@@ -1641,7 +1640,7 @@ pub fn sl_sh_fn(
     proc_macro::TokenStream::from(tokens)
 }
 
-//TODO PC
+//TODO PC macro wish list
 //  - functions that return Values, tuple return types?
 //  - functions that accept iters?
 //  - then... compare against inline the function being called... randomize variable names...

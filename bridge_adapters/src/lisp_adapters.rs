@@ -98,7 +98,7 @@
 //! `impl SlFrom<&Value> for RustType { ... }`
 //!
 //!
-//! TODO PC ISSUE #7 - returning values via annotated or lifetime?
+//! TODO #220 - returning values via annotated or lifetime?
 //!  To avoid allocations when converting a slosh &Value back to a rust type that was mutated
 //!  don't return anything. If it is necessary for the API to return some value.
 //! ...either use an annotation on an input argument `fn myfun(#[likeThis] returnme: &mut String, someotherval: String) -> VMResult<()>`
@@ -122,14 +122,14 @@
 //!                             |                             |     &emsp;- [`SlIntoRef`] `&`[`String`] for `&`[`Value`]
 //!                             |                             | R -> S
 //!                             |                             |     &emsp;- take [`String`]
-//!                             |                             |     &emsp;* uses Clone unless TODO PC ISSUE #220 the extant value problem
+//!                             |                             |     &emsp;* uses Clone unless TODO #220 the extant value problem
 //!                             |                             |
 //! `&mut `[`String`]           | [`Value`]`::String`         |
 //!                             |                             | S -> R
 //!                             |                             |     &emsp;- [`SlAsMut`] [`String`] for `&`[`Value`]
 //!                             |                             | R -> S
 //!                             |                             |     &emsp;- take `&mut `[`String`]
-//!                             |                             |     &emsp;* uses Clone unless TODO PC ISSUE #220 the extant value problem
+//!                             |                             |     &emsp;* uses Clone unless TODO #220 the extant value problem
 //!                             |                             |
 //! `&`[`str`]                  | [`Value`]`::String` / [`Value`]`::StringConst` |
 //!                             |                             | S -> R
@@ -137,9 +137,9 @@
 //!                             |                             |     &emsp;- [`SlIntoRef`] &[`str`] for `&`[`Value`]
 //!                             |                             | R -> S
 //!                             |                             |     &emsp;- [`SlFrom`] for [`Value`]
-//!                             |                             |     &emsp;* uses Clone unless TODO PC ISSUE #220 - the extant value problem
-//!                             |                             |     &emsp;- TODO PC ISSUE #220 adjacent is it even possible to call vm.alloc_string_ro on something that was *newly* created in the current fcn and returned as a RO value OR should that be made as a custom type so the user can declare their intent.
-//!                             |                             |     &emsp;- TODO PC update, isn't this solved with SlAsRef/SlAsMut
+//!                             |                             |     &emsp;* uses Clone unless TODO #220 - the extant value problem
+//!                             |                             |     &emsp;- TODO #220 adjacent is it even possible to call vm.alloc_string_ro on something that was *newly* created in the current fcn and returned as a RO value OR should that be made as a custom type so the user can declare their intent.
+//!                             |                             |     &emsp;- TODO #220 update, isn't this solved with SlAsRef/SlAsMut
 //!                             |                             |
 //! [`char`]                    | [`Value`]`::CodePoint`      |
 //!                             |                             | S -> R

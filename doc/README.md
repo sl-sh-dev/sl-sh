@@ -5,12 +5,30 @@ based on the `doc/mk-site.sh` script referenced in the github action `.github/wo
 the `doc/book/all.html` file and directory hierarchy it makes can be blown away after each invocation of `doc/mk-site.sh`
 
 ## Build locally
+```bash
+# in `./doc` subdirectory
+rm -rf ./book/*
+# generated site entrypoint at `./book/index.html`
+./mk-site.sh
+```
+## Serving for continuous updating
 
 ```bash
 # in `./doc` subdirectory
 rm -rf ./book/*
-./mk-site.sh
-# generated site entrypoint at `./book/index.html`
+# generated site entrypoint at `./book/index.html` automatically rebuilds when
+# documentation source changes.
+# C-c/C-d to exit the process but it will not return as it is invoking a
+# process that listens for file changes and regenerates html, does not return.
+SERVE=TRUE ./mk-site.sh
+```
+
+## Skipping larger possibly unnecessary html files in development
+the slosh docs have supplemental material, namely all the rust documentation, as
+it can be cumbersome for mdbook to build copious amounts of these files it is
+possible to skip these in the `mk-site.sh` script by setting:
+```bash
+export SKIP_SUPPLEMENTAL=SKIP_SUPPLEMENTAL
 ```
 
 ## Important information
