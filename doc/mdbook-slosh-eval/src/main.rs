@@ -132,7 +132,7 @@ mod slosh_eval_lib {
                         Event::End(TagEnd::CodeBlock) if tracking => {
                             let mut vm = state::new_slosh_vm();
                             vm.pause_gc();
-                            slosh_test_lib::vm_with_builtins_and_core();
+                            slosh_test_lib::vm_with_builtins_and_core(&mut vm);
                             vm.unpause_gc();
                             let eval = exec_code(&mut vm, buf.clone());
 
@@ -313,7 +313,7 @@ mod slosh_eval_lib {
                         vm.unpause_gc();
 
                         log::debug!("Add key {}.", key);
-                        _ = docs::link_supplementary_docs(vm, &mut book);
+                        _ = docs::link_supplementary_docs(&mut vm, &mut book);
                     }
                 }
             }
