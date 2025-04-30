@@ -81,16 +81,13 @@ pub(crate) fn build_report(vm: &mut SloshVm) -> VMResult<String> {
     );
     out = format!(
         "{out}\n{:<status_len$} | {:<longest_old$} | {:<longest_notes$}|",
-        iter::repeat("-".to_string())
-            .take(status_len - 1)
+        iter::repeat_n("-".to_string(), status_len - 1)
             .collect::<Vec<String>>()
             .join(""),
-        iter::repeat("-".to_string())
-            .take(longest_old - 1)
+        iter::repeat_n("-".to_string(), longest_old - 1)
             .collect::<Vec<String>>()
             .join(""),
-        iter::repeat("-".to_string())
-            .take(longest_notes - 1)
+        iter::repeat_n("-".to_string(), longest_notes - 1)
             .collect::<Vec<String>>()
             .join(""),
     );
@@ -289,7 +286,7 @@ pub(crate) fn full_legacy_sl_sh_forms_metadata() -> &'static [(&'static str, boo
         ("arccos", true, ""),
         ("arcsin", true, ""),
         ("arctan", true, ""),
-        ("args", true, ""),
+        ("args", true, "*args*"),
         ("arity-zero-can-not-be-required", true, ""),
         ("assert-equal", true, ""),
         ("assert-error", true, ""),
@@ -542,9 +539,13 @@ pub(crate) fn full_legacy_sl_sh_forms_metadata() -> &'static [(&'static str, boo
         ("non-empty-seq?", true, ""),
         ("none?", true, ""),
         ("not", true, ""),
-        ("ns-auto-export", true, ""),
-        ("ns-create", true, ""),
-        ("ns-enter", true, ""),
+        (
+            "ns-auto-export",
+            true,
+            "All symbols defined in a namespace are exported in slosh.",
+        ),
+        ("ns-create", true, "with-ns"),
+        ("ns-enter", true, "ns"),
         ("ns-exists?", true, ""),
         (
             "ns-export",
@@ -552,10 +553,10 @@ pub(crate) fn full_legacy_sl_sh_forms_metadata() -> &'static [(&'static str, boo
             "Everything in slosh is exported by default.",
         ),
         ("ns-import", true, "import"),
-        ("ns-list", true, ""),
+        ("ns-list", true, "get-namespaces"),
         ("ns-pop", false, UNNECESSARY_IN_SLOSH),
         ("ns-push", false, UNNECESSARY_IN_SLOSH),
-        ("ns-symbols", true, ""),
+        ("ns-symbols", true, "get-in-namespace"),
         ("nsubstitute!", true, ""),
         ("nth", true, ""),
         ("null", true, ""),

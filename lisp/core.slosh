@@ -283,17 +283,25 @@ Example:
     `(call/cc (fn (break) ((fn ~params ~@body) ~@bindings))))
 
 #%
-Print the documentation for provided symbol.
+Return the documentation for provided symbol as a string.
 
 Section: core
 %#
-(defmacro doc (sym)
+(defmacro doc-raw (sym)
     (let (docs `(eval (get-prop ~sym :doc-string))
          has-usage `(str-starts-with (str-trim (str ~docs)) "Usage:"))
         (do
         `(if ~has-usage
-          (prn ~docs)
-          (prn (str (usage ~sym) "\n\n" ~docs))))))
+          (str ~docs)
+          (str (usage ~sym) "\n\n" ~docs)))))
+
+#%
+Print the documentation for provided symbol.
+
+Section: core
+%#
+(defn doc (sym)
+    (prn (doc-raw sym)))
 
 #%
 Evaluate body a number of times equal to times' numerical value.

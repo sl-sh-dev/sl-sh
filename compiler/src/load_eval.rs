@@ -212,7 +212,11 @@ pub fn get_load_name(vm: &mut SloshVm, value: Value) -> VMResult<&'static str> {
             let s_i = vm.intern(&s);
             vm.get_interned(s_i)
         }
-        _ => return Err(VMError::new_vm("Not a string.")),
+        v => {
+            let v = v.display_type(vm);
+            let v = "Not a string: ".to_string() + v;
+            return Err(VMError::new_vm(v));
+        }
     };
     if name.contains('~') {
         let name_path = PathBuf::from_str(name).expect("PathBuf from_str failed!");

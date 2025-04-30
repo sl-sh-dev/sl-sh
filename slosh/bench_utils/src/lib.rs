@@ -1,9 +1,10 @@
 use std::path::PathBuf;
 
 use compile_state::state::SloshVm;
+use sl_compiler::load_eval;
 use sl_compiler::Reader;
 use slosh_lib::new_slosh_vm_with_builtins;
-use slosh_test_lib::run_reader;
+
 use slvm::{
     Chunk, VMResult, Value, Vm, ADD, CONST, DIV, GET, INC, JMPLT, MUL, RET, SETCOL, VECMKD,
 };
@@ -28,7 +29,7 @@ pub fn load_file(fname: PathBuf, vm: &mut SloshVm) {
     match std::fs::File::open(fname) {
         Ok(file) => {
             let mut reader = Reader::from_file(file, vm, "", 1, 0);
-            let _ = slosh_test_lib::run_reader(&mut reader);
+            let _ = load_eval::run_reader(&mut reader);
         }
         Err(e) => {
             panic!("Could not open file: {:?}", e);
@@ -41,7 +42,7 @@ pub fn run_float_script(n: usize, m: f32, expected: f64) {
     let fname = get_float_benchmark();
     load_file(fname, vm);
     let mut reader = Reader::from_string(run_float_bench(n, m), vm, "", 1, 0);
-    let last = run_reader(&mut reader);
+    let last = load_eval::run_reader(&mut reader);
     match last {
         Ok(Value::Float(f)) => {
             assert_eq!(expected as f32, f32::from(f));
@@ -66,7 +67,7 @@ pub fn run_continuation_search_bench(n: usize) -> String {
 
 pub fn run_bench_assert_true(n: usize, f: fn(n: usize) -> String, vm: &mut SloshVm) {
     let mut reader = Reader::from_string(f(n), vm, "", 1, 0);
-    let last = run_reader(&mut reader);
+    let last = load_eval::run_reader(&mut reader);
     match last {
         Ok(v) => {
             assert_eq!(Value::True, v);

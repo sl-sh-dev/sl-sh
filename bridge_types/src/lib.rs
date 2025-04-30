@@ -21,14 +21,15 @@ impl<T> BridgedType for Vec<T> where T: BridgedType {}
 /// that appear in slosh as functions that can receive any number of arguments.
 pub type VarArgs<T> = Vec<T>;
 
-/// [`Value`]: /slvm/value/enum.Value.html
+/// [`Value`]: ../slvm/value/enum.Value.html
+/// [`Value::String`]: ../slvm/value/enum.Value.html#variant.String
 /// Type to hold anything in Slosh that can be represented as a [`String`].
 ///
 /// Public type used by rust native -> slosh bridge macro to represent
 /// arguments that can be loosely cast to strings. Unlike the [`String`]
 /// and [`&str`] types, in slosh there are various types that can be
 /// represented as strings. When the rust native function doesn't
-/// require *strict* type checking on whether or not the [`Value`]`::String`
+/// require *strict* type checking on whether or not the [`Value::String`]
 /// type is passed in use this function.
 ///
 /// Can represent SlRefInto [`Value`] types:
@@ -40,10 +41,11 @@ pub type VarArgs<T> = Vec<T>;
 /// - Keyword
 /// - StringConst
 ///
-/// Always does an allocation and returns a [`Value`]`::String` type.
+/// Always does an allocation and returns a [`Value::String`] type.
 pub type LooseString<'a> = Cow<'a, str>;
 
-/// [`Value`]: /slvm/value/enum.Value.html // TODO PC these links are broken!
+/// [`Value`]: ../slvm/value/enum.Value.html
+/// [`Value::Float`]: ../slvm/value/enum.Value.html#variant.Float
 /// Type to hold anything in Slosh that can be represented as a slosh float value: `[u8; 7]`.
 ///
 /// Public type used by rust native -> slosh bridge macro to represent
@@ -61,7 +63,7 @@ pub type LooseString<'a> = Cow<'a, str>;
 /// - Keyword
 /// - StringConst
 ///
-/// Always returns a [`Value`]`::Float` type.
+/// Always returns a [`Value::Float`] type.
 pub struct LooseFloat(pub [u8; 7]);
 
 impl From<LooseFloat> for [u8; 7] {
@@ -76,7 +78,32 @@ impl From<[u8; 7]> for LooseFloat {
     }
 }
 
-/// [`Value`]: /slvm/value/enum.Value.html
+/// [`Value`]: ../slvm/value/enum.Value.html
+/// [`Value::Symbol`]: ../slvm/value/enum.Value.html#variant.Symbol
+/// Type to hold anything in Slosh that can be represented as a slosh symbol: u32.
+///
+/// Public type used by rust native -> slosh bridge macro to represent
+/// arguments that reference a valid symbol.
+///
+/// Can represent SlRefInto [`Value`] types:
+/// - Symbol
+///
+/// Always returns a [`Value::Symbol`] type.
+pub struct Symbol(u32);
+
+impl From<u32> for Symbol {
+    fn from(value: u32) -> Self {
+        Self(value)
+    }
+}
+
+impl From<Symbol> for u32 {
+    fn from(value: Symbol) -> Self {
+        value.0
+    }
+}
+
+/// [`Value`]: ../slvm/value/enum.Value.html
 /// Type to hold anything in Slosh that can be represented as slosh int value: `[u8; 7]`.
 ///
 /// Public type used by rust native -> slosh bridge macro to represent
@@ -109,11 +136,14 @@ impl From<[u8; 7]> for LooseInt {
     }
 }
 
-/// [`Value`]: /slvm/value/enum.Value.html
+/// [`Value`]: ../slvm/value/enum.Value.html
+/// [`Value::CodePoint`]: ../slvm/value/enum.Value.html#variant.CodePoint
+/// [`Value::CharCluster`]: ../slvm/value/enum.Value.html#variant.CharCluster
+/// [`Value::CharClusterLong`]: ../slvm/value/enum.Value.html#variant.CharClusterLong
 /// Type to hold Slosh's notion of a char.
 ///
-/// In slosh a character can either be an actual char, e.g. a [`Value`]`::CodePoint`
-/// or a [`Value`]`::CharCluster`/[`Value`]`::CharClusterLong` in which case it will
+/// In slosh a character can either be an actual char, e.g. a [`Value::CodePoint`]
+/// or a [`Value::CharCluster`]/[`Value::CharClusterLong`] in which case it will
 /// be stored in an &str.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SloshChar<'a> {
@@ -161,7 +191,7 @@ pub struct Param {
     pub passing_style: PassingStyle,
 }
 
-//TODO PC ISSUE #8 use this! need common error messages but want a more comprehensive approach?
+//TODO #224 use this but create a module there is a need for common error messages but there should be a consistent comprehensive approach.
 pub struct ErrorStrings {}
 
 impl ErrorStrings {

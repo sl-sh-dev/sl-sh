@@ -7,6 +7,15 @@ title = "Slosh Documentation"
 
 [preprocessor.slosh-eval]
 after = ["links"]
-doc-forms = true
 doc-supplementary = true
 code-block-label = "slosh"
+
+[preprocessor.slosh-eval.doc-forms]
+std-lib = true
+user = true
+user-doc-files = [
+    "~/.config/slosh/init.slosh",
+]
+user-doc-load-paths = [
+    "~/.config/slosh/",
+]

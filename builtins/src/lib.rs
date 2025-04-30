@@ -1,9 +1,9 @@
 extern crate core;
 
-use std::collections::HashSet;
-
+use bridge_macros::sl_sh_fn;
 use compile_state::state::{SloshVm, SloshVmTrait};
-use slvm::{VMError, VMResult, Value};
+use slvm::{Interned, VMError, VMResult, Value};
+use std::collections::HashSet;
 
 pub mod bridge_macro_tests;
 pub mod collections;
@@ -29,15 +29,10 @@ fn get_globals(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     Ok(vm.alloc_vector(result))
 }
 
-fn get_namespaces(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
-    if !registers.is_empty() {
-        return Err(VMError::new_vm(
-            "get-namespaces: takes no arguments".to_string(),
-        ));
-    }
+pub fn get_namespaces_interned(vm: &mut SloshVm) -> HashSet<Interned> {
     let mut result = HashSet::new();
     let i = vm.intern_static("root");
-    result.insert(Value::Symbol(i));
+    result.insert(i);
     let mut buffer = String::new();
     let gkeys: Vec<_> = vm.globals().keys().copied().collect();
     for g in gkeys.into_iter() {
@@ -51,41 +46,57 @@ fn get_namespaces(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
             }
             buffer.push_str(part);
             let i = vm.intern(&buffer);
-            result.insert(Value::Symbol(i));
+            result.insert(i);
         }
     }
-    let v: Vec<Value> = result.into_iter().collect();
-    Ok(vm.alloc_vector(v))
+    result
 }
 
-fn get_in_namespace(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
-    let mut regs = registers.iter();
-    if let (Some(Value::Symbol(i)), None) = (regs.next(), regs.next()) {
-        let namespace = vm.get_interned(*i);
-        let mut result = vec![];
-        if namespace.eq("root") {
-            for g in vm.globals().keys() {
-                let sym = vm.get_interned(*g);
-                if !sym.contains("::") {
-                    result.push(Value::Symbol(*g));
-                }
-            }
-        } else {
-            let mut namespace = namespace.to_string();
-            namespace.push_str("::");
-            for g in vm.globals().keys() {
-                let sym = vm.get_interned(*g);
-                if sym.starts_with(&namespace) {
-                    result.push(Value::Symbol(*g));
-                }
+/// Usage: (get-namespaces)
+///
+/// Return a vector containing all the namespaces currently defined globally.
+///
+/// Section: namespace
+#[sl_sh_fn(fn_name = "get-namespaces", takes_env = true)]
+fn get_namespaces(environment: &mut SloshVm) -> VMResult<Value> {
+    let namespaces = get_namespaces_interned(environment);
+    let result: Vec<Value> = namespaces.iter().map(|x| Value::Symbol(*x)).collect();
+    Ok(environment.alloc_vector(result))
+}
+
+pub fn retrieve_in_namespace(vm: &mut SloshVm, interned: &Interned) -> Vec<Value> {
+    let namespace = vm.get_interned(*interned);
+    let mut result = vec![];
+    if namespace.eq("root") {
+        for g in vm.globals().keys() {
+            let sym = vm.get_interned(*g);
+            if !sym.contains("::") {
+                result.push(Value::Symbol(*g));
             }
         }
-        Ok(vm.alloc_vector(result))
     } else {
-        Err(VMError::new_vm(
-            "get-in-namespace: takes one argument, a symbol".to_string(),
-        ))
+        let mut namespace = namespace.to_string();
+        namespace.push_str("::");
+        for g in vm.globals().keys() {
+            let sym = vm.get_interned(*g);
+            if sym.starts_with(&namespace) {
+                result.push(Value::Symbol(*g));
+            }
+        }
     }
+    result
+}
+
+/// Usage: (get-in-namespace 'SYMBOL)
+///
+/// Return a vector containing all the globals currently defined namespace SYMBOL.
+///
+/// Section: namespace
+#[sl_sh_fn(fn_name = "get-in-namespace", takes_env = true)]
+fn get_in_namespace(environment: &mut SloshVm, symbol: bridge_types::Symbol) -> VMResult<Value> {
+    let i = Interned::from(symbol);
+    let v = retrieve_in_namespace(environment, &i);
+    Ok(environment.alloc_vector(v))
 }
 
 fn get_prop(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
@@ -242,26 +253,6 @@ Return a vector containing all the symbols currently defined globally.
 Section: core
 ",
     );
-    bridge_adapters::add_builtin(
-        env,
-        "get-namespaces",
-        get_namespaces,
-        "Usage: (get-namespaces)
-
-Return a vector containing all the namespaces currently defined globally.
-
-Section: core
-",
-    );
-    bridge_adapters::add_builtin(
-        env,
-        "get-in-namespace",
-        get_in_namespace,
-        "Usage: (get-in-namespace 'SYMBOL)
-
-Return a vector containing all the globals currently defined namespace SYMBOL.
-
-Section: core
-",
-    );
+    intern_get_in_namespace(env);
+    intern_get_namespaces(env);
 }

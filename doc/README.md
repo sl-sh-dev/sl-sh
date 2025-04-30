@@ -4,16 +4,67 @@ The [documentation site](https://sl-sh-dev.github.io/sl-sh/) is served from the 
 based on the `doc/mk-site.sh` script referenced in the github action `.github/workflows/gh_pages.yml`
 the `doc/book/all.html` file and directory hierarchy it makes can be blown away after each invocation of `doc/mk-site.sh`
 
-## Build locally
+# Configure
+- edit book.toml
+```toml
+# section specifying how mdbook run the `mdbook-slosh-eval` mdbook plugin in this repo.
+[preprocessor.slosh-eval]
+after = ["links"]
+# whether or not legacy sl-sh docs, rust docs, and other supplemental html is built.
+doc-supplementary = true
+# the keyword for the triple backticks in md files that indicate code the vm
+# should interpret.
+code-block-label = "slosh"
 
+[preprocessor.slosh-eval.doc-forms]
+# whether or not to build docs for rust std lib.
+std-lib = true
+# whether or not to build user docs by loading files referenced in
+#`user-doc-files`, or accessible by the load path in `user-doc-load-paths`.
+user = true
+# list of file to load, this is the default setting if none is provided.
+user-doc-files = [
+"~/.config/slosh/init.slosh",
+]
+# list of load paths to use, this is the default setting if non isprovided.
+user-doc-load-paths = [
+"~/.config/slosh/",
+]
+```
+
+## Build locally
 ```bash
 # in `./doc` subdirectory
 rm -rf ./book/*
-./mk-site.sh
 # generated site entrypoint at `./book/index.html`
+./mk-site.sh
+```
+## Serving for continuous updating
+
+It is possible to re-generate the html files every time a change is made to the
+documentation by setting the env variable `SERVE=TRUE`.
+```bash
+# in `./doc` subdirectory
+rm -rf ./book/*
+# generated site entrypoint at `./book/index.html` automatically rebuilds when
+# documentation source changes.
+# C-c/C-d to exit the process but it will not return as it is invoking a
+# process that listens for file changes and regenerates html, does not return.
+SERVE=TRUE ./mk-site.sh
 ```
 
-TODO PC need md files in a specific folder named after a section to be inlined within the section documentation
+## Skipping larger possibly unnecessary html files in development
+the slosh docs have supplemental material, namely all the rust documentation,
+built when `doc-supplementary` is set to true in the book.toml. In iterative
+documentation developemnt (i.e. when using mdbook serve) it is advised to
+set `doc-supplementary` to false to avoid the overhead of re-processing unnecessary
+bulky html.
+
+It is possible to skip building those docs at all when running  the `mk-site.sh`
+script by setting the env variable `SKIP_SUPPLEMENTAL`.
+```bash
+export SKIP_SUPPLEMENTAL=SKIP_SUPPLEMENTAL
+```
 
 ## Important information
 

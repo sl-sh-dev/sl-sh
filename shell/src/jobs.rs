@@ -213,11 +213,7 @@ impl Jobs {
     pub fn new(interactive: bool) -> Self {
         let shell_pid = Sys::getpid();
         let term_settings = if interactive {
-            if let Ok(term_setting) = Sys::get_term_settings(STDIN_FILENO) {
-                Some(term_setting)
-            } else {
-                None
-            }
+            Sys::get_term_settings(STDIN_FILENO).ok()
         } else {
             None
         };
@@ -233,11 +229,7 @@ impl Jobs {
     }
 
     pub fn cap_term(&mut self) {
-        self.term_settings = if let Ok(term_setting) = Sys::get_term_settings(STDIN_FILENO) {
-            Some(term_setting)
-        } else {
-            None
-        };
+        self.term_settings = Sys::get_term_settings(STDIN_FILENO).ok();
     }
 
     /// Create a new job with the next job number.

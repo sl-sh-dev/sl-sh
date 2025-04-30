@@ -3,8 +3,9 @@
 //! and Value::False, Value::Nil, and Value::Undefined map to bool false.
 
 use crate::lisp_adapters::{SlFrom, SlFromRef};
+use bridge_types::{ErrorStrings, Symbol};
 use compile_state::state::SloshVm;
-use slvm::{VMResult, Value};
+use slvm::{VMError, VMResult, Value, ValueType, ValueTypes};
 
 impl SlFromRef<'_, Value> for Value {
     fn sl_from_ref(value: Value, _vm: &SloshVm) -> VMResult<Self> {
@@ -30,6 +31,26 @@ impl SlFrom<bool> for Value {
             Ok(Value::True)
         } else {
             Ok(Value::False)
+        }
+    }
+}
+
+impl SlFrom<Symbol> for Value {
+    fn sl_from(value: Symbol, _vm: &mut SloshVm) -> VMResult<Self> {
+        Ok(Value::Symbol(value.into()))
+    }
+}
+
+impl SlFromRef<'_, Value> for Symbol {
+    fn sl_from_ref(value: Value, vm: &'_ SloshVm) -> VMResult<Self> {
+        match value {
+            Value::Symbol(i) => Ok(Symbol::from(i.id)),
+            _ => Err(VMError::new_conversion(
+                ErrorStrings::fix_me_mismatched_type(
+                    String::from(ValueTypes::from([ValueType::Symbol])),
+                    value.display_type(vm),
+                ),
+            )),
         }
     }
 }
