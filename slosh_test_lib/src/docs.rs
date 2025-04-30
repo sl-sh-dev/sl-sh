@@ -832,6 +832,18 @@ fn add_forms_to_md_book_part(
     Ok(())
 }
 
+/// load md book and attach doc to it. can also attach pre-processors.
+///
+/// defaults here for illustrative purposes.
+/// ```ignore
+///  let renderer = HtmlHandlebars::new();
+///  let l = LinkPreprocessor::new();
+///  md_book.with_preprocessor(l);
+///  let i = IndexPreprocessor::new();
+///  md_book.with_preprocessor(i);
+///  //md_book.with_renderer(renderer);
+///  md_book.preprocess_book(&renderer).unwrap();
+/// ```
 fn build_doc(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();
     let next = i.next();
@@ -860,13 +872,6 @@ fn build_doc(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut md_book = MDBook::load(PathBuf::from(path))
         .map_err(|_e| VMError::new("mdbook", "Unable to load the book at provided path."))?;
     add_forms_and_supplementary_docs(vm, &mut md_book.book)?;
-    //let renderer = HtmlHandlebars::new();
-    //let l = LinkPreprocessor::new();
-    //md_book.with_preprocessor(l);
-    //let i = IndexPreprocessor::new();
-    //md_book.with_preprocessor(i);
-    ////md_book.with_renderer(renderer);
-    //md_book.preprocess_book(&renderer).unwrap();
     md_book
         .build()
         .map_err(|e| VMError::new("mdbook", format!("Failed to build book: {e}")))?;

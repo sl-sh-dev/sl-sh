@@ -1,6 +1,7 @@
 extern crate pulldown_cmark;
 extern crate pulldown_cmark_to_cmark;
 
+use sl_compiler::load_eval;
 use crate::slosh_eval_lib::EvalSlosh;
 use clap::{Arg, ArgMatches, Command};
 use compile_state::state::SloshVm;
@@ -12,7 +13,6 @@ use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 use pulldown_cmark_to_cmark::cmark;
 use semver::{Version, VersionReq};
 use slosh_test_lib::docs;
-use std::cell::RefCell;
 use std::io;
 use std::process;
 
@@ -32,7 +32,7 @@ fn main() {
     env_logger::init();
     let matches = make_app().get_matches();
 
-    let preprocessor = EvalSlosh::new();
+    let preprocessor = SloshArtifacts::new();
 
     if let Some(sub_args) = matches.subcommand_matches("supports") {
         handle_supports(&preprocessor, sub_args);
@@ -78,23 +78,24 @@ fn handle_supports(pre: &dyn Preprocessor, sub_args: &ArgMatches) -> ! {
     }
 }
 
-thread_local! {
-    /// Env (job control status, etc) for the shell.
-    pub static ENV: RefCell<SloshVm> = RefCell::new(state::new_slosh_vm());
-}
-
 mod slosh_eval_lib {
     use super::*;
     use pulldown_cmark::CodeBlockKind;
     use slosh_lib::Reader;
     use toml::Value;
 
-    /// Preprocessor to evaluate slosh code
-    pub struct EvalSlosh;
+    /// Preprocessor to create slosh artifacts
+    ///     - eval slosh code
+    ///     - build std lib docs
+    ///     - build user docs
+    ///     - build supplemental docs
+    ///         - legacy documentation
+    ///         - rust docs
+    pub struct SloshArtifacts;
 
-    impl EvalSlosh {
-        pub fn new() -> EvalSlosh {
-            EvalSlosh
+    impl SloshArtifacts {
+        pub fn new() -> SloshArtifacts {
+            SloshArtifacts
         }
     }
 
@@ -198,7 +199,7 @@ mod slosh_eval_lib {
         );
 
         let mut reader = Reader::from_string(code, vm, "", 1, 0);
-        let s = slosh_test_lib::run_reader(&mut reader)
+        let s = load_eval::run_reader(&mut reader)
             .map(|x| x.display_value(vm))
             .map_err(|e| format!("Encountered error: {}", e));
         match s {
@@ -206,7 +207,7 @@ mod slosh_eval_lib {
         }
     }
 
-    impl Preprocessor for EvalSlosh {
+    impl Preprocessor for SloshArtifacts {
         fn name(&self) -> &str {
             "slosh-eval"
         }
@@ -279,11 +280,13 @@ mod slosh_eval_lib {
                     let mut vm = state::new_slosh_vm();
                     vm.pause_gc();
                     slosh_test_lib::vm_with_builtins_and_core(&mut vm);
+                    vm.unpause_gc();
 
                     // first get provided sections
                     let provided_sections =
                         docs::add_slosh_docs_to_mdbook(&mut vm, &mut book, false)?;
 
+                    vm.pause_gc();
                     // then load init.slosh
                     slosh_test_lib::add_user_builtins(
                         &mut vm,

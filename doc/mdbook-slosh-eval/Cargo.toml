@@ -20,6 +20,7 @@ builtins = { path = "../../builtins" }
 compile_state = { path = "../../compile_state" }
 bridge_adapters = { path = "../../bridge_adapters" }
 slvm = { path = "../../vm" }
+sl-compiler = { path = "../../compiler" }
 toml = "=0.5.11"
 
 [workspace]
