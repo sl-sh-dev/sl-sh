@@ -2,7 +2,7 @@ extern crate pulldown_cmark;
 extern crate pulldown_cmark_to_cmark;
 
 use sl_compiler::load_eval;
-use crate::slosh_eval_lib::EvalSlosh;
+use crate::slosh_eval_lib::SloshArtifacts;
 use clap::{Arg, ArgMatches, Command};
 use compile_state::state::SloshVm;
 use mdbook::book::{Book, BookItem};
