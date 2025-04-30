@@ -1082,7 +1082,7 @@ The symbol "::" will return to the "root" namespace (i.e. no namespace prepended
 This will cause all globals defined to have namespace:: prepended.
 This will also clear any existing imports.
 
-Section: core
+Section: namespace
 
 Example:
 (ns testing)
@@ -1098,7 +1098,7 @@ THe symbol "::" will return to the "root" namespace (i.e. no namespace prepended
 This will cause all globals defined to have namespace:: prepended.
 This will also clear any existing imports.
 
-Section: core
+Section: namespace
 
 Example:
 (with-ns test-with-ns
@@ -1112,7 +1112,7 @@ Example:
 Will import a namespace.  Without an :as then all symbols in the namespace will become available in the current
 namespace as if local.  With [:as symbol] then all namespace symbols become available with symbol:: prepended.
 
-Section: core
+Section: namespace
 
 Example:
 (ns testing)

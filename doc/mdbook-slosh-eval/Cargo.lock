@@ -1257,6 +1257,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bridge_adapters",
+ "builtins",
  "clap",
  "compile_state",
  "env_logger",
@@ -1266,6 +1267,7 @@ dependencies = [
  "pulldown-cmark-to-cmark",
  "semver",
  "serde_json",
+ "sl-compiler",
  "slosh_lib",
  "slosh_test_lib",
  "slvm",
@@ -1953,6 +1955,8 @@ name = "slosh_lib"
 version = "0.11.0"
 dependencies = [
  "bridge_adapters",
+ "bridge_macros",
+ "bridge_types",
  "builtins",
  "chrono",
  "compile_state",
@@ -1970,6 +1974,7 @@ name = "slosh_test_lib"
 version = "0.11.0"
 dependencies = [
  "bridge_adapters",
+ "builtins",
  "chrono",
  "compile_state",
  "lazy_static",

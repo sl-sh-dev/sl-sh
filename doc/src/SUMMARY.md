@@ -13,6 +13,7 @@
 - [Errors](./errors.md)
 - [Syntax and Macros](./syntax-and-macros.md)
 - [Iterators](./iterators.md)
+- [Debugger](./debugger.md)
 
 # General
 

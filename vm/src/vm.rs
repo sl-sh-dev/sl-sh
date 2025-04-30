@@ -38,7 +38,7 @@ pub struct GVm<ENV> {
     stack: *mut Value,
     registers: *mut Value,
     globals: Globals,
-    buitins: Vec<CallFunc<ENV>>,
+    builtins: Vec<CallFunc<ENV>>,
     this_fn: Option<Value>,
     on_error: Option<Value>,
 
@@ -88,7 +88,7 @@ impl<ENV> GVm<ENV> {
             stack, //: [Value::Undefined; STACK_CAP],
             registers: stack,
             globals,
-            buitins: Vec::new(),
+            builtins: Vec::new(),
             this_fn: None,
             on_error: None,
             err_frame: None,
@@ -214,15 +214,15 @@ impl<ENV> GVm<ENV> {
     }
 
     pub fn add_builtin(&mut self, func: CallFuncSig<ENV>) -> Value {
-        let result = self.buitins.len();
-        self.buitins.push(CallFunc { func });
+        let result = self.builtins.len();
+        self.builtins.push(CallFunc { func });
         Value::Builtin(result as u32)
     }
 
     /// Return the builtin function at idx.
     /// Note, will panic if idx is not a valid builtin index.
     pub fn get_builtin(&self, idx: u32) -> &CallFuncSig<ENV> {
-        &self.buitins[idx as usize].func
+        &self.builtins[idx as usize].func
     }
 
     pub fn is_equal_pair(&self, val1: Value, val2: Value) -> VMResult<Value> {

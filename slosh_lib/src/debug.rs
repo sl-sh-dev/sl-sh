@@ -1,7 +1,9 @@
 extern crate sl_liner;
 
 use std::collections::VecDeque;
+use std::env;
 use std::io::ErrorKind;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use compile_state::state::{SloshVm, SloshVmTrait};
@@ -287,4 +289,69 @@ pub fn builtin_dump_regs(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Valu
         }
     }
     Ok(Value::Nil)
+}
+
+pub fn get_temp_file_path(filename: &str) -> PathBuf {
+    let temp_dir = env::temp_dir();
+    //let temp_dir = PathBuf::from("/tmp/");
+    temp_dir.join(filename)
+}
+
+/// A macro similar to println! that writes output to a file in /tmp. Used to experiment but should
+/// not end up in committed code, clippy lint expect(unused) helps enforce this.
+///
+/// # Examples
+///
+/// ```ignore
+/// file_println!("debug.log", "Hello, world!"); // Writes to a platform specific tmp dir.
+/// file_println!("debug.log", "The value is: {}", 42); // Supports format args.
+/// ```
+///
+/// Note on usage:
+/// The expect(unused) fails if macro_export attribute is uncommented because that attribute
+/// makes a macro part of the public API of the crate signifying usage, potentially by an external
+/// crate.
+//#[macro_export] // when needed  for debugging, uncomment.
+#[expect(unused)] // do not remove, prevents CI from passing if used.
+macro_rules! file_println {
+    ($filename:expr, $msg:expr) => {
+        {
+            use std::io::Write;
+            let path = $crate::debug::get_temp_file_path($filename);
+            let mut file = match std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&path) {
+                    Ok(f) => f,
+                    Err(e) => {
+                        eprintln!("Error opening file {:?}: {}", path, e);
+                        std::fs::File::create(&path).expect("Failed to create file")
+                    }
+                };
+
+            if let Err(e) = writeln!(file, "{}", $msg) {
+                eprintln!("Error writing to file {:?}: {}", path, e);
+            }
+        }
+    };
+    ($filename:expr, $fmt:expr, $($arg:tt)*) => {
+        {
+            use std::io::Write;
+            let path = $crate::debug::get_temp_file_path($filename);
+            let mut file = match std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&path) {
+                    Ok(f) => f,
+                    Err(e) => {
+                        eprintln!("Error opening file {}: {}", path.to_string_lossy(), e);
+                        std::fs::File::create(&path).expect("Failed to create file")
+                    }
+                };
+
+            if let Err(e) = writeln!(file, $fmt, $($arg)*) {
+                eprintln!("Error writing to file {:?}: {}", path.to_string_lossy(), e);
+            }
+        }
+    };
 }

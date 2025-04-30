@@ -6,7 +6,8 @@ Namespaces are compiler bookkeeping for organizing global symbols.  When in a na
 
 ## Entering a namespace
 
-From code use the 'with-ns' form.
+From code use the `with-ns` form.
+
 ```slosh
 (doc 'with-ns)
 ```
