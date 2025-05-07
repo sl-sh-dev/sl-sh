@@ -400,9 +400,9 @@ pub fn usage(vm: &mut SloshVm, slot: u32, sym: &Value) -> String {
     doc_str
 }
 
-pub fn set_builtins(env: &mut SloshVm) {
+pub fn set_builtins(env: &mut SloshVm, print_noop: bool) {
     setup_collection_builtins(env);
-    add_print_builtins(env);
+    add_print_builtins(env, print_noop);
     add_load_builtins(env);
     add_str_builtins(env);
     add_misc_builtins(env);
@@ -425,7 +425,7 @@ pub fn set_builtins(env: &mut SloshVm) {
 
 pub fn new_slosh_vm_with_builtins() -> SloshVm {
     let mut env = new_slosh_vm();
-    set_builtins(&mut env);
+    set_builtins(&mut env, false);
     env
 }
 
@@ -483,7 +483,11 @@ Section: shell"#
 }
 
 pub fn set_builtins_shell(env: &mut SloshVm) {
-    set_builtins(env);
+    set_builtins_shell_print_noop(env, false);
+}
+
+pub fn set_builtins_shell_print_noop(env: &mut SloshVm, print_noop: bool) {
+    set_builtins(env, print_noop);
     add_shell_builtins(env);
     env.set_global_builtin("dump-regs", builtin_dump_regs);
 
@@ -503,17 +507,21 @@ pub fn set_builtins_shell(env: &mut SloshVm) {
     export_args(env);
 }
 
-pub fn run(modify_vm: fn(&mut SloshVm) -> ()) -> i32 {
+pub fn run(modify_vm: impl FnOnce(&mut SloshVm) -> ()) -> i32 {
     run_slosh(modify_vm)
 }
 
-fn run_slosh(modify_vm: fn(&mut SloshVm) -> ()) -> i32 {
+fn run_slosh(modify_vm: impl FnOnce(&mut SloshVm) -> ()) -> i32 {
+    run_slosh_print_noop(modify_vm, false)
+}
+
+pub fn run_slosh_print_noop(modify_vm: impl FnOnce(&mut SloshVm) -> (), print_noop: bool) -> i32 {
     let mut status = 0;
     if let Some(config) = get_config() {
         ENV.with(|renv| {
             let mut env = renv.borrow_mut();
             env.pause_gc();
-            set_builtins_shell(&mut env);
+            set_builtins_shell_print_noop(&mut env, print_noop);
             modify_vm(&mut env);
             env.unpause_gc();
         });

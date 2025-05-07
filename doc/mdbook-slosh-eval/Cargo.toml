@@ -23,4 +23,7 @@ slvm = { path = "../../vm" }
 sl-compiler = { path = "../../compiler" }
 toml = "=0.5.11"
 
+[build-dependencies]
+chrono = "0.4.38"
+
 [workspace]

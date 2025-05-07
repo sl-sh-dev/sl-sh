@@ -101,11 +101,19 @@ pub fn pretty_value(vm: &SloshVm, val: Value) -> String {
     }
 }
 
+pub fn _pr(_vm: &mut SloshVm, _registers: &[Value]) -> VMResult<Value> {
+    Ok(Value::Nil)
+}
+
 pub fn pr(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     for v in registers {
         print!("{}", pretty_value(vm, *v));
     }
     stdout().flush()?;
+    Ok(Value::Nil)
+}
+
+pub fn _epr(_vm: &mut SloshVm, _registers: &[Value]) -> VMResult<Value> {
     Ok(Value::Nil)
 }
 
@@ -117,11 +125,19 @@ pub fn epr(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     Ok(Value::Nil)
 }
 
+pub fn _prn(_vm: &mut SloshVm, _registers: &[Value]) -> VMResult<Value> {
+    Ok(Value::Nil)
+}
+
 pub fn prn(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     for v in registers {
         print!("{}", pretty_value(vm, *v));
     }
     println!();
+    Ok(Value::Nil)
+}
+
+pub fn _fpr(_vm: &mut SloshVm, _registers: &[Value]) -> VMResult<Value> {
     Ok(Value::Nil)
 }
 
@@ -141,6 +157,10 @@ pub fn fpr(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
+pub fn _fprn(_vm: &mut SloshVm, _registers: &[Value]) -> VMResult<Value> {
+    Ok(Value::Nil)
+}
+
 pub fn fprn(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut args = registers.iter();
     if let Some(Value::Io(h)) = args.next() {
@@ -158,11 +178,19 @@ pub fn fprn(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
+pub fn _eprn(_vm: &mut SloshVm, _registers: &[Value]) -> VMResult<Value> {
+    Ok(Value::Nil)
+}
+
 pub fn eprn(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     for v in registers {
         eprint!("{}", pretty_value(vm, *v));
     }
     eprintln!();
+    Ok(Value::Nil)
+}
+
+pub fn _dasm(_vm: &mut SloshVm, _registers: &[Value]) -> VMResult<Value> {
     Ok(Value::Nil)
 }
 
@@ -202,12 +230,24 @@ pub fn dasm(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-pub fn add_print_builtins(env: &mut SloshVm) {
-    env.set_global_builtin("pr", pr);
-    env.set_global_builtin("epr", epr);
-    env.set_global_builtin("prn", prn);
-    env.set_global_builtin("eprn", eprn);
-    env.set_global_builtin("dasm", dasm);
-    env.set_global_builtin("fpr", fpr);
-    env.set_global_builtin("fprn", fprn);
+/// noop set to true means every command that would write to stdout/stderr
+/// instead does nothing.
+pub fn add_print_builtins(env: &mut SloshVm, noop: bool) {
+    if noop {
+        env.set_global_builtin("pr", _pr);
+        env.set_global_builtin("epr", _epr);
+        env.set_global_builtin("prn", _prn);
+        env.set_global_builtin("eprn", _eprn);
+        env.set_global_builtin("dasm", _dasm);
+        env.set_global_builtin("fpr", _fpr);
+        env.set_global_builtin("fprn", _fprn);
+    } else {
+        env.set_global_builtin("pr", pr);
+        env.set_global_builtin("epr", epr);
+        env.set_global_builtin("prn", prn);
+        env.set_global_builtin("eprn", eprn);
+        env.set_global_builtin("dasm", dasm);
+        env.set_global_builtin("fpr", fpr);
+        env.set_global_builtin("fprn", fprn);
+    }
 }

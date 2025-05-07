@@ -8,14 +8,14 @@ pub mod docs;
 pub fn new_slosh_vm_with_builtins_and_core() -> SloshVm {
     let mut env = state::new_slosh_vm();
 
-    vm_with_builtins_and_core(&mut env);
+    vm_with_builtins_and_core(&mut env, false);
 
     env
 }
 
-pub fn vm_with_builtins_and_core(env: &mut SloshVm) {
+pub fn vm_with_builtins_and_core(env: &mut SloshVm, print_noop: bool) {
     docs::add_builtins(env);
-    slosh_lib::set_builtins_shell(env);
+    slosh_lib::set_builtins_shell_print_noop(env, print_noop);
     bridge_adapters::add_builtin(
         env,
         "version",
@@ -33,23 +33,7 @@ pub fn add_user_builtins(env: &mut SloshVm, load_paths: &[String], files_to_load
 
     let load_paths: Vec<&str> = load_paths.iter().map(AsRef::as_ref).collect();
     slosh_lib::set_initial_load_path(env, load_paths);
-
-    if !files_to_load.is_empty() {
-        let code = files_to_load.join("\" \"");
-        let code = format!("(load \"{}\")", code);
-        let code = format!(
-            r#"(import test)
-                (def *prn* "")
-                (def *stdout* "")
-                (dyn
-                    prn
-                    (fn (&rest) (set! *prn* (str *prn* &rest)))
-                    (do {}))"#,
-            code
-        );
-        let mut reader = Reader::from_string(code, env, "", 1, 0);
-        _ = load_eval::run_reader(&mut reader).expect("should be able to run this code.");
-    }
+    slosh_lib::load_sloshrc(env, None);
 }
 
 fn fake_version(vm: &mut SloshVm, registers: &[slvm::Value]) -> VMResult<slvm::Value> {

@@ -1,20 +1,30 @@
 extern crate pulldown_cmark;
 extern crate pulldown_cmark_to_cmark;
 
-use sl_compiler::load_eval;
 use crate::slosh_eval_lib::SloshArtifacts;
 use clap::{Arg, ArgMatches, Command};
+use compile_state::state;
 use compile_state::state::SloshVm;
 use mdbook::book::{Book, BookItem};
 use mdbook::errors::Error;
 use mdbook::preprocess::{CmdPreprocessor, Preprocessor, PreprocessorContext};
-use compile_state::state;
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 use pulldown_cmark_to_cmark::cmark;
 use semver::{Version, VersionReq};
+use sl_compiler::load_eval;
 use slosh_test_lib::docs;
+use slvm::{VMError, VMResult, Value};
 use std::io;
 use std::process;
+
+pub const VERSION_STRING: &str = env!("VERSION_STRING");
+
+fn version(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    if !registers.is_empty() {
+        return Err(VMError::new_compile("version: requires no argument"));
+    }
+    Ok(vm.alloc_string(VERSION_STRING.to_string()))
+}
 
 pub fn make_app() -> Command {
     Command::new("mdbook-slosh-eval")
@@ -133,7 +143,7 @@ mod slosh_eval_lib {
                         Event::End(TagEnd::CodeBlock) if tracking => {
                             let mut vm = state::new_slosh_vm();
                             vm.pause_gc();
-                            slosh_test_lib::vm_with_builtins_and_core(&mut vm);
+                            slosh_test_lib::vm_with_builtins_and_core(&mut vm, false);
                             vm.unpause_gc();
                             let eval = exec_code(&mut vm, buf.clone());
 
@@ -207,6 +217,20 @@ mod slosh_eval_lib {
         }
     }
 
+    fn modify_vm(vm: &mut SloshVm) {
+        docs::add_builtins(vm);
+
+        bridge_adapters::add_builtin(
+            vm,
+            "version",
+            version,
+            "Return the software version string.",
+        );
+
+        let mut reader = Reader::from_string(r#"(load "core.slosh")"#.to_string(), vm, "", 1, 0);
+        _ = load_eval::run_reader(&mut reader);
+    }
+
     impl Preprocessor for SloshArtifacts {
         fn name(&self) -> &str {
             "slosh-eval"
@@ -261,7 +285,7 @@ mod slosh_eval_lib {
                     log::info!("Evaluate docs.");
                     let mut vm = state::new_slosh_vm();
                     vm.pause_gc();
-                    slosh_test_lib::vm_with_builtins_and_core(&mut vm);
+                    slosh_test_lib::vm_with_builtins_and_core(&mut vm, false);
                     vm.unpause_gc();
 
                     log::debug!("Add key {}.", key);
@@ -270,35 +294,41 @@ mod slosh_eval_lib {
                 }
 
                 if gen_user_docs {
-                    if user_files.is_empty() {
-                        user_files = vec!["~/.config/slosh/init.slosh".to_string()];
-                    }
-                    if user_load_paths.is_empty() {
-                        user_load_paths = vec!["~/.config/slosh/".to_string()];
-                    }
+                    let modify_vm_local = |vm: &mut SloshVm| {
+                        modify_vm(vm);
 
-                    let mut vm = state::new_slosh_vm();
-                    vm.pause_gc();
-                    slosh_test_lib::vm_with_builtins_and_core(&mut vm);
-                    vm.unpause_gc();
+                        if user_files.is_empty() {
+                            user_files = vec!["~/.config/slosh/init.slosh".to_string()];
+                        }
+                        if user_load_paths.is_empty() {
+                            user_load_paths = vec!["~/.config/slosh/".to_string()];
+                        }
 
-                    // first get provided sections
-                    let provided_sections =
-                        docs::add_slosh_docs_to_mdbook(&mut vm, &mut book, false)?;
+                        let vm = &mut state::new_slosh_vm();
+                        vm.pause_gc();
+                        slosh_test_lib::vm_with_builtins_and_core(vm, true);
+                        vm.unpause_gc();
 
-                    vm.pause_gc();
-                    // then load init.slosh
-                    slosh_test_lib::add_user_builtins(
-                        &mut vm,
-                        user_load_paths.as_slice(),
-                        user_files.as_slice(),
-                    );
-                    vm.unpause_gc();
-                    docs::add_user_docs_to_mdbook_less_provided_sections(
-                        &mut vm,
-                        &mut book,
-                        provided_sections,
-                    )?;
+                        // first get provided sections
+                        if let Ok(provided_sections) =
+                            docs::add_slosh_docs_to_mdbook(vm, &mut book, false)
+                        {
+                            vm.pause_gc();
+                            // then load init.slosh
+                            slosh_test_lib::add_user_builtins(
+                                vm,
+                                user_load_paths.as_slice(),
+                                user_files.as_slice(),
+                            );
+                            vm.unpause_gc();
+                            let _ = docs::add_user_docs_to_mdbook_less_provided_sections(
+                                vm,
+                                &mut book,
+                                provided_sections,
+                            );
+                        }
+                    };
+                    let _vm = slosh_lib::run_slosh_print_noop(modify_vm_local, true);
                 }
 
                 let key = "code-block-label";
@@ -312,7 +342,7 @@ mod slosh_eval_lib {
                     if *b {
                         let mut vm = state::new_slosh_vm();
                         vm.pause_gc();
-                        slosh_test_lib::vm_with_builtins_and_core(&mut vm);
+                        slosh_test_lib::vm_with_builtins_and_core(&mut vm, false);
                         vm.unpause_gc();
 
                         log::debug!("Add key {}.", key);
