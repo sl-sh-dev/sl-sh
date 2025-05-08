@@ -507,15 +507,15 @@ pub fn set_builtins_shell_print_noop(env: &mut SloshVm, print_noop: bool) {
     export_args(env);
 }
 
-pub fn run(modify_vm: impl FnOnce(&mut SloshVm) -> ()) -> i32 {
+pub fn run(modify_vm: impl FnOnce(&mut SloshVm)) -> i32 {
     run_slosh(modify_vm)
 }
 
-fn run_slosh(modify_vm: impl FnOnce(&mut SloshVm) -> ()) -> i32 {
+fn run_slosh(modify_vm: impl FnOnce(&mut SloshVm)) -> i32 {
     run_slosh_print_noop(modify_vm, false)
 }
 
-pub fn run_slosh_print_noop(modify_vm: impl FnOnce(&mut SloshVm) -> (), print_noop: bool) -> i32 {
+pub fn run_slosh_print_noop(modify_vm: impl FnOnce(&mut SloshVm), print_noop: bool) -> i32 {
     let mut status = 0;
     if let Some(config) = get_config() {
         ENV.with(|renv| {

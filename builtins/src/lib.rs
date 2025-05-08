@@ -4,6 +4,8 @@ use bridge_macros::sl_sh_fn;
 use compile_state::state::{SloshVm, SloshVmTrait};
 use slvm::{Interned, VMError, VMResult, Value};
 use std::collections::HashSet;
+use bridge_adapters::lisp_adapters::SlFromRef;
+use bridge_types::LooseString;
 
 pub mod bridge_macro_tests;
 pub mod collections;
@@ -15,6 +17,73 @@ pub mod math;
 pub mod print;
 pub mod rand;
 pub mod string;
+
+pub const NOOP: &str = "noop";
+
+fn noop(_vm: &mut SloshVm, _registers: &[Value]) -> VMResult<Value> {
+    Ok(Value::Nil)
+}
+
+fn get_builtin_slot_and_value(vm: &mut SloshVm, s: impl AsRef<str>) -> (u32, Value) {
+    let sym = vm.intern(s.as_ref());
+    let sym_slot = vm.get_reserve_global(sym);
+    let inplace_val = vm.get_global(sym_slot);
+    (sym_slot, inplace_val)
+}
+
+fn noop_swap(
+    environment: &mut SloshVm,
+    registers: &[Value]
+) -> VMResult<Value> {
+    if registers.len() == 1 {
+        let v = registers[0];
+        let fcn = LooseString::sl_from_ref(v, environment)?.to_string();
+        let (sym_slot, inplace_val) = get_builtin_slot_and_value(environment, &fcn);
+        let (_noop_slot, noop_val) = get_builtin_slot_and_value(environment, NOOP);
+
+        if inplace_val == noop_val {
+            // the value for fcn name is the same as noop slot, this means the function
+            // is currently set to noop
+            if let Some(original_value) = environment.env_mut().remove_noop(fcn) {
+                environment.set_global(sym_slot, original_value);
+            }
+        } else {
+            let _ = environment.env_mut().save_noop(fcn, inplace_val);
+            environment.set_global(sym_slot, noop_val);
+        }
+
+        Ok(Value::Nil)
+    } else {
+       Err(VMError::new_vm(
+           "noop-swap: takes one argument, a builtin function to swap with noop.".to_string(),
+       ))
+    }
+}
+
+fn is_noop(
+    environment: &mut SloshVm,
+    registers: &[Value]
+) -> VMResult<Value> {
+    if registers.len() == 1 {
+        let v = registers[0];
+        let fcn = LooseString::sl_from_ref(v, environment)?.to_string();
+        let (_sym_slot, inplace_val) = get_builtin_slot_and_value(environment, fcn);
+        let (_noop_slot, noop_val) = get_builtin_slot_and_value(environment, NOOP);
+
+        if inplace_val == noop_val {
+            // the value for fcn name is the same as noop slot, this means the function
+            // is currently set to noop
+            Ok(Value::True)
+        } else {
+            Ok(Value::False)
+        }
+    } else {
+        Err(VMError::new_vm(
+            "noop-swap: takes one argument, a builtin function to swap with noop.".to_string(),
+        ))
+    }
+}
+
 
 fn get_globals(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if !registers.is_empty() {
@@ -242,6 +311,9 @@ pub fn add_misc_builtins(env: &mut SloshVm) {
     env.set_global_builtin("sizeof-value", sizeof_value);
     env.set_global_builtin("gensym", gensym);
     env.set_global_builtin("expand-macro", expand_macro);
+    env.set_global_builtin(NOOP, noop);
+    env.set_global_builtin("noop-swap", noop_swap);
+    env.set_global_builtin("is-noop", is_noop);
     bridge_adapters::add_builtin(
         env,
         "get-globals",

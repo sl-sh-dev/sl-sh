@@ -1297,6 +1297,8 @@ pub struct CompileEnvironment {
     global_map: HashMap<Interned, usize>,
     gensym_idx: usize,
     namespace: Namespace,
+    /// Some functions can be swapped to/from a noop, this function tracks the values.
+    noop_map: HashMap<String, Value>,
 }
 
 impl Default for CompileEnvironment {
@@ -1312,6 +1314,7 @@ impl CompileEnvironment {
             line: 1,
             specials: None,
             global_map: HashMap::new(),
+            noop_map: HashMap::new(),
             gensym_idx: 0,
             namespace: Namespace {
                 name: "".to_string(),
@@ -1347,6 +1350,18 @@ impl CompileEnvironment {
     pub fn get_namespace(&self) -> &Namespace {
         &self.namespace
     }
+
+    /// Set a given functions original builtin function so that it can be replaced
+    /// with noop but mapped back later.
+    pub fn save_noop(&mut self, s: String, v: Value) -> Option<Value> {
+        self.noop_map.insert(s, v)
+    }
+
+    /// Removes a key from the map, returning the value at the key if the key was previously
+    /// in the map. This is that original builtin function's [`Value::Builtin`].
+    pub fn remove_noop(&mut self, t: impl AsRef<str>) -> Option<Value> {
+        self.noop_map.remove(t.as_ref())
+    }
 }
 
 pub type SloshVm = GVm<CompileEnvironment>;
@@ -1356,6 +1371,7 @@ pub trait SloshVmTrait {
     fn get_reserve_global(&mut self, symbol: Interned) -> u32;
     fn set_named_global(&mut self, string: &str, value: Value) -> u32;
     fn set_global_builtin(&mut self, string: &str, func: CallFuncSig<CompileEnvironment>) -> u32;
+    //fn swap_global_builtin(&mut self, swap_string: &str, swap_func: CallFuncSig<CompileEnvironment>, string: &str, func: CallFuncSig<CompileEnvironment>);
     fn dump_globals(&self);
     fn globals(&self) -> &HashMap<Interned, usize>;
     fn own_line(&self) -> Option<u32>;
@@ -1408,6 +1424,19 @@ impl SloshVmTrait for SloshVm {
         let f_val = self.add_builtin(func);
         self.set_named_global(string, f_val)
     }
+
+//    fn swap_global_builtin(&mut self, swap_string: &str, swap_func: CallFuncSig<CompileEnvironment>, string: &str, //func: CallFuncSig<CompileEnvironment>) {
+//        let swap_sym = self.intern(swap_string);
+//        let swap_slot = self.get_reserve_global(swap_sym);
+//        self.env().
+//
+//        let sym = self.intern(string);
+//        let slot = self.get_reserve_global(sym);
+//
+//        let swap_val = self.get_global(swap_slot);
+//        let val = self.get_global(swap_slot);
+//
+//    }
 
     fn dump_globals(&self) {
         println!("GLOBALS:");

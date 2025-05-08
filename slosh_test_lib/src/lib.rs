@@ -33,7 +33,11 @@ pub fn add_user_builtins(env: &mut SloshVm, load_paths: &[String], files_to_load
 
     let load_paths: Vec<&str> = load_paths.iter().map(AsRef::as_ref).collect();
     slosh_lib::set_initial_load_path(env, load_paths);
-    slosh_lib::load_sloshrc(env, None);
+    for script in files_to_load {
+        let script = env.intern(script);
+        let script = env.get_interned(script);
+        let _ = load_eval::load_internal(env, script);
+    }
 }
 
 fn fake_version(vm: &mut SloshVm, registers: &[slvm::Value]) -> VMResult<slvm::Value> {
