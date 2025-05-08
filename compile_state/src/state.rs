@@ -1352,7 +1352,7 @@ impl CompileEnvironment {
     }
 
     /// Set a given functions original builtin function so that it can be replaced
-    /// with noop but mapped back later.
+    /// with noop fn but mapped back later.
     pub fn save_noop(&mut self, s: String, v: Value) -> Option<Value> {
         self.noop_map.insert(s, v)
     }
@@ -1371,7 +1371,6 @@ pub trait SloshVmTrait {
     fn get_reserve_global(&mut self, symbol: Interned) -> u32;
     fn set_named_global(&mut self, string: &str, value: Value) -> u32;
     fn set_global_builtin(&mut self, string: &str, func: CallFuncSig<CompileEnvironment>) -> u32;
-    //fn swap_global_builtin(&mut self, swap_string: &str, swap_func: CallFuncSig<CompileEnvironment>, string: &str, func: CallFuncSig<CompileEnvironment>);
     fn dump_globals(&self);
     fn globals(&self) -> &HashMap<Interned, usize>;
     fn own_line(&self) -> Option<u32>;
@@ -1424,19 +1423,6 @@ impl SloshVmTrait for SloshVm {
         let f_val = self.add_builtin(func);
         self.set_named_global(string, f_val)
     }
-
-//    fn swap_global_builtin(&mut self, swap_string: &str, swap_func: CallFuncSig<CompileEnvironment>, string: &str, //func: CallFuncSig<CompileEnvironment>) {
-//        let swap_sym = self.intern(swap_string);
-//        let swap_slot = self.get_reserve_global(swap_sym);
-//        self.env().
-//
-//        let sym = self.intern(string);
-//        let slot = self.get_reserve_global(sym);
-//
-//        let swap_val = self.get_global(swap_slot);
-//        let val = self.get_global(swap_slot);
-//
-//    }
 
     fn dump_globals(&self) {
         println!("GLOBALS:");

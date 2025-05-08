@@ -295,6 +295,7 @@ mod slosh_eval_lib {
 
                 if gen_user_docs {
                     let modify_vm_local = |vm: &mut SloshVm| {
+                        slosh_test_lib::vm_with_stdout_disabled(vm);
                         modify_vm(vm);
 
                         if user_files.is_empty() {
@@ -304,7 +305,6 @@ mod slosh_eval_lib {
                             user_load_paths = vec!["~/.config/slosh/".to_string()];
                         }
 
-                        let vm = &mut state::new_slosh_vm();
                         vm.pause_gc();
                         slosh_test_lib::vm_with_builtins_and_core(vm, true);
                         vm.unpause_gc();
@@ -315,6 +315,7 @@ mod slosh_eval_lib {
                         {
                             vm.pause_gc();
                             // then load init.slosh
+                            slosh_lib::load_sloshrc(vm, None);
                             slosh_test_lib::add_user_builtins(
                                 vm,
                                 user_load_paths.as_slice(),
@@ -328,7 +329,7 @@ mod slosh_eval_lib {
                             );
                         }
                     };
-                    let _vm = slosh_lib::run_slosh_print_noop(modify_vm_local, true);
+                    let _vm = slosh_lib::run_slosh(modify_vm_local);
                 }
 
                 let key = "code-block-label";

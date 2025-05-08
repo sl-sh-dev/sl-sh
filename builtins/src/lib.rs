@@ -1,11 +1,11 @@
 extern crate core;
 
+use bridge_adapters::lisp_adapters::SlFromRef;
 use bridge_macros::sl_sh_fn;
+use bridge_types::LooseString;
 use compile_state::state::{SloshVm, SloshVmTrait};
 use slvm::{Interned, VMError, VMResult, Value};
 use std::collections::HashSet;
-use bridge_adapters::lisp_adapters::SlFromRef;
-use bridge_types::LooseString;
 
 pub mod bridge_macro_tests;
 pub mod collections;
@@ -31,39 +31,61 @@ fn get_builtin_slot_and_value(vm: &mut SloshVm, s: impl AsRef<str>) -> (u32, Val
     (sym_slot, inplace_val)
 }
 
-fn noop_swap(
-    environment: &mut SloshVm,
-    registers: &[Value]
-) -> VMResult<Value> {
+pub fn noop_fn(environment: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if registers.len() == 1 {
         let v = registers[0];
         let fcn = LooseString::sl_from_ref(v, environment)?.to_string();
-        let (sym_slot, inplace_val) = get_builtin_slot_and_value(environment, &fcn);
-        let (_noop_slot, noop_val) = get_builtin_slot_and_value(environment, NOOP);
-
-        if inplace_val == noop_val {
-            // the value for fcn name is the same as noop slot, this means the function
-            // is currently set to noop
-            if let Some(original_value) = environment.env_mut().remove_noop(fcn) {
-                environment.set_global(sym_slot, original_value);
-            }
-        } else {
-            let _ = environment.env_mut().save_noop(fcn, inplace_val);
-            environment.set_global(sym_slot, noop_val);
-        }
-
-        Ok(Value::Nil)
+        noop_swap_internal(environment, fcn, NoopSwap::MakeNoop)
     } else {
-       Err(VMError::new_vm(
-           "noop-swap: takes one argument, a builtin function to swap with noop.".to_string(),
-       ))
+        Err(VMError::new_vm(
+            "noop-swap: takes one argument, a builtin function to swap with noop.".to_string(),
+        ))
     }
 }
 
-fn is_noop(
+pub fn un_noop_fn(environment: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    if registers.len() == 1 {
+        let v = registers[0];
+        let fcn = LooseString::sl_from_ref(v, environment)?.to_string();
+        noop_swap_internal(environment, fcn, NoopSwap::MakeNotNoop)
+    } else {
+        Err(VMError::new_vm(
+            "noop-swap: takes one argument, a builtin function to swap with noop.".to_string(),
+        ))
+    }
+}
+
+/// Helper enum to "force" a given function to be noop'ed or not.
+pub enum NoopSwap {
+    MakeNoop,
+    MakeNotNoop,
+}
+
+pub fn noop_swap_internal(
     environment: &mut SloshVm,
-    registers: &[Value]
+    fcn: String,
+    force_noop: NoopSwap,
 ) -> VMResult<Value> {
+    let (sym_slot, inplace_val) = get_builtin_slot_and_value(environment, &fcn);
+    let (_noop_slot, noop_val) = get_builtin_slot_and_value(environment, NOOP);
+
+    if inplace_val == noop_val && matches!(force_noop, NoopSwap::MakeNotNoop) {
+        // the value for fcn name is the same as noop slot, this means the function
+        // is currently set to noop
+        if let Some(original_value) = environment.env_mut().remove_noop(fcn) {
+            environment.set_global(sym_slot, original_value);
+        }
+    } else if matches!(force_noop, NoopSwap::MakeNoop) {
+        // value is *not* noop, save off the original value and then replace the slot with the
+        // noop value.
+        let _ = environment.env_mut().save_noop(fcn, inplace_val);
+        environment.set_global(sym_slot, noop_val);
+    }
+
+    Ok(Value::Nil)
+}
+
+fn is_noop(environment: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if registers.len() == 1 {
         let v = registers[0];
         let fcn = LooseString::sl_from_ref(v, environment)?.to_string();
@@ -83,7 +105,6 @@ fn is_noop(
         ))
     }
 }
-
 
 fn get_globals(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if !registers.is_empty() {
@@ -312,7 +333,8 @@ pub fn add_misc_builtins(env: &mut SloshVm) {
     env.set_global_builtin("gensym", gensym);
     env.set_global_builtin("expand-macro", expand_macro);
     env.set_global_builtin(NOOP, noop);
-    env.set_global_builtin("noop-swap", noop_swap);
+    env.set_global_builtin("noop-fn", noop_fn);
+    env.set_global_builtin("un-noop-fn", un_noop_fn);
     env.set_global_builtin("is-noop", is_noop);
     bridge_adapters::add_builtin(
         env,

@@ -78,6 +78,10 @@ lazy_static! {
         exemption_set.insert("expand-macro");
         exemption_set.insert("*stdout*");
         exemption_set.insert("*prn*");
+        exemption_set.insert("noop");
+        exemption_set.insert("is-noop");
+        exemption_set.insert("noop-fn");
+        exemption_set.insert("un-noop-fn");
 
         // slosh specific colors
         exemption_set.insert("get-rgb-seq");
@@ -1003,7 +1007,7 @@ mod test {
     use super::*;
     use compile_state::state::new_slosh_vm;
     use sl_compiler::Reader;
-    use slosh_lib::{run_reader, set_builtins_shell, set_initial_load_path, ENV};
+    use slosh_lib::{run_reader, set_builtins_and_shell_builtins, set_initial_load_path, ENV};
     use std::collections::BTreeMap;
     use std::ops::DerefMut;
     use tempfile::TempDir;
@@ -1020,7 +1024,7 @@ mod test {
         temp_env::with_var("HOME", home_dir, || {
             ENV.with(|env| {
                 let mut vm = env.borrow_mut();
-                set_builtins_shell(vm.deref_mut());
+                set_builtins_and_shell_builtins(vm.deref_mut());
                 set_initial_load_path(vm.deref_mut(), vec![&home_path]);
                 let mut reader =
                     Reader::from_string(r#"(load "core.slosh")"#.to_string(), &mut vm, "", 1, 0);
@@ -1054,7 +1058,7 @@ mod test {
     #[test]
     fn list_slosh_functions() {
         let mut vm = new_slosh_vm();
-        set_builtins_shell(&mut vm);
+        set_builtins_and_shell_builtins(&mut vm);
         for (g, _) in vm.globals() {
             let sym = Value::Symbol(*g);
             let symbol = sym.display_value(&vm);
@@ -1066,7 +1070,7 @@ mod test {
     #[test]
     fn test_global_slosh_docs_formatted_properly() {
         let mut env = new_slosh_vm();
-        set_builtins_shell(&mut env);
+        set_builtins_and_shell_builtins(&mut env);
 
         let mut docs: Vec<SloshDoc> = vec![];
         Namespace::Global

@@ -1,21 +1,27 @@
-use compile_state::state::{self, SloshVm};
+use builtins::{noop_swap_internal, NoopSwap};
+use compile_state::state::SloshVm;
 use sl_compiler::load_eval;
 use sl_compiler::Reader;
 use slvm::{VMError, VMResult};
 
 pub mod docs;
 
-pub fn new_slosh_vm_with_builtins_and_core() -> SloshVm {
-    let mut env = state::new_slosh_vm();
-
-    vm_with_builtins_and_core(&mut env, false);
-
-    env
+/// pr/prn/dasm which write directly to stdout are mapped to noop
+pub fn vm_with_stdout_disabled(env: &mut SloshVm) {
+    let _ = noop_swap_internal(env, "pr".to_string(), NoopSwap::MakeNoop);
+    let _ = noop_swap_internal(env, "prn".to_string(), NoopSwap::MakeNoop);
+    let _ = noop_swap_internal(env, "dasm".to_string(), NoopSwap::MakeNoop);
 }
 
-pub fn vm_with_builtins_and_core(env: &mut SloshVm, print_noop: bool) {
+/// If noop_stdout is set to true then all functions that write to stdout
+/// (pr/prn/dasm) will be overwritten with the noop function.
+pub fn vm_with_builtins_and_core(env: &mut SloshVm, noop_stdout: bool) {
     docs::add_builtins(env);
-    slosh_lib::set_builtins_shell_print_noop(env, print_noop);
+    slosh_lib::set_builtins(env);
+    if noop_stdout {
+        vm_with_stdout_disabled(env);
+    }
+    slosh_lib::set_shell_builtins(env);
     bridge_adapters::add_builtin(
         env,
         "version",

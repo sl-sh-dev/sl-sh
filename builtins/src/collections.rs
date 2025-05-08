@@ -125,6 +125,7 @@ pub fn hash_hashkey(environment: &mut SloshVm, map: &VMHashMap, key: Value) -> V
 }
 
 /// Usage: (occurs (list 1 2 ...) 7)
+///
 /// Counts instances of item in sequence.
 ///
 /// Section: core
