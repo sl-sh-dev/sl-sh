@@ -295,7 +295,6 @@ mod slosh_eval_lib {
 
                 if gen_user_docs {
                     let modify_vm_local = |vm: &mut SloshVm| {
-                        slosh_test_lib::vm_with_stdout_disabled(vm);
                         modify_vm(vm);
 
                         if user_files.is_empty() {

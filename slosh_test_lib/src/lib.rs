@@ -2,7 +2,6 @@ use builtins::{noop_swap_internal, NoopSwap};
 use compile_state::state::SloshVm;
 use sl_compiler::load_eval;
 use sl_compiler::Reader;
-use slvm::{VMError, VMResult};
 
 pub mod docs;
 
@@ -19,15 +18,13 @@ pub fn vm_with_builtins_and_core(env: &mut SloshVm, noop_stdout: bool) {
     docs::add_builtins(env);
     slosh_lib::set_builtins(env);
     if noop_stdout {
+        // must be called at this point. before set_shell_builtins. because
+        // set_shell_builtins calls set_environment which loads the sloshrc
+        // which is allowed to write to stdout and is something that should *NOT*
+        // happen while this VM is being used.
         vm_with_stdout_disabled(env);
     }
     slosh_lib::set_shell_builtins(env);
-    bridge_adapters::add_builtin(
-        env,
-        "version",
-        fake_version,
-        r#"Return the software version string."#,
-    );
     slosh_lib::load_core(env);
     slosh_lib::load_color(env);
 }
@@ -44,11 +41,4 @@ pub fn add_user_builtins(env: &mut SloshVm, load_paths: &[String], files_to_load
         let script = env.get_interned(script);
         let _ = load_eval::load_internal(env, script);
     }
-}
-
-fn fake_version(vm: &mut SloshVm, registers: &[slvm::Value]) -> VMResult<slvm::Value> {
-    if !registers.is_empty() {
-        return Err(VMError::new_compile("version: requires no argument"));
-    }
-    Ok(vm.alloc_string("fake-book".to_string()))
 }

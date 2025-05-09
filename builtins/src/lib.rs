@@ -38,7 +38,7 @@ pub fn noop_fn(environment: &mut SloshVm, registers: &[Value]) -> VMResult<Value
         noop_swap_internal(environment, fcn, NoopSwap::MakeNoop)
     } else {
         Err(VMError::new_vm(
-            "noop-swap: takes one argument, a builtin function to swap with noop.".to_string(),
+            "noop-fn: takes one argument, a builtin function to swap with noop.".to_string(),
         ))
     }
 }
@@ -50,12 +50,14 @@ pub fn un_noop_fn(environment: &mut SloshVm, registers: &[Value]) -> VMResult<Va
         noop_swap_internal(environment, fcn, NoopSwap::MakeNotNoop)
     } else {
         Err(VMError::new_vm(
-            "noop-swap: takes one argument, a builtin function to swap with noop.".to_string(),
+            "un-noop-fn: takes one argument, a builtin function to verify is not set to noop."
+                .to_string(),
         ))
     }
 }
 
 /// Helper enum to "force" a given function to be noop'ed or not.
+#[derive(Debug, Copy, Clone)]
 pub enum NoopSwap {
     MakeNoop,
     MakeNotNoop,
@@ -74,15 +76,17 @@ pub fn noop_swap_internal(
         // is currently set to noop
         if let Some(original_value) = environment.env_mut().remove_noop(fcn) {
             environment.set_global(sym_slot, original_value);
+            return Ok(Value::True);
         }
     } else if matches!(force_noop, NoopSwap::MakeNoop) {
         // value is *not* noop, save off the original value and then replace the slot with the
         // noop value.
         let _ = environment.env_mut().save_noop(fcn, inplace_val);
         environment.set_global(sym_slot, noop_val);
+        return Ok(Value::True);
     }
 
-    Ok(Value::Nil)
+    Ok(Value::False)
 }
 
 fn is_noop(environment: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
@@ -101,7 +105,7 @@ fn is_noop(environment: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         }
     } else {
         Err(VMError::new_vm(
-            "noop-swap: takes one argument, a builtin function to swap with noop.".to_string(),
+            "is-noop: takes one argument, a builtin function to check whether or not it is currently set to noop.".to_string(),
         ))
     }
 }

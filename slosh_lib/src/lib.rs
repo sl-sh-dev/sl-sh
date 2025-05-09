@@ -400,6 +400,8 @@ pub fn usage(vm: &mut SloshVm, slot: u32, sym: &Value) -> String {
     doc_str
 }
 
+/// All rust based slosh builtins. These functions only prime the vm w/ new functions
+/// and do not have any side-effects.
 pub fn set_builtins(env: &mut SloshVm) {
     setup_collection_builtins(env);
     add_print_builtins(env);
@@ -416,6 +418,8 @@ pub fn set_builtins(env: &mut SloshVm) {
     add_math_builtins(env);
 }
 
+/// Loads the user's sloshrc file, has side-effects, and sets some important
+/// constants in the environment.
 pub fn set_environment(env: &mut SloshVm) {
     intern_load_sloshrc(env);
 
@@ -523,8 +527,8 @@ pub fn run_slosh(modify_vm: impl FnOnce(&mut SloshVm)) -> i32 {
             let mut env = renv.borrow_mut();
             env.pause_gc();
             set_builtins(&mut env);
-            set_shell_builtins(&mut env);
             modify_vm(&mut env);
+            set_shell_builtins(&mut env);
             env.unpause_gc();
         });
         if config.command.is_none() && config.script.is_none() {
