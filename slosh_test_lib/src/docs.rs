@@ -726,10 +726,10 @@ fn build_sl_sh_transition_chapter(vm: &mut SloshVm) -> VMResult<Chapter> {
 }
 
 /// Convention is that the section that enumerates all of the forms by section
-/// ([`add_slosh_docs_to_mdbook`]) is added to [`MDBook`] and then the supplementary materials
+/// ([`get_slosh_docs`]) is added to [`MDBook`] and then the supplementary materials
 /// ([`link_supplementary_docs`]).
 pub fn add_forms_and_supplementary_docs(vm: &mut SloshVm, md_book: &mut Book) -> VMResult<()> {
-    add_slosh_docs_to_mdbook(vm, md_book, true)?;
+    get_slosh_docs(vm, md_book, true)?;
     link_supplementary_docs(vm, md_book)?;
     Ok(())
 }
@@ -749,15 +749,16 @@ pub fn link_supplementary_docs(vm: &mut SloshVm, md_book: &mut Book) -> VMResult
         ("Legacy sl-sh Documentation", "legacy/index.html"),
     ];
     for (section_name, section_link) in sections.into_iter() {
-        let content = format!("[{}] ", section_name); //, section_link);
+        let content = format!("[{}] ", section_name);
         let section_chapter = Chapter::new(section_name, content, section_link, vec![]);
         md_book.push_item(BookItem::Chapter(section_chapter));
     }
     Ok(())
 }
 
-/// Group documentation as specified in each documentation's designated `Section:`.
-pub fn add_slosh_docs_to_mdbook(
+/// Retrieve the docs for each section. Optional side-effects write docs to provided [`Book`] if toggled
+/// with bool).
+pub fn get_slosh_docs(
     vm: &mut SloshVm,
     md_book: &mut Book,
     write_to_book: bool,

@@ -289,11 +289,18 @@ mod slosh_eval_lib {
                     vm.unpause_gc();
 
                     log::debug!("Add key {}.", key);
-                    docs::add_slosh_docs_to_mdbook(&mut vm, &mut book, true)?;
+                    let _ = docs::get_slosh_docs(&mut vm, &mut book, true)?;
                     log::info!("Docs evaluated.");
                 }
 
                 if gen_user_docs {
+                    // first get provided sections
+                    let mut vm = state::new_slosh_vm();
+                    vm.pause_gc();
+                    slosh_test_lib::vm_with_builtins_and_core(&mut vm, false);
+                    vm.unpause_gc();
+                    let provided_sections = docs::get_slosh_docs(&mut vm, &mut book, false).unwrap_or_default();
+
                     let modify_vm_local = |vm: &mut SloshVm| {
                         modify_vm(vm);
 
@@ -308,10 +315,6 @@ mod slosh_eval_lib {
                         slosh_test_lib::vm_with_builtins_and_core(vm, true);
                         vm.unpause_gc();
 
-                        // first get provided sections
-                        if let Ok(provided_sections) =
-                            docs::add_slosh_docs_to_mdbook(vm, &mut book, false)
-                        {
                             vm.pause_gc();
                             // then load init.slosh
                             slosh_lib::load_sloshrc(vm, None);
@@ -326,9 +329,8 @@ mod slosh_eval_lib {
                                 &mut book,
                                 provided_sections,
                             );
-                        }
                     };
-                    let _vm = slosh_lib::run_slosh(modify_vm_local);
+                    let _ = slosh_lib::run_slosh(modify_vm_local);
                 }
 
                 let key = "code-block-label";
