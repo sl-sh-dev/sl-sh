@@ -58,10 +58,7 @@ lazy_static! {
         exemption_set.insert("return");
         exemption_set.insert("*euid*");
         exemption_set.insert("*last-status*");
-        exemption_set.insert("set-prop");
-        exemption_set.insert("sizeof-heap-object");
         exemption_set.insert("*int-min*");
-        exemption_set.insert("gensym");
         exemption_set.insert("*uid*");
         exemption_set.insert("*int-max*");
         exemption_set.insert("prn");
@@ -70,12 +67,9 @@ lazy_static! {
         exemption_set.insert("fpr");
         exemption_set.insert("eprn");
         exemption_set.insert("epr");
-        exemption_set.insert("sizeof-value");
         exemption_set.insert("dump-regs");
         exemption_set.insert("dasm");
         exemption_set.insert("*int-bits*");
-        exemption_set.insert("get-prop");
-        exemption_set.insert("expand-macro");
         exemption_set.insert("*stdout*");
         exemption_set.insert("*prn*");
 
@@ -722,10 +716,10 @@ fn build_sl_sh_transition_chapter(vm: &mut SloshVm) -> VMResult<Chapter> {
 }
 
 /// Convention is that the section that enumerates all of the forms by section
-/// ([`add_slosh_docs_to_mdbook`]) is added to [`MDBook`] and then the supplementary materials
+/// ([`get_slosh_docs`]) is added to [`MDBook`] and then the supplementary materials
 /// ([`link_supplementary_docs`]).
 pub fn add_forms_and_supplementary_docs(vm: &mut SloshVm, md_book: &mut Book) -> VMResult<()> {
-    add_slosh_docs_to_mdbook(vm, md_book, true)?;
+    get_slosh_docs(vm, md_book, true)?;
     link_supplementary_docs(vm, md_book)?;
     Ok(())
 }
@@ -745,15 +739,16 @@ pub fn link_supplementary_docs(vm: &mut SloshVm, md_book: &mut Book) -> VMResult
         ("Legacy sl-sh Documentation", "legacy/index.html"),
     ];
     for (section_name, section_link) in sections.into_iter() {
-        let content = format!("[{}] ", section_name); //, section_link);
+        let content = format!("[{}] ", section_name);
         let section_chapter = Chapter::new(section_name, content, section_link, vec![]);
         md_book.push_item(BookItem::Chapter(section_chapter));
     }
     Ok(())
 }
 
-/// Group documentation as specified in each documentation's designated `Section:`.
-pub fn add_slosh_docs_to_mdbook(
+/// Retrieve the docs for each section. Optional side-effects write docs to provided [`Book`] if toggled
+/// with bool).
+pub fn get_slosh_docs(
     vm: &mut SloshVm,
     md_book: &mut Book,
     write_to_book: bool,
@@ -1003,7 +998,7 @@ mod test {
     use super::*;
     use compile_state::state::new_slosh_vm;
     use sl_compiler::Reader;
-    use slosh_lib::{run_reader, set_builtins_shell, set_initial_load_path, ENV};
+    use slosh_lib::{run_reader, set_builtins_and_shell_builtins, set_initial_load_path, ENV};
     use std::collections::BTreeMap;
     use std::ops::DerefMut;
     use tempfile::TempDir;
@@ -1020,7 +1015,7 @@ mod test {
         temp_env::with_var("HOME", home_dir, || {
             ENV.with(|env| {
                 let mut vm = env.borrow_mut();
-                set_builtins_shell(vm.deref_mut());
+                set_builtins_and_shell_builtins(vm.deref_mut());
                 set_initial_load_path(vm.deref_mut(), vec![&home_path]);
                 let mut reader =
                     Reader::from_string(r#"(load "core.slosh")"#.to_string(), &mut vm, "", 1, 0);
@@ -1054,7 +1049,7 @@ mod test {
     #[test]
     fn list_slosh_functions() {
         let mut vm = new_slosh_vm();
-        set_builtins_shell(&mut vm);
+        set_builtins_and_shell_builtins(&mut vm);
         for (g, _) in vm.globals() {
             let sym = Value::Symbol(*g);
             let symbol = sym.display_value(&vm);
@@ -1066,7 +1061,7 @@ mod test {
     #[test]
     fn test_global_slosh_docs_formatted_properly() {
         let mut env = new_slosh_vm();
-        set_builtins_shell(&mut env);
+        set_builtins_and_shell_builtins(&mut env);
 
         let mut docs: Vec<SloshDoc> = vec![];
         Namespace::Global

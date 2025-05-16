@@ -1297,6 +1297,11 @@ pub struct CompileEnvironment {
     global_map: HashMap<Interned, usize>,
     gensym_idx: usize,
     namespace: Namespace,
+    /// Some functions can be swapped to/from a noop at runtime for various reasons,
+    /// e.g. make sure nothing can write to stdout; this field tracks the [`Value`]
+    /// the function *should* point to so the user can swap that back in when they
+    /// no longer want it to be a noop.
+    noop_map: HashMap<String, Value>,
 }
 
 impl Default for CompileEnvironment {
@@ -1312,6 +1317,7 @@ impl CompileEnvironment {
             line: 1,
             specials: None,
             global_map: HashMap::new(),
+            noop_map: HashMap::new(),
             gensym_idx: 0,
             namespace: Namespace {
                 name: "".to_string(),
@@ -1346,6 +1352,18 @@ impl CompileEnvironment {
 
     pub fn get_namespace(&self) -> &Namespace {
         &self.namespace
+    }
+
+    /// Set a given function's original [`Value`] function so that it can be replaced
+    /// with noop fn but mapped back later.
+    pub fn save_noop(&mut self, s: String, v: Value) -> Option<Value> {
+        self.noop_map.insert(s, v)
+    }
+
+    /// Removes a key from the map, returning the value at the key if the key was previously
+    /// in the map. This is that original function's [`Value`].
+    pub fn remove_noop(&mut self, t: impl AsRef<str>) -> Option<Value> {
+        self.noop_map.remove(t.as_ref())
     }
 }
 

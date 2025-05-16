@@ -166,21 +166,26 @@ pub fn to_i56(i: i64) -> Value {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum Value {
     Byte(u8),
-    Int([u8; 7]),      // Store a 7 byte int (i56...).
-    Float(float::F56), // Replace with float::F32Wrap if desired
+    /// Store a 7 byte int (i56...).
+    Int([u8; 7]),
+    /// Replace with float::F32Wrap if desired
+    Float(float::F56),
     CodePoint(char),
     CharCluster(u8, [u8; 6]),
-    CharClusterLong(Handle), // Handle points to a String on the heap.
+    /// Handle points to a String on the heap.
+    CharClusterLong(Handle),
     Symbol(Interned),
     Keyword(Interned),
     StringConst(Interned),
-    Special(Interned), // Intended for symbols that are compiled.
+    /// Intended for symbols that are compiled.
+    Special(Interned),
     Builtin(u32),
     True,
     False,
     Nil,
+    /// Value is a placeholder only, should never appear at runtime. Can be
+    /// instantiated at times as a placeholder but should always be overwritten.
     Undefined,
-
     String(Handle),
     Vector(Handle),
     Map(Handle),

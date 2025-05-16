@@ -1,4 +1,5 @@
 use crate::SloshVm;
+use bridge_macros::sl_sh_fn;
 use compile_state::state::{CompileState, SloshVmTrait};
 use sl_compiler::compile;
 use sl_compiler::pass1::pass1;
@@ -166,6 +167,21 @@ pub fn eprn(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     Ok(Value::Nil)
 }
 
+/// Usage: (dump-globals)
+///
+/// Prints the global variables to stdout.
+///
+/// Section: core
+///
+/// Example:
+/// #t
+#[sl_sh_fn(fn_name = "dump-globals", takes_env = true)]
+pub fn dump_globals(environment: &mut SloshVm) -> VMResult<Value> {
+    environment.dump_globals();
+    Ok(Value::Nil)
+}
+
+/// TODO PC make the other builtins.
 pub fn dasm(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if registers.len() != 1 {
         return Err(VMError::new_compile(
@@ -207,7 +223,9 @@ pub fn add_print_builtins(env: &mut SloshVm) {
     env.set_global_builtin("epr", epr);
     env.set_global_builtin("prn", prn);
     env.set_global_builtin("eprn", eprn);
+    env.set_global_builtin("dump-globals", dasm);
     env.set_global_builtin("dasm", dasm);
     env.set_global_builtin("fpr", fpr);
     env.set_global_builtin("fprn", fprn);
+    intern_dump_globals(env);
 }

@@ -400,6 +400,8 @@ pub fn usage(vm: &mut SloshVm, slot: u32, sym: &Value) -> String {
     doc_str
 }
 
+/// All rust based slosh builtins. These functions only prime the vm w/ new functions
+/// and do not have any side-effects.
 pub fn set_builtins(env: &mut SloshVm) {
     setup_collection_builtins(env);
     add_print_builtins(env);
@@ -414,6 +416,11 @@ pub fn set_builtins(env: &mut SloshVm) {
     add_math_builtins(env);
     add_doc_builtins(env);
     add_math_builtins(env);
+}
+
+/// Loads the user's sloshrc file, has side-effects, and sets some important
+/// constants in the environment.
+pub fn set_environment(env: &mut SloshVm) {
     intern_load_sloshrc(env);
 
     env.set_named_global("*int-bits*", (INT_BITS as i64).into());
@@ -426,6 +433,7 @@ pub fn set_builtins(env: &mut SloshVm) {
 pub fn new_slosh_vm_with_builtins() -> SloshVm {
     let mut env = new_slosh_vm();
     set_builtins(&mut env);
+    set_environment(&mut env);
     env
 }
 
@@ -482,8 +490,13 @@ Section: shell"#
     env.set_global_property(si, key, s);
 }
 
-pub fn set_builtins_shell(env: &mut SloshVm) {
+pub fn set_builtins_and_shell_builtins(env: &mut SloshVm) {
     set_builtins(env);
+    set_shell_builtins(env);
+}
+
+pub fn set_shell_builtins(env: &mut SloshVm) {
+    set_environment(env);
     add_shell_builtins(env);
     env.set_global_builtin("dump-regs", builtin_dump_regs);
 
@@ -503,18 +516,19 @@ pub fn set_builtins_shell(env: &mut SloshVm) {
     export_args(env);
 }
 
-pub fn run(modify_vm: fn(&mut SloshVm) -> ()) -> i32 {
+pub fn run(modify_vm: impl FnOnce(&mut SloshVm)) -> i32 {
     run_slosh(modify_vm)
 }
 
-fn run_slosh(modify_vm: fn(&mut SloshVm) -> ()) -> i32 {
+pub fn run_slosh(modify_vm: impl FnOnce(&mut SloshVm)) -> i32 {
     let mut status = 0;
     if let Some(config) = get_config() {
         ENV.with(|renv| {
             let mut env = renv.borrow_mut();
             env.pause_gc();
-            set_builtins_shell(&mut env);
+            set_builtins(&mut env);
             modify_vm(&mut env);
+            set_shell_builtins(&mut env);
             env.unpause_gc();
         });
         if config.command.is_none() && config.script.is_none() {
@@ -803,7 +817,7 @@ mod tests {
         let v = temp_env::with_var("HOME", home_dir, || {
             ENV.with(|env| {
                 let mut vm = env.borrow_mut();
-                set_builtins_shell(vm.deref_mut());
+                set_builtins_and_shell_builtins(vm.deref_mut());
                 set_initial_load_path(
                     vm.deref_mut(),
                     vec![

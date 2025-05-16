@@ -1,6 +1,9 @@
 extern crate core;
 
+use bridge_adapters::add_builtin;
+use bridge_adapters::lisp_adapters::SlFromRef;
 use bridge_macros::sl_sh_fn;
+use bridge_types::LooseString;
 use compile_state::state::{SloshVm, SloshVmTrait};
 use slvm::{Interned, VMError, VMResult, Value};
 use std::collections::HashSet;
@@ -15,6 +18,98 @@ pub mod math;
 pub mod print;
 pub mod rand;
 pub mod string;
+
+pub const NOOP: &str = "noop";
+
+fn noop(_vm: &mut SloshVm, _registers: &[Value]) -> VMResult<Value> {
+    Ok(Value::Nil)
+}
+
+fn get_builtin_slot_and_value(vm: &mut SloshVm, s: impl AsRef<str>) -> (u32, Value) {
+    let sym = vm.intern(s.as_ref());
+    let sym_slot = vm.get_reserve_global(sym);
+    let inplace_val = vm.get_global(sym_slot);
+    (sym_slot, inplace_val)
+}
+
+pub fn noop_fn(environment: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    if registers.len() == 1 {
+        let v = registers[0];
+        let fcn = LooseString::sl_from_ref(v, environment)?.to_string();
+        noop_swap_internal(environment, fcn, NoopSwap::MakeNoop)
+    } else {
+        Err(VMError::new_vm(
+            "noop-fn: takes one argument, a builtin function to swap with noop.".to_string(),
+        ))
+    }
+}
+
+pub fn un_noop_fn(environment: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    if registers.len() == 1 {
+        let v = registers[0];
+        let fcn = LooseString::sl_from_ref(v, environment)?.to_string();
+        noop_swap_internal(environment, fcn, NoopSwap::MakeNotNoop)
+    } else {
+        Err(VMError::new_vm(
+            "un-noop-fn: takes one argument, a builtin function to verify is not set to noop."
+                .to_string(),
+        ))
+    }
+}
+
+/// Helper enum to "force" a given function to be noop'ed or not.
+#[derive(Debug, Copy, Clone)]
+pub enum NoopSwap {
+    MakeNoop,
+    MakeNotNoop,
+}
+
+pub fn noop_swap_internal(
+    environment: &mut SloshVm,
+    fcn: String,
+    force_noop: NoopSwap,
+) -> VMResult<Value> {
+    let (sym_slot, inplace_val) = get_builtin_slot_and_value(environment, &fcn);
+    let (_noop_slot, noop_val) = get_builtin_slot_and_value(environment, NOOP);
+
+    if inplace_val == noop_val && matches!(force_noop, NoopSwap::MakeNotNoop) {
+        // the value for fcn name is the same as noop slot, this means the function
+        // is currently set to noop
+        if let Some(original_value) = environment.env_mut().remove_noop(fcn) {
+            environment.set_global(sym_slot, original_value);
+            return Ok(Value::True);
+        }
+    } else if matches!(force_noop, NoopSwap::MakeNoop) {
+        // value is *not* noop, save off the original value and then replace the slot with the
+        // noop value.
+        let _ = environment.env_mut().save_noop(fcn, inplace_val);
+        environment.set_global(sym_slot, noop_val);
+        return Ok(Value::True);
+    }
+
+    Ok(Value::False)
+}
+
+fn is_noop(environment: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    if registers.len() == 1 {
+        let v = registers[0];
+        let fcn = LooseString::sl_from_ref(v, environment)?.to_string();
+        let (_sym_slot, inplace_val) = get_builtin_slot_and_value(environment, fcn);
+        let (_noop_slot, noop_val) = get_builtin_slot_and_value(environment, NOOP);
+
+        if inplace_val == noop_val {
+            // the value for fcn name is the same as noop slot, this means the function
+            // is currently set to noop
+            Ok(Value::True)
+        } else {
+            Ok(Value::False)
+        }
+    } else {
+        Err(VMError::new_vm(
+            "is-noop: takes one argument, a builtin function to check whether or not it is currently set to noop.".to_string(),
+        ))
+    }
+}
 
 fn get_globals(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if !registers.is_empty() {
@@ -236,22 +331,171 @@ pub fn add_global_value(env: &mut SloshVm, name: &str, val: Value, doc_string: &
 }
 
 pub fn add_misc_builtins(env: &mut SloshVm) {
-    env.set_global_builtin("get-prop", get_prop);
-    env.set_global_builtin("set-prop", set_prop);
-    env.set_global_builtin("sizeof-heap-object", sizeof_heap_object);
-    env.set_global_builtin("sizeof-value", sizeof_value);
-    env.set_global_builtin("gensym", gensym);
-    env.set_global_builtin("expand-macro", expand_macro);
-    bridge_adapters::add_builtin(
+    add_builtin(
+        env,
+        "get-prop",
+        get_prop,
+        r#"Usage: (get-prop 'a-symbol :a-property))
+
+Read property that maps to given keyword for provided-symbol. Most forms have
+a :doc-string property that returns the docstring for the symbol.
+
+Section: core
+
+Example:
+#t
+"#,
+    );
+    add_builtin(
+        env,
+        "set-prop",
+        set_prop,
+        r#"Usage: (set-prop 'a-symbol :a-property a-value)
+
+Write property with value for the given symbol.
+
+Section: core
+
+Example:
+(def foo #t)
+(set-prop 'foo :bar "baz")
+(test::assert-equal "baz" (get-prop 'foo :bar))
+"#,
+    );
+    add_builtin(
+        env,
+        "sizeof-heap-object",
+        sizeof_heap_object,
+        r#"Usage: (sizeof-heap-object)
+
+Returns the default size of a heap object by the current runtime in bytes.
+
+Section: core
+
+Example:
+(test::assert-equal 16 (sizeof-heap-object))
+"#,
+    );
+    add_builtin(
+        env,
+        "sizeof-value",
+        sizeof_value,
+        r#"Usage: (sizeof-value)
+
+Returns the default size of a value by the current runtime in bytes. Optimized to
+be 8 bytes so that a given primitve or pointer to a head object fits in one word
+on a 64 bit machine.
+
+Section: core
+
+Example:
+(test::assert-equal 8 (sizeof-value))
+"#,
+    );
+    add_builtin(
+        env,
+        "gensym",
+        gensym,
+        r#"Usage: (gensym)
+
+Used to make macros hygenic by creating a random symbol name to be used
+in code output by a macro to avoid conflicting variable names.
+
+Section: core
+
+Example:
+#t
+"#,
+    );
+    add_builtin(
+        env,
+        "expand-macro",
+        expand_macro,
+        r#"Usage: (expand-macro 'code)
+
+Output code, any macro invocation will be replaced with the code it would generate.
+This is particularly useful for introspection when debugging macros.
+
+Section: core
+
+Example:
+#t
+"#,
+    );
+    add_builtin(
+        env,
+        NOOP,
+        noop,
+        r#"Usage: (noop any*)
+
+Takes any number of arguments and always returns nil.
+
+Section: core
+
+Example:
+(test::assert-equal nil (noop 'noop))
+(test::assert-equal nil (noop "foo" :bar 'baz))
+(test::assert-equal nil (noop))
+"#,
+    );
+    add_builtin(
+        env,
+        "noop-fn",
+        noop_fn,
+        r#"Usage: (noop-fn 'fn-to-noop)
+
+Alter the runtime so that the provided function is a no-operation (no-op or noop) that
+does nothing and returns nil for the provided function. Any future call to this function
+will do nothing, regardless of the arguments it is given.
+
+Section: core
+
+Example:
+#t
+"#,
+    );
+    add_builtin(
+        env,
+        "un-noop-fn",
+        un_noop_fn,
+        r#"Usage: (un-noop-fn 'fn-to-un-noop)
+
+If the runtime was previously altered for the provided function (to make it do nothing)
+swap the old function back in so the previous behavior is restored and the function
+behaves as normal.
+
+Section: core
+
+Example:
+#t
+"#,
+    );
+    add_builtin(
+        env,
+        "is-noop",
+        is_noop,
+        r#"Usage: (is-noop 'fn-to-test)
+
+Report whether or not the provided function is currently set to do nothing.
+When called with the 'noop function always returns true.
+
+Section: core
+
+Example:
+(test::assert-true (is-noop 'noop))
+(test::assert-false (is-noop 'fs-meta))
+"#,
+    );
+    add_builtin(
         env,
         "get-globals",
         get_globals,
-        "Usage: (get-globals)
+        r#"Usage: (get-globals)
 
 Return a vector containing all the symbols currently defined globally.
 
 Section: core
-",
+"#,
     );
     intern_get_in_namespace(env);
     intern_get_namespaces(env);

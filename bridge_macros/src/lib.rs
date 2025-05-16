@@ -1430,18 +1430,6 @@ fn parse_src_function_arguments(
     takes_env: bool,
 ) -> MacroResult<Vec<Param>> {
     let mut parsed_args = vec![];
-    let len = if takes_env {
-        original_item_fn.sig.inputs.len() - 1
-    } else {
-        original_item_fn.sig.inputs.len()
-    };
-    let mut arg_names = vec![];
-    for i in 0..len {
-        let parse_name = "arg_".to_string() + &i.to_string();
-        let parse_name = Ident::new(&parse_name, Span::call_site());
-        arg_names.push(parse_name);
-    }
-
     let skip = usize::from(takes_env);
 
     for (i, fn_arg) in original_item_fn.sig.inputs.iter().enumerate().skip(skip) {
@@ -1547,7 +1535,7 @@ fn parse_attributes(
     Ok((fn_name, fn_name_ident, takes_env, inline, generics))
 }
 
-/// this function outputs all of the generated code, it is composed into two different functions:
+/// this function outputs all the generated code, it is composed into two different functions:
 /// intern_<original_fn_name>
 /// parse_<original_fn_name>
 /// - intern_ is the simplest function, it is generated to be called within sl-sh to avoid writing
@@ -1605,10 +1593,10 @@ fn generate_sl_sh_fn(
     Ok(tokens)
 }
 
-/// macro that creates a bridge between rust native code and sl-sh code, specify the lisp
-/// function name to be interned with the "fn_name" attribute. This macro outputs all of the
-/// generated bridge code as well as the original function's code so it can be used
-/// by the generated bridge code.
+/// macro that creates a bridge between rust native code and sl-sh code. Specify the lisp
+/// function name to be interned with the "fn_name" attribute. This macro outputs
+/// a function with a slosh compatible signature as well as a helper intern function
+/// to be called with the environment to add the function.
 #[proc_macro_attribute]
 pub fn sl_sh_fn(
     attr: proc_macro::TokenStream,
