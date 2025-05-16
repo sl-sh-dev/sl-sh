@@ -1,5 +1,6 @@
 extern crate core;
 
+use bridge_adapters::add_builtin;
 use bridge_adapters::lisp_adapters::SlFromRef;
 use bridge_macros::sl_sh_fn;
 use bridge_types::LooseString;
@@ -330,26 +331,171 @@ pub fn add_global_value(env: &mut SloshVm, name: &str, val: Value, doc_string: &
 }
 
 pub fn add_misc_builtins(env: &mut SloshVm) {
-    env.set_global_builtin("get-prop", get_prop);
-    env.set_global_builtin("set-prop", set_prop);
-    env.set_global_builtin("sizeof-heap-object", sizeof_heap_object);
-    env.set_global_builtin("sizeof-value", sizeof_value);
-    env.set_global_builtin("gensym", gensym);
-    env.set_global_builtin("expand-macro", expand_macro);
-    env.set_global_builtin(NOOP, noop);
-    env.set_global_builtin("noop-fn", noop_fn);
-    env.set_global_builtin("un-noop-fn", un_noop_fn);
-    env.set_global_builtin("is-noop", is_noop);
-    bridge_adapters::add_builtin(
+    add_builtin(
+        env,
+        "get-prop",
+        get_prop,
+        r#"Usage: (get-prop 'a-symbol :a-property))
+
+Read property that maps to given keyword for provided-symbol. Most forms have
+a :doc-string property that returns the docstring for the symbol.
+
+Section: core
+
+Example:
+#t
+"#,
+    );
+    add_builtin(
+        env,
+        "set-prop",
+        set_prop,
+        r#"Usage: (set-prop 'a-symbol :a-property a-value)
+
+Write property with value for the given symbol.
+
+Section: core
+
+Example:
+(def foo #t)
+(set-prop 'foo :bar "baz")
+(test::assert-equal "baz" (get-prop 'foo :bar))
+"#,
+    );
+    add_builtin(
+        env,
+        "sizeof-heap-object",
+        sizeof_heap_object,
+        r#"Usage: (sizeof-heap-object)
+
+Returns the default size of a heap object by the current runtime in bytes.
+
+Section: core
+
+Example:
+(test::assert-equal 16 (sizeof-heap-object))
+"#,
+    );
+    add_builtin(
+        env,
+        "sizeof-value",
+        sizeof_value,
+        r#"Usage: (sizeof-value)
+
+Returns the default size of a value by the current runtime in bytes. Optimized to
+be 8 bytes so that a given primitve or pointer to a head object fits in one word
+on a 64 bit machine.
+
+Section: core
+
+Example:
+(test::assert-equal 8 (sizeof-value))
+"#,
+    );
+    add_builtin(
+        env,
+        "gensym",
+        gensym,
+        r#"Usage: (gensym)
+
+Used to make macros hygenic by creating a random symbol name to be used
+in code output by a macro to avoid conflicting variable names.
+
+Section: core
+
+Example:
+#t
+"#,
+    );
+    add_builtin(
+        env,
+        "expand-macro",
+        expand_macro,
+        r#"Usage: (expand-macro 'code)
+
+Output code, any macro invocation will be replaced with the code it would generate.
+This is particularly useful for introspection when debugging macros.
+
+Section: core
+
+Example:
+#t
+"#,
+    );
+    add_builtin(
+        env,
+        NOOP,
+        noop,
+        r#"Usage: (noop any*)
+
+Takes any number of arguments and always returns nil.
+
+Section: core
+
+Example:
+(test::assert-equal nil (noop 'noop))
+(test::assert-equal nil (noop "foo" :bar 'baz))
+(test::assert-equal nil (noop))
+"#,
+    );
+    add_builtin(
+        env,
+        "noop-fn",
+        noop_fn,
+        r#"Usage: (noop-fn 'fn-to-noop)
+
+Alter the runtime so that the provided function is a no-operation (no-op or noop) that
+does nothing and returns nil for the provided function. Any future call to this function
+will do nothing, regardless of the arguments it is given.
+
+Section: core
+
+Example:
+#t
+"#,
+    );
+    add_builtin(
+        env,
+        "un-noop-fn",
+        un_noop_fn,
+        r#"Usage: (un-noop-fn 'fn-to-un-noop)
+
+If the runtime was previously altered for the provided function (to make it do nothing)
+swap the old function back in so the previous behavior is restored and the function
+behaves as normal.
+
+Section: core
+
+Example:
+#t
+"#,
+    );
+    add_builtin(
+        env,
+        "is-noop",
+        is_noop,
+        r#"Usage: (is-noop 'fn-to-test)
+
+Report whether or not the provided function is currently set to do nothing.
+When called with the 'noop function always returns true.
+
+Section: core
+
+Example:
+(test::assert-true (is-noop 'noop))
+(test::assert-false (is-noop 'fs-meta))
+"#,
+    );
+    add_builtin(
         env,
         "get-globals",
         get_globals,
-        "Usage: (get-globals)
+        r#"Usage: (get-globals)
 
 Return a vector containing all the symbols currently defined globally.
 
 Section: core
-",
+"#,
     );
     intern_get_in_namespace(env);
     intern_get_namespaces(env);

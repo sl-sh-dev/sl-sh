@@ -10,10 +10,11 @@ pub fn vm_with_stdout_disabled(env: &mut SloshVm) {
     let _ = noop_swap_internal(env, "pr".to_string(), NoopSwap::MakeNoop);
     let _ = noop_swap_internal(env, "prn".to_string(), NoopSwap::MakeNoop);
     let _ = noop_swap_internal(env, "dasm".to_string(), NoopSwap::MakeNoop);
+    let _ = noop_swap_internal(env, "dump-globals".to_string(), NoopSwap::MakeNoop);
 }
 
 /// If noop_stdout is set to true then all functions that write to stdout
-/// (pr/prn/dasm) will be overwritten with the noop function.
+/// (pr/prn/dasm/dump-globals) will be overwritten with the noop function.
 pub fn vm_with_builtins_and_core(env: &mut SloshVm, noop_stdout: bool) {
     docs::add_builtins(env);
     slosh_lib::set_builtins(env);

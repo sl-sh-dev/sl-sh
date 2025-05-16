@@ -299,7 +299,8 @@ mod slosh_eval_lib {
                     vm.pause_gc();
                     slosh_test_lib::vm_with_builtins_and_core(&mut vm, false);
                     vm.unpause_gc();
-                    let provided_sections = docs::get_slosh_docs(&mut vm, &mut book, false).unwrap_or_default();
+                    let provided_sections =
+                        docs::get_slosh_docs(&mut vm, &mut book, false).unwrap_or_default();
 
                     let modify_vm_local = |vm: &mut SloshVm| {
                         modify_vm(vm);
@@ -315,20 +316,20 @@ mod slosh_eval_lib {
                         slosh_test_lib::vm_with_builtins_and_core(vm, true);
                         vm.unpause_gc();
 
-                            vm.pause_gc();
-                            // then load init.slosh
-                            slosh_lib::load_sloshrc(vm, None);
-                            slosh_test_lib::add_user_builtins(
-                                vm,
-                                user_load_paths.as_slice(),
-                                user_files.as_slice(),
-                            );
-                            vm.unpause_gc();
-                            let _ = docs::add_user_docs_to_mdbook_less_provided_sections(
-                                vm,
-                                &mut book,
-                                provided_sections,
-                            );
+                        vm.pause_gc();
+                        // then load init.slosh
+                        slosh_lib::load_sloshrc(vm, None);
+                        slosh_test_lib::add_user_builtins(
+                            vm,
+                            user_load_paths.as_slice(),
+                            user_files.as_slice(),
+                        );
+                        vm.unpause_gc();
+                        let _ = docs::add_user_docs_to_mdbook_less_provided_sections(
+                            vm,
+                            &mut book,
+                            provided_sections,
+                        );
                     };
                     let _ = slosh_lib::run_slosh(modify_vm_local);
                 }

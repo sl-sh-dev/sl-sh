@@ -58,10 +58,7 @@ lazy_static! {
         exemption_set.insert("return");
         exemption_set.insert("*euid*");
         exemption_set.insert("*last-status*");
-        exemption_set.insert("set-prop");
-        exemption_set.insert("sizeof-heap-object");
         exemption_set.insert("*int-min*");
-        exemption_set.insert("gensym");
         exemption_set.insert("*uid*");
         exemption_set.insert("*int-max*");
         exemption_set.insert("prn");
@@ -70,18 +67,11 @@ lazy_static! {
         exemption_set.insert("fpr");
         exemption_set.insert("eprn");
         exemption_set.insert("epr");
-        exemption_set.insert("sizeof-value");
         exemption_set.insert("dump-regs");
         exemption_set.insert("dasm");
         exemption_set.insert("*int-bits*");
-        exemption_set.insert("get-prop");
-        exemption_set.insert("expand-macro");
         exemption_set.insert("*stdout*");
         exemption_set.insert("*prn*");
-        exemption_set.insert("noop");
-        exemption_set.insert("is-noop");
-        exemption_set.insert("noop-fn");
-        exemption_set.insert("un-noop-fn");
 
         // slosh specific colors
         exemption_set.insert("get-rgb-seq");
