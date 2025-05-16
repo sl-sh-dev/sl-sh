@@ -647,7 +647,8 @@ functions. The user's init.slosh is automatically loaded, so any additional file
 loads are alos imported. If the user needs to alter the slosh load path or add
 additional files to be loaded (presumably because they aren't imported in init.slosh
 or any slosh file it imports) it can be done by adding the paths in the `user-doc-files`
-and `user-doc-load-paths` string arrays in doc/book.toml.
+and `user-doc-load-paths` string arrays in doc/book.toml. The default is to use
+`~/.config/slosh/` as the load path and `~/.config/slosh/init.slosh` for the rc file.
 
 "#;
     let sections_len = docs_by_section.keys().len();
