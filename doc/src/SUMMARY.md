@@ -2,6 +2,7 @@
 
 # Basics
 - [Welcome](./welcome.md)
+- [Overview](./overview.md)
 
 # Shell Basics
 - [Shell Commands in Lisp](./shell-vs-lisp.md)
