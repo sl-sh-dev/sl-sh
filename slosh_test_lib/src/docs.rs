@@ -640,7 +640,16 @@ fn build_all_slosh_forms_listing_chapter(
     docs_by_section: &BTreeMap<String, Vec<SloshDoc>>,
 ) -> VMResult<Chapter> {
     let mut all_content = format!("# {}\n\n", name);
+    all_content += r#"
+When built locally (see doc/README.md) the mdbook generator has access to the user's
+slosh environment. This enables creating documentation in md form of all user defined
+functions. The user's init.slosh is automatically loaded, so any additional files it
+loads are alos imported. If the user needs to alter the slosh load path or add
+additional files to be loaded (presumably because they aren't imported in init.slosh
+or any slosh file it imports) it can be done by adding the paths in the `user-doc-files`
+and `user-doc-load-paths` string arrays in doc/book.toml.
 
+"#;
     let sections_len = docs_by_section.keys().len();
     let mut list = "List of sections: \n\n".to_string();
     for (i, section) in docs_by_section.keys().enumerate() {
