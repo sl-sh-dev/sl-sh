@@ -17,6 +17,7 @@ compile_state = { workspace = true }
 shell = { path = "../shell" }
 unicode-width = { workspace = true }
 glob = { workspace = true }
+static_assertions = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
