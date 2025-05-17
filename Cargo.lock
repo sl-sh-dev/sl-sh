@@ -2171,6 +2171,7 @@ dependencies = [
  "sl-compiler",
  "sl-liner",
  "slvm",
+ "static_assertions",
  "temp-env",
  "tempfile",
  "unicode-width 0.2.0",
