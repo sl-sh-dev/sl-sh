@@ -6,41 +6,68 @@
 
 ;; what is a possible set -e equivalent?
 
-(def *do-supplemental* #t)
+(def legacy-doc-path "src/legacy")
+(def slosh-rust-doc-path "src/slosh-rust-docs")
+(def all-rust-doc-path "src/all-rust-docs")
+(def help "Usage:
 
-(prn "args: " *args*)
+./mk-site.slosh build|serve [skip-supplemental]
+
+Generate the slosh static documentation site.
+
+First argument must be build or serve. Build generates the mdbook one time into
+the folder ./book. Serve hosts the static site on localhost:3000 and automatically
+updates when any files in ./src change.
+
+Optional second argument is `skip-supplemental`. Include if quick feedback loops
+are needed because the supplemental materials take a lot longer to process because
+they contain a lot of raw html which must be handled by mdbook.")
+
+(def *do-supplemental* #t)
 
 (def args-local *args*)
 
-;; TODO PC args w/o skip-supplemental ran into an issue, need a cache clearing mechanism.
-(when (and (>= (len *args*) 2) (= args-local.1 "skip-supplemental"))
+(when (or (<= (len *args*) 1) (> (len *args*) 3))
+    (do (eprn "Takes 1 or 2 arguments.")
+    (eprn help)
+    (exit 1)))
+
+(when (not (or (= args-local.1 "build") (= args-local.1 "serve")))
+    (do (eprn "First argument must be build or serve.")
+    (eprn help)
+    (exit 1)))
+
+(when (and (= (len *args*) 3) (= args-local.2 "skip-supplemental"))
     (set! *do-supplemental* #f))
 
-;; (def *skip-remove* #f)
-;; (when (and (>= (len *args*) 2) (= args-local.0 "remove-static-files"))
-;;     (set! *skip-remove* #t))
-;; (when (not *skip-remove*) $(rm -rf src/legacy/ src/all-rust-docs/ src/slosh-rust-docs/))
+(when (and (= (len *args*) 3) (not (= args-local.2 "skip-supplemental"())))
+    (do (eprn "Optional second argument can only be string skip-supplemental.")
+    (eprn help)
+    (exit 1)))
 
 (sh "export RUST_LOG=DEBUG")
 
+(prn "args: " *args*)
+
 (prn "do supplemental: " *do-supplemental*)
 
-(when *do-supplemental*
+(if *do-supplemental*
     (do
         (prn "clone in the legacy gh pages docs")
         (sh "git clone -b gh-pages-legacy-html https://github.com/sl-sh-dev/sl-sh src/legacy/")
 
         (prn "Remove legacy/.git submodule directory")
         ;; don't want git submodules
-        $(rm -rf src/legacy/.git)
+        $(rm -rf (str legacy-doc-path "/.git"))
         (prn "Make rust docs pages")
-        $(mkdir src/all-rust-docs)
-        $(mkdir src/slosh-rust-docs)
+        $(mkdir -p ~slosh-rust-doc-path)
+        $(mkdir -p ~all-rust-doc-path)
 
         (prn "Build rust docs")
         ;; build rust documentation
-        $(cargo doc --features lisp-test --target-dir src/all-rust-docs)
-        $(cargo doc --no-deps --document-private-items --features lisp-test --target-dir src/slosh-rust-docs)))
+        $(cargo doc --features lisp-test --target-dir $all-rust-doc-path)
+        $(cargo doc --no-deps --document-private-items --features lisp-test --target-dir slosh-rust-doc-path))
+    $(rm -rf ~legacy-doc-path ~slosh-rust-doc-path ~all-rust-doc-path))
 
 
 (prn "Build workspace")
@@ -48,11 +75,14 @@ $(cargo build --workspace)
 
 (prn "Build doc extension")
 $(cd ${PWD}/mdbook-slosh-eval)
-(sh "cargo build")
-(sh "cd -")
+$(cargo build)
+$(cd -)
 
-(sh "export PATH=$PATH:./mdbook-slosh-eval/target/debug")
-(sh "mdbook build")
+$(export PATH=$PATH:./mdbook-slosh-eval/target/debug)
 
+$(mdbook build)
 
 (sh "./search-hack-patch.sh")
+
+(when (= args-local.1 "serve")
+    $(mdbook serve))
