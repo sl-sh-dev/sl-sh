@@ -1609,7 +1609,6 @@ pub fn sl_sh_fn(
     let tokens = match syn::parse::<Item>(input) {
         Ok(item) => match &item {
             Item::Fn(original_item_fn) => {
-
                 let generated_code = match generate_sl_sh_fn(original_item_fn, attr_args) {
                     Ok(generated_code) => generated_code,
                     Err(e) => e.to_compile_error(),

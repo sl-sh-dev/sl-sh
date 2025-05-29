@@ -1,4 +1,4 @@
-#!/usr/bin/env slosh_test
+#!/usr/bin/env slosh
 
 ;; TODO PC you should be able to remove mdbook from slosh_test, slosh_test binary
 ;; might be unnecessary and fcns inside slosh-test might be able to move to slosh
@@ -37,13 +37,12 @@ they contain a lot of raw html which must be handled by mdbook.")
     (eprn help)
     (exit 1)))
 
-(when (and (= (len *args*) 3) (= args-local.2 "skip-supplemental"))
-    (set! *do-supplemental* #f))
-
-(when (and (= (len *args*) 3) (not (= args-local.2 "skip-supplemental"())))
-    (do (eprn "Optional second argument can only be string skip-supplemental.")
-    (eprn help)
-    (exit 1)))
+(when (= (len *args*) 3)
+	(if (= args-local.2 "skip-supplemental")
+		(set! *do-supplemental* #f)
+		(do (eprn "Optional second argument can only be string skip-supplemental.")
+			(eprn help)
+			(exit 1))))
 
 (sh "export RUST_LOG=DEBUG")
 

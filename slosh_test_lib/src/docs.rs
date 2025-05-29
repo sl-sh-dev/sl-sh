@@ -25,6 +25,7 @@ use std::string::ToString;
 
 pub mod legacy;
 
+const GLOBAL_NAMESPACE: &str = "root";
 const USAGE: &str = "usage";
 const DESCRIPTION: &str = "description";
 const SECTION: &str = "section";
@@ -124,20 +125,17 @@ enum Namespace {
     Other(Interned),
 }
 
-impl Display for Namespace {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Namespace::Global => "global".to_string(),
-                Namespace::Other(s) => s.id.to_string(),
-            }
-        )
-    }
-}
-
 impl Namespace {
+    fn display(&self, vm: &mut SloshVm) -> String {
+        match self {
+            Namespace::Global => GLOBAL_NAMESPACE.to_string(),
+            Namespace::Other(s) => {
+                let s = vm.get_interned(*s);
+                s.to_string()
+            }
+        }
+    }
+
     fn get_doc(
         &self,
         interned: &Interned,
@@ -339,7 +337,7 @@ impl AsMd for SloshDoc {
 pub struct SloshDoc {
     symbol: String,
     symbol_type: String,
-    namespace: Namespace,
+    namespace: String,
     doc_string: DocStringSection,
 }
 
@@ -390,6 +388,7 @@ impl SloshDoc {
             let doc_string = DocStringSection::from_symbol(slot, sym, vm)?;
             let symbol = sym.display_value(vm);
             let symbol_type = sym.display_type(vm).to_string();
+            let namespace = namespace.display(vm);
             Ok(SloshDoc {
                 symbol,
                 symbol_type,
@@ -410,6 +409,7 @@ impl SloshDoc {
             let doc_string = DocStringSection::new_incomplete(slot, &sym, vm);
             let symbol = sym.display_value(vm);
             let symbol_type = sym.display_type(vm).to_string();
+            let namespace = namespace.display(vm);
             Ok(SloshDoc {
                 symbol,
                 symbol_type,
@@ -798,7 +798,8 @@ pub fn add_user_docs_to_mdbook_less_provided_sections(
             let mut set = HashSet::new();
             // to set
             for d in all_docs {
-                if !matches!(d.namespace, Namespace::Global) {
+                let namespace = GLOBAL_NAMESPACE.to_string();
+                if d.namespace != namespace {
                     set.insert(d);
                 }
             }

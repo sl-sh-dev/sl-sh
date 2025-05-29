@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - main
+      - user-docs/fix2
 
 jobs:
   deploy:
@@ -16,11 +17,13 @@ jobs:
         fetch-depth: 0
     - name: Deploy GitHub Pages
       run: |
+        cargo build --bin slosh
+        export PATH="$PATH:$PWD/target/debug/"
         cargo install --force mdbook
         # change to documentation directory
         cd doc
         # mk-site.sh writes the static site to the book directory
-        ./mk-site.sh
+        ./mk-site.slosh build
         git worktree add gh-pages
         git config user.name "Deploy from CI"
         git config user.email ""
