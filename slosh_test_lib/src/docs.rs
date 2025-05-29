@@ -25,6 +25,7 @@ use std::string::ToString;
 
 pub mod legacy;
 
+const USER_FORMS: &str = "User Forms";
 const GLOBAL_NAMESPACE: &str = "root";
 const USAGE: &str = "usage";
 const DESCRIPTION: &str = "description";
@@ -640,7 +641,8 @@ fn build_all_slosh_forms_listing_chapter(
     docs_by_section: &BTreeMap<String, Vec<SloshDoc>>,
 ) -> VMResult<Chapter> {
     let mut all_content = format!("# {}\n\n", name);
-    all_content += r#"
+    if name == USER_FORMS {
+        all_content += r#"
 When built locally (see doc/README.md) the mdbook generator has access to the user's
 slosh environment. This enables creating documentation in md form of all user defined
 functions. The user's init.slosh is automatically loaded, so any additional files it
@@ -651,6 +653,7 @@ and `user-doc-load-paths` string arrays in doc/book.toml. The default is to use
 `~/.config/slosh/` as the load path and `~/.config/slosh/init.slosh` for the rc file.
 
 "#;
+    }
     let sections_len = docs_by_section.keys().len();
     let mut list = "List of sections: \n\n".to_string();
     for (i, section) in docs_by_section.keys().enumerate() {
@@ -811,7 +814,7 @@ pub fn add_user_docs_to_mdbook_less_provided_sections(
         }
     }
 
-    add_forms_to_md_book_part("User Forms".to_string(), md_book, &docs_by_section)?;
+    add_forms_to_md_book_part(USER_FORMS.to_string(), md_book, &docs_by_section)?;
     Ok(())
 }
 
