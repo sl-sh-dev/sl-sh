@@ -55,6 +55,7 @@ lazy_static! {
         exemption_set.insert("return");
         exemption_set.insert("*euid*");
         exemption_set.insert("*last-status*");
+        exemption_set.insert("*last-command*");
         exemption_set.insert("*int-min*");
         exemption_set.insert("*uid*");
         exemption_set.insert("*int-max*");

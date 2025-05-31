@@ -507,6 +507,8 @@ pub fn set_shell_builtins(env: &mut SloshVm) {
     env.set_named_global("*uid*", uid.into());
     env.set_named_global("*euid*", euid.into());
     env.set_named_global("*last-status*", 0.into());
+    let val = env.alloc_string("".to_string());
+    env.set_named_global("*last-command*", val);
     // Initialize the HOST variable
     let host: OsString = Sys::gethostname().unwrap_or_else(|| "Operating system hostname is not a string capable of being parsed by native platform???".into());
     env::set_var("HOST", host);
@@ -677,8 +679,10 @@ fn run_command(res: &String) -> i32 {
         })
     });
     ENV.with(|env| {
-        env.borrow_mut()
-            .set_named_global("*last-status*", status.into());
+        let mut env = env.borrow_mut();
+        env.set_named_global("*last-status*", status.into());
+        let res = env.alloc_string(res.to_string());
+        env.set_named_global("*last-command*", res);
     });
     status
 }
