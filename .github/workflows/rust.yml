@@ -1,4 +1,4 @@
-nme: Rust
+name: Rust
 
 on:
   push:
