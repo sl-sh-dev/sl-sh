@@ -25,6 +25,8 @@ use std::string::ToString;
 
 pub mod legacy;
 
+const USER_FORMS: &str = "User Forms";
+const GLOBAL_NAMESPACE: &str = "root";
 const USAGE: &str = "usage";
 const DESCRIPTION: &str = "description";
 const SECTION: &str = "section";
@@ -124,20 +126,17 @@ enum Namespace {
     Other(Interned),
 }
 
-impl Display for Namespace {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Namespace::Global => "global".to_string(),
-                Namespace::Other(s) => s.id.to_string(),
-            }
-        )
-    }
-}
-
 impl Namespace {
+    fn display(&self, vm: &mut SloshVm) -> String {
+        match self {
+            Namespace::Global => GLOBAL_NAMESPACE.to_string(),
+            Namespace::Other(s) => {
+                let s = vm.get_interned(*s);
+                s.to_string()
+            }
+        }
+    }
+
     fn get_doc(
         &self,
         interned: &Interned,
@@ -339,7 +338,7 @@ impl AsMd for SloshDoc {
 pub struct SloshDoc {
     symbol: String,
     symbol_type: String,
-    namespace: Namespace,
+    namespace: String,
     doc_string: DocStringSection,
 }
 
@@ -390,6 +389,7 @@ impl SloshDoc {
             let doc_string = DocStringSection::from_symbol(slot, sym, vm)?;
             let symbol = sym.display_value(vm);
             let symbol_type = sym.display_type(vm).to_string();
+            let namespace = namespace.display(vm);
             Ok(SloshDoc {
                 symbol,
                 symbol_type,
@@ -410,6 +410,7 @@ impl SloshDoc {
             let doc_string = DocStringSection::new_incomplete(slot, &sym, vm);
             let symbol = sym.display_value(vm);
             let symbol_type = sym.display_type(vm).to_string();
+            let namespace = namespace.display(vm);
             Ok(SloshDoc {
                 symbol,
                 symbol_type,
@@ -640,7 +641,19 @@ fn build_all_slosh_forms_listing_chapter(
     docs_by_section: &BTreeMap<String, Vec<SloshDoc>>,
 ) -> VMResult<Chapter> {
     let mut all_content = format!("# {}\n\n", name);
+    if name == USER_FORMS {
+        all_content += r#"
+When built locally (see doc/README.md) the mdbook generator has access to the user's
+slosh environment. This enables creating documentation in md form of all user defined
+functions. The user's init.slosh is automatically loaded, so any additional files it
+loads are also imported. If the user needs to alter the slosh load path or add
+additional files to be loaded (presumably because they aren't imported in init.slosh
+or any slosh file it imports) it can be done by adding the paths in the `user-doc-files`
+and `user-doc-load-paths` string arrays in doc/book.toml. The default is to use
+`~/.config/slosh/` as the load path and `~/.config/slosh/init.slosh` for the rc file.
 
+"#;
+    }
     let sections_len = docs_by_section.keys().len();
     let mut list = "List of sections: \n\n".to_string();
     for (i, section) in docs_by_section.keys().enumerate() {
@@ -788,7 +801,8 @@ pub fn add_user_docs_to_mdbook_less_provided_sections(
             let mut set = HashSet::new();
             // to set
             for d in all_docs {
-                if !matches!(d.namespace, Namespace::Global) {
+                let namespace = GLOBAL_NAMESPACE.to_string();
+                if d.namespace != namespace {
                     set.insert(d);
                 }
             }
@@ -800,7 +814,7 @@ pub fn add_user_docs_to_mdbook_less_provided_sections(
         }
     }
 
-    add_forms_to_md_book_part("User Forms".to_string(), md_book, &docs_by_section)?;
+    add_forms_to_md_book_part(USER_FORMS.to_string(), md_book, &docs_by_section)?;
     Ok(())
 }
 

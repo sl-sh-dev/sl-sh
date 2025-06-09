@@ -1966,6 +1966,7 @@ dependencies = [
  "sl-compiler",
  "sl-liner",
  "slvm",
+ "static_assertions",
  "unicode-width 0.2.0",
  "unicode_reader",
 ]

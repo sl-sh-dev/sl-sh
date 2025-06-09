@@ -1585,7 +1585,9 @@ fn generate_sl_sh_fn(
         params.as_slice(),
         builtin_fn,
     );
+    let fn_attributes = &original_item_fn.attrs;
     let tokens = quote! {
+        #(#fn_attributes)*
         #parse_fn
 
         #intern_fn

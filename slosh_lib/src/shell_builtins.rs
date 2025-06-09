@@ -1,5 +1,7 @@
 use crate::SHELL_ENV;
 use bridge_adapters::add_builtin;
+use bridge_macros::sl_sh_fn;
+use bridge_types::LooseInt;
 use compile_state::state::SloshVm;
 use shell::platform::{FromFileDesc, Platform, Sys};
 use slvm::io::HeapIo;
@@ -8,6 +10,7 @@ use std::collections::HashSet;
 use std::env::VarError;
 use std::fs::File;
 use std::io::{BufRead, ErrorKind};
+use std::process;
 use std::{env, io};
 
 fn sh(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
@@ -87,6 +90,26 @@ fn sh(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
+/// Usage: (exit int)
+///
+/// Exit shell with provided exit code.
+///
+/// Section: core
+///
+/// Example:
+/// #t
+#[allow(unreachable_code)]
+#[sl_sh_fn(fn_name = "exit")]
+fn exit(val: Option<LooseInt>) -> VMResult<Value> {
+    let exit_code = if let Some(val) = val {
+        let val = slvm::from_i56(&val.0);
+        val as i32
+    } else {
+        0
+    };
+    process::exit(exit_code);
+}
+
 fn sh_str(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut command = String::new();
     for exp in registers {
@@ -155,6 +178,7 @@ fn env_var(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
 }
 
 pub fn add_shell_builtins(env: &mut SloshVm) {
+    intern_exit(env);
     add_builtin(
         env,
         "$sh",
