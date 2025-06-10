@@ -1,6 +1,8 @@
 use crate::SloshVm;
 use bridge_macros::sl_sh_fn;
+use bridge_types::LooseFloat;
 use slvm::{VMError, VMResult, Value};
+use slvm::float::F56;
 
 /// Usage: (abs arg)
 ///
