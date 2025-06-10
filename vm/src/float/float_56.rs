@@ -9,6 +9,7 @@
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
+use bridge_types::LooseFloat;
 
 #[allow(rustdoc::broken_intra_doc_links)]
 /// The F56 struct represents a 56-bit floating point number using 7 bytes.
@@ -34,12 +35,15 @@ use std::str::FromStr;
 /// A f64 number like 1.000000000001 with 13 decimal digits will be converted to 1.0
 #[derive(Copy, Clone)]
 pub struct F56(pub [u8; 7]);
+
 impl Eq for F56 {}
+
 impl PartialEq for F56 {
     fn eq(&self, other: &Self) -> bool {
         self.strictest_equal(other) // appropriate for `identical?` comparison
     }
 }
+
 impl Hash for F56 {
     // In order to use F56 as a key in a hash map, we need to ensure:
     // If a == b then hash(a) == hash(b)
@@ -47,17 +51,20 @@ impl Hash for F56 {
         state.write_u64(self.hash_for_strictest_equal())
     }
 }
+
 impl std::fmt::Debug for F56 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "F56({:?})", self.0)
     }
 }
+
 impl Display for F56 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         // write!(f, "{}", f64::from(*self))
         write!(f, "{}", F56::round_f64_to_f56_precision(f64::from(*self)))
     }
 }
+
 impl From<f64> for F56 {
     fn from(f: f64) -> F56 {
         let f64_bytes = f.to_be_bytes();
@@ -140,6 +147,18 @@ impl From<f64> for F56 {
             f56_bytes[6],
             f56_bytes[7],
         ])
+    }
+}
+
+impl From<LooseFloat> for F56 {
+    fn from(value: LooseFloat) -> Self {
+        F56(value.0)
+    }
+}
+
+impl From<F56> for LooseFloat {
+    fn from(value: F56) -> Self {
+        LooseFloat(value.0)
     }
 }
 
