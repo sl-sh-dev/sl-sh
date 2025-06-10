@@ -10,6 +10,8 @@
 (def slosh-rust-doc-path "src/slosh-rust-docs")
 (def all-rust-doc-path "src/all-rust-docs")
 (def help "Usage:
+(def *do-supplemental* #t)
+(def serve #f)
 
 ./mk-site.slosh build|serve [skip-supplemental]
 
@@ -27,9 +29,18 @@ they contain a lot of raw html which must be handled by mdbook.")
 
 (def args-local *args*)
 
-(when (or (<= (len *args*) 1) (> (len *args*) 3))
-    (do (eprn "Takes 1 or 2 arguments.")
+;; Fail if args is 0 or 3.
+(when (or (< (len *args*) 1) (> (len *args*) 3))
+    (do (eprn "Takes 1 or 2 arguments. First arugment must be `build` or `serve` second can be `skip-supplemental`")
     (eprn help)
+    (exit 1)))
+
+(when (and (>= (len *args*) 2) (= args-local.1 "skip-supplemental"))
+    (set! *do-supplemental* #f))
+
+
+(when (and (<= (len *args*) 2) (or (= args-local.0 "build") (= args-local.0 "serve")))
+    (do (eprn "First argument must be build or serve")
     (exit 1)))
 
 (when (not (or (= args-local.1 "build") (= args-local.1 "serve")))
@@ -43,6 +54,9 @@ they contain a lot of raw html which must be handled by mdbook.")
 		(do (eprn "Optional second argument can only be string skip-supplemental.")
 			(eprn help)
 			(exit 1))))
+
+(when (not *do-supplemental*)
+    $(rm -rf src/legacy/ src/all-rust-docs/ src/slosh-rust-docs/))
 
 (sh "export RUST_LOG=DEBUG")
 
