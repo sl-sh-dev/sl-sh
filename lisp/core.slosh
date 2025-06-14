@@ -71,6 +71,45 @@ Example:
 (def symbol? (fn (v) (identical? (type v) :Symbol)))
 
 #%
+Usage: (hash-set? expression)
+
+True if the expression is a set, false otherwise.
+
+Section: type
+
+Example:
+(test::assert-true (set? (make-hash)))
+(test::assert-false (set? 1))
+%#
+(def hash-set? (fn (v) (identical? (type v) :Map)))
+
+#%
+Usage: (int? expression)
+
+True if the expression is an int, false otherwise.
+
+Section: type
+
+Example:
+(test::assert-true (int? 7))
+(test::assert-false (int? "7"))
+%#
+(def int? (fn (v) (identical? (type v) :Int)))
+
+#%
+Usage: (float? expression)
+
+True if the expression is a float, false otherwise.
+
+Section: type
+
+Example:
+(test::assert-true (float? 7.0))
+(test::assert-false (float? "7.0"))
+%#
+(def float? (fn (v) (identical? (type v) :Float)))
+
+#%
 Usage: (vec? expression)
 
 True if the expression is a vector, false otherwise.
@@ -814,5 +853,119 @@ Example:
   (defmacro substitute (lst old-item new-item & mods)
        `(nsubstitute! (to-list ~lst) ~old-item ~new-item ~@mods))
 
+#% Usage (-> form1 form2 form3 ...)
+Inserts result of previous expression as second argument to current expression.
+
+Section: threading-macros
+
+Example:
+
+(assert-equal
+    (str "I go at the beginning.I'll be stuck in the middle.I'll be at the end.")
+    (-> "I go at the beginning."
+        (str "I'll be stuck in the middle.")
+        (str "I'll be at the end.")))
+%#
+(defmacro -> (&rest args)
+    (if (< (len args) 2)
+        (err "-> (thrush operator) requires at least two arguments")
+        (let (fst (car args)
+              sexp nil
+              fcn nil)
+          (loop (curr-form forms) (fst (cdr args))
+                (if (empty? forms)
+                    curr-form
+                    (do
+                     (set! sexp nil)
+                     (set! fcn (car forms))
+                      (if (seq? fcn)
+                          (set! sexp `(~(car fcn) ~curr-form ~@(cdr fcn)))
+                          (set! sexp `(~fcn ~curr-form)))
+                      (recur sexp (cdr forms))))))))
+
+#%
+Usage (->> form1 form2 form3 ...)
+
+inserts result of previous expression as last argument to current expression.
+First argument is not evaluated.
+
+Section: threading-macros
+
+Example:
+
+(assert-equal
+    (str "I'll be at the beginning.I'll be more in the middle.I go at the end.")
+    (->> "I go at the end."
+        (str "I'll be more in the middle.")
+        (str "I'll be at the beginning.")))
+%#
+(defmacro ->>
+(&rest args)
+    (if (< (len args) 2)
+        (err "->> (thush operator) requires at least two arguments")
+        (let (fst (car args)
+              sexp nil
+              fcn nil)
+          (loop (curr-form forms) (fst (cdr args))
+                (if (empty? forms)
+                    curr-form
+                    (do
+                     (set! sexp nil)
+                     (set! fcn (car forms))
+                      (if (seq? fcn)
+                          (set! sexp `(~@fcn ~curr-form))
+                          (set! sexp `(~fcn ~curr-form)))
+                      (recur sexp (cdr forms))))))))
+
+#|
+#%
+Inserts result of previous expression into place indicated by the _ symbol
+in the next expression. This macro is useful when nested actions
+need to occur but when a more sequential enumeration of steps is preferable.
+To demonstrate a sequence of operations:
+    (fn (x) (delta (charlie (bravo (alpha x)))))
+can be unwound, and more idiomatically stated with the chain macro:
+    (fn (x) (chain x (alpha _) (bravo _) (charlie _) (delta _)))
+
+The flexibility of using the _ symbol as a placeholder means subsequent
+results can be \"threaded\" into any desired place in a clause which is an
+advantage over the thread first, [->](#root::->) and thread last,
+[->>](#root::->>), macros
+
+Section: threading-macros
+
+Example:
+
+(test::assert-equal "Ordered sentence: I will become a properly worded statement."
+    (chain "a properly worded "
+           (str "will " "become " _)
+           (str "I " _ "statement.")
+           (str "Ordered sentence: " _)))
+
+(test::assert-equal 3 (chain 7 (% _ 4)))
+
+(test::assert-equal 9 (chain 7 (% _ 4) (+ 1 8)))
+
+(test::assert-equal (list 6 12 18) (collect (chain 7
+                                    (% _ 4)
+                                    (range _ 10)
+                                    (map (fn (x) (* x 2)) _)
+                                    (filter (fn (x) (= 0 (% x 3))) _))))
+
 (load "iterator.slosh")
 (load "test.slosh")
+
+%#
+(defmacro chain
+(init arg0 &rest args)
+  (do
+      (if (not (nil? args))
+        (set! args arg0.0)
+        (set! args (vec arg0)))
+      (iterator::for elem in args (when (empty-seq? elem)
+         (err "All args must be non-empty sequences.")))
+      #t)
+  (let* ((reducer (fn (fst nxt)
+          (substitute fst '_ nxt))))
+    (iterator::reduce reducer init args)))
+|#

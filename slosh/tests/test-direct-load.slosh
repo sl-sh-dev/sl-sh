@@ -1,0 +1,20 @@
+#!/usr/bin/env slosh
+
+;; Test loading test namespace directly
+(prn "Loading test.slosh...")
+(load "lisp/test.slosh")
+
+;; Now use test functions with namespace prefix
+(prn "Using test::assert-equal...")
+(test::assert-equal 1 1)
+(prn "✓ test::assert-equal works")
+
+;; Test our math functions
+(prn "\nTesting math functions...")
+(test::assert-equal 1 (min 1 2 3))
+(prn "✓ min works")
+
+(test::assert-equal 3 (max 1 2 3))
+(prn "✓ max works")
+
+(prn "\nAll tests passed!")

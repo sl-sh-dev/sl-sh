@@ -1,0 +1,10 @@
+#!/usr/bin/env slosh
+
+; This is a demo test file for the enhanced test runner
+(println "Running test_runner_demo.slosh")
+(println "This test should pass!")
+
+; Simple assertion
+(assert (= (+ 1 2) 3))
+
+(println "Test completed successfully")

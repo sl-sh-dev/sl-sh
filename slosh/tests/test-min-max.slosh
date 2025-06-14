@@ -1,0 +1,25 @@
+#!/usr/bin/env slosh
+
+;; Quick test to verify min and max work
+(prn "Testing min and max functions...")
+
+;; Test min
+(prn "min(1, 2, 3) = " (min 1 2 3))
+(prn "min(10, -5, 3) = " (min 10 -5 3))
+(prn "min(42) = " (min 42))
+(prn "min(3.0, 1.5, 2.0) = " (min 3.0 1.5 2.0))
+
+;; Test max  
+(prn "max(1, 2, 3) = " (max 1 2 3))
+(prn "max(10, -5, 3) = " (max 10 -5 3))
+(prn "max(42) = " (max 42))
+(prn "max(3.0, 1.5, 2.0) = " (max 3.0 1.5 2.0))
+
+;; Test other new functions
+(prn "pow(4, 2) = " (pow 4 2))
+(prn "sqrt(16) = " (sqrt 16))
+(prn "exp(0) = " (exp 0))
+(prn "log(1) = " (log 1))
+(prn "log2(8) = " (log2 8))
+
+(prn "All tests completed!")
