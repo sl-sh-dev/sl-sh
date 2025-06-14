@@ -1,0 +1,41 @@
+#!/usr/bin/env slosh
+
+;; Load test.slosh explicitly
+(load "./lisp/test.slosh")
+
+;; Now test our functions
+(prn "Testing min function...")
+(test::assert-equal 1 (min 1 2 3))
+(prn "✓ min(1, 2, 3) = 1")
+
+(test::assert-equal -5 (min 10 -5 3))
+(prn "✓ min(10, -5, 3) = -5")
+
+(prn "\nTesting max function...")
+(test::assert-equal 3 (max 1 2 3))
+(prn "✓ max(1, 2, 3) = 3")
+
+(test::assert-equal 10 (max 10 -5 3))
+(prn "✓ max(10, -5, 3) = 10")
+
+(prn "\nTesting pow function...")
+(test::assert-equal 16.0 (pow 4 2))
+(prn "✓ pow(4, 2) = 16.0")
+
+(prn "\nTesting sqrt function...")
+(test::assert-equal 4.0 (sqrt 16))
+(prn "✓ sqrt(16) = 4.0")
+
+(prn "\nTesting exp function...")
+(test::assert-equal 1.0 (exp 0))
+(prn "✓ exp(0) = 1.0")
+
+(prn "\nTesting log function...")
+(test::assert-equal 0.0 (log 1))
+(prn "✓ log(1) = 0.0")
+
+(prn "\nTesting log2 function...")
+(test::assert-equal 3.0 (log2 8))
+(prn "✓ log2(8) = 3.0")
+
+(prn "\nAll tests passed! ✓")

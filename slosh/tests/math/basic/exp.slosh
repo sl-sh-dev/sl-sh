@@ -1,0 +1,32 @@
+;; Tests for exp function (e^x)
+;; Testing basic functionality, edge cases, and error conditions
+(load "test.slosh")
+(import test)
+
+;; Basic functionality
+(assert-equal 1.0 (exp 0))
+(assert-true (< 2.718 (exp 1) 2.719)) ; e^1 = e
+(assert-true (< 7.389 (exp 2) 7.390)) ; e^2
+(assert-true (< 20.085 (exp 3) 20.086)) ; e^3
+
+;; Negative exponents
+(assert-true (< 0.367 (exp -1) 0.368)) ; 1/e
+(assert-true (< 0.135 (exp -2) 0.136)) ; 1/e^2
+(assert-true (< 0.049 (exp -3) 0.050)) ; 1/e^3
+
+;; Fractional exponents
+(assert-true (< 1.648 (exp 0.5) 1.649)) ; e^0.5
+(assert-true (< 2.117 (exp 0.75) 2.118)) ; e^0.75
+
+;; Large values (testing overflow behavior)
+(assert-true (> (exp 100) 1e43))
+(assert-true (< (exp -100) 1e-43))
+
+;; Special values
+(assert-true (< 0.999 (exp 0.0) 1.001))
+
+;; Error cases
+(assert-error (exp))
+(assert-error (exp 1 2))
+(assert-error (exp "one"))
+(assert-error (exp nil))

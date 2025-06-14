@@ -1,0 +1,45 @@
+;; Tests for log2 function
+;; Testing base-2 logarithm
+(load "test.slosh")
+(import test)
+
+;; Basic powers of 2
+(assert-equal 0.0 (log2 1))      ; log2(1) = 0
+(assert-equal 1.0 (log2 2))      ; log2(2) = 1
+(assert-equal 2.0 (log2 4))      ; log2(4) = 2
+(assert-equal 3.0 (log2 8))      ; log2(8) = 3
+(assert-equal 4.0 (log2 16))     ; log2(16) = 4
+(assert-equal 5.0 (log2 32))     ; log2(32) = 5
+(assert-equal 6.0 (log2 64))     ; log2(64) = 6
+(assert-equal 7.0 (log2 128))    ; log2(128) = 7
+(assert-equal 8.0 (log2 256))    ; log2(256) = 8
+(assert-equal 9.0 (log2 512))    ; log2(512) = 9
+(assert-equal 10.0 (log2 1024))  ; log2(1024) = 10
+
+;; Negative powers of 2 (fractions)
+(assert-equal -1.0 (log2 0.5))   ; log2(1/2) = -1
+(assert-equal -2.0 (log2 0.25))  ; log2(1/4) = -2
+(assert-equal -3.0 (log2 0.125)) ; log2(1/8) = -3
+
+;; Non-power-of-2 values
+(assert-true (< 1.584 (log2 3) 1.585))     ; log2(3) ≈ 1.585
+(assert-true (< 2.321 (log2 5) 2.322))     ; log2(5) ≈ 2.322
+(assert-true (< 3.321 (log2 10) 3.322))    ; log2(10) ≈ 3.322
+(assert-true (< 6.643 (log2 100) 6.644))   ; log2(100) ≈ 6.644
+
+;; Large values
+(assert-equal 20.0 (log2 1048576))          ; log2(2^20) = 20
+(assert-true (< 19.931 (log2 1000000) 19.932)) ; log2(10^6) ≈ 19.93
+
+;; Small values
+(assert-true (< -3.322 (log2 0.1) -3.321))  ; log2(0.1) ≈ -3.322
+(assert-true (< -6.644 (log2 0.01) -6.643)) ; log2(0.01) ≈ -6.644
+
+;; Error cases
+(assert-error (log2))            ; No arguments
+(assert-error (log2 -1))         ; Negative argument
+(assert-error (log2 0))          ; Zero argument
+(assert-error (log2 -10))        ; Negative number
+(assert-error (log2 1 2))        ; Too many arguments
+(assert-error (log2 "two"))      ; Type error
+(assert-error (log2 nil))        ; Type error
