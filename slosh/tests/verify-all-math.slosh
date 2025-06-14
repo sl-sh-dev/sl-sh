@@ -1,0 +1,78 @@
+#!/usr/bin/env slosh
+
+;; Comprehensive test for all implemented math functions
+(load "test.slosh")
+(import test)
+
+(prn "Testing all implemented math functions...\n")
+
+;; Test min
+(prn "Testing min...")
+(test::assert-equal 1 (min 1 2 3))
+(test::assert-equal -5 (min 10 -5 3))
+(test::assert-equal 42 (min 42))
+(test::assert-equal 1.5 (min 3.0 1.5 2.0))
+(prn "✓ min passed all tests")
+
+;; Test max
+(prn "\nTesting max...")
+(test::assert-equal 3 (max 1 2 3))
+(test::assert-equal 10 (max 10 -5 3))
+(test::assert-equal 42 (max 42))
+(test::assert-equal 3.0 (max 3.0 1.5 2.0))
+(prn "✓ max passed all tests")
+
+;; Test pow
+(prn "\nTesting pow...")
+(test::assert-equal 16.0 (pow 4 2))
+(test::assert-equal 1024.0 (pow 2 10))
+(test::assert-equal 1.0 (pow 85 0))
+(test::assert-equal 0.25 (pow 2 -2))
+(prn "✓ pow passed all tests")
+
+;; Test sqrt
+(prn "\nTesting sqrt...")
+(test::assert-equal 2.0 (sqrt 4))
+(test::assert-equal 3.0 (sqrt 9))
+(test::assert-equal 4.0 (sqrt 16))
+(test::assert-equal 12.0 (sqrt 144))
+(prn "✓ sqrt passed all tests")
+
+;; Test exp
+(prn "\nTesting exp...")
+(test::assert-equal 1.0 (exp 0))
+(test::assert-true (< 2.718 (exp 1) 2.719))
+(test::assert-true (< 7.389 (exp 2) 7.390))
+(prn "✓ exp passed all tests")
+
+;; Test log
+(prn "\nTesting log...")
+(test::assert-equal 0.0 (log 1))
+(test::assert-true (< 2.302 (log 10) 2.303))
+(test::assert-equal 3.0 (log 8 2))
+(test::assert-equal 2.0 (log 100 10))
+(prn "✓ log passed all tests")
+
+;; Test log2
+(prn "\nTesting log2...")
+(test::assert-equal 0.0 (log2 1))
+(test::assert-equal 3.0 (log2 8))
+(test::assert-equal 10.0 (log2 1024))
+(test::assert-equal -1.0 (log2 0.5))
+(prn "✓ log2 passed all tests")
+
+;; Test existing functions
+(prn "\nTesting existing functions...")
+(test::assert-equal 144 (abs -144))
+(test::assert-equal 4.53 (abs -4.53))
+(test::assert-equal 5 (% 55 10))
+(test::assert-equal -1 (% -10 3))
+(test::assert-equal 2 (rem_euclid -10 3))
+(test::assert-equal 1024.0 (2pow 10))
+(prn "✓ existing functions passed all tests")
+
+(prn "\n✅ All math functions passed their tests!")
+(prn "\nSummary of implemented functions:")
+(prn "  Basic: min, max, pow, sqrt, exp, log, log2")
+(prn "  Existing: abs, %, rem, rem_euclid, 2pow")
+(prn "\nTotal: 12 math functions working correctly!")
