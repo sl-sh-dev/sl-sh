@@ -1,0 +1,43 @@
+;; Tests for pow function
+;; Testing basic functionality, edge cases, and error conditions
+(load "test.slosh")
+(import test)
+
+;; Basic functionality
+(assert-equal 16.0 (pow 4 2))
+(assert-equal 8.0 (pow 2 3))
+(assert-equal 1024.0 (pow 2 10))
+(assert-equal 81.0 (pow 3 4))
+
+;; Any number to the power of 0 is 1
+(assert-equal 1.0 (pow 85 0))
+(assert-equal 1.0 (pow 0 0))
+(assert-equal 1.0 (pow -5 0))
+
+;; Negative exponents
+(assert-equal 0.25 (pow 2 -2))
+(assert-equal 0.125 (pow 2 -3))
+(assert-equal 0.01 (pow 10 -2))
+
+;; Fractional bases
+(assert-equal 0.25 (pow 0.5 2))
+(assert-equal 0.0625 (pow 0.5 4))
+
+;; Fractional exponents (square root via pow)
+(assert-equal 2.0 (pow 4 0.5))
+(assert-equal 3.0 (pow 9 0.5))
+
+;; Negative bases with even exponents
+(assert-equal 4.0 (pow -2 2))
+(assert-equal 16.0 (pow -2 4))
+
+;; Negative bases with odd exponents
+(assert-equal -8.0 (pow -2 3))
+(assert-equal -32.0 (pow -2 5))
+
+;; Error cases
+(assert-error (pow))
+(assert-error (pow 2))
+(assert-error (pow 2 3 4))
+(assert-error (pow "two" 3))
+(assert-error (pow 2 "three"))

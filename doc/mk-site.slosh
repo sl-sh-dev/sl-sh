@@ -35,10 +35,6 @@ they contain a lot of raw html which must be handled by mdbook.")
     (eprn help)
     (exit 1)))
 
-(when (and (>= (len *args*) 2) (= args-local.1 "skip-supplemental"))
-    (set! *do-supplemental* #f))
-
-
 (when (and (<= (len *args*) 2) (or (= args-local.0 "build") (= args-local.0 "serve")))
     (do (eprn "First argument must be build or serve")
     (exit 1)))
@@ -55,9 +51,6 @@ they contain a lot of raw html which must be handled by mdbook.")
 			(eprn help)
 			(exit 1))))
 
-(when (not *do-supplemental*)
-    $(rm -rf src/legacy/ src/all-rust-docs/ src/slosh-rust-docs/))
-
 (sh "export RUST_LOG=DEBUG")
 
 (prn "args: " *args*)
@@ -67,22 +60,23 @@ they contain a lot of raw html which must be handled by mdbook.")
 (if *do-supplemental*
     (do
         (prn "clone in the legacy gh pages docs")
-        (sh "git clone -b gh-pages-legacy-html https://github.com/sl-sh-dev/sl-sh src/legacy/")
-
+        (sh (str "git clone -b gh-pages-legacy-html https://github.com/sl-sh-dev/sl-sh" legacy-doc-path))
         (prn "Remove legacy/.git submodule directory")
-        ;; don't want git submodules
-        $(rm -rf (str legacy-doc-path "/.git"))
-        (prn "Make rust docs pages")
+        ;; don't want .git dir
+        (let (legacy-git (str legacy-doc-path "/.git"))
+            $(rm -rf ~legacy-git))
+        (prn "Make rust docs pages dirs")
         $(mkdir -p ~slosh-rust-doc-path)
         $(mkdir -p ~all-rust-doc-path)
 
         (prn "Build rust docs")
         ;; build rust documentation
-        $(cargo doc --features lisp-test --target-dir $all-rust-doc-path)
-        $(cargo doc --no-deps --document-private-items --features lisp-test --target-dir slosh-rust-doc-path))
+        $(cargo doc --features lisp-test --target-dir ~all-rust-doc-path)
+        $(cargo doc --no-deps --document-private-items --features lisp-test --target-dir ~slosh-rust-doc-path)) )
     $(rm -rf ~legacy-doc-path ~slosh-rust-doc-path ~all-rust-doc-path))
 
 
+(exit 0)
 (prn "Build workspace")
 $(cargo build --workspace)
 
