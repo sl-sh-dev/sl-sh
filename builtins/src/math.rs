@@ -1,8 +1,8 @@
 use crate::SloshVm;
 use bridge_macros::sl_sh_fn;
 use bridge_types::{LooseFloat, VarArgs};
-use slvm::{VMError, VMResult, Value};
 use slvm::float::F56;
+use slvm::{VMError, VMResult, Value};
 
 /// Usage: (abs arg)
 ///
@@ -162,7 +162,9 @@ pub fn two_pow(float: LooseFloat) -> VMResult<f64> {
 #[sl_sh_fn(fn_name = "min")]
 pub fn min(vals: VarArgs<Value>) -> VMResult<Value> {
     if vals.is_empty() {
-        return Err(VMError::new_vm("min: requires at least one argument".to_string()));
+        return Err(VMError::new_vm(
+            "min: requires at least one argument".to_string(),
+        ));
     }
 
     let mut min_val = vals[0];
@@ -199,7 +201,11 @@ pub fn min(vals: VarArgs<Value>) -> VMResult<Value> {
                     min_val = Value::Float(b.into());
                 }
             }
-            _ => return Err(VMError::new_vm("min: all arguments must be numbers".to_string())),
+            _ => {
+                return Err(VMError::new_vm(
+                    "min: all arguments must be numbers".to_string(),
+                ))
+            }
         }
     }
 
@@ -223,7 +229,9 @@ pub fn min(vals: VarArgs<Value>) -> VMResult<Value> {
 #[sl_sh_fn(fn_name = "max")]
 pub fn max(vals: VarArgs<Value>) -> VMResult<Value> {
     if vals.is_empty() {
-        return Err(VMError::new_vm("max: requires at least one argument".to_string()));
+        return Err(VMError::new_vm(
+            "max: requires at least one argument".to_string(),
+        ));
     }
 
     let mut max_val = vals[0];
@@ -260,7 +268,11 @@ pub fn max(vals: VarArgs<Value>) -> VMResult<Value> {
                     max_val = Value::Float(b.into());
                 }
             }
-            _ => return Err(VMError::new_vm("max: all arguments must be numbers".to_string())),
+            _ => {
+                return Err(VMError::new_vm(
+                    "max: all arguments must be numbers".to_string(),
+                ))
+            }
         }
     }
 
@@ -305,7 +317,9 @@ pub fn pow(base: LooseFloat, power: LooseFloat) -> VMResult<f64> {
 pub fn sqrt(num: LooseFloat) -> VMResult<f64> {
     let num = f64::from(F56(num.0));
     if num < 0.0 {
-        Err(VMError::new_vm("sqrt: cannot take square root of negative number".to_string()))
+        Err(VMError::new_vm(
+            "sqrt: cannot take square root of negative number".to_string(),
+        ))
     } else {
         Ok(num.sqrt())
     }
@@ -347,14 +361,18 @@ pub fn exp(power: LooseFloat) -> VMResult<f64> {
 pub fn log(num: LooseFloat, base: Option<LooseFloat>) -> VMResult<f64> {
     let num = f64::from(F56(num.0));
     if num <= 0.0 {
-        return Err(VMError::new_vm("log: argument must be positive".to_string()));
+        return Err(VMError::new_vm(
+            "log: argument must be positive".to_string(),
+        ));
     }
 
     match base {
         Some(b) => {
             let base = f64::from(F56(b.0));
             if base <= 0.0 || base == 1.0 {
-                Err(VMError::new_vm("log: base must be positive and not equal to 1".to_string()))
+                Err(VMError::new_vm(
+                    "log: base must be positive and not equal to 1".to_string(),
+                ))
             } else {
                 Ok(num.log(base))
             }
@@ -380,10 +398,136 @@ pub fn log(num: LooseFloat, base: Option<LooseFloat>) -> VMResult<f64> {
 pub fn log2(num: LooseFloat) -> VMResult<f64> {
     let num = f64::from(F56(num.0));
     if num <= 0.0 {
-        Err(VMError::new_vm("log2: argument must be positive".to_string()))
+        Err(VMError::new_vm(
+            "log2: argument must be positive".to_string(),
+        ))
     } else {
         Ok(num.log2())
     }
+}
+
+/// Usage: (sin radians)
+///
+/// Calculate the sine of an angle in radians.
+///
+/// Section: math
+///
+/// Example:
+/// (test::assert-equal 0.0 (sin 0))
+/// (test::assert-true (< 0.841 (sin 1) 0.842))
+/// (test::assert-true (< -0.001 (sin 3.14159) 0.001))
+/// (test::assert-error (sin))
+/// (test::assert-error (sin 1 2))
+#[sl_sh_fn(fn_name = "sin")]
+pub fn sin(radians: LooseFloat) -> VMResult<f64> {
+    let radians = f64::from(F56(radians.0));
+    Ok(radians.sin())
+}
+
+/// Usage: (cos radians)
+///
+/// Calculate the cosine of an angle in radians.
+///
+/// Section: math
+///
+/// Example:
+/// (test::assert-equal 1.0 (cos 0))
+/// (test::assert-true (< 0.540 (cos 1) 0.541))
+/// (test::assert-true (< -1.001 (cos 3.14159) -0.999))
+/// (test::assert-error (cos))
+/// (test::assert-error (cos 1 2))
+#[sl_sh_fn(fn_name = "cos")]
+pub fn cos(radians: LooseFloat) -> VMResult<f64> {
+    let radians = f64::from(F56(radians.0));
+    Ok(radians.cos())
+}
+
+/// Usage: (tan radians)
+///
+/// Calculate the tangent of an angle in radians.
+///
+/// Section: math
+///
+/// Example:
+/// (test::assert-equal 0.0 (tan 0))
+/// (test::assert-true (< 1.557 (tan 1) 1.558))
+/// (test::assert-true (< -0.001 (tan 3.14159) 0.001))
+/// (test::assert-error (tan))
+/// (test::assert-error (tan 1 2))
+#[sl_sh_fn(fn_name = "tan")]
+pub fn tan(radians: LooseFloat) -> VMResult<f64> {
+    let radians = f64::from(F56(radians.0));
+    Ok(radians.tan())
+}
+
+/// Usage: (arcsin value)
+///
+/// Calculate the arcsine (inverse sine) of a value. Returns angle in radians.
+/// Value must be between -1 and 1.
+///
+/// Section: math
+///
+/// Example:
+/// (test::assert-equal 0.0 (arcsin 0))
+/// (test::assert-true (< 1.570 (arcsin 1) 1.571))
+/// (test::assert-true (< -1.571 (arcsin -1) -1.570))
+/// (test::assert-error (arcsin))
+/// (test::assert-error (arcsin 2))
+/// (test::assert-error (arcsin -2))
+#[sl_sh_fn(fn_name = "arcsin")]
+pub fn arcsin(value: LooseFloat) -> VMResult<f64> {
+    let value = f64::from(F56(value.0));
+    if value < -1.0 || value > 1.0 {
+        Err(VMError::new_vm(
+            "arcsin: value must be between -1 and 1".to_string(),
+        ))
+    } else {
+        Ok(value.asin())
+    }
+}
+
+/// Usage: (arccos value)
+///
+/// Calculate the arccosine (inverse cosine) of a value. Returns angle in radians.
+/// Value must be between -1 and 1.
+///
+/// Section: math
+///
+/// Example:
+/// (test::assert-true (< 1.570 (arccos 0) 1.571))
+/// (test::assert-equal 0.0 (arccos 1))
+/// (test::assert-true (< 3.141 (arccos -1) 3.142))
+/// (test::assert-error (arccos))
+/// (test::assert-error (arccos 2))
+/// (test::assert-error (arccos -2))
+#[sl_sh_fn(fn_name = "arccos")]
+pub fn arccos(value: LooseFloat) -> VMResult<f64> {
+    let value = f64::from(F56(value.0));
+    if value < -1.0 || value > 1.0 {
+        Err(VMError::new_vm(
+            "arccos: value must be between -1 and 1".to_string(),
+        ))
+    } else {
+        Ok(value.acos())
+    }
+}
+
+/// Usage: (arctan value)
+///
+/// Calculate the arctangent (inverse tangent) of a value. Returns angle in radians.
+///
+/// Section: math
+///
+/// Example:
+/// (test::assert-equal 0.0 (arctan 0))
+/// (test::assert-true (< 0.785 (arctan 1) 0.786))
+/// (test::assert-true (< -0.786 (arctan -1) -0.785))
+/// (test::assert-error (arctan))
+/// (test::assert-error (arctan 1 2))
+#[sl_sh_fn(fn_name = "arctan")]
+pub fn arctan(value: LooseFloat) -> VMResult<f64> {
+    let value = f64::from(F56(value.0));
+    Ok(value.atan())
 }
 
 pub fn add_math_builtins(env: &mut SloshVm) {
@@ -399,4 +543,10 @@ pub fn add_math_builtins(env: &mut SloshVm) {
     intern_exp(env);
     intern_log(env);
     intern_log2(env);
+    intern_sin(env);
+    intern_cos(env);
+    intern_tan(env);
+    intern_arcsin(env);
+    intern_arccos(env);
+    intern_arctan(env);
 }
