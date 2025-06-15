@@ -1,10 +1,14 @@
 #!/usr/bin/env slosh
 
+(load "core.slosh")
+(load "test.slosh")
+(import test)
+
 ; This is a demo test file for the enhanced test runner
-(println "Running test_runner_demo.slosh")
-(println "This test should pass!")
+(prn "Running test_runner_demo.slosh")
+(prn "This test should pass!")
 
 ; Simple assertion
-(assert (= (+ 1 2) 3))
+(assert-true (= (+ 1 2) 3))
 
-(println "Test completed successfully")
+(prn "Test completed successfully")
