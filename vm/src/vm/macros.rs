@@ -131,19 +131,29 @@ macro_rules! compare_numeric_eq {
                     $crate::Value::Float(f) => f,
                     $crate::Value::Byte(b) => $crate::float::F56::from(b as f64),
                     $crate::Value::Int(i) => $crate::float::F56::from($crate::from_i56(&i) as f64),
-                    _ => return Err(($crate::VMError::new_value(format!(
-                        "Not a number: {}",
-                        op1.display_value($vm)
-                    )), $chunk.clone())),
+                    _ => {
+                        return Err((
+                            $crate::VMError::new_value(format!(
+                                "Not a number: {}",
+                                op1.display_value($vm)
+                            )),
+                            $chunk.clone(),
+                        ))
+                    }
                 };
                 let f56_2 = match op2 {
                     $crate::Value::Float(f) => f,
                     $crate::Value::Byte(b) => $crate::float::F56::from(b as f64),
                     $crate::Value::Int(i) => $crate::float::F56::from($crate::from_i56(&i) as f64),
-                    _ => return Err(($crate::VMError::new_value(format!(
-                        "Not a number: {}",
-                        op2.display_value($vm)
-                    )), $chunk.clone())),
+                    _ => {
+                        return Err((
+                            $crate::VMError::new_value(format!(
+                                "Not a number: {}",
+                                op2.display_value($vm)
+                            )),
+                            $chunk.clone(),
+                        ))
+                    }
                 };
                 f56_1.roughly_equal_using_relative_difference(&f56_2)
             } else {
