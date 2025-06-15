@@ -1,0 +1,16 @@
+(load "test.slosh")
+
+;; Test str-append function
+(test::assert-equal "helloworld" (str-append "hello" "world"))
+(test::assert-equal "hello world" (str-append "hello " "world"))
+(test::assert-equal "hello" (str-append "hello" ""))
+(test::assert-equal "world" (str-append "" "world"))
+(test::assert-equal "" (str-append "" ""))
+
+;; Test with unicode
+(test::assert-equal "hello世界" (str-append "hello" "世界"))
+
+;; Test errors
+(test::assert-error (str-append))
+(test::assert-error (str-append "hello"))
+(test::assert-error (str-append "a" "b" "c"))

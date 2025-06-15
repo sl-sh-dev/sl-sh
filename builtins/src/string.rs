@@ -235,6 +235,19 @@ fn str_empty(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
+fn str_clear_bang(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    let mut i = registers.iter();
+    if let (Some(Value::String(handle)), None) = (i.next(), i.next()) {
+        let buffer = vm.get_string_mut(*handle)?;
+        buffer.clear();
+        Ok(Value::String(*handle))
+    } else {
+        Err(VMError::new_vm(
+            "str-clear!: takes a non-const string".to_string(),
+        ))
+    }
+}
+
 fn str_starts_with(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();
     if let (Some(string), Some(pat), None) = (i.next(), i.next(), i.next()) {
@@ -555,6 +568,89 @@ fn to_float(target: LooseFloat) -> VMResult<Value> {
     Ok(Value::Float(F56(target.0)))
 }
 
+/// Usage: (str-ltrim string) -> string
+///
+/// Trim left whitespace from string.
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-equal "some string" (str-ltrim "   some string"))
+/// (test::assert-equal "some string   " (str-ltrim "   some string   "))
+/// (test::assert-equal "some string   " (str-ltrim (str "   some string   ")))
+/// (test::assert-equal "some string   " (str-ltrim "some string   "))
+/// (test::assert-equal "some string" (str-ltrim "some string"))
+#[sl_sh_fn(fn_name = "str-ltrim")]
+fn str_ltrim(s: &str) -> String {
+    s.trim_start().to_string()
+}
+
+/// Usage: (str-rtrim string) -> string
+///
+/// Trim right whitespace from string.
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-equal "   some string" (str-rtrim "   some string"))
+/// (test::assert-equal "   some string" (str-rtrim "   some string   "))
+/// (test::assert-equal "   some string" (str-rtrim (str "   some string   ")))
+/// (test::assert-equal "some string" (str-rtrim "some string   "))
+/// (test::assert-equal "some string" (str-rtrim "some string"))
+#[sl_sh_fn(fn_name = "str-rtrim")]
+fn str_rtrim(s: &str) -> String {
+    s.trim_end().to_string()
+}
+
+/// Usage: (str-append string1 string2) -> string
+///
+/// Append two strings together.
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-equal "helloworld" (str-append "hello" "world"))
+/// (test::assert-equal "hello world" (str-append "hello " "world"))
+/// (test::assert-equal "hello" (str-append "hello" ""))
+/// (test::assert-equal "world" (str-append "" "world"))
+#[sl_sh_fn(fn_name = "str-append")]
+fn str_append(s1: &str, s2: &str) -> String {
+    let mut result = String::with_capacity(s1.len() + s2.len());
+    result.push_str(s1);
+    result.push_str(s2);
+    result
+}
+
+/// Usage: (str-rsplit pattern string) -> list
+///
+/// Use a pattern to split a string in reverse order.
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-equal ["string" "yyy" "some"] (str-rsplit "xxx" "somexxxyyyxxxstring"))
+/// (test::assert-equal ["" "string" "yyy" "some"] (str-rsplit "xxx" "somexxxyyyxxxstringxxx"))
+/// (test::assert-equal ["" "string" "yyy" "some" ""] (str-rsplit "xxx" "xxxsomexxxyyyxxxstringxxx"))
+#[sl_sh_fn(fn_name = "str-rsplit")]
+fn str_rsplit(pat: &str, text: &str) -> VMResult<Vec<String>> {
+    Ok(text.rsplit(pat).map(|s| s.to_string()).collect())
+}
+
+/// Usage: (str-rsplitn n split-pattern string) -> list
+///
+/// Use a pattern to split a string in reverse order with at most n items.
+///
+/// Section: string
+///
+/// Example:
+/// (test::assert-equal ["string" "yyyxxxsome"] (str-rsplitn 2 "xxx" "somexxxyyyxxxstring"))
+/// (test::assert-equal ["string" "yyy" "some"] (str-rsplitn 3 "xxx" "somexxxyyyxxxstring"))
+/// (test::assert-equal ["string" "yyy" "some"] (str-rsplitn 4 "xxx" "somexxxyyyxxxstring"))
+#[sl_sh_fn(fn_name = "str-rsplitn")]
+fn str_rsplitn(n: usize, pat: &str, text: &str) -> VMResult<Vec<String>> {
+    Ok(text.rsplitn(n, pat).map(|s| s.to_string()).collect())
+}
+
 pub fn add_str_builtins(env: &mut SloshVm) {
     intern_str_sub(env);
     intern_str_splitn(env);
@@ -567,6 +663,28 @@ pub fn add_str_builtins(env: &mut SloshVm) {
     intern_char_is_whitespace(env);
     intern_to_int(env);
     intern_to_float(env);
+    intern_str_ltrim(env);
+    intern_str_rtrim(env);
+    intern_str_append(env);
+    intern_str_rsplit(env);
+    intern_str_rsplitn(env);
+    add_builtin(
+        env,
+        "str-clear!",
+        str_clear_bang,
+        r#"Usage: (str-clear! string) -> string
+
+Clear a string buffer in place.  This is a destructive form.
+
+Section: string
+
+Example:
+(def test-str-clear (str "string"))
+(test::assert-equal "string" test-str-clear)
+(test::assert-equal "" (str-clear! test-str-clear))
+(test::assert-equal "" test-str-clear)
+"#,
+    );
     add_builtin(
         env,
         "str-replace",

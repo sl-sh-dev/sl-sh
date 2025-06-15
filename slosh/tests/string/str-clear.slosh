@@ -1,0 +1,18 @@
+(load "test.slosh")
+
+;; Test str-clear! function
+(def test-str-clear (str "string"))
+(test::assert-equal "string" test-str-clear)
+(test::assert-equal "" (str-clear! test-str-clear))
+(test::assert-equal "" test-str-clear)
+
+;; Test with another string
+(def test-str2 (str "hello world"))
+(test::assert-equal "hello world" test-str2)
+(str-clear! test-str2)
+(test::assert-equal "" test-str2)
+
+;; Test errors
+(test::assert-error (str-clear!))
+(test::assert-error (str-clear! "constant string"))  ; Can't clear a const string
+(test::assert-error (str-clear! (str "a") (str "b")))

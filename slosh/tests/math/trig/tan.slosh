@@ -1,0 +1,35 @@
+;; Tests for tan function
+;; Testing tangent calculation with various angles in radians
+(load "test.slosh")
+
+;; Basic values
+(test::assert-compare == 0 (tan 0))
+
+;; Common angles (using assert-true with ranges for floating point precision)
+(test::assert-true (< 1.557 (tan 1) 1.558))          ; tan(1 radian)
+(test::assert-true (< -0.001 (tan 3.14159) 0.001))   ; tan(π) ≈ 0
+(test::assert-true (< 1.731 (tan 1.047) 1.733))      ; tan(π/3) ≈ 1.732
+(test::assert-true (< 0.999 (tan 0.785) 1.001))      ; tan(π/4) ≈ 1
+(test::assert-true (< 0.576 (tan 0.523) 0.577))      ; tan(π/6) ≈ 0.577
+
+;; Negative angles (tangent is odd function)
+(test::assert-true (< -1.558 (tan -1) -1.557))       ; tan(-x) = -tan(x)
+(test::assert-true (< -1.001 (tan -0.785) -0.999))   ; tan(-π/4) ≈ -1
+
+;; Large angles (should wrap around)
+(test::assert-true (< -0.001 (tan 6.28318) 0.001))   ; tan(2π) ≈ 0
+(test::assert-true (< -0.001 (tan 12.56637) 0.001))  ; tan(4π) ≈ 0
+
+;; Values near π/2 (where tan approaches infinity)
+(test::assert-true (> (tan 1.5) 10))                  ; Large positive value
+(test::assert-true (< (tan -1.5) -10))                ; Large negative value
+
+;; Type conversion
+(test::assert-true (< 1.557 (tan 1) 1.558))          ; integer input
+(test::assert-true (< 1.557 (tan 1.0) 1.558))        ; float input
+
+;; Error cases
+(test::assert-error (tan))        ; No arguments
+(test::assert-error (tan 1 2))    ; Too many arguments
+(test::assert-error (tan "π"))    ; String argument
+(test::assert-error (tan nil))    ; nil argument
