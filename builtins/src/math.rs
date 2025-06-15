@@ -530,6 +530,88 @@ pub fn arctan(value: LooseFloat) -> VMResult<f64> {
     Ok(value.atan())
 }
 
+/// Usage: (ceil num)
+///
+/// Round a number up to the nearest integer.
+///
+/// Section: math
+///
+/// Example:
+/// (test::assert-compare == 3 (ceil 2.1))
+/// (test::assert-compare == 3 (ceil 2.9))
+/// (test::assert-compare == -2 (ceil -2.1))
+/// (test::assert-compare == -2 (ceil -2.9))
+/// (test::assert-compare == 5 (ceil 5))
+/// (test::assert-error (ceil))
+/// (test::assert-error (ceil 1 2))
+#[sl_sh_fn(fn_name = "ceil")]
+pub fn ceil(num: LooseFloat) -> VMResult<f64> {
+    let num = f64::from(F56(num.0));
+    Ok(num.ceil())
+}
+
+/// Usage: (floor num)
+///
+/// Round a number down to the nearest integer.
+///
+/// Section: math
+///
+/// Example:
+/// (test::assert-compare == 2 (floor 2.1))
+/// (test::assert-compare == 2 (floor 2.9))
+/// (test::assert-compare == -3 (floor -2.1))
+/// (test::assert-compare == -3 (floor -2.9))
+/// (test::assert-compare == 5 (floor 5))
+/// (test::assert-error (floor))
+/// (test::assert-error (floor 1 2))
+#[sl_sh_fn(fn_name = "floor")]
+pub fn floor(num: LooseFloat) -> VMResult<f64> {
+    let num = f64::from(F56(num.0));
+    Ok(num.floor())
+}
+
+/// Usage: (round num)
+///
+/// Round a number to the nearest integer, with ties rounding away from zero.
+///
+/// Section: math
+///
+/// Example:
+/// (test::assert-compare == 2 (round 2.1))
+/// (test::assert-compare == 3 (round 2.9))
+/// (test::assert-compare == 3 (round 2.5))
+/// (test::assert-compare == -2 (round -2.1))
+/// (test::assert-compare == -3 (round -2.9))
+/// (test::assert-compare == -3 (round -2.5))
+/// (test::assert-compare == 5 (round 5))
+/// (test::assert-error (round))
+/// (test::assert-error (round 1 2))
+#[sl_sh_fn(fn_name = "round")]
+pub fn round(num: LooseFloat) -> VMResult<f64> {
+    let num = f64::from(F56(num.0));
+    Ok(num.round())
+}
+
+/// Usage: (fract num)
+///
+/// Get the fractional part of a number.
+///
+/// Section: math
+///
+/// Example:
+/// (test::assert-true (< 0.099 (fract 2.1) 0.101))
+/// (test::assert-true (< 0.899 (fract 2.9) 0.901))
+/// (test::assert-compare == 0 (fract 5))
+/// (test::assert-true (< -0.901 (fract -2.9) -0.899))
+/// (test::assert-true (< -0.101 (fract -2.1) -0.099))
+/// (test::assert-error (fract))
+/// (test::assert-error (fract 1 2))
+#[sl_sh_fn(fn_name = "fract")]
+pub fn fract(num: LooseFloat) -> VMResult<f64> {
+    let num = f64::from(F56(num.0));
+    Ok(num.fract())
+}
+
 pub fn add_math_builtins(env: &mut SloshVm) {
     intern_abs(env);
     intern_rem_as_rem(env);
@@ -549,4 +631,8 @@ pub fn add_math_builtins(env: &mut SloshVm) {
     intern_arcsin(env);
     intern_arccos(env);
     intern_arctan(env);
+    intern_ceil(env);
+    intern_floor(env);
+    intern_round(env);
+    intern_fract(env);
 }
