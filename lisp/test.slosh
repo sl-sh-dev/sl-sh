@@ -1,13 +1,13 @@
 (with-ns test
 
 #%
-Asserts the two values are identical.
+Asserts the two values are true based on the provided comparator.
 
 Section: test
 %#
-(defmacro assert-equal (expected-val right-val & body)
+(defmacro assert-compare (compare expected-val right-val & body)
     `(let (expected-val ~expected-val, right-val ~right-val) ; make sure to eval expressions only once.
-        (if (= expected-val right-val)
+        (if (~compare expected-val right-val)
             #t
             (let (ev (type expected-val)
                   rv (type right-val)
@@ -16,14 +16,31 @@ Section: test
                     (prn assert-err)
                     (err assert-err))))))
 
+
 #%
-Asserts the two values are not identical.
+Asserts the two values are identical.
 
 Section: test
 %#
-(defmacro assert-not-equal (expected-val right-val & body)
+(defmacro assert-equal (expected-val right-val & body)
     `(let (expected-val ~expected-val, right-val ~right-val) ; make sure to eval expressions only once.
-        (if (not (= expected-val right-val))
+              (if (= expected-val right-val)
+                  #t
+                  (let (ev (type expected-val)
+                        rv (type right-val)
+                        assert-err (mk-err :assert (str "Expected: " expected-val " " ev ", Got: " right-val " " rv "." ~@body)))
+                      (do
+                          (prn assert-err)
+                          (err assert-err))))))
+
+#%
+Asserts the two values are not true based on the comparator.
+
+Section: test
+%#
+(defmacro assert-not-compare (compare expected-val right-val & body)
+    `(let (expected-val ~expected-val, right-val ~right-val) ; make sure to eval expressions only once.
+        (if (not (~compare expected-val right-val))
             #t
             (let (ev (type expected-val)
                   rv (type right-val)
@@ -31,6 +48,23 @@ Section: test
                 (do
                     (prn assert-err)
                     (err assert-err))))))
+
+
+#%
+Asserts the two values are not identical.
+
+Section: test
+%#
+(defmacro assert-not-equal (expected-val right-val & body)
+    `(let (expected-val ~expected-val, right-val ~right-val) ; make sure to eval expressions only once.
+              (if (not (= expected-val right-val))
+                  #t
+                  (let (ev (type expected-val)
+                        rv (type right-val)
+                        assert-err (mk-err :assert (str "Did not expect: " expected-val " " ev ", but got a matching: " right-val " " rv "." ~@body)))
+                      (do
+                          (prn assert-err)
+                          (err assert-err))))))
 
 #%
 Asserts the value is true.
@@ -71,5 +105,6 @@ Example:
 (defmacro assert-error-msg (form key msg)
     `((fn (ret) (test::assert-true (and (err? ret) (= ~key (car ret)) (= ~msg (cdr ret)))
          (str ". Expected \n" ~key ", [" ~msg "]\n => Test returned:\n" (car ret) ", [" (cdr ret) "]")))
-        (get-error ~form))))
+        (get-error ~form)))
+)
 
