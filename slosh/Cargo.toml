@@ -47,3 +47,7 @@ harness = false
 [[bench]]
 name = "iai"
 harness = false
+
+[[test]]
+name = "lisp-scripts"
+harness = false
