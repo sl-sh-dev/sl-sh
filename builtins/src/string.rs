@@ -1,11 +1,13 @@
+use std::borrow::Borrow;
 use crate::SloshVm;
 use bridge_adapters::add_builtin;
 use bridge_macros::sl_sh_fn;
-use bridge_types::{LooseFloat, LooseInt, LooseString, SloshChar};
+use bridge_types::{LooseFloat, LooseInt, LooseString, SloshChar, Symbol};
 use slvm::float::F56;
 use slvm::{Handle, VMError, VMResult, Value};
 use std::borrow::Cow;
 use unicode_segmentation::UnicodeSegmentation;
+use bridge_adapters::lisp_adapters::SlAsRef;
 
 fn str_trim(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();
@@ -60,6 +62,171 @@ fn str_trim_bang(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         )),
     }
 }
+
+// /// r#"Usage: (str-trim! string [:right | :left]) -> string
+// ///
+// /// Trim right and/or left whitespace from string in place.  With no optional keywork trims both,
+// /// otherwise :right or :left specify right or left trimming.
+// ///
+// /// This is a destructive operation (unlike str-trim) and requires an actual non-const string as it's first
+// /// argument.  It returns this string on success.
+// ///
+// /// Section: string
+// ///
+// /// Example:
+// /// (test::assert-equal "some string" (str-trim! (str "   some string")))
+// /// (test::assert-equal "some string" (str-trim! (str  "   some string   ")))
+// /// (test::assert-equal "some string" (str-trim! (str  (str "   some string   "))))
+// /// (test::assert-equal "some string" (str-trim! (str  "some string   ")))
+// /// (test::assert-equal "some string" (str-trim! (str  "some string")))
+// ///
+// /// (test::assert-equal "   some string" (str-trim! (str  "   some string") :right))
+// /// (test::assert-equal "   some string" (str-trim! (str  "   some string   ") :right))
+// /// (test::assert-equal "   some string" (str-trim! (str  (str "   some string   "))  :right))
+// /// (test::assert-equal "some string" (str-trim! (str  "some string   ") :right))
+// /// (test::assert-equal "some string" (str-trim! (str  "some string") :right))
+// ///
+// /// (test::assert-equal "some string" (str-trim! (str  "   some string") :left))
+// /// (test::assert-equal "some string   " (str-trim! (str  "   some string   ") :left))
+// /// (test::assert-equal "some string   " (str-trim! (str  (str "   some string   "))  :left))
+// /// (test::assert-equal "some string   " (str-trim! (str  "some string   ") :left))
+// /// (test::assert-equal "some string" (str-trim! (str  "some string") :left))
+// //#[sl_sh_fn(fn_name = "str-trim!!")]
+// fn str_trim_bang(buffer: &mut String, direction: Option<LooseString>) -> VMResult<()> {
+//     let (start, end) = match &direction {
+//         Some(ref dir) if dir.as_ref() == "right" || dir.as_ref() == ":right" => {
+//             let start = buffer.find(|c: char| !c.is_whitespace()).unwrap_or(buffer.len());
+//             (Some(start), None)
+//         }
+//         Some(ref dir) if dir.as_ref() == "left" || dir.as_ref() == ":left" => {
+//             let end = buffer.rfind(|c: char| !c.is_whitespace()).map_or(0, |i| i + 1);
+//             (None, Some(end))
+//         }
+//         Some(_) => {
+//             return Err(VMError::new_vm(
+//                 "str-trim!: takes a non-const string with optional left/right keyword".to_string(),
+//             ));
+//         }
+//         _ => {
+//             // Remove leading whitespace
+//             let start = buffer.find(|c: char| !c.is_whitespace()).unwrap_or(buffer.len());
+//             // Remove trailing whitespace
+//             let end = buffer.rfind(|c: char| !c.is_whitespace()).map_or(0, |i| i + 1);
+//             (Some(start), Some(end))
+//         }
+//     };
+//
+//     if let Some(start) = start {
+//         buffer.drain(..start);
+//     }
+//     if let Some(end) = end {
+//         buffer.truncate(end);
+//     }
+//     Ok(())
+// }
+
+//fn pparse_str_trim_bang(environment: &mut compile_state::state::SloshVm, args: &[slvm::Value] ) -> slvm::VMResult<slvm::Value> {
+//    let fn_name = "str-trim!!";   const PARAMS_LEN: usize = 2usize;
+//    let arg_types: [bridge_types::Param; PARAMS_LEN] = [bridge_types::Param { handle: bridge_types::TypeHandle::Direct, passing_style: bridge_types::PassingStyle::MutReference }, bridge_types::Param { //handle: bridge_types::TypeHandle::Optional, passing_style: bridge_types::PassingStyle::Value }];
+//    static_assertions::assert_impl_all!((): bridge_adapters :: lisp_adapters :: SlInto < slvm :: Value > );
+//    let param = arg_types[1usize];
+//    let arg_1 = args.get(1usize);
+//    match param.handle {
+//        bridge_types::TypeHandle::Optional => {
+//            match arg_1 {
+//                None => {
+//                    let arg_1 = None;
+//                    let param = arg_types[0usize];
+//                    match param.handle {
+//                        bridge_types::TypeHandle::Direct => match args.get(0usize) {
+//                            None => { return Err(slvm::VMError::new_vm(format!("{} not given enough arguments, expected at least {} arguments, got {}.", fn_name, 1usize, args.len()))); }
+//                            Some(mut arg_0) => {
+//                                {
+//                                    use bridge_adapters::lisp_adapters::SlAsMut;
+//                                    let arg_0: &mut String = arg_0.sl_as_mut(environment)?;
+//                                    match args.get(PARAMS_LEN) {
+//                                        Some(_) if PARAMS_LEN == 0 || arg_types[PARAMS_LEN - 1].handle != bridge_types::TypeHandle::VarArgs => { return Err(slvm::VMError::new_vm(format!("{} given too// many arguments, expected at least {} arguments, got {}.", fn_name, 1usize, args.len()))); }
+//                                        _ => {
+//                                            {
+//                                                let buffer: &mut String = arg_0;
+//                                                let direction: Option<LooseString> = arg_1;
+//                                                let res: VMResult<()> = {
+//                                                    {
+//                                                        let (start, end) = match &direction {
+//                                                            Some(ref dir)   if dir.as_ref() == "right" || dir.as_ref() == ":right" => {
+//                                                                let start = buffer.find(|c: char| !c.is_whitespace()).unwrap_or(buffer.len());
+//                                                                (Some(start), None)
+//                                                            }
+//                                                            Some(ref dir)   if dir.as_ref() == "left" || dir.as_ref() == ":left" => {
+//                                                                let end = buffer.rfind(|c: char| !c.is_whitespace()).map_or(0, |i| i + 1);
+//                                                                (None, Some(end))
+//                                                            }
+//                                                            Some(_) => {
+//                                                                return Err(VMError::new_vm(
+//                                                                    "str-trim!: takes a non-const string with optional left/right keyword".to_string(),
+//                                                                ));
+//                                                            }
+//                                                            _ => {
+//                                                                // Remove leading whitespace
+//                                                                let start = buffer.find(|c: char| !c.is_whitespace()).unwrap_or(buffer.len());
+//                                                                // Remove trailing whitespace
+//                                                                let end = buffer.rfind(|c: char| !c.is_whitespace()).map_or(0, |i| i + 1);
+//                                                                (Some(start), Some(end))
+//                                                            }
+//                                                        };
+//
+//                                                        if let Some(start) = start {
+//                                                            buffer.drain(..start);
+//                                                        }
+//                                                        if let Some(end) = end {
+//                                                            buffer.truncate(end);
+//                                                        }
+//                                                        Ok(())
+//                                                    }
+//                                                };
+//                                                res
+//                                            }?;
+//                                            return Ok(slvm::Value::Nil);
+//                                        }
+//                                    }
+//                                }
+//                            }
+//                        },
+//                        _ => { return Err(slvm::VMError::new_vm(format!("{} failed to parse its arguments, internal error.", fn_name, ))); }
+//                    }
+//                }
+//                Some(arg_1) => {
+//                    {
+//                        use bridge_adapters::lisp_adapters::SlAsRef;
+//                        let arg_1: LooseString = arg_1.sl_as_ref(environment)?;
+//                        let arg_1 = Some(arg_1);
+//                        let param = arg_types[0usize];
+//                        match param.handle {
+//                            bridge_types::TypeHandle::Direct => match args.get(0usize) {
+//                                None => { return Err(slvm::VMError::new_vm(format!("{} not given enough arguments, expected at least {} arguments, got {}.", fn_name, 1usize, args.len()))); }
+//                                Some(mut arg_0) => {
+//                                    {
+//                                        use bridge_adapters::lisp_adapters::SlAsMut;
+//                                        let arg_0: &mut String = arg_0.sl_as_mut(environment)?;
+//                                        match args.get(PARAMS_LEN) {
+//                                            Some(_) if PARAMS_LEN == 0 || arg_types[PARAMS_LEN - 1].handle != bridge_types::TypeHandle::VarArgs => { return Err(slvm::VMError::new_vm(format!("{} given// too many arguments, expected at least {} arguments, got {}.", fn_name, 1usize, args.len()))); }
+//                                            _ => {
+//                                                str_trim_bang(arg_0, arg_1)?;
+//                                                return Ok(slvm::Value::Nil);
+//                                            }
+//                                        }
+//                                    }
+//                                }
+//                            },
+//                            _ => { return Err(slvm::VMError::new_vm(format!("{} failed to parse its arguments, internal error.", fn_name, ))); }
+//                        }
+//                    }
+//                }
+//            }
+//        }
+//        _ => { return Err(slvm::VMError::new_vm(format!("{} failed to parse its arguments, internal error.", fn_name, ))); }
+//    }
+//}
 
 fn str_replace(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();
@@ -732,6 +899,7 @@ Example:
 (test::assert-equal "some string" (str-trim "some string" :left))
 "#,
     );
+    //intern_str_trim_bang(env);
     add_builtin(
         env,
         "str-trim!",
@@ -765,7 +933,7 @@ Example:
 (test::assert-equal "some string   " (str-trim! (str  "some string   ") :left))
 (test::assert-equal "some string" (str-trim! (str  "some string") :left))
 "#,
-    );
+    );   
     add_builtin(
         env,
         "str-contains",
