@@ -245,6 +245,67 @@ pub fn hash_clear(map: &mut VMHashMap) -> VMResult<()> {
     Ok(())
 }
 
+// Low level implementation for vec-clear! because we need direct access to VM and registers
+pub fn vec_clear(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    if registers.len() != 1 {
+        return Err(VMError::new_vm("vec-clear!: requires exactly one argument (vector)".to_string()));
+    }
+    
+    if let Value::Vector(vec_handle) = registers[0] {
+        let vec = vm.get_vector_mut(vec_handle)?;
+        vec.clear();
+        Ok(registers[0])
+    } else {
+        Err(VMError::new_vm("vec-clear!: argument must be a vector".to_string()))
+    }
+}
+
+// Low level implementation for vec-remove! because we need direct access to VM and registers
+pub fn vec_remove(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    let mut args = registers.iter();
+    if let (Some(vector), Some(index), None) = (args.next(), args.next(), args.next()) {
+        if let Value::Vector(vec_handle) = vector {
+            let idx = index.get_int(vm)?;
+            let vec = vm.get_vector_mut(*vec_handle)?;
+            let len = vec.len() as i64;
+            
+            if idx < 0 || idx >= len {
+                return Err(VMError::new_vm(format!("vec-remove!: index {} out of range (length {})", idx, len)));
+            }
+            
+            vec.remove(idx as usize);
+            Ok(*vector)
+        } else {
+            Err(VMError::new_vm("vec-remove!: first argument must be a vector".to_string()))
+        }
+    } else {
+        Err(VMError::new_vm("vec-remove!: requires exactly two arguments (vector and index)".to_string()))
+    }
+}
+
+// Low level implementation for vec-insert! because we need direct access to VM and registers
+pub fn vec_insert(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    let mut args = registers.iter();
+    if let (Some(vector), Some(index), Some(value), None) = (args.next(), args.next(), args.next(), args.next()) {
+        if let Value::Vector(vec_handle) = vector {
+            let idx = index.get_int(vm)?;
+            let vec = vm.get_vector_mut(*vec_handle)?;
+            let len = vec.len() as i64;
+            
+            if idx < 0 || idx > len {
+                return Err(VMError::new_vm(format!("vec-insert!: index {} out of range (length {})", idx, len)));
+            }
+            
+            vec.insert(idx as usize, *value);
+            Ok(*vector)
+        } else {
+            Err(VMError::new_vm("vec-insert!: first argument must be a vector".to_string()))
+        }
+    } else {
+        Err(VMError::new_vm("vec-insert!: requires exactly three arguments (vector, index, and value)".to_string()))
+    }
+}
+
 fn flatten_helper(vec: &mut Vec<Value>, vm: &mut SloshVm, registers: &[Value]) -> VMResult<()> {
     for i in registers.iter() {
         if i.iter(vm).next().is_some() {
@@ -386,48 +447,68 @@ Section: vector
 ",
     );
     intern_hash_haskey(env);
+    
+    add_builtin(
+        env,
+        "vec-clear!",
+        vec_clear,
+        r#"Usage: (vec-clear! vector)
 
-    /*  XXXX add these
-        add_docstring(
-            env,
-            "vec-remove!",
-            "Usage: (vec-remove! vector index) -> vector
+Clear all elements from a vector. This is a destructive form!
 
-    Remove the element at index from vector, shifting all elements after it to the left.
-    This is destructive!
+Section: vector
 
-    Section: vector
+Example:
+(def test-vec [1 2 3])
+(test::assert-false (empty? test-vec))
+(vec-clear! test-vec)
+(test::assert-true (empty? test-vec))
+(test::assert-equal [] test-vec)
+    "#,
+    );
+    
+    add_builtin(
+        env,
+        "vec-remove!",
+        vec_remove,
+        r#"Usage: (vec-remove! vector index) -> vector
 
-    Example:
-    (def test-remove-nth-vec (vec 1 2 3))
-    (test::assert-equal '(1 2 3) test-remove-nth-vec)
-    (vec-remove! test-remove-nth-vec 1)
-    (test::assert-equal '(1 3) test-remove-nth-vec)
-    (vec-remove! test-remove-nth-vec 1)
-    (test::assert-equal '(1) test-remove-nth-vec)
-    (vec-remove! test-remove-nth-vec 0)
-    (test::assert-equal '() test-remove-nth-vec)
-    ",
-        );
-        add_docstring(
-            env,
-            "vec-insert!",
-            "Usage: (vec-insert! vector index new-element) -> vector
+Remove the element at index from vector, shifting all elements after it to the left.
+This is destructive!
 
-    Inserts new-element at index and moves following elements right in vector.  This is destructive!
+Section: vector
 
-    Section: vector
+Example:
+(def test-remove-nth-vec [1 2 3])
+(test::assert-equal [1 2 3] test-remove-nth-vec)
+(vec-remove! test-remove-nth-vec 1)
+(test::assert-equal [1 3] test-remove-nth-vec)
+(vec-remove! test-remove-nth-vec 1)
+(test::assert-equal [1] test-remove-nth-vec)
+(vec-remove! test-remove-nth-vec 0)
+(test::assert-equal [] test-remove-nth-vec)
+    "#,
+    );
+    
+    add_builtin(
+        env,
+        "vec-insert!",
+        vec_insert,
+        r#"Usage: (vec-insert! vector index new-element) -> vector
 
-    Example:
-    (def test-insert-nth-vec (vec 1 2 3))
-    (test::assert-equal '(1 2 3) test-insert-nth-vec)
-    (vec-insert! test-insert-nth-vec 1 5)
-    (test::assert-equal '(1 5 2 3) test-insert-nth-vec)
-    (vec-insert! test-insert-nth-vec 2 6)
-    (test::assert-equal '(1 5 6 2 3) test-insert-nth-vec)
-    (vec-insert! test-insert-nth-vec 0 4)
-    (test::assert-equal '(4 1 5 6 2 3) test-insert-nth-vec)
-    ",
-        );
-         */
+Inserts new-element at index and moves following elements right in vector.  This is destructive!
+
+Section: vector
+
+Example:
+(def test-insert-nth-vec [1 2 3])
+(test::assert-equal [1 2 3] test-insert-nth-vec)
+(vec-insert! test-insert-nth-vec 1 5)
+(test::assert-equal [1 5 2 3] test-insert-nth-vec)
+(vec-insert! test-insert-nth-vec 2 6)
+(test::assert-equal [1 5 6 2 3] test-insert-nth-vec)
+(vec-insert! test-insert-nth-vec 0 4)
+(test::assert-equal [4 1 5 6 2 3] test-insert-nth-vec)
+    "#,
+    );
 }
