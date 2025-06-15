@@ -114,6 +114,57 @@ macro_rules! decode3 {
     }};
 }
 
+/// Special macro for NUMEQ that uses approximate equality for floats
+macro_rules! compare_numeric_eq {
+    ($vm:expr, $chunk:expr, $code:expr, $wide:expr) => {{
+        let (dest, reg1, reg2) = decode3!($code, $wide);
+        let mut val = false;
+        for reg in reg1..reg2 {
+            let op1 = $vm.register_unref(reg as usize);
+            let op2 = $vm.register_unref(reg as usize + 1);
+            val = if matches!(op1, $crate::Value::Float(_))
+                || matches!(op2, $crate::Value::Float(_))
+            {
+                // For float equality, use approximate comparison
+                // Convert both values to F56 for comparison
+                let f56_1 = match op1 {
+                    $crate::Value::Float(f) => f,
+                    $crate::Value::Byte(b) => $crate::float::F56::from(b as f64),
+                    $crate::Value::Int(i) => $crate::float::F56::from($crate::from_i56(&i) as f64),
+                    _ => return Err(($crate::VMError::new_value(format!(
+                        "Not a number: {}",
+                        op1.display_value($vm)
+                    )), $chunk.clone())),
+                };
+                let f56_2 = match op2 {
+                    $crate::Value::Float(f) => f,
+                    $crate::Value::Byte(b) => $crate::float::F56::from(b as f64),
+                    $crate::Value::Int(i) => $crate::float::F56::from($crate::from_i56(&i) as f64),
+                    _ => return Err(($crate::VMError::new_value(format!(
+                        "Not a number: {}",
+                        op2.display_value($vm)
+                    )), $chunk.clone())),
+                };
+                f56_1.roughly_equal_using_relative_difference(&f56_2)
+            } else {
+                // Both operands are treated as integers - exact comparison
+                let i1 = get_primitive_int!($vm, op1).map_err(|e| (e, $chunk.clone()))?;
+                let i2 = get_primitive_int!($vm, op2).map_err(|e| (e, $chunk.clone()))?;
+                i1 == i2
+            };
+            if !val {
+                break;
+            }
+        }
+        let val = if val {
+            $crate::Value::True
+        } else {
+            $crate::Value::False
+        };
+        *$vm.register_mut(dest as usize) = val;
+    }};
+}
+
 macro_rules! compare_numeric {
     ($vm:expr, $chunk:expr, $code:expr, $comp_fn:expr, $wide:expr) => {{
         let (dest, reg1, reg2) = decode3!($code, $wide);

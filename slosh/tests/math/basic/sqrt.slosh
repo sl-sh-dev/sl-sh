@@ -1,5 +1,6 @@
 ;; Tests for sqrt function
 ;; Testing basic functionality, edge cases, and error conditions
+(load "core.slosh")
 (load "test.slosh")
 (import test)
 
@@ -23,7 +24,8 @@
 
 ;; Fractional inputs
 (assert-equal 0.5 (sqrt 0.25))
-(assert-equal 0.1 (sqrt 0.01))
+;; For more on equality see https://sl-sh-dev.github.io/sl-sh/equality.html
+(assert-compare == 0.1 (sqrt 0.01))
 (assert-true (< 0.707 (sqrt 0.5) 0.708))
 
 ;; Large numbers

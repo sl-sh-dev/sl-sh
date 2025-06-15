@@ -1,5 +1,6 @@
 ;; Tests for log function
 ;; Testing natural logarithm and logarithm with specified base
+(load "core.slosh")
 (load "test.slosh")
 (import test)
 
@@ -16,7 +17,8 @@
 (assert-equal 0.0 (log 1 10))     ; log_10(1) = 0
 (assert-equal 1.0 (log 10 10))    ; log_10(10) = 1
 (assert-equal 2.0 (log 100 10))   ; log_10(100) = 2
-(assert-equal 3.0 (log 1000 10))  ; log_10(1000) = 3
+;; For more on equality see https://sl-sh-dev.github.io/sl-sh/equality.html
+(assert-compare == 3.0 (log 1000 10))  ; log_10(1000) = 3
 
 ;; Base 2 logarithms
 (assert-equal 0.0 (log 1 2))      ; log_2(1) = 0
