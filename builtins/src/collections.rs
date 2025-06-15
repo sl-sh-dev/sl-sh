@@ -116,7 +116,7 @@ pub fn hash_remove(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
 /// (set! tst-hash :key1 "val one b")
 /// (test::assert-true (hash-haskey tst-hash :key1))
 #[sl_sh_fn(fn_name = "hash-haskey?", takes_env = true)]
-pub fn hash_hashkey(environment: &mut SloshVm, map: &VMHashMap, key: Value) -> VMResult<Value> {
+pub fn hash_haskey(environment: &mut SloshVm, map: &VMHashMap, key: Value) -> VMResult<Value> {
     if map.contains_key(environment, key) {
         Ok(Value::True)
     } else {
@@ -227,6 +227,24 @@ pub fn hash_keys(map: &VMHashMap) -> VMResult<Vec<Value>> {
     Ok(keys)
 }
 
+/// Usage: (hash-clear! hashmap)
+///
+/// Clear all entries from a hashmap. This is a destructive form!
+///
+/// Section: hashmap
+///
+/// Example:
+/// (def tst-hash {:key1 "val one" 'key2 "val two" "key3" "val three"})
+/// (test::assert-equal 3 (len tst-hash))
+/// (hash-clear! tst-hash)
+/// (test::assert-equal 0 (len tst-hash))
+/// (test::assert-equal {} tst-hash)
+#[sl_sh_fn(fn_name = "hash-clear!")]
+pub fn hash_clear(map: &mut VMHashMap) -> VMResult<()> {
+    map.clear();
+    Ok(())
+}
+
 fn flatten_helper(vec: &mut Vec<Value>, vm: &mut SloshVm, registers: &[Value]) -> VMResult<()> {
     for i in registers.iter() {
         if i.iter(vm).next().is_some() {
@@ -283,6 +301,7 @@ pub fn setup_collection_builtins(env: &mut SloshVm) {
     intern_occurs(env);
     intern_reverse(env);
     intern_hash_keys(env);
+    intern_hash_clear(env);
     intern_is_in(env);
     intern_to_vec(env);
     intern_to_list(env);
@@ -366,6 +385,7 @@ Convert a vector to a list.
 Section: vector
 ",
     );
+    intern_hash_haskey(env);
 
     /*  XXXX add these
         add_docstring(
