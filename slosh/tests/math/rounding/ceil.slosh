@@ -1,0 +1,32 @@
+;; Tests for ceil function
+;; Testing ceiling (round up) functionality
+(load "test.slosh")
+
+;; Positive numbers
+(test::assert-compare == 3 (ceil 2.1))
+(test::assert-compare == 3 (ceil 2.9))
+(test::assert-compare == 3 (ceil 2.5))
+(test::assert-compare == 1 (ceil 0.1))
+(test::assert-compare == 1 (ceil 0.9))
+
+;; Negative numbers
+(test::assert-compare == -2 (ceil -2.1))
+(test::assert-compare == -2 (ceil -2.9))
+(test::assert-compare == -2 (ceil -2.5))
+(test::assert-compare == 0 (ceil -0.1))
+(test::assert-compare == 0 (ceil -0.9))
+
+;; Integers (should return unchanged)
+(test::assert-compare == 5 (ceil 5))
+(test::assert-compare == -5 (ceil -5))
+(test::assert-compare == 0 (ceil 0))
+
+;; Very small numbers
+(test::assert-compare == 1 (ceil 0.000001))
+(test::assert-compare == 0 (ceil -0.000001))
+
+;; Error cases
+(test::assert-error (ceil))         ; No arguments
+(test::assert-error (ceil 1 2))     ; Too many arguments
+(test::assert-error (ceil "2.5"))   ; String argument
+(test::assert-error (ceil nil))     ; nil argument
