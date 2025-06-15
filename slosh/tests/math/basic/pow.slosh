@@ -1,5 +1,6 @@
 ;; Tests for pow function
 ;; Testing basic functionality, edge cases, and error conditions
+(load "core.slosh")
 (load "test.slosh")
 (import test)
 

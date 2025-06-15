@@ -1048,7 +1048,7 @@ impl<ENV> GVm<ENV> {
                 MUL => binary_math!(self, chunk, self.ip_ptr, |a, b| a * b, wide),
                 DIV => div_math!(self, chunk, self.ip_ptr, wide),
                 NUMEQ => {
-                    compare_numeric!(self, chunk, self.ip_ptr, |a, b| a == b, wide)
+                    compare_numeric_eq!(self, chunk, self.ip_ptr, wide)
                 }
                 NUMLT => {
                     compare_numeric!(self, chunk, self.ip_ptr, |a, b| a < b, wide)

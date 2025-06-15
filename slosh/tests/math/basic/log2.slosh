@@ -1,5 +1,6 @@
 ;; Tests for log2 function
 ;; Testing base-2 logarithm
+(load "core.slosh")
 (load "test.slosh")
 (import test)
 
