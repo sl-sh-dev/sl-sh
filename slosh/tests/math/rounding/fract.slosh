@@ -1,0 +1,36 @@
+;; Tests for fract function
+;; Testing fractional part extraction
+(load "test.slosh")
+
+;; Positive numbers
+(test::assert-true (< 0.099 (fract 2.1) 0.101))
+(test::assert-true (< 0.899 (fract 2.9) 0.901))
+(test::assert-true (< 0.499 (fract 2.5) 0.501))
+(test::assert-true (< 0.099 (fract 0.1) 0.101))
+(test::assert-true (< 0.899 (fract 0.9) 0.901))
+
+;; Negative numbers (fract preserves sign)
+(test::assert-true (< -0.101 (fract -2.1) -0.099))
+(test::assert-true (< -0.901 (fract -2.9) -0.899))
+(test::assert-true (< -0.501 (fract -2.5) -0.499))
+(test::assert-true (< -0.101 (fract -0.1) -0.099))
+(test::assert-true (< -0.901 (fract -0.9) -0.899))
+
+;; Integers (should return 0)
+(test::assert-compare == 0 (fract 5))
+(test::assert-compare == 0 (fract -5))
+(test::assert-compare == 0 (fract 0))
+
+;; Very small numbers
+(test::assert-true (< 0.0 (fract 0.000001) 0.000002))
+(test::assert-true (< -0.000002 (fract -0.000001) 0.0))
+
+;; Large numbers
+(test::assert-true (< 0.141 (fract 123456.14159) 0.142))
+(test::assert-true (< -0.142 (fract -123456.14159) -0.141))
+
+;; Error cases
+(test::assert-error (fract))         ; No arguments
+(test::assert-error (fract 1 2))     ; Too many arguments
+(test::assert-error (fract "2.5"))   ; String argument
+(test::assert-error (fract nil))     ; nil argument
