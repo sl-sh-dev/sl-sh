@@ -6,10 +6,10 @@
 //! f32 is simpler and faster.
 //! Additionally, there are questions about whether to impl the Eq and Hash Traits <https://github.com/sl-sh-dev/sl-sh/issues/125>
 
+use bridge_types::LooseFloat;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
-use bridge_types::LooseFloat;
 
 #[allow(rustdoc::broken_intra_doc_links)]
 /// The F56 struct represents a 56-bit floating point number using 7 bytes.

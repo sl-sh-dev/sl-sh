@@ -1,13 +1,12 @@
-use std::borrow::Borrow;
 use crate::SloshVm;
 use bridge_adapters::add_builtin;
+use bridge_adapters::lisp_adapters::SlAsRef;
 use bridge_macros::sl_sh_fn;
-use bridge_types::{LooseFloat, LooseInt, LooseString, SloshChar, Symbol};
+use bridge_types::{LooseFloat, LooseInt, LooseString, SloshChar};
 use slvm::float::F56;
 use slvm::{Handle, VMError, VMResult, Value};
 use std::borrow::Cow;
 use unicode_segmentation::UnicodeSegmentation;
-use bridge_adapters::lisp_adapters::SlAsRef;
 
 fn str_trim(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut i = registers.iter();
