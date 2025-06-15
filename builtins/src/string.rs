@@ -643,7 +643,7 @@ fn str_rsplit(pat: &str, text: &str) -> VMResult<Vec<String>> {
 /// Section: string
 ///
 /// Example:
-/// (test::assert-equal ["string" "yyyxxxsome"] (str-rsplitn 2 "xxx" "somexxxyyyxxxstring"))
+/// (test::assert-equal ["string" "somexxxyyy"] (str-rsplitn 2 "xxx" "somexxxyyyxxxstring"))
 /// (test::assert-equal ["string" "yyy" "some"] (str-rsplitn 3 "xxx" "somexxxyyyxxxstring"))
 /// (test::assert-equal ["string" "yyy" "some"] (str-rsplitn 4 "xxx" "somexxxyyyxxxstring"))
 #[sl_sh_fn(fn_name = "str-rsplitn")]
