@@ -116,14 +116,17 @@ fn get_test_files() -> Vec<PathBuf> {
 /// To run all tests in this executable:
 ///
 /// ```
+/// # Run all tests
 /// cargo test --package slosh --test lisp-scripts
-/// ```
 ///
-/// To run a specific file or directory:
-/// ```
+/// # Run just string tests
 /// cargo test --package slosh --test lisp-scripts string/
-/// cargo test --package slosh --test lisp-scripts hello.slosh
-/// cargo test --package slosh --test lisp-scripts tests/subdir/
+///
+/// # Run just math tests
+/// cargo test --package slosh --test lisp-scripts math/
+///
+/// # Run a specific test file
+/// cargo test --package slosh --test lisp-scripts string/str-append.slosh
 /// ```
 ///
 /// All slosh scripts found will be run by this integration test. If

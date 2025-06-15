@@ -72,11 +72,10 @@ they contain a lot of raw html which must be handled by mdbook.")
         (prn "Build rust docs")
         ;; build rust documentation
         $(cargo doc --features lisp-test --target-dir ~all-rust-doc-path)
-        $(cargo doc --no-deps --document-private-items --features lisp-test --target-dir ~slosh-rust-doc-path)) )
+        $(cargo doc --no-deps --document-private-items --features lisp-test --target-dir ~slosh-rust-doc-path))
     $(rm -rf ~legacy-doc-path ~slosh-rust-doc-path ~all-rust-doc-path))
 
 
-(exit 0)
 (prn "Build workspace")
 $(cargo build --workspace)
 
