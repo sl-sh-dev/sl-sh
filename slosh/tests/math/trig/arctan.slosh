@@ -1,0 +1,40 @@
+;; Tests for arctan function
+;; Testing arctangent (inverse tangent) calculation
+(load "test.slosh")
+
+;; Basic values
+(test::assert-compare == 0 (arctan 0))
+(test::assert-true (< 0.785 (arctan 1) 0.786))        ; arctan(1) ≈ π/4
+(test::assert-true (< -0.786 (arctan -1) -0.785))     ; arctan(-1) ≈ -π/4
+
+;; Common values (using assert-true with ranges for floating point precision)
+(test::assert-true (< 0.463 (arctan 0.5) 0.465))      ; arctan(0.5)
+(test::assert-true (< 1.047 (arctan 1.732) 1.048))    ; arctan(√3) ≈ π/3
+(test::assert-true (< 0.321 (arctan 0.333) 0.322))    ; arctan(1/3)
+
+;; Negative values (arctan is odd function)
+(test::assert-true (< -0.465 (arctan -0.5) -0.463))   ; arctan(-0.5)
+(test::assert-true (< -1.048 (arctan -1.732) -1.047)) ; arctan(-√3) ≈ -π/3
+
+;; Large values (approaches ±π/2)
+(test::assert-true (< 1.560 (arctan 10) 1.571))       ; Close to π/2
+(test::assert-true (< 1.565 (arctan 100) 1.571))      ; Even closer to π/2
+(test::assert-true (< -1.571 (arctan -10) -1.560))    ; Close to -π/2
+(test::assert-true (< -1.571 (arctan -100) -1.565))   ; Even closer to -π/2
+
+;; Small values (approximately equal to the input)
+(test::assert-true (< 0.099 (arctan 0.1) 0.101))      ; Small positive
+(test::assert-true (< -0.1001 (arctan -0.1) -0.099))  ; Small negative (adjusted range)
+(test::assert-true (< 0.0099 (arctan 0.01) 0.0101))   ; Very small
+
+;; Type conversion
+(test::assert-compare == 0 (arctan 0))                 ; integer input
+(test::assert-compare == 0 (arctan 0.0))               ; float input
+(test::assert-true (< 0.785 (arctan 1) 0.786))         ; integer 1
+(test::assert-true (< 0.785 (arctan 1.0) 0.786))       ; float 1.0
+
+;; Error cases - wrong arguments
+(test::assert-error (arctan))          ; No arguments
+(test::assert-error (arctan 1 2))      ; Too many arguments
+(test::assert-error (arctan "one"))    ; String argument
+(test::assert-error (arctan nil))      ; nil argument

@@ -1,0 +1,18 @@
+(load "test.slosh")
+
+;; Test str-rsplitn function
+(test::assert-equal ["string" "yyyxxxsome"] (str-rsplitn 2 "xxx" "somexxxyyyxxxstring"))
+(test::assert-equal ["string" "yyy" "some"] (str-rsplitn 3 "xxx" "somexxxyyyxxxstring"))
+(test::assert-equal ["string" "yyy" "some"] (str-rsplitn 4 "xxx" "somexxxyyyxxxstring"))
+
+;; Test with n=1
+(test::assert-equal ["somexxxyyyxxxstring"] (str-rsplitn 1 "xxx" "somexxxyyyxxxstring"))
+
+;; Test with n=0 (should return empty)
+(test::assert-equal [] (str-rsplitn 0 "xxx" "somexxxyyyxxxstring"))
+
+;; Test errors
+(test::assert-error (str-rsplitn))
+(test::assert-error (str-rsplitn 2))
+(test::assert-error (str-rsplitn 2 "xxx"))
+(test::assert-error (str-rsplitn 2 "xxx" "test" "extra"))

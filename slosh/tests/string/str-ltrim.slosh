@@ -1,0 +1,16 @@
+(load "test.slosh")
+
+;; Test str-ltrim function
+(test::assert-equal "some string" (str-ltrim "   some string"))
+(test::assert-equal "some string   " (str-ltrim "   some string   "))
+(test::assert-equal "some string   " (str-ltrim (str "   some string   ")))
+(test::assert-equal "some string   " (str-ltrim "some string   "))
+(test::assert-equal "some string" (str-ltrim "some string"))
+
+;; Test with tabs and newlines
+(test::assert-equal "hello\t" (str-ltrim "\t\nhello\t"))
+(test::assert-equal "world  " (str-ltrim "    world  "))
+
+;; Test errors
+(test::assert-error (str-ltrim))
+(test::assert-error (str-ltrim "a" "b"))
