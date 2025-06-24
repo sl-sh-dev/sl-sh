@@ -179,8 +179,10 @@
 //! [`Symbol`]                   | [`Value`]::Symbol(Interned)       |                             |
 //!                             |                             | S -> R
 //!                             |                             |     &emsp;- [`SlIntoRef`] [`Symbol`] for `&`[`Value`]
+//!                             |                             |     &emsp;- [`SlIntoRef`] [`SymbolAsString`] for `&`[`Value`]
 //!                             |                             | R -> S
 //!                             |                             |     &emsp;- [`SlFrom`] `&`[`Value`] for [`Symbol`]
+//!                             |                             |     &emsp;- [`SlFrom`] `&`[`Value`] for [`SymbolAsString`]
 //!                             |                             |
 //!                             |                             |
 //!                             |                             |
@@ -235,9 +237,9 @@
 //!                             |                             |
 //!                             |                             |
 
-use bridge_types::BridgedType;
+use bridge_types::{BridgedType, Symbol};
 #[cfg(doc)]
-use bridge_types::{LooseString, SloshChar, Symbol};
+use bridge_types::{LooseString, SloshChar, Symbol, SymbolAsString};
 use compile_state::state::SloshVm;
 
 use slvm::{VMResult, Value};

@@ -104,6 +104,39 @@ impl From<Symbol> for u32 {
 }
 
 /// [`Value`]: ../slvm/value/enum.Value.html
+/// [`Value::Symbol`]: ../slvm/value/enum.Value.html#variant.Symbol
+/// Type to hold anything in Slosh that can be represented as a slosh symbol, however, this
+/// type, in contrast to [`Symbol`] does need to do some allocations, specifically when
+/// using [`SlFrom`]. Not a huge penalty but worth mentioning if unnecessary.
+///
+/// Public type used by rust native -> slosh bridge macro to represent
+/// arguments that reference a valid symbol.
+///
+/// Can represent SlRefInto [`Value`] types:
+/// - Symbol
+///
+/// Always returns a [`Value::Symbol`] type.
+pub struct SymbolAsString(String);
+
+impl AsRef<str> for SymbolAsString {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl From<String> for SymbolAsString {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl From<SymbolAsString> for String {
+    fn from(value: SymbolAsString) -> Self {
+        value.0
+    }
+}
+
+/// [`Value`]: ../slvm/value/enum.Value.html
 /// Type to hold anything in Slosh that can be represented as slosh int value: `[u8; 7]`.
 ///
 /// Public type used by rust native -> slosh bridge macro to represent
@@ -160,6 +193,39 @@ impl Display for SloshChar<'_> {
             SloshChar::String(c) => c.to_string(),
         };
         write!(f, "{}", str)
+    }
+}
+
+/// [`Value`]: ../slvm/value/enum.Value.html
+/// [`Value::Keyword`]: ../slvm/value/enum.Value.html#variant.Keyword
+/// Type to hold anything in Slosh that can be represented as a slosh symbol, however, this
+/// type, in contrast to [`Keyword`] does need to do some allocations, specifically when
+/// using [`SlFrom`]. Not a huge penalty but worth mentioning if unnecessary.
+///
+/// Public type used by rust native -> slosh bridge macro to represent
+/// arguments that reference a valid symbol.
+///
+/// Can represent SlRefInto [`Value`] types:
+/// - Keyword
+///
+/// Always returns a [`Value::Keyword`] type.
+pub struct KeywordAsString(String);
+
+impl AsRef<str> for KeywordAsString {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl From<String> for KeywordAsString {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl From<KeywordAsString> for String {
+    fn from(value: KeywordAsString) -> Self {
+        value.0
     }
 }
 
