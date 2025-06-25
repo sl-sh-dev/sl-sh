@@ -3,7 +3,7 @@ extern crate core;
 use bridge_adapters::add_builtin;
 use bridge_adapters::lisp_adapters::SlFromRef;
 use bridge_macros::sl_sh_fn;
-use bridge_types::{KeywordAsString, LooseString, SymbolAsString};
+use bridge_types::{KeywordAsString, LooseString};
 use compile_state::state::{SloshVm, SloshVmTrait};
 use slvm::{Interned, VMError, VMResult, Value};
 use std::collections::HashSet;

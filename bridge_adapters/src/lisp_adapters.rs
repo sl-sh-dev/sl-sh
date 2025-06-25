@@ -184,9 +184,13 @@
 //!                             |                             |     &emsp;- [`SlFrom`] `&`[`Value`] for [`Symbol`]
 //!                             |                             |     &emsp;- [`SlFrom`] `&`[`Value`] for [`SymbolAsString`]
 //!                             |                             |
-//!                             |                             |
-//!                             |                             |
-//!                             |                             |
+//! [`Keyword`]                   | [`Value`]::Keyword(Interned)       |                             |
+//!                             |                             | S -> R
+//!                             |                             |     &emsp;- [`SlIntoRef`] [`Keyword`] for `&`[`Value`]
+//!                             |                             |     &emsp;- [`SlIntoRef`] [`KeywordAsString`] for `&`[`Value`]
+//!                             |                             | R -> S
+//!                             |                             |     &emsp;- [`SlFrom`] `&`[`Value`] for [`Keyword`]
+//!                             |                             |     &emsp;- [`SlFrom`] `&`[`Value`] for [`KeywordAsString`]
 //! [`f32`]/[`f64`]             | [`Value`]::Float(F56)       |                             |
 //!                             |                             |
 //!                             | [`Value`]::Pair(Handle)       |                             |
@@ -199,9 +203,6 @@
 //!                             |                             |
 //!                             |                             |
 //!                             | [`Value`]::Map(Handle)       |                             |
-//!                             |                             |
-//!                             |                             |
-//!                             | [`Value`]::Keyword(Interned)       |                             |
 //!                             |                             |
 //!                             |                             |
 //!                             | [`Value`]::Special(Interned) // Intended for symbols that are compiled.       |                             |
@@ -237,9 +238,9 @@
 //!                             |                             |
 //!                             |                             |
 
-use bridge_types::{BridgedType, Symbol};
+use bridge_types::BridgedType;
 #[cfg(doc)]
-use bridge_types::{LooseString, SloshChar, Symbol, SymbolAsString};
+use bridge_types::{Keyword, KeywordAsString, LooseString, SloshChar, Symbol, SymbolAsString};
 use compile_state::state::SloshVm;
 
 use slvm::{VMResult, Value};

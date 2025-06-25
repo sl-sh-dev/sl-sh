@@ -3,7 +3,7 @@
 //! and Value::False, Value::Nil, and Value::Undefined map to bool false.
 
 use crate::lisp_adapters::{SlFrom, SlFromRef};
-use bridge_types::{ErrorStrings, SymbolAsString, Symbol, KeywordAsString};
+use bridge_types::{ErrorStrings, Keyword, KeywordAsString, Symbol, SymbolAsString};
 use compile_state::state::SloshVm;
 use slvm::{VMError, VMResult, Value, ValueType, ValueTypes};
 
@@ -47,7 +47,7 @@ impl SlFromRef<'_, Value> for KeywordAsString {
             Value::Keyword(i) => {
                 let ret = KeywordAsString::from(vm.get_interned(i).to_string());
                 Ok(ret)
-            },
+            }
             _ => Err(VMError::new_conversion(
                 ErrorStrings::fix_me_mismatched_type(
                     String::from(ValueTypes::from([ValueType::Keyword])),
@@ -70,10 +70,30 @@ impl SlFromRef<'_, Value> for SymbolAsString {
             Value::Symbol(i) => {
                 let ret = SymbolAsString::from(vm.get_interned(i).to_string());
                 Ok(ret)
-            },
+            }
             _ => Err(VMError::new_conversion(
                 ErrorStrings::fix_me_mismatched_type(
                     String::from(ValueTypes::from([ValueType::Symbol])),
+                    value.display_type(vm),
+                ),
+            )),
+        }
+    }
+}
+
+impl SlFrom<Keyword> for Value {
+    fn sl_from(value: Keyword, _vm: &mut SloshVm) -> VMResult<Self> {
+        Ok(Value::Keyword(value.into()))
+    }
+}
+
+impl SlFromRef<'_, Value> for Keyword {
+    fn sl_from_ref(value: Value, vm: &'_ SloshVm) -> VMResult<Self> {
+        match value {
+            Value::Keyword(i) => Ok(Keyword::from(i.id)),
+            _ => Err(VMError::new_conversion(
+                ErrorStrings::fix_me_mismatched_type(
+                    String::from(ValueTypes::from([ValueType::Keyword])),
                     value.display_type(vm),
                 ),
             )),

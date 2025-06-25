@@ -198,6 +198,31 @@ impl Display for SloshChar<'_> {
 
 /// [`Value`]: ../slvm/value/enum.Value.html
 /// [`Value::Keyword`]: ../slvm/value/enum.Value.html#variant.Keyword
+/// Type to hold anything in Slosh that can be represented as a slosh Keyword: u32.
+///
+/// Public type used by rust native -> slosh bridge macro to represent
+/// arguments that reference a valid keyword.
+///
+/// Can represent SlRefInto [`Value`] types:
+/// - Keyword
+///
+/// Always returns a [`Value::Symbol`] type.
+pub struct Keyword(u32);
+
+impl From<u32> for Keyword {
+    fn from(value: u32) -> Self {
+        Self(value)
+    }
+}
+
+impl From<Keyword> for u32 {
+    fn from(value: Keyword) -> Self {
+        value.0
+    }
+}
+
+/// [`Value`]: ../slvm/value/enum.Value.html
+/// [`Value::Keyword`]: ../slvm/value/enum.Value.html#variant.Keyword
 /// Type to hold anything in Slosh that can be represented as a slosh symbol, however, this
 /// type, in contrast to [`Keyword`] does need to do some allocations, specifically when
 /// using [`SlFrom`]. Not a huge penalty but worth mentioning if unnecessary.
