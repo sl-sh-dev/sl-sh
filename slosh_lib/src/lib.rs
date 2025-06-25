@@ -167,6 +167,13 @@ fn get_home_dir() -> Option<PathBuf> {
     }
 }
 
+pub fn load_test(env: &mut SloshVm) {
+    match load_internal(env, "test.slosh") {
+        Ok(_) => {}
+        Err(err) => eprintln!("ERROR: {err}"),
+    }
+}
+
 pub fn load_core(env: &mut SloshVm) {
     match load_internal(env, "core.slosh") {
         Ok(_) => {}
