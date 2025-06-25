@@ -1,6 +1,5 @@
 use nix::sys::stat::Mode;
 use std::io;
-use std::io::ErrorKind;
 
 pub use nix::libc::mode_t;
 
@@ -24,7 +23,7 @@ fn get_class(str: &str) -> Result<mode_t, io::Error> {
         if next.is_some() {
             let msg =
                 "symbolic mode string before the '+' can only contain u, g, o, or a.".to_string();
-            Err(io::Error::new(ErrorKind::Other, msg))
+            Err(io::Error::other(msg))
         } else {
             let mut class: mode_t = 0;
             for c in str.chars() {
@@ -50,7 +49,7 @@ fn get_perms(str: &str) -> Result<mode_t, io::Error> {
         if next.is_some() {
             let msg =
                 "symbolic mode string before the '+' can only contain r, w, or x.".to_string();
-            Err(io::Error::new(ErrorKind::Other, msg))
+            Err(io::Error::other(msg))
         } else {
             let mut class: mode_t = 0;
             for c in str.chars() {
@@ -76,7 +75,7 @@ fn decode_symbolic_mode_string(str: &str, split_char: char) -> Result<(mode_t, m
                         after the '{}' character.",
                     split_char,
                 );
-                Err(io::Error::new(ErrorKind::Other, msg))
+                Err(io::Error::other(msg))
             } else {
                 let class = get_class(c)?;
                 let perms = get_perms(p)?;
@@ -87,14 +86,14 @@ fn decode_symbolic_mode_string(str: &str, split_char: char) -> Result<(mode_t, m
                 "symbolic mode string contains too many '{}' characters.",
                 split_char,
             );
-            Err(io::Error::new(ErrorKind::Other, msg))
+            Err(io::Error::other(msg))
         }
     } else {
         let msg = format!(
             "symbolic mode string contains too many '{}' characters.",
             split_char,
         );
-        Err(io::Error::new(ErrorKind::Other, msg))
+        Err(io::Error::other(msg))
     }
 }
 
@@ -151,7 +150,7 @@ fn to_mask_type(str: &str) -> Result<MaskType, io::Error> {
         })
     } else {
         let msg = "symbolic mode string must contain one of '+', '-', or '='.".to_string();
-        Err(io::Error::new(ErrorKind::Other, msg))
+        Err(io::Error::other(msg))
     }
 }
 
@@ -167,7 +166,7 @@ fn get_umask_tokens(str: &str) -> Result<Vec<MaskType>, io::Error> {
         }
         _ => {
             let msg = "must supply only one line as input.".to_string();
-            Err(io::Error::new(ErrorKind::Other, msg))
+            Err(io::Error::other(msg))
         }
     }
 }
@@ -183,15 +182,15 @@ fn with_umask_tokens(mut umask: mode_t, masks: Vec<MaskType>) -> mode_t {
 fn make_parsable_octal_string(str: &str) -> Result<String, io::Error> {
     if str.is_empty() {
         let msg = "no input.".to_string();
-        Err(io::Error::new(ErrorKind::Other, msg))
+        Err(io::Error::other(msg))
     } else if str.len() > 4 {
         let msg = "no more than 4 characters can be used to specify a umask, e.g.\
              644 or 0222."
             .to_string();
-        Err(io::Error::new(ErrorKind::Other, msg))
+        Err(io::Error::other(msg))
     } else if str.len() == 4 && !str.starts_with('0') {
         let msg = "most significant octal character can only be 0.".to_string();
-        Err(io::Error::new(ErrorKind::Other, msg))
+        Err(io::Error::other(msg))
     } else {
         let mut ret = String::from(str);
         while ret.len() < 4 {
@@ -214,7 +213,7 @@ fn build_mask(to_shift: usize, c: char) -> Result<mode_t, io::Error> {
         '7' => apply(0b111),
         _ => {
             let msg = "octal format can only take on values between 0 and 7 inclusive.".to_string();
-            Err(io::Error::new(ErrorKind::Other, msg))
+            Err(io::Error::other(msg))
         }
     }
 }
@@ -234,7 +233,7 @@ fn octal_string_to_mode_t(str: &str) -> Result<mode_t, io::Error> {
     }
     if err {
         let msg = "failed to parse provided octal.".to_string();
-        Err(io::Error::new(ErrorKind::Other, msg))
+        Err(io::Error::other(msg))
     } else {
         Ok(val)
     }
@@ -291,14 +290,13 @@ pub fn merge_and_set_umask(current_umask: mode_t, mask_string: &str) -> Result<m
             nix::sys::stat::umask(umask);
             Ok(mode)
         } else {
-            Err(io::Error::new(
-                ErrorKind::Other,
+            Err(io::Error::other(
                 "invalid umask".to_string(),
             ))
         }
     } else {
         let msg = "no input.".to_string();
-        Err(io::Error::new(ErrorKind::Other, msg))
+        Err(io::Error::other(msg))
     }
 }
 
@@ -315,7 +313,7 @@ pub fn set_umask(umask: mode_t) -> Result<(), io::Error> {
         nix::sys::stat::umask(umask);
         Ok(())
     } else {
-        Err(io::Error::new(ErrorKind::Other, "invalid mode"))
+        Err(io::Error::other("invalid mode"))
     }
 }
 

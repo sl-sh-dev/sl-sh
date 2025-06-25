@@ -168,7 +168,7 @@ impl Platform for Sys {
         let program = if let Some(program) = command.command(jobs) {
             program?
         } else {
-            return Err(io::Error::new(ErrorKind::Other, "no program to execute"));
+            return Err(io::Error::other("no program to execute"));
         };
         let args = command.args_iter();
         let (UnixFileDesc(input), UnixFileDesc(output)) = Sys::anon_pipe()?;
@@ -455,7 +455,7 @@ impl FromStr for UnixFileDesc {
     fn from_str(fd_str: &str) -> Result<Self, Self::Err> {
         match fd_str.parse::<i32>() {
             Ok(fd) => Ok(Self(fd)),
-            Err(err) => Err(io::Error::new(ErrorKind::Other, err)),
+            Err(err) => Err(io::Error::other(err)),
         }
     }
 }

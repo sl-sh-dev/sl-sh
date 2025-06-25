@@ -5,7 +5,7 @@ use std::ffi::OsString;
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io;
-use std::io::{BufRead, ErrorKind, Write};
+use std::io::{BufRead, Write};
 use std::str::FromStr;
 
 /// Arg to a command, either a direct string or a sub command to run to get the arg.
@@ -165,12 +165,12 @@ impl RedirType {
                     Sys::close_fd(source_fd)?;
                     Ok(dest_fd)
                 }
-                Err(err) => Err(io::Error::new(ErrorKind::Other, err)),
+                Err(err) => Err(io::Error::other(err)),
             }
         } else {
             match FileDesc::from_str(&source_fd) {
                 Ok(source_fd) => Sys::dup2_fd(source_fd, dest_fd),
-                Err(err) => Err(io::Error::new(ErrorKind::Other, err)),
+                Err(err) => Err(io::Error::other(err)),
             }
         }
     }
