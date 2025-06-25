@@ -1,5 +1,7 @@
-use crate::docs::legacy_docs;
+use crate::docs::{legacy, legacy_docs};
+use bridge_macros::sl_sh_fn;
 use compile_state::state::{SloshVm, SloshVmTrait};
+use slosh_lib::load_test;
 use slvm::{VMResult, Value};
 use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
@@ -103,11 +105,40 @@ pub(crate) fn build_report(vm: &mut SloshVm) -> VMResult<String> {
 
 pub(crate) fn unimplemented_report(vm: &mut SloshVm) -> VMResult<StatusReport> {
     let mut slosh_forms = HashSet::new();
+
+    load_test(vm);
+    // Add all global symbols
     for g in vm.globals().keys() {
         let sym = Value::Symbol(*g);
         let val: String = sym.display_value(vm);
+
+        // Also add the symbol without namespace prefix if it has one
+        if let Some(pos) = val.rfind("::") {
+            let without_namespace = &val[pos + 2..];
+            slosh_forms.insert(without_namespace.to_string());
+        }
+
         slosh_forms.insert(val);
     }
+
+    // Also check all namespaces for symbols
+    let namespaces = builtins::get_namespaces_interned(vm);
+    for ns_interned in namespaces {
+        let symbols = builtins::retrieve_in_namespace(vm, &ns_interned);
+        for symbol_value in symbols {
+            if let Value::Symbol(_sym) = symbol_value {
+                let full_name = symbol_value.display_value(vm);
+                slosh_forms.insert(full_name.clone());
+
+                // Also add the symbol without namespace prefix
+                if let Some(pos) = full_name.rfind("::") {
+                    let without_namespace = &full_name[pos + 2..];
+                    slosh_forms.insert(without_namespace.to_string());
+                }
+            }
+        }
+    }
+
     let metadata = legacy_docs::full_legacy_sl_sh_forms_metadata();
     let mut completed = 0;
     let mut yet_to_be_implemented = 0;
@@ -116,6 +147,7 @@ pub(crate) fn unimplemented_report(vm: &mut SloshVm) -> VMResult<StatusReport> {
         let (impl_status, form_name, notes) = match (will_implement, notes.is_empty()) {
             (true, true) => {
                 // will implement and name is/has not yet been changed.
+                // Check both the exact name and common namespace prefixes
                 if slosh_forms.contains(*old_sym_name) {
                     (
                         ImplStatus::Implemented,
@@ -180,6 +212,19 @@ pub(crate) fn unimplemented_report(vm: &mut SloshVm) -> VMResult<StatusReport> {
         yet_to_be_implemented,
         status_entries,
     })
+}
+
+/// Usage: (legacy-report)
+///
+/// Outputs the current list of functions that have/haven't been implemented from sl-sh to slosh transition.
+///
+/// Section: doc
+///
+/// Example:
+/// #t
+#[sl_sh_fn(fn_name = "legacy-report", takes_env = true)]
+pub fn legacy_report(environment: &mut SloshVm) -> VMResult<String> {
+    legacy::build_report(environment)
 }
 
 pub fn get_legacy_sl_sh_form_syms(vm: &mut SloshVm, _registers: &[Value]) -> VMResult<Value> {
