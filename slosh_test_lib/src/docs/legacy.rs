@@ -1,7 +1,6 @@
 use crate::docs::{legacy, legacy_docs};
 use bridge_macros::sl_sh_fn;
 use compile_state::state::{SloshVm, SloshVmTrait};
-use slosh_lib::load_builtins_lisp_less_sloshrc;
 use slvm::{VMResult, Value};
 use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
@@ -107,7 +106,8 @@ pub(crate) fn unimplemented_report(vm: &mut SloshVm) -> VMResult<StatusReport> {
     let mut slosh_forms = HashSet::new();
 
     crate::vm_with_stdout_disabled(vm);
-    load_builtins_lisp_less_sloshrc(vm)?;
+    slosh_lib::load_builtins_lisp_less_sloshrc(vm)?;
+    slosh_lib::load_test(vm);
     crate::vm_with_stdout_enabled(vm);
     // Add all global symbols
     for g in vm.globals().keys() {
