@@ -1,7 +1,3 @@
-TODO
- - make ticket for sls set -x
- - change mdbook dep in slosh_test to not rely on default features to remove the serve target which brings in an old version of tokio.
-
 <img src="https://raw.githubusercontent.com/sl-sh-dev/sl-sh/gh-pages-legacy/images/sl-sh-ascii-logo.png" alt="sl-sh logo" style="max-width:100%;">
 
 # Simple Lisp Shell (pronounced slosh)
