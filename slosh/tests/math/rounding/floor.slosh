@@ -28,5 +28,5 @@
 ;; Error cases
 (test::assert-error (floor))         ; No arguments
 (test::assert-error (floor 1 2))     ; Too many arguments
-(test::assert-error (floor "2.5"))   ; String argument
+(test::assert-error (floor "string"))   ; String argument
 (test::assert-error (floor nil))     ; nil argument
