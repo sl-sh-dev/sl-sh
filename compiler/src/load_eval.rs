@@ -18,11 +18,26 @@ const fn from_utf8(bytes: &[u8]) -> &str {
     }
 }
 
+pub const CORE_LISP_NAME: &str = "core.slosh";
+pub const ITER_LISP_NAME: &str = "iterator.slosh";
+pub const TEST_LISP_NAME: &str = "test.slosh";
+pub const COLORS_LISP_NAME: &str = "sh-color.slosh";
+pub const SLSHRC_NAME: &str = "init.slosh";
+
 const CORE_LISP: &str = from_utf8(include_bytes!("../../lisp/core.slosh"));
 const ITER_LISP: &str = from_utf8(include_bytes!("../../lisp/iterator.slosh"));
 const TEST_LISP: &str = from_utf8(include_bytes!("../../lisp/test.slosh"));
 const COLORS_LISP: &str = from_utf8(include_bytes!("../../lisp/sh-color.slosh"));
 pub const SLSHRC: &str = from_utf8(include_bytes!("../../init.slosh"));
+
+// TODO PC change to using phf.
+pub const BUILTINS: [(&str, &str); 5] = [
+    (CORE_LISP_NAME, CORE_LISP),
+    (ITER_LISP_NAME, ITER_LISP),
+    (TEST_LISP_NAME, TEST_LISP),
+    (COLORS_LISP_NAME, COLORS_LISP),
+    (SLSHRC_NAME, SLSHRC),
+];
 
 /// Execute a chunk that may not be rooted, will make sure any allocated consts don't get GCed
 /// out from under it...
@@ -232,38 +247,36 @@ pub fn get_load_name(vm: &mut SloshVm, value: Value) -> VMResult<&'static str> {
     }
 }
 
+fn check_builtins(name: &str) -> Option<&'static str> {
+    for (k, b) in BUILTINS {
+        if k == name {
+            return Some(b);
+        }
+    }
+    None
+}
+
 fn reader_for_file<'vm>(vm: &'vm mut SloshVm, name: &'static str) -> VMResult<Reader<'vm>> {
     let fname = if fs::metadata::<&Path>(name.as_ref()).is_ok() {
         Ok(Cow::Borrowed(name))
     } else {
         find_first_instance_of_file_in_load_path(vm, name)
     };
-    let reader = match fname {
-        Ok(fname) => match std::fs::File::open(&*fname) {
-            Ok(file) => Reader::from_file(file, vm, name, 1, 0),
-            Err(e) => match name {
-                "core.slosh" => Reader::from_static_string(CORE_LISP, vm, name, 1, 0),
-                "iterator.slosh" => Reader::from_static_string(ITER_LISP, vm, name, 1, 0),
-                "test.slosh" => Reader::from_static_string(TEST_LISP, vm, name, 1, 0),
-                "sh-color.slosh" => Reader::from_static_string(COLORS_LISP, vm, name, 1, 0),
-                "init.slosh" => Reader::from_static_string(SLSHRC, vm, name, 1, 0),
-                _ => {
-                    return Err(VMError::new("io", format!("{name}: {e}")));
+    match fname {
+        Ok(fname) => match fs::File::open(&*fname) {
+            Ok(file) => Ok(Reader::from_file(file, vm, name, 1, 0)),
+            Err(e) => match check_builtins(name) {
+                Some(file_contents) => {
+                    Ok(Reader::from_static_string(file_contents, vm, name, 1, 0))
                 }
+                None => Err(VMError::new("io", format!("{name}: {e}"))),
             },
         },
-        Err(e) => match name {
-            "core.slosh" => Reader::from_static_string(CORE_LISP, vm, name, 1, 0),
-            "iterator.slosh" => Reader::from_static_string(ITER_LISP, vm, name, 1, 0),
-            "test.slosh" => Reader::from_static_string(TEST_LISP, vm, name, 1, 0),
-            "sh-color.slosh" => Reader::from_static_string(COLORS_LISP, vm, name, 1, 0),
-            "init.slosh" => Reader::from_static_string(SLSHRC, vm, name, 1, 0),
-            _ => {
-                return Err(VMError::new("io", format!("{name}: {e}")));
-            }
+        Err(e) => match check_builtins(name) {
+            None => Err(VMError::new("io", format!("{name}: {e}"))),
+            Some(file_contents) => Ok(Reader::from_static_string(file_contents, vm, name, 1, 0)),
         },
-    };
-    Ok(reader)
+    }
 }
 
 pub fn load(
