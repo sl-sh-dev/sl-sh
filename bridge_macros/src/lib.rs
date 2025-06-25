@@ -20,10 +20,8 @@
 ///  - functions that return Values, tuple return types?
 ///  - functions that accept iters?
 ///  - then... compare against inline the function being called... randomize variable names...
-///      and fn names too? could pick some random string and prefix all generated idents.
+///    and fn names too? could pick some random string and prefix all generated idents.
 ///  - ISSUE #119 trybuild!
-
-
 use bridge_types::Param;
 use bridge_types::PassingStyle;
 use bridge_types::TypeHandle;

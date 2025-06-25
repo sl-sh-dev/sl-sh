@@ -385,7 +385,10 @@ impl SloshDoc {
             let doc_string = DocStringSection::from_symbol(slot, sym, vm)?;
             let symbol = sym.display_value(vm);
             let mut full_name: Vec<_> = symbol.split("::").collect();
-            let symbol = full_name.pop().expect("Symbol should never be an empty.").to_string();
+            let symbol = full_name
+                .pop()
+                .expect("Symbol should never be an empty.")
+                .to_string();
             let symbol_type = sym.display_type(vm).to_string();
             let namespace = namespace.display(vm);
             Ok(SloshDoc {
