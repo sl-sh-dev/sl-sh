@@ -1900,7 +1900,7 @@ two""#
         assert!(tokens[5] == "Float:0.0023");
         assert!(tokens[6] == "Symbol:23e-+5");
         assert!(tokens[7] == "Symbol:23e-5e+4");
-        assert!(tokens[8] == "Float:23.123", "{}", tokens[8]);
+        assert!(tokens[8] == "Float:23.123");
         assert!(tokens[9] == "]");
     }
 

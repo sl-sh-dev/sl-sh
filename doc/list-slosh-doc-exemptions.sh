@@ -4,7 +4,3 @@
     (if (>= (+ i 1) (len lst))
         (break output)
         (recur lst (inc! i)  (str output lst.~i ",\n")))))
-
-(def meow (make-vec))
-(set! meow.0 "abc")
-(prn (get meow 0))
