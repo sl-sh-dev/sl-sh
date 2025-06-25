@@ -553,6 +553,7 @@ Example:
         "*last-status*",
         0.into(),
         r#"Usage: (prn *last-status)
+
 Return last exit code as an Int.
 
 Section: core
@@ -578,7 +579,7 @@ Example:
         env,
         "*euler*",
         Value::Float(F56::from(std::f64::consts::E)),
-        r#"Usage: (print *euler*)
+        r#"Usage: (prn *euler*)
 
 Float representing euler’s number.
 
@@ -591,7 +592,7 @@ Example:
         env,
         "*pi*",
         Value::Float(F56::from(std::f64::consts::PI)),
-        r#"
+        r#"Usage: (prn *pi*)
 
 Float representing pi.
 

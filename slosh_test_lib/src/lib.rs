@@ -1,7 +1,6 @@
 use builtins::{noop_swap_internal, NoopSwap};
 use compile_state::state::SloshVm;
 use sl_compiler::load_eval;
-use sl_compiler::Reader;
 use slosh_lib::load_builtins_lisp_less_sloshrc;
 use slvm::VMResult;
 

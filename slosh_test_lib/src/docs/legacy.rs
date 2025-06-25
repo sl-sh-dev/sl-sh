@@ -1,7 +1,7 @@
 use crate::docs::{legacy, legacy_docs};
 use bridge_macros::sl_sh_fn;
 use compile_state::state::{SloshVm, SloshVmTrait};
-use slosh_lib::{load_builtins_lisp, load_builtins_lisp_less_sloshrc};
+use slosh_lib::load_builtins_lisp_less_sloshrc;
 use slvm::{VMResult, Value};
 use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
