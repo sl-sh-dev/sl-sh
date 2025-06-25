@@ -1,6 +1,7 @@
 use crate::docs::legacy as legacy_docs;
 use bridge_adapters::add_builtin;
 use bridge_adapters::lisp_adapters::SlFrom;
+use bridge_macros::sl_sh_fn;
 use compile_state::state::{SloshVm, SloshVmTrait};
 use lazy_static::lazy_static;
 use mdbook::book::{Book, Chapter};
@@ -910,7 +911,21 @@ fn get_globals_sorted(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> 
     Ok(vm.alloc_vector(v))
 }
 
+/// Usage: (legacy-report)
+///
+/// Output as a string the current legacy report, detailing how much of the former sl-sh project has been covered by the new slosh.
+///
+/// Section: doc
+///
+/// Example:
+/// #t
+#[sl_sh_fn(fn_name = "legacy-report", takes_env = true)]
+fn legacy_report(environment: &mut SloshVm) -> VMResult<String> {
+    legacy::build_report(environment)
+}
+
 pub fn add_builtins(env: &mut SloshVm) {
+    intern_legacy_report(env);
     add_builtin(
         env,
         "doc-map",

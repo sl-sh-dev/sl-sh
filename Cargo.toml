@@ -33,6 +33,8 @@ debug = true
 version = "0.11.1"
 
 [workspace.dependencies]
+bridge_adapters = { path = "bridge_adapters" }
+bridge_macros = { path = "bridge_macros" }
 bridge_types = { path = "bridge_types" }
 compile_state = { path = "compile_state" }
 sl-compiler = { path = "compiler" }
