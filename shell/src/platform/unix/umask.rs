@@ -290,9 +290,7 @@ pub fn merge_and_set_umask(current_umask: mode_t, mask_string: &str) -> Result<m
             nix::sys::stat::umask(umask);
             Ok(mode)
         } else {
-            Err(io::Error::other(
-                "invalid umask".to_string(),
-            ))
+            Err(io::Error::other("invalid umask".to_string()))
         }
     } else {
         let msg = "no input.".to_string();

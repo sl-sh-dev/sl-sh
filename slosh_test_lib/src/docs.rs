@@ -253,7 +253,7 @@ impl DocStringSection {
         let cap = DOC_REGEX.captures(raw_doc_string.as_str()).ok_or_else(|| {
             if EXEMPTIONS.contains(symbol.as_ref()) {
                 DocError::ExemptFromProperDocString {
-                    symbol: symbol.to_string()
+                    symbol: symbol.to_string(),
                 }
             } else {
                 DocError::NoDocString {

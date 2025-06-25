@@ -562,9 +562,9 @@ fn char_to_hex_num(ch: char) -> Result<u8, io::Error> {
             'd' | 'D' => Ok(13),
             'e' | 'E' => Ok(14),
             'f' | 'F' => Ok(15),
-            _ => Err(io::Error::other(
-                format!("Invalid hex digit {ch}, expected 0-9 or A-F."),
-            )),
+            _ => Err(io::Error::other(format!(
+                "Invalid hex digit {ch}, expected 0-9 or A-F."
+            ))),
         }
     }
 }
@@ -594,9 +594,9 @@ fn read_utf_scalar(chars: &mut Peekable<Chars>) -> Result<char, io::Error> {
         if let Some(val) = std::char::from_u32(char_u32) {
             Ok(val)
         } else {
-            Err(io::Error::other(
-                format!("Invalid unicode scalar, {char_u32:x} not a valid utf scalar."),
-            ))
+            Err(io::Error::other(format!(
+                "Invalid unicode scalar, {char_u32:x} not a valid utf scalar."
+            )))
         }
     }
     let mut first = true;
