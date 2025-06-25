@@ -579,7 +579,7 @@ Example:
         env,
         "*euler*",
         Value::Float(F56::from(std::f64::consts::E)),
-        r#"Usage: (print *euler*)
+        r#"Usage: (prn *euler*)
 
 Float representing euler’s number.
 

@@ -7,8 +7,6 @@ use lazy_static::lazy_static;
 use mdbook::book::{Book, Chapter};
 use mdbook::{BookItem, MDBook};
 use regex::{Regex, RegexBuilder};
-use sl_compiler::load_eval::run_reader;
-use sl_compiler::Reader;
 use slosh_lib::load_builtins_lisp_less_sloshrc;
 use slvm::vm_hashmap::VMHashMap;
 use slvm::VMErrorObj::Message;

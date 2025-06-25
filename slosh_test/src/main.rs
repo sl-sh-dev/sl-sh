@@ -2,7 +2,7 @@ use bridge_adapters::add_builtin;
 use compile_state::state::SloshVm;
 use sl_compiler::load_eval::{run_reader, CORE_LISP_NAME, TEST_LISP_NAME};
 use sl_compiler::Reader;
-use slosh_lib::run;
+use slosh_lib::{load_builtins_lisp_less_sloshrc, run};
 use slosh_test_lib::docs;
 use slvm::{VMError, VMResult, Value};
 use std::process;
@@ -36,6 +36,7 @@ fn modify_vm(vm: &mut SloshVm) {
     );
     let mut reader = Reader::from_string(code, vm, "", 1, 0);
     _ = run_reader(&mut reader);
+    _ = load_builtins_lisp_less_sloshrc(vm);
 }
 
 fn main() {
