@@ -1,4 +1,4 @@
-//! TODO PC macro crate wish list
+//! TODO PC MACROS crate wish list
 //! 1. The macro should fail if the structure of the docs is not as expected. e.g. Type/Namespace/.../Usage/Example/
 //! 2. type aliasing, need a gensym type macro so I do not conflict with names.
 //! 3. trybuild tests!
@@ -17,6 +17,12 @@
 //! 11. Support for slices? to avoid Vec allocation? Is it a big deal to only be able to accept Vec?
 //!     The decision should at least be documented.
 //! 12. SINCE WHEN is it a requirement like that it *has* to return VMResult or Option
+///  - functions that return Values, tuple return types?
+///  - functions that accept iters?
+///  - then... compare against inline the function being called... randomize variable names...
+///      and fn names too? could pick some random string and prefix all generated idents.
+///  - ISSUE #119 trybuild!
+
 
 use bridge_types::Param;
 use bridge_types::PassingStyle;
@@ -648,12 +654,12 @@ fn parse_variadic_args_type(
                     });
                     args.push(quote! {
                         use bridge_adapters::lisp_adapters::SlInto;
-                        //TODO put #fn_name back in
+                        //TODO PC MACROS put #fn_name back in?
                         let #arg_name: #elem = #arg_name.sl_into(environment)?;
                     })
                 }
                 Ok(quote! {{
-                    //TODO PC SlIntoRef?
+                    //TODO PC MACROS SlIntoRef?
                     use bridge_adapters::lisp_adapters::SlInto;
                     #(#type_assertions)*
                     #arg_check
@@ -1629,13 +1635,6 @@ pub fn sl_sh_fn(
 
     proc_macro::TokenStream::from(tokens)
 }
-
-//TODO PC macro wish list
-//  - functions that return Values, tuple return types?
-//  - functions that accept iters?
-//  - then... compare against inline the function being called... randomize variable names...
-//      and fn names too? could pick some random string and prefix all generated idents.
-//  - ISSUE #119 trybuild!
 
 #[cfg(test)]
 mod test {
