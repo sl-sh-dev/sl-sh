@@ -227,7 +227,8 @@ mod slosh_eval_lib {
             "Return the software version string.",
         );
 
-        let mut reader = Reader::from_string(r#"(load "core.slosh")"#.to_string(), vm, "", 1, 0);
+        let code = format!(r#"(load "{}")"#, sl_compiler::load_eval::CORE_LISP_NAME);
+        let mut reader = Reader::from_string(code, vm, "", 1, 0);
         _ = load_eval::run_reader(&mut reader);
     }
 
