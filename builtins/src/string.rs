@@ -732,7 +732,6 @@ Example:
 (test::assert-equal "some string" (str-trim "some string" :left))
 "#,
     );
-    //intern_str_trim_bang(env);
     add_builtin(
         env,
         "str-trim!",
