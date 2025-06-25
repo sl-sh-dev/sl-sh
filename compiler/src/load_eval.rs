@@ -154,8 +154,7 @@ fn find_first_instance_of_file_in_load_path<'a>(
                     _ => None,
                 };
                 if let Some(path) = path {
-                    let mut p = PathBuf::new();
-                    p.push(path);
+                    let mut p = expand_tilde(PathBuf::from(path));
                     p.push(name);
                     if p.exists() && !p.is_dir() {
                         if let Ok(p) = p.into_os_string().into_string() {

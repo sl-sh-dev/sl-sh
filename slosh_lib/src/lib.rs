@@ -253,7 +253,7 @@ pub fn load_sloshrc(environment: &mut SloshVm, path: Option<LooseString>) {
             let script = environment.get_interned(script);
             match load_internal(environment, script) {
                 Ok(_) => {}
-                Err(e) => eprintln!("Failed to load script: {e}"),
+                Err(e) => eprintln!("Failed to load script ({script}): {e}"),
             }
         } else {
             // home doesn't have slosh config dir
