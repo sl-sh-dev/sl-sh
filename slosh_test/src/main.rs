@@ -1,6 +1,6 @@
 use bridge_adapters::add_builtin;
 use compile_state::state::SloshVm;
-use sl_compiler::load_eval::run_reader;
+use sl_compiler::load_eval::{run_reader, CORE_LISP_NAME, TEST_LISP_NAME};
 use sl_compiler::Reader;
 use slosh_lib::run;
 use slosh_test_lib::docs;
@@ -26,13 +26,15 @@ fn modify_vm(vm: &mut SloshVm) {
         "Return the software version string.",
     );
 
-    let mut reader = Reader::from_string(
-        r#"(do (load "core.slosh") (load "test.slosh"))"#.to_string(),
-        vm,
-        "",
-        1,
-        0,
+    let code = format!(
+        "(do {})",
+        [CORE_LISP_NAME, TEST_LISP_NAME]
+            .iter()
+            .map(|x| format!("(load \"{x}\")"))
+            .collect::<Vec<String>>()
+            .join(" ")
     );
+    let mut reader = Reader::from_string(code, vm, "", 1, 0);
     _ = run_reader(&mut reader);
 }
 
