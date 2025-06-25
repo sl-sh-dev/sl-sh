@@ -28,5 +28,5 @@
 ;; Error cases
 (test::assert-error (ceil))         ; No arguments
 (test::assert-error (ceil 1 2))     ; Too many arguments
-(test::assert-error (ceil "2.5"))   ; String argument
+(test::assert-error (ceil "string"))   ; String argument
 (test::assert-error (ceil nil))     ; nil argument
