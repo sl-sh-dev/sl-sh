@@ -31,6 +31,9 @@ const COLORS_LISP: &str = from_utf8(include_bytes!("../../lisp/sh-color.slosh"))
 pub const SLSHRC: &str = from_utf8(include_bytes!("../../init.slosh"));
 
 // TODO PC change to using phf.
+// TODO PC docs are silently failing if the interpolation symbol {} fails. this happens when some
+//  doc happens to use the {} syntax. maybe the docs are silencing said failure but need to investigate
+//  test case came up when my docs for `eix` had the string {debug} in it.
 pub const BUILTINS: [(&str, &str); 5] = [
     (CORE_LISP_NAME, CORE_LISP),
     (ITER_LISP_NAME, ITER_LISP),
