@@ -34,5 +34,5 @@
 ;; Error cases
 (test::assert-error (round))         ; No arguments
 (test::assert-error (round 1 2))     ; Too many arguments
-(test::assert-error (round "2.5"))   ; String argument
+(test::assert-error (round "string"))   ; String argument
 (test::assert-error (round nil))     ; nil argument

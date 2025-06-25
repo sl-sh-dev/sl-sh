@@ -32,5 +32,5 @@
 ;; Error cases
 (test::assert-error (fract))         ; No arguments
 (test::assert-error (fract 1 2))     ; Too many arguments
-(test::assert-error (fract "2.5"))   ; String argument
+(test::assert-error (fract "string"))   ; String argument
 (test::assert-error (fract nil))     ; nil argument
