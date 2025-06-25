@@ -9,6 +9,7 @@ use mdbook::{BookItem, MDBook};
 use regex::{Regex, RegexBuilder};
 use sl_compiler::load_eval::run_reader;
 use sl_compiler::Reader;
+use slosh_lib::load_builtins_lisp_less_sloshrc;
 use slvm::vm_hashmap::VMHashMap;
 use slvm::VMErrorObj::Message;
 use slvm::{Interned, VMError, VMResult, Value, SLOSH_NIL};
@@ -844,16 +845,7 @@ fn build_doc(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         },
     }?;
 
-    {
-        let mut reader = Reader::from_string(
-            r#"(do (load "core.slosh") (load "sh-color.slosh"))"#.to_string(),
-            vm,
-            "",
-            1,
-            0,
-        );
-        _ = run_reader(&mut reader)?;
-    }
+    load_builtins_lisp_less_sloshrc(vm)?;
 
     let mut md_book = MDBook::load(PathBuf::from(path))
         .map_err(|_e| VMError::new("mdbook", "Unable to load the book at provided path."))?;
@@ -1003,7 +995,10 @@ mod test {
     use super::*;
     use compile_state::state::new_slosh_vm;
     use sl_compiler::Reader;
-    use slosh_lib::{run_reader, set_builtins_and_shell_builtins, set_initial_load_path, ENV};
+    use slosh_lib::{
+        load_builtins_lisp_less_sloshrc, run_reader, set_builtins_and_shell_builtins,
+        set_initial_load_path, ENV,
+    };
     use std::collections::BTreeMap;
     use std::ops::DerefMut;
     use tempfile::TempDir;
@@ -1022,14 +1017,7 @@ mod test {
                 let mut vm = env.borrow_mut();
                 set_builtins_and_shell_builtins(vm.deref_mut());
                 set_initial_load_path(vm.deref_mut(), vec![&home_path]);
-                let mut reader = Reader::from_string(
-                    r#"(do (load "core.slosh") (load "test.slosh"))"#.to_string(),
-                    &mut vm,
-                    "",
-                    1,
-                    0,
-                );
-                _ = run_reader(&mut reader).unwrap();
+                load_builtins_lisp_less_sloshrc(vm.deref_mut()).unwrap();
 
                 let mut docs: Vec<SloshDoc> = vec![];
                 Namespace::Global
