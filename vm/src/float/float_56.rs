@@ -316,6 +316,7 @@ impl F56 {
         ])
     }
 
+    /// TODO PC #125 this ticket is outdated now but this may need to be used somewhere?
     /// Returns true if the two F56s are bitwise identical OR if they are both NaN or both 0
     pub fn strictly_equal_except_nan_and_0(&self, other: &F56) -> bool {
         // if the bit patterns are identical, then they are equal
@@ -338,6 +339,7 @@ impl F56 {
         false
     }
 
+    /// TODO PC #125 this ticket is outdated now but this may need to be used somewhere?
     pub fn hash_for_strictly_equal_except_nan_and_0(&self) -> u64 {
         let f56_word = u64::from_be_bytes([
             0, self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5], self.0[6],
