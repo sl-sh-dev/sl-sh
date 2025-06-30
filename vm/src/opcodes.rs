@@ -32,141 +32,143 @@ pub const MOVII: OpCode = STACK_BASE + 23; // MOVII A B - R(A) = R(R(B)), B is a
 pub const GET: OpCode = STACK_BASE + 24; // GET A B C - if R(A) = R(B) (if it is a complex data structure) element R(C)
 pub const SETCOL: OpCode = STACK_BASE + 25; // SETCOL A B C - Set R(B) (if it is a complex data structure) element R(C) to R(A)
 
-// Flow control
+/// Flow control
 const FLOW_BASE: OpCode = STACK_BASE + 26;
-// CALL A B C - Call fn R(A) with B args with R(C) as first reg/param
+/// CALL A B C - Call fn R(A) with B args with R(C) as first reg/param
 pub const CALL: OpCode = FLOW_BASE;
-// TCALL A B - Tail Call fn R(A) with B args with existing stack/regs
+/// TCALL A B - Tail Call fn R(A) with B args with existing stack/regs
 pub const TCALL: OpCode = FLOW_BASE + 1;
-// CALLG A B C - Call fn G[A] with B args with R(C) as first reg/param
+/// CALLG A B C - Call fn G[A] with B args with R(C) as first reg/param
 pub const CALLG: OpCode = FLOW_BASE + 2;
-// TCALLG A B - Tail Call fn G[A] with B args with existing stack/regs
+/// TCALLG A B - Tail Call fn G[A] with B args with existing stack/regs
 pub const TCALLG: OpCode = FLOW_BASE + 3;
-// CALLM A B - Call current fn with B args with R(C) as first reg/param
+/// CALLM A B - Call current fn with B args with R(C) as first reg/param
 pub const CALLM: OpCode = FLOW_BASE + 4;
-// TCALLM B - Tail Call current fn with B args with existing stack/regs
+/// TCALLM B - Tail Call current fn with B args with existing stack/regs
 pub const TCALLM: OpCode = FLOW_BASE + 5;
-
-// Jumps, all jumps use a signed 24 bit OFFSET (high bit is sign and next 23 are integer).
-// This means all jumps are forward or back (negative target).
-// JMP OFFSET - Jump to IP + OFFSET
+/// Jumps, all jumps use a signed 24 bit OFFSET (high bit is sign and next 23 are integer).
+/// This means all jumps are forward or back (negative target).
+/// JMP OFFSET - Jump to IP + OFFSET
 pub const JMP: OpCode = FLOW_BASE + 6;
-// JMPT A OFFSET - Jump to current IP + OFFSET if R(A) is truthy (not (nil or false))
+/// JMPT A OFFSET - Jump to current IP + OFFSET if R(A) is truthy (not (nil or false))
 pub const JMPT: OpCode = FLOW_BASE + 7;
-// JMPF A OFFSET - Jump to current IP + OFFSET if R(A) is falsy (nil or false)
+/// JMPF A OFFSET - Jump to current IP + OFFSET if R(A) is falsy (nil or false)
 pub const JMPF: OpCode = FLOW_BASE + 8;
-
-// JMPEQ A B OFFSET - compare A and B and jump to IP + OFFSET if they are equal
+/// JMPEQ A B OFFSET - compare A and B and jump to IP + OFFSET if they are equal
 pub const JMPEQ: OpCode = FLOW_BASE + 9;
-// JMPLT A B OFFSET - compare A and B and jump to IP + OFFSET if R(A) < R(B)
+/// JMPLT A B OFFSET - compare A and B and jump to IP + OFFSET if R(A) < R(B)
 pub const JMPLT: OpCode = FLOW_BASE + 10;
-// JMPGT A B OFFSET - compare A and B and jump to IP + OFFSET if R(A) > R(B)
+/// JMPGT A B OFFSET - compare A and B and jump to IP + OFFSET if R(A) > R(B)
 pub const JMPGT: OpCode = FLOW_BASE + 11;
-
-// JMPU A OFFSET - Jump to current IP + OFFSET if R(A) is undefined
+/// JMPU A OFFSET - Jump to current IP + OFFSET if R(A) is undefined
 pub const JMPU: OpCode = FLOW_BASE + 12;
-// JMPNU A OFFSET - Jump to current IP + OFFSET if R(A) is NOT undefined
+/// JMPNU A OFFSET - Jump to current IP + OFFSET if R(A) is NOT undefined
 pub const JMPNU: OpCode = FLOW_BASE + 13;
-
-// EQ A B C - R[A] is #t if objects in R[B] - R[C] (inclusive) are the same objects
+/// EQ A B C - R[A] is #t if objects in R[B] - R[C] (inclusive) are the same objects
 pub const EQ: OpCode = FLOW_BASE + 14;
-// EQUAL A B C - R[A] is #t if objects in R[B] - R[C] (inclusive) are the same objects, values or
-// containers with equal values (must be the same container type)
+/// EQUAL A B C - R[A] is #t if objects in R[B] - R[C] (inclusive) are the same objects, values or
+/// containers with equal values (must be the same container type)
 pub const EQUAL: OpCode = FLOW_BASE + 15;
-// NOT A B - R[A] is #t if R[B] is falsey and #f otherwise
+/// NOT A B - R[A] is #t if R[B] is falsey and #f otherwise
 pub const NOT: OpCode = FLOW_BASE + 16;
-// ERR A B - raise error with key R(A) (must be keyword) and value R(B)
+/// ERR A B - raise error with key R(A) (must be keyword) and value R(B)
 pub const ERR: OpCode = FLOW_BASE + 17;
-// CCC A B - call with continuation, R(A) must be a lambda that takes one arg (the continuation)
-// R(B) is the first reg for the call
+/// CCC A B - call with continuation, R(A) must be a lambda that takes one arg (the continuation)
+/// R(B) is the first reg for the call
 pub const CCC: OpCode = FLOW_BASE + 18;
-// DFR A - Add a lambda, R(A) to the deferred list.
+/// DFR A - Add a lambda, R(A) to the deferred list.
 pub const DFR: OpCode = FLOW_BASE + 19;
-// DFRPOP - Pop and call the last deferred lambda.
+/// DFRPOP - Pop and call the last deferred lambda.
 pub const DFRPOP: OpCode = FLOW_BASE + 20;
-// ONERR A - Make R(A) the current error handler and put the previous error handler in R(A).
-// If R(A) is nil then remove error handler.
+/// ONERR A - Make R(A) the current error handler and put the previous error handler in R(A).
+/// If R(A) is nil then remove error handler.
 pub const ONERR: OpCode = FLOW_BASE + 21;
 
-// JMPRU A B OFFSET - Jump to current IP + OFFSET if any in R(A)..R(A+B) is undefined
+/// JMPRU A B OFFSET - Jump to current IP + OFFSET if any in R(A)..R(A+B) is undefined
 pub const JMPRU: OpCode = FLOW_BASE + 22;
-// JMPRNU A B OFFSET - Jump to current IP + OFFSET if any in R(A)..R(A+B) is NOT undefined
+/// JMPRNU A B OFFSET - Jump to current IP + OFFSET if any in R(A)..R(A+B) is NOT undefined
 pub const JMPRNU: OpCode = FLOW_BASE + 23;
-// MKERR A B C - R(A) = error with key R(B) (must be keyword) and value R(C)
+/// MKERR A B C - R(A) = error with key R(B) (must be keyword) and value R(C)
 pub const MKERR: OpCode = FLOW_BASE + 24;
-// ISERR A B - R(A) is #t if R(B) is an error type, #f otherwise
+/// ISERR A B - R(A) is #t if R(B) is an error type, #f otherwise
 pub const ISERR: OpCode = FLOW_BASE + 25;
-// ISOK A B - R(A) is #f if R(B) is an error type, #t otherwise
+/// ISOK A B - R(A) is #f if R(B) is an error type, #t otherwise
 pub const ISOK: OpCode = FLOW_BASE + 26;
 
 // Basic math
 const MATH_BASE: OpCode = FLOW_BASE + 27;
-// ADD A B - set R(A) = R(A) + R(B)
+/// ADD A B - set R(A) = R(A) + R(B)
 pub const ADD: OpCode = MATH_BASE;
-// SUB A B - set R(A) = R(A) - R(B)
+/// SUB A B - set R(A) = R(A) - R(B)
 pub const SUB: OpCode = MATH_BASE + 1;
-// MUL A B - set R(A) = R(A) * R(B)
+/// MUL A B - set R(A) = R(A) * R(B)
 pub const MUL: OpCode = MATH_BASE + 2;
-// DIV A B - set R(A) = R(A) / R(B)
+/// DIV A B - set R(A) = R(A) / R(B)
 pub const DIV: OpCode = MATH_BASE + 3;
-// INC A B - Increment the integer in R(A) by B
+/// INC A B - Increment the integer in R(A) by B
 pub const INC: OpCode = MATH_BASE + 4;
-// DEC A B - Decrement the integer in R(A) by B
+/// DEC A B - Decrement the integer in R(A) by B
 pub const DEC: OpCode = MATH_BASE + 5;
-// NUMEQ A B C - compare (=) in register B (inclusive) to C (inclusive) and set R[A] to the
-// result.
+/// NUMEQ A B C - compare (=) in register B (inclusive) to C (inclusive) and set R[A] to the
+/// result.
 pub const NUMEQ: OpCode = MATH_BASE + 6;
-// NUMLT A B C - compare (<) in register B (inclusive) to C (inclusive) and set R[A] to the
-// result.
+/// NUMLT A B C - compare (<) in register B (inclusive) to C (inclusive) and set R[A] to the
+/// result.
 pub const NUMLT: OpCode = MATH_BASE + 7;
-// NUMGT A B C - compare (>) in register B (inclusive) to C (inclusive) and set R[A] to the
-// result.
+/// NUMGT A B C - compare (>) in register B (inclusive) to C (inclusive) and set R[A] to the
+/// result.
 pub const NUMGT: OpCode = MATH_BASE + 8;
-// NUMLTE A B C - compare (<=) in register B (inclusive) to C (inclusive) and set R[A] to the
-// result.
+/// NUMLTE A B C - compare (<=) in register B (inclusive) to C (inclusive) and set R[A] to the
+/// result.
 pub const NUMLTE: OpCode = MATH_BASE + 9;
-// NUMGTE A B C - compare (>=) in register B (inclusive) to C (inclusive) and set R[A] to the
-// result.
+/// NUMGTE A B C - compare (>=) in register B (inclusive) to C (inclusive) and set R[A] to the
+/// result.
 pub const NUMGTE: OpCode = MATH_BASE + 10;
-
-// Cons cells
+/// Cons cells
 const CONS_BASE: OpCode = MATH_BASE + 11;
-pub const CONS: OpCode = CONS_BASE; // CONS A B C - R(A) = conscell(R(B), R(C))
-pub const CAR: OpCode = CONS_BASE + 1; // CAR A B - R(A) = car(R(B))
-pub const CDR: OpCode = CONS_BASE + 2; // CDR A B - R(A) = cdr(R(B))
-pub const XAR: OpCode = CONS_BASE + 3; // XAR A B - car(R(A)) = R(B)
-pub const XDR: OpCode = CONS_BASE + 4; // XDR A B - cdr(R(A)) = R(B)
-pub const LIST: OpCode = CONS_BASE + 5; // LIST A B C - R(A) = list(elements R(B)..R(C)) (R(B) and R(C) are inclusive)
-pub const APND: OpCode = CONS_BASE + 6; // APND A B C - R(A) = append lists R(B)..R(C) (R(B) and R(C) are inclusive)
+/// CONS A B C - R(A) = conscell(R(B), R(C))
+pub const CONS: OpCode = CONS_BASE;
+/// CAR A B - R(A) = car(R(B))
+pub const CAR: OpCode = CONS_BASE + 1;
+/// CDR A B - R(A) = cdr(R(B))
+pub const CDR: OpCode = CONS_BASE + 2;
+/// XAR A B - car(R(A)) = R(B)
+pub const XAR: OpCode = CONS_BASE + 3;
+/// XDR A B - cdr(R(A)) = R(B)
+pub const XDR: OpCode = CONS_BASE + 4;
+/// LIST A B C - R(A) = list(elements R(B)..R(C)) (R(B) and R(C) are inclusive)
+pub const LIST: OpCode = CONS_BASE + 5;
+/// APND A B C - R(A) = append lists R(B)..R(C) (R(B) and R(C) are inclusive)
+pub const APND: OpCode = CONS_BASE + 6;
 
 // Vectors
 const VEC_BASE: OpCode = CONS_BASE + 7;
-// VECMK A B - make a vector with R(B) elements and put it in R(A)
+/// VECMK A B - make a vector with R(B) elements and put it in R(A)
 pub const VECMK: OpCode = VEC_BASE;
-// VECELS A B - make the length of vec in R(A) R(B)
+/// VECELS A B - make the length of vec in R(A) R(B)
 pub const VECELS: OpCode = VEC_BASE + 1;
-// VECPSH A B - push R(B) into vec in R(A)
+/// VECPSH A B - push R(B) into vec in R(A)
 pub const VECPSH: OpCode = VEC_BASE + 2;
-// VECPOP A B - pop from vec in R(A) to R(B)
+/// VECPOP A B - pop from vec in R(A) to R(B)
 pub const VECPOP: OpCode = VEC_BASE + 3;
 pub const VECMKD: OpCode = VEC_BASE + 4;
-// VEC A B C - R(A) = vec(elements R(B)..R(C)) (R(B) inclusive, R(C) exclusive)
+/// VEC A B C - R(A) = vec(elements R(B)..R(C)) (R(B) inclusive, R(C) exclusive)
 pub const VEC: OpCode = VEC_BASE + 5;
-// LEN A B - R(A) = length of data in R(B)
+/// LEN A B - R(A) = length of data in R(B)
 pub const LEN: OpCode = VEC_BASE + 6;
-// CLR A - Clear the collection in R(A)
+/// CLR A - Clear the collection in R(A)
 pub const CLR: OpCode = VEC_BASE + 7;
-// MAPMK A B C - R(A) = map(elements R(B)..R(C)) (R(B) inclusive, R(C) exclusive), alternating key, val pairs
+/// MAPMK A B C - R(A) = map(elements R(B)..R(C)) (R(B) inclusive, R(C) exclusive), alternating key, val pairs
 pub const MAPMK: OpCode = VEC_BASE + 8;
 
-// Strings
+/// Strings
 const STRING_BASE: OpCode = VEC_BASE + 9;
-// STR A B C - R(A) = string concatenated from objects in R(A) - R(B) (inclusive)
+/// STR A B C - R(A) = string concatenated from objects in R(A) - R(B) (inclusive)
 pub const STR: OpCode = STRING_BASE;
 
-// Types
+/// Types
 const TYPE_BASE: OpCode = STRING_BASE + 1;
-// TYPE A B - R(A) = type(R(B)) as a StringConst
+/// TYPE A B - R(A) = type(R(B)) as a StringConst
 pub const TYPE: OpCode = TYPE_BASE;
 
 pub const MAX_OP_CODE: OpCode = TYPE_BASE;

@@ -38,15 +38,16 @@ pub struct F56(pub [u8; 7]);
 
 impl Eq for F56 {}
 
+/// appropriate for `identical?` comparison
 impl PartialEq for F56 {
     fn eq(&self, other: &Self) -> bool {
-        self.strictest_equal(other) // appropriate for `identical?` comparison
+        self.strictest_equal(other)
     }
 }
 
+/// In order to use F56 as a key in a hash map, we need to ensure:
+/// If a == b then hash(a) == hash(b)
 impl Hash for F56 {
-    // In order to use F56 as a key in a hash map, we need to ensure:
-    // If a == b then hash(a) == hash(b)
     fn hash<H: Hasher>(&self, state: &mut H) {
         state.write_u64(self.hash_for_strictest_equal())
     }
