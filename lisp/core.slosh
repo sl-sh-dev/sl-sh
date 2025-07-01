@@ -78,8 +78,8 @@ True if the expression is a set, false otherwise.
 Section: type
 
 Example:
-(test::assert-true (set? (make-hash)))
-(test::assert-false (set? 1))
+(test::assert-true (hash-set? (make-hash)))
+(test::assert-false (hash-set? 1))
 %#
 (def hash-set? (fn (v) (identical? (type v) :Map)))
 

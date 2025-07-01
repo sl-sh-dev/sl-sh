@@ -48,7 +48,10 @@ use debug::*;
 use shell::builtins::expand_tilde;
 use shell::config::get_config;
 use shell::platform::{Platform, Sys, STDIN_FILENO};
-use sl_compiler::load_eval::{add_load_builtins, load_internal, SLSHRC};
+use sl_compiler::load_eval::{
+    add_load_builtins, load_internal, BUILTINS, COLORS_LISP_NAME, CORE_LISP_NAME, SLSHRC,
+    SLSHRC_NAME,
+};
 use sl_compiler::pass1::pass1;
 use slvm::float::F56;
 use slvm::{VMError, VMResult, Value, INT_BITS, INT_MAX, INT_MIN};
@@ -64,7 +67,6 @@ thread_local! {
 }
 
 const PROMPT_FN: &str = "prompt";
-const SLSHRC_NAME: &str = "init.slosh";
 
 fn get_prompt(env: &mut SloshVm) -> String {
     let i_val = env.intern("__prompt");
@@ -167,15 +169,31 @@ fn get_home_dir() -> Option<PathBuf> {
     }
 }
 
+pub fn load_builtins_lisp(env: &mut SloshVm) -> VMResult<()> {
+    for (name, _) in BUILTINS.iter() {
+        load_internal(env, name)?;
+    }
+    Ok(())
+}
+
+pub fn load_builtins_lisp_less_sloshrc(env: &mut SloshVm) -> VMResult<()> {
+    for (name, _) in BUILTINS.iter() {
+        if SLSHRC_NAME != *name {
+            load_internal(env, name)?;
+        }
+    }
+    Ok(())
+}
+
 pub fn load_core(env: &mut SloshVm) {
-    match load_internal(env, "core.slosh") {
+    match load_internal(env, CORE_LISP_NAME) {
         Ok(_) => {}
         Err(err) => eprintln!("ERROR: {err}"),
     }
 }
 
 pub fn load_color(env: &mut SloshVm) {
-    match load_internal(env, "sh-color.slosh") {
+    match load_internal(env, COLORS_LISP_NAME) {
         Ok(_) => {}
         Err(err) => eprintln!("ERROR: {err}"),
     }
@@ -211,7 +229,7 @@ pub fn load_sloshrc(environment: &mut SloshVm, path: Option<LooseString>) {
             let path = path
                 .clone()
                 .map(|x| x.to_string())
-                .unwrap_or_else(|| "init.slosh".to_string());
+                .unwrap_or_else(|| SLSHRC_NAME.to_string());
             set_initial_load_path(
                 environment,
                 vec![slosh_dir.as_os_str().to_string_lossy().as_ref()],
@@ -235,7 +253,7 @@ pub fn load_sloshrc(environment: &mut SloshVm, path: Option<LooseString>) {
             let script = environment.get_interned(script);
             match load_internal(environment, script) {
                 Ok(_) => {}
-                Err(e) => eprintln!("Failed to load script: {e}"),
+                Err(e) => eprintln!("Failed to load script ({script}): {e}"),
             }
         } else {
             // home doesn't have slosh config dir
@@ -535,6 +553,7 @@ Example:
         "*last-status*",
         0.into(),
         r#"Usage: (prn *last-status)
+
 Return last exit code as an Int.
 
 Section: core
@@ -560,7 +579,7 @@ Example:
         env,
         "*euler*",
         Value::Float(F56::from(std::f64::consts::E)),
-        r#"Usage: (print *euler*)
+        r#"Usage: (prn *euler*)
 
 Float representing euler’s number.
 
@@ -573,7 +592,7 @@ Example:
         env,
         "*pi*",
         Value::Float(F56::from(std::f64::consts::PI)),
-        r#"
+        r#"Usage: (prn *pi*)
 
 Float representing pi.
 
