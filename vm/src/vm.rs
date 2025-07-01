@@ -230,10 +230,16 @@ impl<ENV> GVm<ENV> {
         match (val1, val2) {
             (_, _) if val1 == val2 => val = Value::True,
             (Value::Int(i1), Value::Int(i2)) if from_i56(&i1) == from_i56(&i2) => val = Value::True,
-            (Value::Float(f1), Value::Float(f2)) if f1.roughly_equal_using_relative_difference(&f2) => val = Value::True,
-            (Value::Int(i), Value::Float(f)) | (Value::Float(f), Value::Int(i)) if from_i56(&i) as f64 == f64::from(f) => val = Value::True,
-            (Value::Int(i), Value::Byte(b)) | (Value::Byte(b), Value::Int(i)) if from_i56(&i) == i64::from(b) => val = Value::True,
-            (Value::Float(f), Value::Byte(b)) | (Value::Byte(b), Value::Float(f)) if f64::from(f) == f64::from(b) => val = Value::True,
+            (Value::Float(f1), Value::Float(f2))
+                if f1.roughly_equal_using_relative_difference(&f2) =>
+            {
+                val = Value::True
+            }
+            (Value::Int(i), Value::Byte(b)) | (Value::Byte(b), Value::Int(i))
+                if from_i56(&i) == i64::from(b) =>
+            {
+                val = Value::True
+            }
             (Value::StringConst(s1), Value::CharCluster(l, c)) => {
                 let s2 = format!("{}", String::from_utf8_lossy(&c[0..l as usize]));
                 let s1 = self.get_interned(s1);
