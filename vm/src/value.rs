@@ -8,7 +8,6 @@ use std::hash::{Hash, Hasher};
 use std::iter;
 use std::ops::Deref;
 use std::sync::Arc;
-use crate::float::F56;
 
 pub type CallFuncSig<ENV> = fn(vm: &mut GVm<ENV>, registers: &[Value]) -> VMResult<Value>;
 #[derive(Copy, Clone)]
