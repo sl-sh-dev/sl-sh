@@ -477,7 +477,7 @@ pub fn tan(radians: LooseFloat) -> VMResult<f64> {
 #[sl_sh_fn(fn_name = "arcsin")]
 pub fn arcsin(value: LooseFloat) -> VMResult<f64> {
     let value = f64::from(F56(value.0));
-    if value < -1.0 || value > 1.0 {
+    if !(-1.0..=1.0).contains(&value) {
         Err(VMError::new_vm(
             "arcsin: value must be between -1 and 1".to_string(),
         ))
@@ -503,7 +503,7 @@ pub fn arcsin(value: LooseFloat) -> VMResult<f64> {
 #[sl_sh_fn(fn_name = "arccos")]
 pub fn arccos(value: LooseFloat) -> VMResult<f64> {
     let value = f64::from(F56(value.0));
-    if value < -1.0 || value > 1.0 {
+    if !(-1.0..=1.0).contains(&value) {
         Err(VMError::new_vm(
             "arccos: value must be between -1 and 1".to_string(),
         ))
