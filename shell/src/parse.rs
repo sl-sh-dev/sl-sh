@@ -9,7 +9,6 @@ use crate::jobs::Jobs;
 use crate::platform::{FileDesc, STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use std::fmt::{Display, Formatter};
 use std::io;
-use std::io::ErrorKind;
 use std::iter::Peekable;
 use std::str::{Chars, FromStr};
 
@@ -485,7 +484,7 @@ impl ParseState {
                     chars.next();
                     r
                 } else {
-                    return Err(io::Error::new(ErrorKind::Other, "bad substitution"));
+                    return Err(io::Error::other("bad substitution"));
                 }
             } else {
                 read_token(chars, end_char)
@@ -533,7 +532,7 @@ fn read_simple_string(chars: &mut Peekable<Chars>) -> Result<Arg, io::Error> {
         res.push(ch);
         next_ch = chars.peek().copied();
     }
-    Err(io::Error::new(ErrorKind::Other, "unclosed string"))
+    Err(io::Error::other("unclosed string"))
 }
 
 fn read_chars_until(
@@ -549,7 +548,7 @@ fn read_chars_until(
         }
         next_ch = chars.next();
     }
-    Err(io::Error::new(ErrorKind::Other, "unclosed expression"))
+    Err(io::Error::other("unclosed expression"))
 }
 
 fn char_to_hex_num(ch: char) -> Result<u8, io::Error> {
@@ -563,10 +562,9 @@ fn char_to_hex_num(ch: char) -> Result<u8, io::Error> {
             'd' | 'D' => Ok(13),
             'e' | 'E' => Ok(14),
             'f' | 'F' => Ok(15),
-            _ => Err(io::Error::new(
-                ErrorKind::Other,
-                format!("Invalid hex digit {ch}, expected 0-9 or A-F."),
-            )),
+            _ => Err(io::Error::other(format!(
+                "Invalid hex digit {ch}, expected 0-9 or A-F."
+            ))),
         }
     }
 }
@@ -576,16 +574,14 @@ fn escape_to_char(chars: &mut Peekable<Chars>) -> Result<char, io::Error> {
     if let (Some(ch1), Some(ch2)) = (chars.next(), chars.peek()) {
         let ch_n: u8 = (char_to_hex_num(ch1)? * 16) + (char_to_hex_num(*ch2)?);
         if ch_n > 0x7f {
-            Err(io::Error::new(
-                ErrorKind::Other,
+            Err(io::Error::other(
                 "Invalid hex ascii code, must be less then \\x7f.".to_string(),
             ))
         } else {
             Ok(ch_n as char)
         }
     } else {
-        Err(io::Error::new(
-            ErrorKind::Other,
+        Err(io::Error::other(
             "Invalid hex ascii code, expected two digits.".to_string(),
         ))
     }
@@ -598,10 +594,9 @@ fn read_utf_scalar(chars: &mut Peekable<Chars>) -> Result<char, io::Error> {
         if let Some(val) = std::char::from_u32(char_u32) {
             Ok(val)
         } else {
-            Err(io::Error::new(
-                ErrorKind::Other,
-                format!("Invalid unicode scalar, {char_u32:x} not a valid utf scalar."),
-            ))
+            Err(io::Error::other(format!(
+                "Invalid unicode scalar, {char_u32:x} not a valid utf scalar."
+            )))
         }
     }
     let mut first = true;
@@ -631,8 +626,7 @@ fn read_utf_scalar(chars: &mut Peekable<Chars>) -> Result<char, io::Error> {
             return finish(char_u32);
         }
         if nibbles >= 8 {
-            return Err(io::Error::new(
-                ErrorKind::Other,
+            return Err(io::Error::other(
                 "Invalid unicode scalar, too many bytes (4 max).".to_string(),
             ));
         }
@@ -643,8 +637,7 @@ fn read_utf_scalar(chars: &mut Peekable<Chars>) -> Result<char, io::Error> {
         next_ch = chars.peek().copied();
     }
     if has_bracket {
-        Err(io::Error::new(
-            ErrorKind::Other,
+        Err(io::Error::other(
             "Invalid unicode scalar, failed to parse.".to_string(),
         ))
     } else {
@@ -772,7 +765,7 @@ fn read_string(jobs: &mut Jobs, chars: &mut Peekable<Chars>) -> Result<Arg, io::
             next_ch = chars.peek().copied();
         }
     }
-    Err(io::Error::new(ErrorKind::Other, "unclosed string"))
+    Err(io::Error::other("unclosed string"))
 }
 
 fn read_token(chars: &mut Peekable<Chars>, end_char: Option<char>) -> String {
@@ -861,7 +854,7 @@ fn read_special_arg(
                 chars.next();
                 r
             } else {
-                return Err(io::Error::new(ErrorKind::Other, "bad substitution"));
+                return Err(io::Error::other("bad substitution"));
             }
         } else {
             read_token(chars, end_char)

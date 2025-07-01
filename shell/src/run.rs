@@ -260,7 +260,7 @@ fn run_pipe(new_job: &[Run], job: &mut Job, jobs: &mut Jobs) -> Result<bool, io:
         }
     }
     if job.is_empty() {
-        Err(io::Error::new(io::ErrorKind::Other, "no processes started"))
+        Err(io::Error::other("no processes started"))
     } else {
         job.reverse();
         Ok(background)

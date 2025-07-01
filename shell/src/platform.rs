@@ -5,7 +5,6 @@ use crate::jobs::{Job, Jobs};
 pub use crate::platform::unix::*;
 use std::ffi::OsString;
 use std::io;
-use std::io::ErrorKind;
 
 /// Abstraction for a "platform" (for instance Unix or Windows).
 pub trait Platform {
@@ -77,7 +76,7 @@ pub trait Platform {
             Ok(octal)
         } else {
             let msg = format!("encountered invalid umask {octal}.");
-            Err(io::Error::new(ErrorKind::Other, msg))
+            Err(io::Error::other(msg))
         }
     }
 }

@@ -9,7 +9,7 @@ use slvm::{VMError, VMResult, Value};
 use std::collections::HashSet;
 use std::env::VarError;
 use std::fs::File;
-use std::io::{BufRead, ErrorKind};
+use std::io::BufRead;
 use std::process;
 use std::{env, io};
 
@@ -65,7 +65,7 @@ fn sh(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         return Err(VMError::new_compile("sh: empty command"));
     }
     let mut fork_res = Ok(0);
-    let mut run_res = Err(io::Error::new(ErrorKind::Other, "broken parse"));
+    let mut run_res = Err(io::Error::other("broken parse"));
     SHELL_ENV.with(|jobs_ref| {
         let jobs = &mut jobs_ref.borrow_mut();
         run_res = shell::parse::parse_line(jobs, &command)
@@ -124,7 +124,7 @@ fn sh_str(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         return Err(VMError::new_compile("$sh: empty command"));
     }
     let mut fork_res = Ok(0);
-    let mut run_res = Err(io::Error::new(ErrorKind::Other, "broken parse"));
+    let mut run_res = Err(io::Error::other("broken parse"));
     SHELL_ENV.with(|jobs_ref| {
         let jobs = &mut jobs_ref.borrow_mut();
         run_res = shell::parse::parse_line(jobs, &command)

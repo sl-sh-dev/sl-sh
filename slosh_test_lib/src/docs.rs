@@ -246,19 +246,18 @@ impl DocStringSection {
     /// Given the rules for parsing slosh docstrings, parse one! See [`static@DOC_REGEX`]
     /// for the specification.
     pub fn parse_doc_string(
-        symbol: Cow<'_, String>,
+        symbol: Cow<'_, str>,
         raw_doc_string: String,
         backup_usage: String,
     ) -> DocResult<DocStringSection> {
-        let sym_text = symbol.as_str().to_string();
         let cap = DOC_REGEX.captures(raw_doc_string.as_str()).ok_or_else(|| {
-            if EXEMPTIONS.contains(symbol.as_str()) {
+            if EXEMPTIONS.contains(symbol.as_ref()) {
                 DocError::ExemptFromProperDocString {
-                    symbol: sym_text.clone(),
+                    symbol: symbol.to_string(),
                 }
             } else {
                 DocError::NoDocString {
-                    symbol: sym_text.clone(),
+                    symbol: symbol.to_string(),
                 }
             }
         })?;
@@ -269,19 +268,19 @@ impl DocStringSection {
         let description = cap
             .get(3)
             .ok_or_else(|| DocError::DocStringMissingSection {
-                symbol: sym_text.clone(),
+                symbol: symbol.to_string(),
                 section: "Description".to_string(),
             })
             .map(|x| x.as_str().to_string())?;
         let section = cap
             .get(4)
             .ok_or_else(|| DocError::DocStringMissingSection {
-                symbol: sym_text,
+                symbol: symbol.to_string(),
                 section: "Section".to_string(),
             })
             .map(|x| x.as_str().trim().to_string())?;
         let example = cap.get(6).map(|x| x.as_str().trim().to_string());
-        if EXEMPTIONS.contains(symbol.as_str()) {
+        if EXEMPTIONS.contains(symbol.as_ref()) {
             Err(DocError::RemoveExemption {
                 symbol: symbol.to_string(),
             })
