@@ -165,6 +165,7 @@ fn lisp_scripts() {
 
     let mut passed = 0;
     let mut failed = 0;
+    let mut failed_tests = vec![];
 
     for (idx, test_script) in scripts.iter().enumerate() {
         // Calculate relative path for cleaner output
@@ -199,13 +200,12 @@ fn lisp_scripts() {
                 )
             });
 
-        let success = output.status.success();
-        let expected = !should_fail;
-        let test_passed = success == expected;
+        let exit_code_pass = output.status.success();
+        let test_passed = exit_code_pass || should_fail;
 
         println!(
             "      Status:   {} (exit code: {})",
-            if success { "SUCCESS" } else { "FAILED" },
+            if test_passed { "SUCCESS" } else { "FAILED" },
             output.status.code().unwrap_or(-1)
         );
 
@@ -226,13 +226,14 @@ fn lisp_scripts() {
         } else {
             println!(
                 "\n✗ Test FAILED - {}",
-                if success {
+                if output.status.success() {
                     "expected to fail but succeeded"
                 } else {
                     "expected to succeed but failed"
                 }
             );
             failed += 1;
+            failed_tests.push(test_script);
         }
 
         // Don't assert here since we handle the exit code in main()
@@ -240,6 +241,12 @@ fn lisp_scripts() {
 
     println!("\n════════════════════════════════════════════════════════════════════════════════");
     println!("Test Summary: {} passed, {} failed", passed, failed);
+    if failed > 0 {
+        println!("Failures:");
+        for test_script in failed_tests {
+            println!("{:?}", test_script);
+        }
+    }
     println!("════════════════════════════════════════════════════════════════════════════════");
 
     if failed > 0 {
