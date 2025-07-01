@@ -50,8 +50,8 @@ use shell::config::get_config;
 use shell::platform::{Platform, Sys, STDIN_FILENO};
 use sl_compiler::load_eval::{add_load_builtins, load_internal, SLSHRC};
 use sl_compiler::pass1::pass1;
-use slvm::{VMError, VMResult, Value, INT_BITS, INT_MAX, INT_MIN};
 use slvm::float::F56;
+use slvm::{VMError, VMResult, Value, INT_BITS, INT_MAX, INT_MIN};
 
 thread_local! {
     /// Env (job control status, etc) for the shell.

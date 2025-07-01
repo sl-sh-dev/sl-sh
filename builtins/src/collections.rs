@@ -248,15 +248,19 @@ pub fn hash_clear(map: &mut VMHashMap) -> VMResult<()> {
 // Low level implementation for vec-clear! because we need direct access to VM and registers
 pub fn vec_clear(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if registers.len() != 1 {
-        return Err(VMError::new_vm("vec-clear!: requires exactly one argument (vector)".to_string()));
+        return Err(VMError::new_vm(
+            "vec-clear!: requires exactly one argument (vector)".to_string(),
+        ));
     }
-    
+
     if let Value::Vector(vec_handle) = registers[0] {
         let vec = vm.get_vector_mut(vec_handle)?;
         vec.clear();
         Ok(registers[0])
     } else {
-        Err(VMError::new_vm("vec-clear!: argument must be a vector".to_string()))
+        Err(VMError::new_vm(
+            "vec-clear!: argument must be a vector".to_string(),
+        ))
     }
 }
 
@@ -268,41 +272,57 @@ pub fn vec_remove(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
             let idx = index.get_int(vm)?;
             let vec = vm.get_vector_mut(*vec_handle)?;
             let len = vec.len() as i64;
-            
+
             if idx < 0 || idx >= len {
-                return Err(VMError::new_vm(format!("vec-remove!: index {} out of range (length {})", idx, len)));
+                return Err(VMError::new_vm(format!(
+                    "vec-remove!: index {} out of range (length {})",
+                    idx, len
+                )));
             }
-            
+
             vec.remove(idx as usize);
             Ok(*vector)
         } else {
-            Err(VMError::new_vm("vec-remove!: first argument must be a vector".to_string()))
+            Err(VMError::new_vm(
+                "vec-remove!: first argument must be a vector".to_string(),
+            ))
         }
     } else {
-        Err(VMError::new_vm("vec-remove!: requires exactly two arguments (vector and index)".to_string()))
+        Err(VMError::new_vm(
+            "vec-remove!: requires exactly two arguments (vector and index)".to_string(),
+        ))
     }
 }
 
 // Low level implementation for vec-insert! because we need direct access to VM and registers
 pub fn vec_insert(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut args = registers.iter();
-    if let (Some(vector), Some(index), Some(value), None) = (args.next(), args.next(), args.next(), args.next()) {
+    if let (Some(vector), Some(index), Some(value), None) =
+        (args.next(), args.next(), args.next(), args.next())
+    {
         if let Value::Vector(vec_handle) = vector {
             let idx = index.get_int(vm)?;
             let vec = vm.get_vector_mut(*vec_handle)?;
             let len = vec.len() as i64;
-            
+
             if idx < 0 || idx > len {
-                return Err(VMError::new_vm(format!("vec-insert!: index {} out of range (length {})", idx, len)));
+                return Err(VMError::new_vm(format!(
+                    "vec-insert!: index {} out of range (length {})",
+                    idx, len
+                )));
             }
-            
+
             vec.insert(idx as usize, *value);
             Ok(*vector)
         } else {
-            Err(VMError::new_vm("vec-insert!: first argument must be a vector".to_string()))
+            Err(VMError::new_vm(
+                "vec-insert!: first argument must be a vector".to_string(),
+            ))
         }
     } else {
-        Err(VMError::new_vm("vec-insert!: requires exactly three arguments (vector, index, and value)".to_string()))
+        Err(VMError::new_vm(
+            "vec-insert!: requires exactly three arguments (vector, index, and value)".to_string(),
+        ))
     }
 }
 
@@ -447,7 +467,7 @@ Section: vector
 ",
     );
     intern_hash_haskey(env);
-    
+
     add_builtin(
         env,
         "vec-clear!",
@@ -466,7 +486,7 @@ Example:
 (test::assert-equal [] test-vec)
     "#,
     );
-    
+
     add_builtin(
         env,
         "vec-remove!",
@@ -489,7 +509,7 @@ Example:
 (test::assert-equal [] test-remove-nth-vec)
     "#,
     );
-    
+
     add_builtin(
         env,
         "vec-insert!",
