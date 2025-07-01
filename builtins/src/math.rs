@@ -129,16 +129,16 @@ pub fn rem_euclid(dividend: i64, divisor: i64) -> VMResult<i64> {
     })
 }
 
-/// Usage: (2pow base)
+/// Usage: (pow2 base)
 ///
 /// Raise 2 to power of argument.
 ///
 /// Section: math
 ///
 /// Example:
-/// (test::assert-compare == 1024 (2pow 10))
-/// (test::assert-compare == (2pow (* 10 2)) (pow (2pow 10) 2))
-#[sl_sh_fn(fn_name = "2pow")]
+/// (test::assert-compare == 1024 (pow2 10))
+/// (test::assert-compare == (pow2 (* 10 2)) (pow (pow2 10) 2))
+#[sl_sh_fn(fn_name = "pow2")]
 pub fn two_pow(float: LooseFloat) -> VMResult<f64> {
     let float = f64::from(F56(float.0));
     Ok(float.exp2())
