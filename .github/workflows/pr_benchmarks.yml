@@ -7,6 +7,9 @@ on:
   pull_request:
     types: [opened, reopened, synchronize, closed]
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 env:
   RUST_BACKTRACE: 1
@@ -71,6 +74,11 @@ jobs:
           --err \
           --branch "${BRANCH}" \
           --branch-start-point "main" \
+          --threshold-measure estimated_cycles \
+          --threshold-min-sample-size 4 \
+          --threshold-test z_score \
+          --threshold-lower-boundary 0.977 \
+          --threshold-upper-boundary 0.977 \
           --branch-reset \
           "cargo bench --all"
 
@@ -116,5 +124,10 @@ jobs:
           --err \
           --branch "$BRANCH" \
           --branch-start-point "main" \
+          --threshold-measure latency \
+          --threshold-min-sample-size 4 \
+          --threshold-test z_score \
+          --threshold-lower-boundary 0.977 \
+          --threshold-upper-boundary 0.977 \
           --branch-reset \
           "cargo bench --all"
