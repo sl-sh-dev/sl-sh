@@ -1,0 +1,37 @@
+;; Tests for arcsin function
+;; Testing arcsine (inverse sine) calculation
+(load "test.slosh")
+
+;; Basic values
+(test::assert-compare == 0 (arcsin 0))
+(test::assert-true (< 1.570 (arcsin 1) 1.571))       ; arcsin(1) ≈ π/2
+(test::assert-true (< -1.571 (arcsin -1) -1.570))    ; arcsin(-1) ≈ -π/2
+
+;; Common values (using assert-true with ranges for floating point precision)
+(test::assert-true (< 0.523 (arcsin 0.5) 0.524))     ; arcsin(0.5) ≈ π/6
+(test::assert-true (< 0.785 (arcsin 0.707) 0.786))   ; arcsin(√2/2) ≈ π/4
+(test::assert-true (< 1.047 (arcsin 0.866) 1.048))   ; arcsin(√3/2) ≈ π/3
+
+;; Negative values (arcsin is odd function)
+(test::assert-true (< -0.524 (arcsin -0.5) -0.523))  ; arcsin(-0.5) ≈ -π/6
+(test::assert-true (< -0.786 (arcsin -0.707) -0.785)) ; arcsin(-√2/2) ≈ -π/4
+
+;; Small values
+(test::assert-true (< 0.099 (arcsin 0.1) 0.101))     ; Small positive
+(test::assert-true (< -0.101 (arcsin -0.1) -0.099))  ; Small negative
+
+;; Type conversion
+(test::assert-compare == 0 (arcsin 0))                ; integer input
+(test::assert-compare == 0 (arcsin 0.0))              ; float input
+
+;; Error cases - invalid domain
+(test::assert-error (arcsin 2))       ; Value > 1
+(test::assert-error (arcsin -2))      ; Value < -1
+(test::assert-error (arcsin 1.1))     ; Slightly > 1
+(test::assert-error (arcsin -1.1))    ; Slightly < -1
+
+;; Error cases - wrong arguments
+(test::assert-error (arcsin))         ; No arguments
+(test::assert-error (arcsin 0.5 2))   ; Too many arguments
+(test::assert-error (arcsin "half"))  ; String argument
+(test::assert-error (arcsin nil))     ; nil argument

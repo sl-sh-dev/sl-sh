@@ -1,0 +1,17 @@
+(load "test.slosh")
+
+;; Test str-rsplit function
+(test::assert-equal ["string" "yyy" "some"] (str-rsplit "xxx" "somexxxyyyxxxstring"))
+(test::assert-equal ["" "string" "yyy" "some"] (str-rsplit "xxx" "somexxxyyyxxxstringxxx"))
+(test::assert-equal ["" "string" "yyy" "some" ""] (str-rsplit "xxx" "xxxsomexxxyyyxxxstringxxx"))
+
+;; Test with single element
+(test::assert-equal ["nodelimiter"] (str-rsplit "xxx" "nodelimiter"))
+
+;; Test with empty string
+(test::assert-equal [""] (str-rsplit "x" ""))
+
+;; Test errors
+(test::assert-error (str-rsplit))
+(test::assert-error (str-rsplit "xxx"))
+(test::assert-error (str-rsplit "xxx" "test" "extra"))
