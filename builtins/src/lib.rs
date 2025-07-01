@@ -3,7 +3,7 @@ extern crate core;
 use bridge_adapters::add_builtin;
 use bridge_adapters::lisp_adapters::SlFromRef;
 use bridge_macros::sl_sh_fn;
-use bridge_types::LooseString;
+use bridge_types::{KeywordAsString, LooseString};
 use compile_state::state::{SloshVm, SloshVmTrait};
 use slvm::{Interned, VMError, VMResult, Value};
 use std::collections::HashSet;
@@ -330,6 +330,19 @@ pub fn add_global_value(env: &mut SloshVm, name: &str, val: Value, doc_string: &
     env.set_global_property(si, key, s);
 }
 
+/// Usage: (platform)
+///
+/// Returns a string representing the platform.
+///
+/// Section: core
+///
+/// Example:
+/// #t
+#[sl_sh_fn(fn_name = "platform")]
+fn platform() -> KeywordAsString {
+    std::env::consts::OS.to_string().into()
+}
+
 pub fn add_misc_builtins(env: &mut SloshVm) {
     add_builtin(
         env,
@@ -499,4 +512,5 @@ Section: core
     );
     intern_get_in_namespace(env);
     intern_get_namespaces(env);
+    intern_platform(env);
 }

@@ -1,4 +1,4 @@
-use bridge_types::Symbol;
+use bridge_types::{Keyword, Symbol};
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::mem;
@@ -19,6 +19,19 @@ impl From<Symbol> for Interned {
 impl From<Interned> for Symbol {
     fn from(value: Interned) -> Self {
         Symbol::from(value.id)
+    }
+}
+impl From<Keyword> for Interned {
+    fn from(value: Keyword) -> Self {
+        Self {
+            id: u32::from(value),
+        }
+    }
+}
+
+impl From<Interned> for Keyword {
+    fn from(value: Interned) -> Self {
+        Keyword::from(value.id)
     }
 }
 
