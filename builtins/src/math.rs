@@ -47,9 +47,6 @@ pub fn abs(v: Value) -> VMResult<Value> {
 /// Section: math
 ///
 /// Example:
-/// (load "test.slosh")
-/// (import test)
-///
 /// (test::assert-equal 0 (% 50 10))
 /// (test::assert-equal 5 (% 55 10))
 /// (test::assert-equal 1 (% 1 2))
