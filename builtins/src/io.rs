@@ -1,7 +1,7 @@
-use std::env;
 use bridge_adapters::add_builtin;
 use compile_state::state::SloshVm;
 use slvm::{VMError, VMResult, Value};
+use std::env;
 use std::fs::{self, OpenOptions};
 use std::io::{Read, Write};
 extern crate unicode_reader;
@@ -211,7 +211,6 @@ fn fs_rm(path: String) -> VMResult<Value> {
         ))
     }
 }
-
 
 /// Usage: (unset-env "NAME_OF_ENVIRONMENT_VARIABLE")
 ///
