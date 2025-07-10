@@ -7,9 +7,6 @@ on:
   pull_request:
     types: [opened, reopened, synchronize, closed]
   workflow_dispatch:
-  push:
-    branches:
-      - main
 
 env:
   RUST_BACKTRACE: 1
