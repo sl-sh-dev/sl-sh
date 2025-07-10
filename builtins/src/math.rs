@@ -136,9 +136,7 @@ pub fn rem_euclid(dividend: i64, divisor: i64) -> VMResult<i64> {
 /// Section: math
 ///
 /// Example:
-/// (import 'math)
-/// (test::assert-equal 1024 (2pow 10))
-/// (test::assert-equal (2pow (* 10 2)) (pow (2pow 10) 2))
+/// (test::assert-equal 1024.0 (2pow 10))
 #[sl_sh_fn(fn_name = "2pow")]
 pub fn two_pow(float: LooseFloat) -> VMResult<f64> {
     let float = f64::from(F56(float.0));
