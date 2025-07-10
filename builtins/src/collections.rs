@@ -95,7 +95,7 @@ pub fn hash_remove(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-/// Usage: (hash-haskey hashmap key)
+/// Usage: (hash-haskey? hashmap key)
 ///
 /// Checks if a key is in a hashmap.
 ///
@@ -104,17 +104,17 @@ pub fn hash_remove(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
 /// Example:
 /// (def tst-hash {:key1  "val one" 'key2 "val two" "key3" "val three" \S "val S"})
 /// (test::assert-equal 4 (len (hash-keys tst-hash)))
-/// (test::assert-true (hash-haskey tst-hash :key1))
-/// (test::assert-true (hash-haskey tst-hash 'key2))
-/// (test::assert-true (hash-haskey tst-hash "key3"))
-/// (test::assert-true (hash-haskey tst-hash \S))
-/// (test::assert-false (hash-haskey tst-hash 'key1))
-/// (test::assert-false (hash-haskey tst-hash :key2))
-/// (test::assert-false (hash-haskey tst-hash "keynone"))
+/// (test::assert-true (hash-haskey? tst-hash :key1))
+/// (test::assert-true (hash-haskey? tst-hash 'key2))
+/// (test::assert-true (hash-haskey? tst-hash "key3"))
+/// (test::assert-true (hash-haskey? tst-hash \S))
+/// (test::assert-false (hash-haskey? tst-hash 'key1))
+/// (test::assert-false (hash-haskey? tst-hash :key2))
+/// (test::assert-false (hash-haskey? tst-hash "keynone"))
 /// (hash-remove! tst-hash :key1)
-/// (test::assert-false (hash-haskey tst-hash :key1))
-/// (set! tst-hash :key1 "val one b")
-/// (test::assert-true (hash-haskey tst-hash :key1))
+/// (test::assert-false (hash-haskey? tst-hash :key1))
+/// (set! tst-hash.:key1 "val one b")
+/// (test::assert-true (hash-haskey? tst-hash :key1))
 #[sl_sh_fn(fn_name = "hash-haskey?", takes_env = true)]
 pub fn hash_haskey(environment: &mut SloshVm, map: &VMHashMap, key: Value) -> VMResult<Value> {
     if map.contains_key(environment, key) {
