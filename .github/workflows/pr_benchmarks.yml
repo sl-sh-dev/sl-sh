@@ -41,6 +41,10 @@ jobs:
       BENCHER_TESTBED: ubuntu-latest
       BENCHER_ADAPTER: rust_iai_callgrind
       BENCHER_API_TOKEN: ${{ secrets.BENCHER_API_TOKEN }}
+      GITHUB_EVENT_NAME: ${{ github.event_name }}
+      GITHUB_EVENT_PATH: ${{ github.event_path }}
+      GITHUB_SHA: ${{ github.sha }}
+      GITHUB_ACTIONS: true
       BRANCH: ${{ needs.target_branch.outputs.branch_name || needs.backup_branch.outputs.branch_name || github.event.pull_request.base.ref || 'main' }}
     steps:
       - run: sudo apt-get update
@@ -85,6 +89,10 @@ jobs:
       BENCHER_TESTBED: ubuntu-latest
       BENCHER_ADAPTER: rust_criterion
       BENCHER_API_TOKEN: ${{ secrets.BENCHER_API_TOKEN }}
+      GITHUB_EVENT_NAME: ${{ github.event_name }}
+      GITHUB_EVENT_PATH: ${{ github.event_path }}
+      GITHUB_SHA: ${{ github.sha }}
+      GITHUB_ACTIONS: true
       BRANCH: ${{ needs.target_branch.outputs.branch_name || needs.backup_branch.outputs.branch_name || github.event.pull_request.base.ref || 'main' }}
     steps:
       - run: sudo apt-get update
