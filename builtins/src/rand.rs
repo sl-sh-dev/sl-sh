@@ -1,13 +1,15 @@
 use rand::distributions::{Alphanumeric, Distribution};
-use rand::Rng;
+use rand::{Rng, SeedableRng};
 use std::iter;
 use unicode_segmentation::UnicodeSegmentation;
 
 use bridge_adapters::add_builtin;
 use compile_state::state::SloshVm;
-use rand::rngs::ThreadRng;
+use rand::rngs::{StdRng, ThreadRng};
 use slvm::{from_i56, VMError, VMResult, Value};
 use std::borrow::Cow;
+use std::hash::{DefaultHasher, Hash, Hasher};
+use bridge_macros::sl_sh_fn;
 
 fn builtin_random(_vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut rng = rand::thread_rng();
@@ -212,7 +214,53 @@ fn builtin_probool(_vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
+fn string_to_seed(s: &str) -> [u8; 32] {
+    let mut hasher = DefaultHasher::new();
+    s.hash(&mut hasher);
+    let hash = hasher.finish();
+
+    // Convert u64 hash to [u8; 32] seed
+    let mut seed = [0u8; 32];
+    seed[..8].copy_from_slice(&hash.to_le_bytes());
+
+    // You could hash multiple times to fill more bytes if needed
+    for i in 1..4 {
+        let mut hasher = DefaultHasher::new();
+        (s, i).hash(&mut hasher);
+        let hash = hasher.finish();
+        seed[i*8..(i+1)*8].copy_from_slice(&hash.to_le_bytes());
+    }
+
+    seed
+}
+
+/// Usage: (random-seq limit count [seed])
+///
+/// Like (random) but also accepts a count which is the number of random numbers to return in a [`Vec`]
+/// also takes an optional seed for a seeded random sequence.
+///
+/// Section: random
+///
+/// Example:
+/// (assert-eq (vec 2 2) (random-seq 4 2 "42"))
+#[sl_sh_fn(fn_name = "random-seq")]
+fn generate_random_sequence(limit: usize, count: usize, seed_string: Option<String>) -> VMResult<Vec<usize>> {
+    if let Some(seed_string) = seed_string {
+        let seed = string_to_seed(&seed_string);
+        let mut rng = StdRng::from_seed(seed);
+        Ok((0..count)
+            .map(|_| rng.gen_range(0..=limit))
+            .collect())
+    } else {
+        let mut rng = rand::thread_rng();
+        Ok((0..count)
+            .map(|_| rng.gen_range(0..=limit))
+            .collect())
+    }
+}
+
 pub fn add_rand_builtins(env: &mut SloshVm) {
+    intern_generate_random_sequence(env);
     add_builtin(
         env,
         "probool",
