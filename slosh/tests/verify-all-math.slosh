@@ -68,7 +68,7 @@
 (test::assert-equal 5 (% 55 10))
 (test::assert-equal -1 (% -10 3))
 (test::assert-equal 2 (rem_euclid -10 3))
-(test::assert-equal 1024.0 (pow2 10))
+(test::assert-equal 1024.0 (2pow 10))
 (prn "✓ existing functions passed all tests")
 
 (prn "\n✅ All math functions passed their tests!")
