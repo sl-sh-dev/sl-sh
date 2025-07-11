@@ -129,7 +129,7 @@ pub fn rem_euclid(dividend: i64, divisor: i64) -> VMResult<i64> {
     })
 }
 
-/// Usage: (pow2 base)
+/// Usage: (2pow base)
 ///
 /// Raise 2 to power of argument.
 ///
