@@ -85,7 +85,7 @@
 
           shellHook = ''
             echo "Slosh development environment"
-            echo "Run 'cargo build' to build the project"
+            echo "Run 'cargo run --bin slosh' to build the project and run the shell in debug mode."
           '';
         };
 
