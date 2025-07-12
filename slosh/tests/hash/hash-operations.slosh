@@ -1,0 +1,30 @@
+(load "test.slosh")
+
+;; Test hash-clear!
+(def test-hash {:a 1 :b 2 :c 3})
+(test::assert-equal 3 (len test-hash))
+(hash-clear! test-hash)
+(test::assert-equal 0 (len test-hash))
+(test::assert-false (hash-haskey? test-hash :a))
+(test::assert-false (hash-haskey? test-hash :b))
+(test::assert-false (hash-haskey? test-hash :c))
+
+;; Test that cleared hash can be reused
+(set! test-hash.:new-key "new value")
+(test::assert-equal 1 (len test-hash))
+(test::assert-equal "new value" (get test-hash :new-key))
+
+;; Test clearing an empty hash
+(def empty-hash {})
+(test::assert-equal 0 (len empty-hash))
+(hash-clear! empty-hash)
+(test::assert-equal 0 (len empty-hash))
+
+;; Test clearing a hash with various key types
+(def mixed-hash {:symbol-key "sym val" "string-key" "str val" 123 "num val"})
+(test::assert-equal 3 (len mixed-hash))
+(hash-clear! mixed-hash)
+(test::assert-equal 0 (len mixed-hash))
+(test::assert-false (hash-haskey? mixed-hash :symbol-key))
+(test::assert-false (hash-haskey? mixed-hash "string-key"))
+(test::assert-false (hash-haskey? mixed-hash 123))
