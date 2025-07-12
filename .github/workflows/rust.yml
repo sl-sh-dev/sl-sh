@@ -25,7 +25,7 @@ jobs:
       run: |
           cargo version
           rustc --version
-          cargo clippy --verbose -- -D warnings
+          cargo clippy --verbose -- -D warnings -A "clippy::uninlined_format_args"
     - name: Build
       run: |
           cargo version

@@ -239,7 +239,7 @@ impl ParseState {
         let mut open_braces = 0;
         let mut last_ch = ' ';
         let mut quoted = false;
-        for (i, ch) in token.chars().enumerate() {
+        for (i, ch) in token.char_indices() {
             if ch == '{' && last_ch != '\\' && !quoted {
                 if open_braces == 0 {
                     open = i;

@@ -1,13 +1,12 @@
 use crate::SHELL_ENV;
 use bridge_adapters::add_builtin;
 use bridge_macros::sl_sh_fn;
-use bridge_types::LooseInt;
+use bridge_types::{LooseInt, LooseString};
 use compile_state::state::SloshVm;
 use shell::platform::{FromFileDesc, Platform, Sys};
 use slvm::io::HeapIo;
 use slvm::{VMError, VMResult, Value};
 use std::collections::HashSet;
-use std::env::VarError;
 use std::fs::File;
 use std::io::BufRead;
 use std::process;
@@ -151,30 +150,51 @@ fn sh_str(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     Ok(vm.alloc_string(val))
 }
 
-fn env_var(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
-    if let (Some(name), None) = (registers.first(), registers.get(1)) {
-        let name = match name {
-            Value::String(h) => vm.get_string(*h),
-            Value::StringConst(i) => vm.get_interned(*i),
-            Value::Symbol(i) => vm.get_interned(*i),
-            _ => {
-                return Err(VMError::new_compile(
-                    "env: requires string or symbol argument",
-                ))
-            }
-        };
-        match env::var(name) {
-            Ok(val) => Ok(vm.alloc_string(val)),
-            Err(VarError::NotPresent) => Ok(vm.alloc_string("".to_string())),
-            Err(err) => Err(VMError::new_compile(format!(
-                "env: error finding env var {name}: {err}"
-            ))),
-        }
-    } else {
-        Err(VMError::new_compile(
-            "$sh: wrong number of args, expected one",
-        ))
+/// Usage: (unset-env "NAME_OF_ENVIRONMENT_VARIABLE")
+///
+/// Takes a string, checks the environment to see if the string is a valid
+/// environment variable and if it is it unsets it.
+///
+/// Section: core
+///
+/// Example:
+/// #t
+#[sl_sh_fn(fn_name = "unset-env")]
+fn unset_env(var: LooseString) {
+    unsafe {
+        env::remove_var(var.as_ref());
     }
+}
+
+/// Usage: (set-env "NAME_OF_ENVIRONMENT_VARIABLE" "Value variable should be assigned")
+///
+/// Takes two strings the first is the name of an environment variable, and the second is the
+/// value it should bind.
+///
+/// Section: core
+///
+/// Example:
+/// #t
+#[sl_sh_fn(fn_name = "set-env")]
+fn set_env(var: LooseString, value: LooseString) {
+    unsafe {
+        env::set_var(var.as_ref(), value.as_ref());
+    }
+}
+
+/// Usage: (env "NAME_OF_ENVIRONMENT_VARIABLE")
+///
+/// Takes a string (tries to treat all values like strings), and checks the environment to see if
+/// that string is a valid environment variable and returns the value as a string, otherwise returns
+/// Nil.
+///
+/// Section: core
+///
+/// Example:
+/// #t
+#[sl_sh_fn(fn_name = "env")]
+fn get_env(var: LooseString) -> Option<String> {
+    env::var(var.as_ref()).ok()
 }
 
 pub fn add_shell_builtins(env: &mut SloshVm) {
@@ -183,13 +203,30 @@ pub fn add_shell_builtins(env: &mut SloshVm) {
         env,
         "$sh",
         sh_str,
-        "Runs a shell command and returns a string of the output with newlines removed.",
+        r#"Usage: ($sh "echo 'hello world'")
+
+Runs a shell command and returns a string of the output with newlines removed.
+
+Section: shell
+
+Example:
+#t
+"#,
     );
     add_builtin(
         env,
         "sh",
         sh,
-        "Runs a shell command and returns it's status.",
+        r#"Usage: (sh "echo 'hello world'")
+
+Runs a shell command and returns its status.
+
+Section: shell
+Example:
+#t
+"#,
     );
-    add_builtin(env, "env", env_var, "Retrieves an environment variable.");
+    intern_unset_env(env);
+    intern_set_env(env);
+    intern_get_env(env);
 }
