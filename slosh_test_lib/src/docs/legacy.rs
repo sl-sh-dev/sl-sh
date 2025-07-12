@@ -312,7 +312,7 @@ pub(crate) fn full_legacy_sl_sh_forms_metadata() -> &'static [(&'static str, boo
         ("->", true, ""),
         ("->>", true, ""),
         ("/", true, ""),
-        ("2pow", true, "pow2"),
+        ("2pow", true, ""),
         ("<", true, ""),
         ("<=", true, ""),
         ("=", true, ""),
