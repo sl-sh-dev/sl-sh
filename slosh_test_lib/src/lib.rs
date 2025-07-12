@@ -6,7 +6,8 @@ use slvm::VMResult;
 
 pub mod docs;
 
-/// pr/prn/dasm which write directly to stdout are mapped to noop
+/// pr/prn/dasm/dump-globals which write directly to stdout are handed new behavior according
+/// to variable: [`NoopSwap`].
 pub fn do_to_vm_stdout_fcns(env: &mut SloshVm, noop_swap_type: NoopSwap) {
     let _ = noop_swap_internal(env, "pr".to_string(), noop_swap_type);
     let _ = noop_swap_internal(env, "prn".to_string(), noop_swap_type);
@@ -14,12 +15,12 @@ pub fn do_to_vm_stdout_fcns(env: &mut SloshVm, noop_swap_type: NoopSwap) {
     let _ = noop_swap_internal(env, "dump-globals".to_string(), noop_swap_type);
 }
 
-/// pr/prn/dasm which write directly to stdout are mapped to noop
+/// pr/prn/dasm/dump-globals which write directly to stdout are mapped to noop
 pub fn vm_with_stdout_disabled(env: &mut SloshVm) {
     do_to_vm_stdout_fcns(env, NoopSwap::MakeNoop);
 }
 
-/// pr/prn/dasm which write directly to stdout are not mapped to noop
+/// pr/prn/dasm/dump-globals which write directly to stdout are not mapped to noop
 pub fn vm_with_stdout_enabled(env: &mut SloshVm) {
     do_to_vm_stdout_fcns(env, NoopSwap::MakeNotNoop);
 }
