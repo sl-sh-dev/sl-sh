@@ -74,5 +74,5 @@
 (prn "\n✅ All math functions passed their tests!")
 (prn "\nSummary of implemented functions:")
 (prn "  Basic: min, max, pow, sqrt, exp, log, log2")
-(prn "  Existing: abs, %, rem, rem_euclid, pow2")
+(prn "  Existing: abs, %, rem, rem_euclid, 2pow")
 (prn "\nTotal: 12 math functions working correctly!")
