@@ -30,7 +30,7 @@ panic = "abort"
 debug = true
 
 [workspace.package]
-version = "0.11.2"
+version = "0.11.1"
 
 [workspace.dependencies]
 bridge_types = { path = "bridge_types" }
