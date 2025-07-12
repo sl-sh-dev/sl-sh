@@ -429,16 +429,6 @@ impl SloshDoc {
     pub fn fully_qualified_name(&self) -> String {
         self.namespace.to_string() + "::" + self.symbol.as_ref()
     }
-
-    /// Return an empty documentation map.
-    fn nil_doc_map(vm: &mut SloshVm) -> VMHashMap {
-        let mut map = VMHashMap::with_capacity(4);
-        insert_nil_section(&mut map, USAGE, vm);
-        insert_nil_section(&mut map, SECTION, vm);
-        insert_nil_section(&mut map, DESCRIPTION, vm);
-        insert_nil_section(&mut map, EXAMPLE, vm);
-        map
-    }
 }
 
 enum DocError {
