@@ -1,13 +1,13 @@
 use crate::docs::legacy as legacy_docs;
 use bridge_adapters::add_builtin;
 use bridge_adapters::lisp_adapters::SlFrom;
+use bridge_macros::sl_sh_fn;
 use compile_state::state::{SloshVm, SloshVmTrait};
 use lazy_static::lazy_static;
 use mdbook::book::{Book, Chapter};
 use mdbook::{BookItem, MDBook};
 use regex::{Regex, RegexBuilder};
-use sl_compiler::load_eval::run_reader;
-use sl_compiler::Reader;
+use slosh_lib::load_builtins_lisp_less_sloshrc;
 use slvm::vm_hashmap::VMHashMap;
 use slvm::VMErrorObj::Message;
 use slvm::{Interned, VMError, VMResult, Value, SLOSH_NIL};
@@ -317,7 +317,7 @@ impl AsMd for SloshDoc {
         if let Some(usage) = &self.doc_string.usage {
             content += &format!("**Usage:** {}\n\n", usage);
         }
-        //content = content + &format!("section: {}\n", docs.doc_string.section);
+        content = content + &format!("**Namespace:** {}\n\n", self.namespace);
         content = content + &format!("{}\n", self.doc_string.description);
         if let Some(example) = &self.doc_string.example {
             content += "\n\nExample:\n```\n";
@@ -384,6 +384,11 @@ impl SloshDoc {
         if let Some(slot) = slot {
             let doc_string = DocStringSection::from_symbol(slot, sym, vm)?;
             let symbol = sym.display_value(vm);
+            let mut full_name: Vec<_> = symbol.split("::").collect();
+            let symbol = full_name
+                .pop()
+                .expect("Symbol should never be an empty.")
+                .to_string();
             let symbol_type = sym.display_type(vm).to_string();
             let namespace = namespace.display(vm);
             Ok(SloshDoc {
@@ -843,16 +848,7 @@ fn build_doc(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         },
     }?;
 
-    {
-        let mut reader = Reader::from_string(
-            r#"(do (load "core.slosh") (load "sh-color.slosh"))"#.to_string(),
-            vm,
-            "",
-            1,
-            0,
-        );
-        _ = run_reader(&mut reader)?;
-    }
+    load_builtins_lisp_less_sloshrc(vm)?;
 
     let mut md_book = MDBook::load(PathBuf::from(path))
         .map_err(|_e| VMError::new("mdbook", "Unable to load the book at provided path."))?;
@@ -910,7 +906,21 @@ fn get_globals_sorted(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> 
     Ok(vm.alloc_vector(v))
 }
 
+/// Usage: (legacy-report)
+///
+/// Output as a string the current legacy report, detailing how much of the former sl-sh project has been covered by the new slosh.
+///
+/// Section: doc
+///
+/// Example:
+/// #t
+#[sl_sh_fn(fn_name = "legacy-report", takes_env = true)]
+fn legacy_report(environment: &mut SloshVm) -> VMResult<String> {
+    legacy::build_report(environment)
+}
+
 pub fn add_builtins(env: &mut SloshVm) {
+    intern_legacy_report(env);
     add_builtin(
         env,
         "doc-map",
@@ -988,7 +998,10 @@ mod test {
     use super::*;
     use compile_state::state::new_slosh_vm;
     use sl_compiler::Reader;
-    use slosh_lib::{run_reader, set_builtins_and_shell_builtins, set_initial_load_path, ENV};
+    use slosh_lib::{
+        load_builtins_lisp_less_sloshrc, run_reader, set_builtins_and_shell_builtins,
+        set_initial_load_path, ENV,
+    };
     use std::collections::BTreeMap;
     use std::ops::DerefMut;
     use tempfile::TempDir;
@@ -1007,14 +1020,7 @@ mod test {
                 let mut vm = env.borrow_mut();
                 set_builtins_and_shell_builtins(vm.deref_mut());
                 set_initial_load_path(vm.deref_mut(), vec![&home_path]);
-                let mut reader = Reader::from_string(
-                    r#"(do (load "core.slosh") (load "test.slosh"))"#.to_string(),
-                    &mut vm,
-                    "",
-                    1,
-                    0,
-                );
-                _ = run_reader(&mut reader).unwrap();
+                load_builtins_lisp_less_sloshrc(vm.deref_mut()).unwrap();
 
                 let mut docs: Vec<SloshDoc> = vec![];
                 Namespace::Global
