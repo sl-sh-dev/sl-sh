@@ -9,7 +9,7 @@ use compile_state::state::SloshVm;
 use rand::rngs::{StdRng, ThreadRng};
 use slvm::{from_i56, VMError, VMResult, Value};
 use std::borrow::Cow;
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::hash::{DefaultHasher, Hasher};
 
 fn builtin_random(_vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut rng = rand::thread_rng();
