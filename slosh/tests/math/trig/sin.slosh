@@ -1,0 +1,33 @@
+;; Tests for sin function
+;; Testing sine calculation with various angles in radians
+(load "test.slosh")
+
+;; Basic values
+(test::assert-compare == 0 (sin 0))
+(test::assert-compare == 1 (sin 1.5707963267948966)) ; sin(π/2) = 1
+(test::assert-compare == -1 (sin 4.71238898038469))  ; sin(3π/2) = -1
+
+;; Common angles (using assert-true with ranges for floating point precision)
+(test::assert-true (< 0.841 (sin 1) 0.842))         ; sin(1 radian)
+(test::assert-true (< -0.001 (sin 3.14159) 0.001))  ; sin(π) ≈ 0
+(test::assert-true (< 0.865 (sin 1.047) 0.866))     ; sin(π/3) ≈ 0.866
+(test::assert-true (< 0.706 (sin 0.785) 0.707))     ; sin(π/4) ≈ 0.707
+(test::assert-true (< 0.499 (sin 0.523) 0.501))     ; sin(π/6) ≈ 0.5
+
+;; Negative angles
+(test::assert-true (< -0.842 (sin -1) -0.841))      ; sin is odd function
+(test::assert-true (< -0.707 (sin -0.785) -0.706))  ; sin(-π/4) ≈ -0.707
+
+;; Large angles (should wrap around)
+(test::assert-true (< -0.001 (sin 6.28318) 0.001))  ; sin(2π) ≈ 0
+(test::assert-true (< -0.001 (sin 12.56637) 0.001)) ; sin(4π) ≈ 0
+
+;; Type conversion
+(test::assert-true (< 0.841 (sin 1) 0.842))         ; integer input
+(test::assert-true (< 0.841 (sin 1.0) 0.842))       ; float input
+
+;; Error cases
+(test::assert-error (sin))        ; No arguments
+(test::assert-error (sin 1 2))    ; Too many arguments
+(test::assert-error (sin "π"))    ; String argument
+(test::assert-error (sin nil))    ; nil argument

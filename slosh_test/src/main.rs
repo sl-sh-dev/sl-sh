@@ -26,7 +26,13 @@ fn modify_vm(vm: &mut SloshVm) {
         "Return the software version string.",
     );
 
-    let mut reader = Reader::from_string(r#"(load "core.slosh")"#.to_string(), vm, "", 1, 0);
+    let mut reader = Reader::from_string(
+        r#"(do (load "core.slosh") (load "test.slosh"))"#.to_string(),
+        vm,
+        "",
+        1,
+        0,
+    );
     _ = run_reader(&mut reader);
 }
 
