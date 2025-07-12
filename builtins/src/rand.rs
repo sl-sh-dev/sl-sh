@@ -4,12 +4,12 @@ use std::iter;
 use unicode_segmentation::UnicodeSegmentation;
 
 use bridge_adapters::add_builtin;
+use bridge_macros::sl_sh_fn;
 use compile_state::state::SloshVm;
 use rand::rngs::{StdRng, ThreadRng};
 use slvm::{from_i56, VMError, VMResult, Value};
 use std::borrow::Cow;
 use std::hash::{DefaultHasher, Hash, Hasher};
-use bridge_macros::sl_sh_fn;
 
 fn builtin_random(_vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut rng = rand::thread_rng();
@@ -228,7 +228,7 @@ fn string_to_seed(s: &str) -> [u8; 32] {
         let mut hasher = DefaultHasher::new();
         (s, i).hash(&mut hasher);
         let hash = hasher.finish();
-        seed[i*8..(i+1)*8].copy_from_slice(&hash.to_le_bytes());
+        seed[i * 8..(i + 1) * 8].copy_from_slice(&hash.to_le_bytes());
     }
 
     seed
@@ -244,18 +244,18 @@ fn string_to_seed(s: &str) -> [u8; 32] {
 /// Example:
 /// (assert-eq (vec 2 2) (random-seq 4 2 "42"))
 #[sl_sh_fn(fn_name = "random-seq")]
-fn generate_random_sequence(limit: usize, count: usize, seed_string: Option<String>) -> VMResult<Vec<usize>> {
+fn generate_random_sequence(
+    limit: usize,
+    count: usize,
+    seed_string: Option<String>,
+) -> VMResult<Vec<usize>> {
     if let Some(seed_string) = seed_string {
         let seed = string_to_seed(&seed_string);
         let mut rng = StdRng::from_seed(seed);
-        Ok((0..count)
-            .map(|_| rng.gen_range(0..=limit))
-            .collect())
+        Ok((0..count).map(|_| rng.gen_range(0..=limit)).collect())
     } else {
         let mut rng = rand::thread_rng();
-        Ok((0..count)
-            .map(|_| rng.gen_range(0..=limit))
-            .collect())
+        Ok((0..count).map(|_| rng.gen_range(0..=limit)).collect())
     }
 }
 

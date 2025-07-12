@@ -258,11 +258,12 @@ impl DocStringSection {
                 example,
             });
         }
-        let cap = DOC_REGEX.captures(raw_doc_string.as_str()).ok_or_else(|| {
-            DocError::NoDocString {
-                symbol: symbol.to_string(),
-            }
-        })?;
+        let cap =
+            DOC_REGEX
+                .captures(raw_doc_string.as_str())
+                .ok_or_else(|| DocError::NoDocString {
+                    symbol: symbol.to_string(),
+                })?;
         let mut usage = cap.get(2).map(|x| x.as_str().trim().to_string());
         if usage.is_none() && !backup_usage.trim().is_empty() {
             usage = Some(backup_usage);
