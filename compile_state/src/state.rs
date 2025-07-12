@@ -302,11 +302,11 @@ Example:
 (test::assert-equal 11 test-fn1)
 (test::assert-equal 20 test-fn2)
 (test::assert-equal 3 test-fn3)
-((fn (x y z) (set! test-fn1 x)(set! test-fn2 y)(set! test-fn3 z)) 12 21 30)
+(test::assert-equal 63 ((fn (x y z) (set! test-fn1 x)(set! test-fn2 y)(set! test-fn3 z)(+ x y z)) 12 21 30))
 (test::assert-equal 12 test-fn1)
 (test::assert-equal 21 test-fn2)
 (test::assert-equal 30 test-fn3)
-(test::assert-equal 63 ((fn (x y z) (set! test-fn1 x)(set! test-fn2 y)(set! test-fn3 z)(+ x y z)) 12 21 30))"),
+"),
             mac_: add_special(vm, "macro", "Usage: (macro (args) `(apply + ,@args))
 
 Define an anonymous macro.

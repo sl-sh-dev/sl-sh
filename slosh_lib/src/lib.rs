@@ -50,6 +50,7 @@ use shell::config::get_config;
 use shell::platform::{Platform, Sys, STDIN_FILENO};
 use sl_compiler::load_eval::{add_load_builtins, load_internal, SLSHRC};
 use sl_compiler::pass1::pass1;
+use slvm::float::F56;
 use slvm::{VMError, VMResult, Value, INT_BITS, INT_MAX, INT_MIN};
 
 thread_local! {
@@ -415,7 +416,6 @@ pub fn set_builtins(env: &mut SloshVm) {
     add_rand_builtins(env);
     add_math_builtins(env);
     add_doc_builtins(env);
-    add_math_builtins(env);
 }
 
 /// Loads the user's sloshrc file, has side-effects, and sets some important
@@ -504,9 +504,86 @@ pub fn set_shell_builtins(env: &mut SloshVm) {
     let euid = Sys::effective_uid();
     env::set_var("UID", format!("{uid}"));
     env::set_var("EUID", format!("{euid}"));
-    env.set_named_global("*uid*", uid.into());
-    env.set_named_global("*euid*", euid.into());
-    env.set_named_global("*last-status*", 0.into());
+    bridge_adapters::add_named_global_doc(
+        env,
+        "*uid*",
+        uid.into(),
+        r#"Usage: (prn *uid*)
+
+Return system uid as a String.
+
+Section: core
+
+Example:
+#t"#,
+    );
+    bridge_adapters::add_named_global_doc(
+        env,
+        "*euid*",
+        euid.into(),
+        r#"Usage: (prn *euid*)
+
+Return effective system uid as a String.
+
+Section: core
+
+Example:
+#t"#,
+    );
+    bridge_adapters::add_named_global_doc(
+        env,
+        "*last-status*",
+        0.into(),
+        r#"Usage: (prn *last-status*)
+
+Return last exit code as an Int.
+
+Section: core
+
+Example:
+#t"#,
+    );
+    let val = env.alloc_string("".to_string());
+    bridge_adapters::add_named_global_doc(
+        env,
+        "*last-command*",
+        val,
+        r#"Usage: (prn *last-command*)
+
+Return last run command as a String.
+
+Section: core
+
+Example:
+#t"#,
+    );
+    bridge_adapters::add_named_global_doc(
+        env,
+        "*euler*",
+        Value::Float(F56::from(std::f64::consts::E)),
+        r#"Usage: (print *euler*)
+
+Float representing euler’s number.
+
+Section: math
+
+Example:
+(test::assert-equal 2.718281828459045 *euler*)"#,
+    );
+    bridge_adapters::add_named_global_doc(
+        env,
+        "*pi*",
+        Value::Float(F56::from(std::f64::consts::PI)),
+        r#"Usage: (prn *pi*)
+
+Float representing pi.
+
+Section: math
+
+Example:
+(test::assert-equal 3.141592653589793 *pi*)"#,
+    );
+
     // Initialize the HOST variable
     let host: OsString = Sys::gethostname().unwrap_or_else(|| "Operating system hostname is not a string capable of being parsed by native platform???".into());
     env::set_var("HOST", host);
@@ -575,6 +652,17 @@ pub fn run_slosh(modify_vm: impl FnOnce(&mut SloshVm)) -> i32 {
             status = ENV.with(|renv| {
                 let mut env = renv.borrow_mut();
                 let script = env.intern(&script);
+                add_global_value(&mut env, "*run-script*", Value::StringConst(script),
+                                 r#"Usage: (prn *run-script*)
+
+                                 If a script is being run, this variable will contain it's name as provided on the CLI.
+
+                                 Section: shell
+
+                                 Example:
+                                 (prn *run-script*)
+                                 "#
+                );
                 let script = env.get_interned(script);
                 match load_internal(&mut env, script) {
                     Ok(_) => 0,
@@ -677,8 +765,10 @@ fn run_command(res: &String) -> i32 {
         })
     });
     ENV.with(|env| {
-        env.borrow_mut()
-            .set_named_global("*last-status*", status.into());
+        let mut env = env.borrow_mut();
+        env.set_named_global("*last-status*", status.into());
+        let res = env.alloc_string(res.to_string());
+        env.set_named_global("*last-command*", res);
     });
     status
 }

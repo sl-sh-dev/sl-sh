@@ -1,0 +1,16 @@
+(load "test.slosh")
+
+;; Test str-rtrim function
+(test::assert-equal "   some string" (str-rtrim "   some string"))
+(test::assert-equal "   some string" (str-rtrim "   some string   "))
+(test::assert-equal "   some string" (str-rtrim (str "   some string   ")))
+(test::assert-equal "some string" (str-rtrim "some string   "))
+(test::assert-equal "some string" (str-rtrim "some string"))
+
+;; Test with tabs and newlines
+(test::assert-equal "\thello" (str-rtrim "\thello\t\n"))
+(test::assert-equal "  world" (str-rtrim "  world    "))
+
+;; Test errors
+(test::assert-error (str-rtrim))
+(test::assert-error (str-rtrim "a" "b"))

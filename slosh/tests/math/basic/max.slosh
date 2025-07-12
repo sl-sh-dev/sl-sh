@@ -1,0 +1,35 @@
+;; Tests for max function
+;; Testing basic functionality, edge cases, and error conditions
+(load "test.slosh")
+(import test)
+
+;; Basic functionality with integers
+(assert-equal 3 (max 1 2 3))
+(assert-equal 10 (max 10 -5 3))
+(assert-equal -50 (max -100 -50 -75))
+
+;; Single argument
+(assert-equal 42 (max 42))
+(assert-equal -42 (max -42))
+
+;; Floats
+(assert-equal 3.0 (max 3.0 1.5 2.0))
+(assert-equal -1.0 (max -3.5 -1.0 -2.0))
+
+;; Mixed int and float - result should be float when max is float
+(assert-equal 3.0 (max 1 2.0 3))
+(assert-equal 10 (max 10 -5.5 3))
+(assert-equal 2 (max 1 0.5 2))
+
+;; Many arguments
+(assert-equal 10 (max -10 -9 -8 -7 -6 -5 -4 -3 -2 -1 0 1 2 3 4 5 6 7 8 9 10))
+
+;; Large numbers
+(assert-equal 9223372036854775 (max 9223372036854775 -9223372036854775 0))
+
+;; Error cases
+(assert-error (max))
+(assert-error (max 1 "two"))
+(assert-error (max "one" 2))
+;; Note: (max 1 2 nil) returns 2 because varargs stops at nil
+(assert-equal 2 (max 1 2 nil))
