@@ -132,9 +132,9 @@ fn file_test(path: &str, test: fn(path: &Path) -> bool, fn_name: &str) -> VMResu
 /// #t
 #[sl_sh_fn(fn_name = "fs-fullpath")]
 fn fs_fullpath(path: &str) -> Option<String> {
-    Path::new(path).canonicalize().ok().map(|x| {
-        let expanded = expand_tilde(x);
-        expanded.to_string_lossy().into_owned()
+    let path = expand_tilde(path.into());
+    Path::new(&path).canonicalize().ok().map(|path| {
+        path.to_string_lossy().into_owned()
     })
 }
 
