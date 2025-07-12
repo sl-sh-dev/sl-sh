@@ -1,7 +1,6 @@
 use bridge_adapters::add_builtin;
 use compile_state::state::SloshVm;
 use slvm::{VMError, VMResult, Value};
-use std::env;
 use std::fs::{self, OpenOptions};
 use std::io::{Read, Write};
 extern crate unicode_reader;
@@ -212,52 +211,6 @@ fn fs_rm(path: String) -> VMResult<Value> {
     }
 }
 
-/// Usage: (unset-env "NAME_OF_ENVIRONMENT_VARIABLE")
-///
-/// Takes a string, checks the environment to see if the string is a valid
-/// environment variable and if it is it unsets it.
-///
-/// Section: core
-///
-/// Example:
-/// #t
-#[sl_sh_fn(fn_name = "unset-env")]
-fn unset_env(var: &str) {
-    unsafe {
-        env::remove_var(var);
-    }
-}
-
-/// Usage: (set-env "NAME_OF_ENVIRONMENT_VARIABLE" "Value variable should be assigned")
-///
-/// Takes two strings the first is the name of an environment variable, and the second is the
-/// value it should bind.
-///
-/// Section: core
-///
-/// Example:
-/// #t
-#[sl_sh_fn(fn_name = "set-env")]
-fn set_env(var: &str, value: &str) {
-    unsafe {
-        env::set_var(var, value);
-    }
-}
-
-/// Usage: (get-env "NAME_OF_ENVIRONMENT_VARIABLE")
-///
-/// Takes a string, checks the environment to see if the string is a valid
-/// environment variable and returns the value as a string, returns Nil otherwise.
-///
-/// Section: core
-///
-/// Example:
-/// #t
-#[sl_sh_fn(fn_name = "get-env")]
-fn get_env(var: &str) -> Option<String> {
-    env::var(var).ok()
-}
-
 pub fn add_io_builtins(env: &mut SloshVm) {
     intern_fs_rm(env);
 
@@ -355,7 +308,4 @@ Example:
         (test::assert-equal \"Test Line Three\n\" (read-line tst-file-read)))))
 ",
     );
-    intern_unset_env(env);
-    intern_set_env(env);
-    intern_get_env(env);
 }

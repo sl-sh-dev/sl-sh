@@ -244,7 +244,7 @@ fn string_to_seed(s: &str) -> [u8; 32] {
 /// Section: random
 ///
 /// Example:
-/// (assert-eq (vec 2 2) (random-seq 4 2 "42"))
+/// (test::assert-equal (vec 2 2) (random-seq 4 2 "42"))
 #[sl_sh_fn(fn_name = "random-seq")]
 fn generate_random_sequence(
     limit: usize,

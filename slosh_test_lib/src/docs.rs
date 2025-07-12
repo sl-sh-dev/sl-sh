@@ -44,9 +44,6 @@ lazy_static! {
     pub static ref EXEMPTIONS: HashSet<&'static str> = {
         let mut exemption_set = HashSet::new();
         exemption_set.insert("version");
-        exemption_set.insert("env");
-        exemption_set.insert("sh");
-        exemption_set.insert("$sh");
         exemption_set.insert("this-fn");
         exemption_set.insert("identical?");
         exemption_set.insert("type");
@@ -245,8 +242,14 @@ impl DocStringSection {
         raw_doc_string: String,
         backup_usage: String,
     ) -> DocResult<DocStringSection> {
-        if EXEMPTIONS.contains(symbol.as_ref()) {
-            let usage = None;
+        let cap =
+            DOC_REGEX
+                .captures(raw_doc_string.as_str())
+                .ok_or_else(|| DocError::NoDocString {
+                    symbol: symbol.to_string(),
+                });
+        if EXEMPTIONS.contains(symbol.as_ref()) && cap.is_err() {
+            let usage = Some("unknown".to_string());
             let description = "unknown".to_string();
             let section = "undocumented".to_string();
             let example = None;
@@ -257,12 +260,7 @@ impl DocStringSection {
                 example,
             });
         }
-        let cap =
-            DOC_REGEX
-                .captures(raw_doc_string.as_str())
-                .ok_or_else(|| DocError::NoDocString {
-                    symbol: symbol.to_string(),
-                })?;
+        let cap = cap?;
         let mut usage = cap.get(2).map(|x| x.as_str().trim().to_string());
         if usage.is_none() && !backup_usage.trim().is_empty() {
             usage = Some(backup_usage);
