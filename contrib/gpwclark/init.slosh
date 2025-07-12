@@ -1,0 +1,263 @@
+;; any accompanying functions OR files might be referring to slosh files that live
+;; here: https://github.com/gpwclark/so-lush/tree/main/.config/so-lush/slosh
+;; or here: https://github.com/gpwclark/zsh/tree/main/.config/slosh
+;; *** I highly recommend using vcsh and mr to manage [all your (repos/dotfiles) ***
+(prn (version))
+
+;;;; Common imports and env setup.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; load the core lib
+(load "core.slosh")
+(load "iterator.slosh")
+(import iter)
+;; load and activate syntax highlighting on the prompt
+(load "sh-color.slosh")
+(load "color-palette.slosh")
+
+(def so-lush (str (env "HOME") "/.config/so-lush/slosh/"))
+(when (fs-exists? so-lush)
+	(do
+		(vec-push! *load-path* so-lush)
+		(prn "load-path*:" *load-path*)))
+
+
+(when (fs-exists? so-lush)
+	(do
+        (load "shell-docs.slosh")
+        (import shell-docs)))
+
+
+;;;; common helpers
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+#%
+Usage: (file-to-str /path/to/file)
+
+Get contents of file to string.
+
+Section: user-shell
+
+%#
+(defn file-to-str (file)
+     (let (tst-file-read (fopen file :read))
+        (defer (fclose tst-file-read))
+        (iter::reduce
+            (iter::iter tst-file-read)
+            ""
+            (fn (x y)
+                (if (= (len x) 0)
+                    (str x (str-trim y))
+                    (str x (str-trim y) \newline))))))
+
+
+(defn parse-git-branch () (let (branch ($sh "git rev-parse --abbrev-ref HEAD 2>/dev/null"))
+	(if (= branch "")
+		(str "")
+		(do $(export BRANCH_NAME=~branch)
+		    (str ": " branch)))))
+
+(defn get-pwd ()
+	(str-replace (env 'PWD) (env 'HOME) "~"))
+
+(defn set-prompt-tail (last-status color-prompt)
+    (let (debug (if (str-contains (version) "debug") "[DEBUG]" "")
+         status (if (= last-status 0) "" (str *fg-red* "(" last-status ")" *fg-default*))
+	 alt-work-tree (if (nil? (env "SLOSH_ALT_REPO")) "" (str "\n" *fg-red* "(altrepo): " (env "SLOSH_ALT_REPO") *fg-default*)))
+    (if (= *euid* 0)
+        (str *fg-red* alt-work-tree status "\n" *fg-red* debug "λ #" *fg-default* " ")
+        (str color-prompt alt-work-tree status "\n" color-prompt debug "λ >" *fg-default* " "))))
+
+#%
+Usage: (file-to-str "/path/to/file")
+
+Get contents of file to string.
+
+Section: user-shell
+%#
+(defn file-to-str (file)
+     (let (tst-file-read (fopen file :read))
+        (defer (fclose tst-file-read))
+        (iter::reduce
+            (iter::iter tst-file-read)
+            ""
+            (fn (x y)
+                (if (= (len x) 0)
+                    (str x (str-trim y))
+                    (str x (str-trim y) \newline))))))
+
+#|
+(defn stripcolor
+        "remove all color codes from any strings
+        Section: user-shell"
+        (&rest args)
+        (if (< (length args) 2)
+                $(perl -pe "s/\e\[?.*?[\@-~]//g']" $((nth 0 ars)))
+                (err "Only accepts 0 or 1 arguments")))
+
+;; all find . -iname &rest
+(defn ifind
+        "pass in a string. list all files in vim whose filenames contain that string.
+        Section: user-shell"
+        (&rest args)
+        (let (find-str
+                        (apply str #\*
+                                (collect (iterator::interleave args (repeat #\* (length args))))))
+                $(find $PWD -iname $find-str)))
+|#
+
+;; TODO trying to figure out how to make the body of get-hostname a macro
+(defmacro str-str-rep (given)
+	(let (new-given `(cons ~given ":>"))
+	`(prn "str " ~new-given)))
+
+(defn get-hostname ()
+    (let ([pid, out] $(cat /etc/hostname :> 2>&1))
+        (iter::reduce (iter::iter out) "" (fn (x y) (if (= (len x) 0) (str x (str-trim y)) (str x (str-trim y) \newline))))))
+
+
+;; want my "random colorizer like before"
+;; want to get a nice color pallet like:
+;; >>(fg-color-rgb 128 128 128)
+;; and only pick colors that go together.
+(defn colorize-rand (string seed count)
+    (let (fg-color-vec (vec *fg-default* *fg-red* *fg-green* *fg-yellow* *fg-blue* *fg-magenta* *fg-cyan* *fg-white*)
+		random-vec (random-seq (len fg-color-vec) count seed)
+		num (% random-vec.0 (len fg-color-vec))
+		color fg-color-vec.~num
+		)
+		(prn (type num))
+        (str color string *fg-default*)))
+
+
+;;;; Custom imports
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;(panic-display (str-trim (file-to-str "/etc/hostname")))
+(def *hostname* (str-trim (file-to-str "/etc/hostname")))
+(def *hostname-secrets* (str *hostname* "-secrets"))
+(def *hostname-file* (str "~/.config/slosh/" *hostname* ".slosh"))
+(def *hostname-secrets-file* (str "~/.config/slosh/" *hostname-secrets* ".slosh"))
+(load *hostname-file*)
+(load *hostname-secrets-file*)
+(def *hostname-sym* (->sym *hostname*))
+(def *hostname-secrets-sym* (->sym *hostname*))
+(import *hostname-sym*)
+(import *hostname-secrets-sym*)
+(load "secrets.slosh")
+(import secrets)
+
+
+;;;; Prompt and aliases
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(def *ns* "SLOSH")
+(defn __prompt ()
+	(let    (palettes (color-palette::make-palettes)
+		palette-indices (random-seq (len palettes) 2 (env "HOST"))
+		palette-a (get palettes palette-indices.0)
+		palette-a-indices (random-seq (len palette-a) 4 (env "HOST"))
+		color-namespace (apply fg-color-rgb (get palette-a palette-a-indices.0))
+		color-namespace-parens (apply fg-color-rgb (get palette-a palette-a-indices.1))
+		color-hostname (apply fg-color-rgb (get palette-a palette-a-indices.2))
+		color-prompt (apply fg-color-rgb (get palette-a palette-a-indices.3))
+
+		palette-b (get palettes palette-indices.1)
+		palette-b-indices (random-seq (len palette-b) 3 (env "HOST"))
+		color-pwd (apply fg-color-rgb (get palette-b palette-b-indices.0))
+		color-git-branch (apply fg-color-rgb (get palette-b palette-b-indices.1))
+		color-pwd-parens (apply fg-color-rgb (get palette-b palette-b-indices.2)))
+	(str
+	    color-namespace-parens "["
+	    color-namespace *ns*
+	    color-namespace-parens  "]"
+	    color-namespace ":"
+	    color-hostname *hostname* ": "
+	    color-pwd-parens "("
+	    color-pwd (str-trim! (get-pwd))
+	    color-pwd-parens ")"
+	    color-git-branch (parse-git-branch)
+	    (set-prompt-tail *last-status* color-prompt))))
+
+(sh "alias ls='/bin/ls --color -F'")
+(sh "alias ll='/bin/ls --color -Flathr'")
+(sh "alias vi=nvim")
+(sh "alias vim=nvim")
+$(alias tmuxls="tmux list-sessions")
+;;(sh "echo CURR_PATH: $PATH")
+;;(sh "export PATH=/bin:/usr/local/bin:~/bin:~/.cargo/bin:~/.nix-profile/bin/:/usr/bin/:$PATH")
+(sh "export PATH=~/.cargo/bin:/bin:/usr/bin:/usr/local/bin:~/bin:/opt/jetbrains-toolbox:$PATH")
+(sh "export LC_ALL=en_US.UTF-8")
+;; for burntsishi ucd-generate library
+;;(sh "export UCD_DIR=/home/price/unicode/ucd-15.0.0/")
+;;(sh "export UCD_DIR=/home/price/unicode2/")
+
+
+;;;; utility functions
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;(defmacro sc () $(xclip -selection c))
+
+#% Usage: (altrepo "../path/to/other/repo") || (altrepo)
+
+[Inspired by](https://www.vikingsoftware.com/blog/multiple-git-repositories-in-the-same-tree/)
+
+When called with no arguments unsets GIT_DIR and GIT_WORK_TREE env variables so
+git defaults to using the .git directory in the closest parent directory.
+
+When called with 1 argument expands the path and changes the GIT_DIR and GIT_WORK_TREE
+environment variables so user can remain in 1 directory but commit files to another.
+
+To avoid git conflicts in the directory make sure to add necessary excludes to `.git/info/exclude`
+these are local only so no other users of the repo will see you have added lines here. This allows
+the altrepo to have files that the main repo ignores. Similarly putting a `**` type rule in the altrepo
+so it ignores all the files in the mainrepo is not a bad idea.
+
+* note!!! might be smarter to just do this with bare repos... Wouldn't be hard to bootstrap a little
+system to do so. Create a ~/.local/share directory and store git bare repos there, don't necessarily
+need them. Could also add some functions to help manage what the corresponding altrepo even is.
+Hopefully mr can help with this.
+
+Section: tools
+%#
+(defn altrepo (& args)
+	(cond 	((nil? args) (do (unset-env "SLOSH_ALT_REPO") (unset-env "GIT_DIR") (unset-env "GIT_WORK_TREE")))
+		((== 1 (len args)) (let (path (str args.0)
+					full-path (fs-fullpath path))
+			(if (nil? full-path)
+				(err "Provided filepath is invalid.")
+				(do
+					(set-env "SLOSH_ALT_REPO" full-path)
+					(set-env "GIT_DIR" (str full-path "/.git"))
+					(set-env "GIT_WORK_TREE" (env "PWD"))))))
+		(#t (err "Takes 0 arguments to leave altrepo and 1 argument for path to altrepo"))))
+
+
+;;;; Personal Flavor
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;(syntax-on)
+
+;; i'm fun {{{
+(prn "                                           ██╗")
+(prn "                                           ██║")
+(prn "                                           ██║")
+(prn "      ██████████████████████████████████╗  ██║")
+(prn "      ██╔═════════════════════════════██║  ██║")
+(prn "      ██║                             ██║  ██║")
+(prn "███████╗██╗      ███████╗██╗  ██╗     ██║  ██║")
+(prn "██╔════╝██║      ██╔════╝██║  ██║     ██║  ██║")
+(prn "███████╗██║█████╗███████╗███████║     ██║  ██║")
+(prn "╚════██║██║╚════╝╚════██║██╔══██║     ██║  ██║")
+(prn "███████║███████╗ ███████║██║  ██║     ██║  ██║")
+(prn "╚══════╝╚══════╝ ╚══════╝╚═╝  ╚═╝     ██║  ╚═╝")
+(prn " ██╗  ██║                             ██║")
+(prn " ██║  ██████████████████████████████████║")
+(prn " ██║  ╚═════════════════════════════════╝")
+(prn " ██║")
+(prn " ██║  ████████████████████████████████████████████╗")
+(prn " ██║  ╚═══════════════════════════════════════════╝")
+(prn " ██║")
+(prn " ╚═╝")
+
+(prn "		Hey, hey, hey. Don't be mean.")
+(prn "		We don't have to be mean because,")
+(prn "		remember, no matter where you go,")
+(prn "		there you are.")
+(prn (str "			- Buckaroo Banzai"))
