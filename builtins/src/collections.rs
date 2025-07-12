@@ -245,7 +245,6 @@ pub fn hash_clear(map: &mut VMHashMap) -> VMResult<()> {
     Ok(())
 }
 
-// Low level implementation for vec-clear! because we need direct access to VM and registers
 pub fn vec_clear(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if registers.len() != 1 {
         return Err(VMError::new_vm(
@@ -264,7 +263,6 @@ pub fn vec_clear(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-// Low level implementation for vec-remove! because we need direct access to VM and registers
 pub fn vec_remove(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut args = registers.iter();
     if let (Some(vector), Some(index), None) = (args.next(), args.next(), args.next()) {
@@ -294,7 +292,6 @@ pub fn vec_remove(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-// Low level implementation for vec-insert! because we need direct access to VM and registers
 pub fn vec_insert(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut args = registers.iter();
     if let (Some(vector), Some(index), Some(value), None) =
