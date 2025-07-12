@@ -214,17 +214,14 @@ fn builtin_probool(_vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-fn string_to_seed(s: &str) -> [u8; 32] {
-    let mut hasher = DefaultHasher::new();
-    s.hash(&mut hasher);
-    let hash = hasher.finish();
-
+fn string_to_seed(str_seed: &str) -> [u8; 32] {
     let mut seed = [0u8; 32];
-    seed[..8].copy_from_slice(&hash.to_le_bytes());
 
-    for i in 1..4 {
+    // Hash the string multiple times with different prefixes
+    for i in 0..4 {
         let mut hasher = DefaultHasher::new();
-        (s, i).hash(&mut hasher);
+        hasher.write_u8(i as u8); // Different prefix each time
+        hasher.write(str_seed.as_bytes());
         let hash = hasher.finish();
         seed[i * 8..(i + 1) * 8].copy_from_slice(&hash.to_le_bytes());
     }
@@ -236,7 +233,7 @@ fn string_to_seed(s: &str) -> [u8; 32] {
 ///
 /// Returns Vector of size `count` of non-negative integer(s) less than limit. Optional seed can be used
 /// for the random number generator which allows (random-seq) to behave as a pure function, each unique
-/// triple of (limit, count, seed) is equivalent to one deterministic sequence. Without seed values in
+/// triple of (`limit`, `count`, `seed`) is equivalent to one deterministic sequence. Without seed values in
 /// returned Vector are randomly selected on each invocation.
 ///
 /// Like (random) but with two additional parameters and is capable of returning a Vector of random values instead of just one.
