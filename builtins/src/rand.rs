@@ -219,11 +219,9 @@ fn string_to_seed(s: &str) -> [u8; 32] {
     s.hash(&mut hasher);
     let hash = hasher.finish();
 
-    // Convert u64 hash to [u8; 32] seed
     let mut seed = [0u8; 32];
     seed[..8].copy_from_slice(&hash.to_le_bytes());
 
-    // You could hash multiple times to fill more bytes if needed
     for i in 1..4 {
         let mut hasher = DefaultHasher::new();
         (s, i).hash(&mut hasher);
@@ -236,8 +234,12 @@ fn string_to_seed(s: &str) -> [u8; 32] {
 
 /// Usage: (random-seq limit count [seed])
 ///
-/// Like (random) but also accepts a count which is the number of random numbers to return in a [`Vec`]
-/// also takes an optional seed for a seeded random sequence.
+/// Returns Vector of size `count` of non-negative integer(s) less than limit. Optional seed can be used
+/// for the random number generator which allows (random-seq) to behave as a pure function, each unique
+/// triple of (limit, count, seed) is equivalent to one deterministic sequence. Without seed values in
+/// returned Vector are randomly selected on each invocation.
+///
+/// Like (random) but with two additional parameters and is capable of returning a Vector of random values instead of just one.
 ///
 /// Section: random
 ///

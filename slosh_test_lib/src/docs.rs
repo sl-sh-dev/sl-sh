@@ -48,7 +48,6 @@ lazy_static! {
         exemption_set.insert("sh");
         exemption_set.insert("$sh");
         exemption_set.insert("this-fn");
-        exemption_set.insert("cons");
         exemption_set.insert("identical?");
         exemption_set.insert("type");
         exemption_set.insert("call/cc");

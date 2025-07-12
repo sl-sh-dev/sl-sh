@@ -480,11 +480,13 @@ Create a proper list from pairs with items 0 - N.
 Section: pair
 
 Example:
-(test::assert-equal '(1 2 3) (list 1 2 3))"),
-            list_append: add_special(vm, "list-append", r#"Usage: (list-append list1 item1)
+(test::assert-equal '(1 2 3) (list 1 2 3))
+(test::assert-not-equal (list-append (list 1 2 3) (list 1)) (list-append (list 1 2 3) 1))
+"),
+            list_append: add_special(vm, "list-append", r#"Usage: (list-append list item)
 
 If second parameter is a list it will be appened to the first list, otherwise
-treated like cons.
+appends item to list.
 
 Section: pair
 
@@ -494,9 +496,12 @@ Example:
 "#),
             cons: add_special(vm, "cons", r#"Usage: (cons item collection)
 
-Prepends item to collection forms a pair.
+Prepends item to collection, forms a pair.
 
 Section: pair
+
+Example:
+(test::assert-equal '(1 2 3) (cons 1 (list 2 3)))
 "#),
             car: add_special(vm, "car", "Usage: (car pair)
 
