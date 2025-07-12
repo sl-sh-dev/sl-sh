@@ -124,7 +124,7 @@ fn file_test(path: &str, test: fn(path: &Path) -> bool, fn_name: &str) -> VMResu
 
 /// Usage: (fs-fullpath "~/some/filepath/../") -> nil
 ///
-/// Return full filepath.
+/// Return absolute `canonical` file path.
 ///
 /// Section: file
 ///
