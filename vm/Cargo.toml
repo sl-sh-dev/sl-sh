@@ -2,7 +2,7 @@
 name = "slvm"
 version.workspace = true
 authors = ["Steven Stanfield <stanfield@scarecrowtech.com>"]
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 unicode-segmentation = { workspace = true }

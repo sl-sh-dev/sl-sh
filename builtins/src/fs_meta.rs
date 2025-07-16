@@ -93,13 +93,13 @@ fn cd(arg: Option<String>) -> VMResult<Value> {
     let new_dir = cd_expand_all_dots(new_dir.to_string());
     let root = Path::new(&new_dir);
     if let Ok(oldpwd) = env::current_dir() {
-        env::set_var("OLDPWD", oldpwd);
+        unsafe { env::set_var("OLDPWD", oldpwd); }
     }
     if let Err(e) = env::set_current_dir(root) {
         eprintln!("{} Error changing to {}, {}", fn_name, root.display(), e);
         Ok(Value::Nil)
     } else {
-        env::set_var("PWD", env::current_dir()?);
+        unsafe { env::set_var("PWD", env::current_dir()?); }
         Ok(Value::True)
     }
 }

@@ -197,7 +197,7 @@ fn get_generic_argument_from_type_path(
 }
 
 fn get_generic_argument_from_type(ty: &Type) -> Option<(&GenericArgument, &TypePath)> {
-    if let Type::Path(ref type_path) = ty {
+    if let Type::Path(type_path) = ty {
         get_generic_argument_from_type_path(type_path)
     } else {
         None
