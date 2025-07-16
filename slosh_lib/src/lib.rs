@@ -604,9 +604,9 @@ Example:
 
     // Initialize the HOST variable
     let host: OsString = Sys::gethostname().unwrap_or_else(|| "Operating system hostname is not a string capable of being parsed by native platform???".into());
-    env::set_var("HOST", host);
+    unsafe { env::set_var("HOST", host); }
     if let Ok(dir) = env::current_dir() {
-        env::set_var("PWD", dir);
+        unsafe { env::set_var("PWD", dir); }
     }
     export_args(env);
 }
