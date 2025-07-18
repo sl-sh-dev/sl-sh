@@ -1,109 +1,14 @@
 extern crate sl_liner;
 
-use std::collections::VecDeque;
 use std::env;
 use std::io::ErrorKind;
 use std::path::PathBuf;
-use std::sync::Arc;
 
+use builtins::vm_inspect::{disassemble_value, dump_call_stack, dump_regs, dump_stack};
 use compile_state::state::{SloshVm, SloshVmTrait};
 use sl_compiler::Reader;
 use sl_liner::{Context, Prompt};
-use slvm::{CallFrame, Chunk, VMError, VMResult, Value};
-
-fn dump_regs(vm: &SloshVm, frame: &CallFrame) {
-    let start = frame.stack_top;
-    let end = frame.stack_top + frame.chunk.input_regs + frame.chunk.extra_regs + 1;
-    let regs = vm.get_registers(start, end);
-    let mut reg_names = frame.chunk.dbg_args.as_ref().map(|iargs| iargs.iter());
-    for (i, r) in regs.iter().enumerate() {
-        let aname = if i == 0 {
-            "params/result"
-        } else if let Some(reg_names) = reg_names.as_mut() {
-            if let Some(n) = reg_names.next() {
-                vm.get_interned(*n)
-            } else {
-                "[SCRATCH]"
-            }
-        } else {
-            "[SCRATCH]"
-        };
-        if let Value::Value(_) = r {
-            println!(
-                "{:#03} ^{:#20}: {:#12} {}",
-                i,
-                aname,
-                r.display_type(vm),
-                r.pretty_value(vm)
-            );
-        } else {
-            println!(
-                "{:#03}  {:#20}: {:#12} {}",
-                i,
-                aname,
-                r.display_type(vm),
-                r.pretty_value(vm)
-            );
-        }
-    }
-}
-
-fn dump_stack(vm: &SloshVm) {
-    //println!("Stack from 0 to {}", vm.stack_max() - 1);
-    let mut reg_names = None;
-    let mut chunks = VecDeque::new();
-    for i in 1..=vm.stack_max() {
-        let r = vm.get_stack(i);
-        if let Value::CallFrame(handle) = r {
-            let frame = vm.get_callframe(handle);
-            chunks.push_back(frame.chunk.clone());
-        }
-    }
-    if let Some(err_frame) = vm.err_frame() {
-        chunks.push_back(err_frame.chunk.clone());
-    }
-
-    let mut chunk_own;
-    for i in 0..=vm.stack_max() {
-        let r = vm.get_stack(i);
-        let reg_name = if let Value::CallFrame(_) = r {
-            reg_names = if let Some(chunk) = chunks.pop_front() {
-                chunk_own = chunk;
-                chunk_own.dbg_args.as_ref().map(|iargs| iargs.iter())
-            } else {
-                None
-            };
-            "RESULT"
-        } else if let Some(reg_names) = reg_names.as_mut() {
-            if let Some(n) = reg_names.next() {
-                vm.get_interned(*n)
-            } else {
-                "[SCRATCH]"
-            }
-        } else {
-            "[SCRATCH]"
-        };
-        //for (i, r) in vm.stack().iter().enumerate() {
-        if let Value::Value(handle) = r {
-            let han_str = format!("{}({})", reg_name, handle.idx());
-            println!(
-                "{:#03} ^{:#20}: {:#12} {}",
-                i,
-                han_str,
-                r.display_type(vm),
-                r.pretty_value(vm)
-            );
-        } else {
-            println!(
-                "{:#03}  {:#20}: {:#12} {}",
-                i,
-                reg_name,
-                r.display_type(vm),
-                r.pretty_value(vm)
-            );
-        }
-    }
-}
+use slvm::Value;
 
 pub fn debug(env: &mut SloshVm) {
     let abort = env.intern("abort");
@@ -172,8 +77,8 @@ pub fn debug(env: &mut SloshVm) {
                                 break;
                             }
                         }
-                    } else {
-                        println!("Param not an int.");
+                    } else if let Err(e) = disassemble_value(env, parm) {
+                        println!("Error in disassembly: {e}");
                     }
                 } else if let Some(err_frame) = env.err_frame() {
                     if let Err(e) = err_frame.chunk.disassemble_chunk(env, 0) {
@@ -206,25 +111,7 @@ pub fn debug(env: &mut SloshVm) {
                 dump_stack(env);
             }
             Some(Ok(Value::Keyword(k))) if k == stack => {
-                if let Some(frame) = env.err_frame() {
-                    let line = frame.current_line().unwrap_or(0);
-                    println!(
-                        "ERROR Frame: {} line: {} ip: {:#010x}",
-                        frame.chunk.file_name,
-                        line,
-                        frame.current_offset()
-                    );
-                }
-                for frame in env.get_call_stack() {
-                    let line = frame.current_line().unwrap_or(0);
-                    println!(
-                        "ID: {} {} line: {} ip: {:#010x}",
-                        frame.id,
-                        frame.chunk.file_name,
-                        line,
-                        frame.current_offset()
-                    );
-                }
+                dump_call_stack(env);
             }
             Some(Err(err)) => println!("Reader error: {err}"),
             _ => {}
@@ -233,62 +120,6 @@ pub fn debug(env: &mut SloshVm) {
         //  Err(err) => println!("Reader error: {}", err),
         //}
     }
-}
-
-pub fn builtin_dump_regs(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
-    if !registers.is_empty() {
-        return Err(VMError::new_compile("dump-regs: takes no args"));
-    }
-    if let Some(frame) = vm.call_frame() {
-        println!("Previous Call Frames Regs (NOTE: tail calls will be 'missing' Call Frames):");
-        dump_regs(vm, frame);
-        println!();
-    }
-    let lambda = if let Some(val) = vm.this_fn() {
-        match val {
-            Value::Lambda(h) => vm.get_lambda(h),
-            Value::Closure(h) => {
-                let (l, _) = vm.get_closure(h);
-                l
-            }
-            _ => Arc::new(Chunk::new("", 0)),
-        }
-    } else {
-        Arc::new(Chunk::new("", 0))
-    };
-    let mut reg_names = lambda.dbg_args.as_ref().map(|iargs| iargs.iter());
-    let regs = vm.get_current_registers();
-    for (i, r) in regs.iter().enumerate() {
-        let aname = if i == 0 {
-            "params/result"
-        } else if let Some(reg_names) = reg_names.as_mut() {
-            if let Some(n) = reg_names.next() {
-                vm.get_interned(*n)
-            } else {
-                "[SCRATCH]"
-            }
-        } else {
-            "[SCRATCH]"
-        };
-        if let Value::Value(_) = r {
-            println!(
-                "{:#03} ^{:#20}: {:#12} {}",
-                i,
-                aname,
-                r.display_type(vm),
-                r.pretty_value(vm)
-            );
-        } else {
-            println!(
-                "{:#03}  {:#20}: {:#12} {}",
-                i,
-                aname,
-                r.display_type(vm),
-                r.pretty_value(vm)
-            );
-        }
-    }
-    Ok(Value::Nil)
 }
 
 pub fn get_temp_file_path(filename: &str) -> PathBuf {
