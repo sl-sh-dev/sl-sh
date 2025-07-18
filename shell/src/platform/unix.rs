@@ -472,7 +472,7 @@ impl From<File> for UnixFileDesc {
 }
 impl FromFileDesc for File {
     unsafe fn from_file_desc(fd: UnixFileDesc) -> Self {
-        File::from_raw_fd(fd.0)
+        unsafe { File::from_raw_fd(fd.0) }
     }
 }
 
@@ -589,17 +589,17 @@ unsafe fn send_error_to_parent(output: i32, err: io::Error) {
     // pipe I/O up to PIPE_BUF bytes should be atomic, and then
     // we want to be sure we *don't* run at_exit destructors as
     // we're being torn down regardless
-    if let Err(e) = File::from_raw_fd(output).write_all(&bytes) {
+    if let Err(e) = unsafe { File::from_raw_fd(output) }.write_all(&bytes) {
         eprintln!("Error on child reporting error (err) to parent: {e}");
     }
-    libc::_exit(1);
+    unsafe { libc::_exit(1); }
 }
 
 unsafe fn close_extra_fds(opened: &HashSet<UnixFileDesc>) {
-    let fd_max = libc::sysconf(libc::_SC_OPEN_MAX) as i32;
+    let fd_max = unsafe { libc::sysconf(libc::_SC_OPEN_MAX) } as i32;
     for fd in 3..fd_max {
         if !opened.contains(&UnixFileDesc(fd)) {
-            libc::close(fd);
+            unsafe { libc::close(fd); }
         }
     }
 }

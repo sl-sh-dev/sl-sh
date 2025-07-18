@@ -49,13 +49,13 @@ fn main() {
 pub fn start_interactive() -> i32 {
     let uid = Sys::current_uid();
     let euid = Sys::effective_uid();
-    env::set_var("UID", format!("{}", uid));
-    env::set_var("EUID", format!("{}", euid));
+    unsafe { env::set_var("UID", format!("{}", uid)); }
+    unsafe { env::set_var("EUID", format!("{}", euid)); }
     // Initialize the HOST variable
     let host: OsString = Sys::gethostname().unwrap_or_else(|| "???".into());
-    env::set_var("HOST", host);
+    unsafe { env::set_var("HOST", host); }
     if let Ok(dir) = env::current_dir() {
-        env::set_var("PWD", dir);
+        unsafe { env::set_var("PWD", dir); }
     }
     /*let mut home = match env::var("HOME") {
         Ok(val) => val,

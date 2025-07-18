@@ -502,16 +502,16 @@ pub fn set_shell_builtins(env: &mut SloshVm) {
 
     let uid = Sys::current_uid();
     let euid = Sys::effective_uid();
-    env::set_var("UID", format!("{uid}"));
-    env::set_var("EUID", format!("{euid}"));
+    unsafe { env::set_var("UID", format!("{uid}")); }
+    unsafe { env::set_var("EUID", format!("{euid}")); }
     env.set_named_global("*uid*", uid.into());
     env.set_named_global("*euid*", euid.into());
     env.set_named_global("*last-status*", 0.into());
     // Initialize the HOST variable
     let host: OsString = Sys::gethostname().unwrap_or_else(|| "Operating system hostname is not a string capable of being parsed by native platform???".into());
-    env::set_var("HOST", host);
+    unsafe { env::set_var("HOST", host); }
     if let Ok(dir) = env::current_dir() {
-        env::set_var("PWD", dir);
+        unsafe { env::set_var("PWD", dir); }
     }
     export_args(env);
 }

@@ -149,14 +149,14 @@ pub fn cd(arg: Option<PathBuf>) -> i32 {
     let new_dir = cd_expand_all_dots(new_dir);
     let root = Path::new(&new_dir);
     if let Ok(oldpwd) = env::current_dir() {
-        env::set_var("OLDPWD", oldpwd);
+        unsafe { env::set_var("OLDPWD", oldpwd); }
     }
     if let Err(e) = env::set_current_dir(root) {
         eprintln!("cd: Error changing to {}, {}", root.display(), e);
         -1
     } else {
         match env::current_dir() {
-            Ok(dir) => env::set_var("PWD", dir),
+            Ok(dir) => unsafe { env::set_var("PWD", dir) },
             Err(err) => eprintln!("cd: error setting PWD: {err}"),
         }
         0
@@ -215,7 +215,7 @@ fn export(key: OsString, val: OsString) -> i32 {
         eprintln!("export: Invalid val (contains NUL character ('\\0')'");
         return 1;
     }
-    env::set_var(key, val);
+    unsafe { env::set_var(key, val); }
     0
 }
 
@@ -265,7 +265,7 @@ fn set_var(jobs: &mut Jobs, key: OsString, val: OsString) -> i32 {
         return 1;
     }
     if env::var_os(&key).is_some() {
-        env::set_var(key, val);
+        unsafe { env::set_var(key, val); }
     } else {
         jobs.set_local_var(key, val);
     }
@@ -401,7 +401,7 @@ where
                         split_export(arg.to_string_lossy())
                     } else {
                         if let Some(val) = jobs.remove_local_var(&arg) {
-                            env::set_var(arg, val)
+                            unsafe { env::set_var(arg, val) }
                         }
                         0
                     }
@@ -432,7 +432,7 @@ where
                     1
                 } else {
                     jobs.remove_local_var(&key);
-                    env::remove_var(key);
+                    unsafe { env::remove_var(key); }
                     0
                 }
             }
