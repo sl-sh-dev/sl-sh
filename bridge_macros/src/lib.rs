@@ -1615,6 +1615,7 @@ pub fn sl_sh_fn(
                     #generated_code
 
                     #[allow(dead_code)]
+                    #[inline(always)]
                     #original_fn_code
                 }
             }
