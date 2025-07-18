@@ -81,7 +81,7 @@
 //!
 //! ```
 //!
-//! TODO PC more explanation
+//! TODO PC MACROS more explanation
 //!     - this section needs more clarity on when users should worry about borrowing or not???
 //!     - am i returning owned values? borrowed values?
 //!     - how can i avoid needless cloning when going to/from rust/slosh boundary w/ procedural macro etc. etc.
@@ -173,7 +173,7 @@
 //!                             |                             |     &emsp;- [`SlFrom`] `&`[`Value`] for [`i8`]
 //!                             |                             |
 //! [`u32`]/[`i32`]/[`u64`]/[`i64`]/[`usize`]                             | [`Value`]::Int          |
-//! TODO PC *current behavior overflows* |  [`Value`]::Int([[u8; 7]]), // Store a 7 byte int (i56...).                           |
+//! TODO PC MACROS *current behavior overflows* |  [`Value`]::Int([[u8; 7]]), // Store a 7 byte int (i56...).                           |
 //!                             |                             |
 //!                             |                             |
 //! [`Symbol`]                   | [`Value`]::Symbol(Interned)       |                             |

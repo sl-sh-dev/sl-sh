@@ -1,0 +1,36 @@
+;; Tests for min function
+;; Testing basic functionality, edge cases, and error conditions
+
+(load "test.slosh")
+(import test)
+
+;; Basic functionality with integers
+(assert-equal 1 (min 1 2 3))
+(assert-equal -5 (min 10 -5 3))
+(assert-equal -100 (min -100 -50 -75))
+
+;; Single argument
+(assert-equal 42 (min 42))
+(assert-equal -42 (min -42))
+
+;; Floats
+(assert-equal 1.5 (min 3.0 1.5 2.0))
+(assert-equal -3.5 (min -3.5 -1.0 -2.0))
+
+;; Mixed int and float
+(assert-equal 1 (min 1 2.0 3))
+(assert-equal -5.5 (min 10 -5.5 3))
+(assert-equal 0.5 (min 1 0.5 2))
+
+;; Many arguments
+(assert-equal -10 (min 5 4 3 2 1 0 -1 -2 -3 -4 -5 -6 -7 -8 -9 -10))
+
+;; Large numbers
+(assert-equal -9223372036854775 (min 9223372036854775 -9223372036854775 0))
+
+;; Error cases
+(assert-error (min))
+(assert-error (min 1 "two"))
+(assert-error (min "one" 2))
+;; Note: (min 1 2 nil) returns 1 because varargs stops at nil
+(assert-equal 1 (min 1 2 nil))

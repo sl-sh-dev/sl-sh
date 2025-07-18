@@ -1,0 +1,33 @@
+;; Tests for cos function
+;; Testing cosine calculation with various angles in radians
+(load "test.slosh")
+
+;; Basic values
+(test::assert-compare == 1 (cos 0))
+(test::assert-true (< -0.001 (cos 1.5707963267948966) 0.001)) ; cos(π/2) ≈ 0
+(test::assert-compare == -1 (cos 3.14159265358979))           ; cos(π) = -1
+
+;; Common angles (using assert-true with ranges for floating point precision)
+(test::assert-true (< 0.540 (cos 1) 0.541))          ; cos(1 radian)
+(test::assert-true (< -1.001 (cos 3.14159) -0.999))  ; cos(π) ≈ -1
+(test::assert-true (< 0.499 (cos 1.047) 0.501))      ; cos(π/3) ≈ 0.5
+(test::assert-true (< 0.707 (cos 0.785) 0.708))      ; cos(π/4) ≈ 0.707
+(test::assert-true (< 0.866 (cos 0.523) 0.867))      ; cos(π/6) ≈ 0.866
+
+;; Negative angles (cosine is even function)
+(test::assert-true (< 0.540 (cos -1) 0.541))         ; cos(-x) = cos(x)
+(test::assert-true (< 0.707 (cos -0.785) 0.708))     ; cos(-π/4) ≈ 0.707
+
+;; Large angles (should wrap around)
+(test::assert-true (< 0.999 (cos 6.28318) 1.001))    ; cos(2π) ≈ 1
+(test::assert-true (< 0.999 (cos 12.56637) 1.001))   ; cos(4π) ≈ 1
+
+;; Type conversion
+(test::assert-true (< 0.540 (cos 1) 0.541))          ; integer input
+(test::assert-true (< 0.540 (cos 1.0) 0.541))        ; float input
+
+;; Error cases
+(test::assert-error (cos))        ; No arguments
+(test::assert-error (cos 1 2))    ; Too many arguments
+(test::assert-error (cos "π"))    ; String argument
+(test::assert-error (cos nil))    ; nil argument

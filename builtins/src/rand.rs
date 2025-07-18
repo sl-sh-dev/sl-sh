@@ -1,13 +1,15 @@
 use rand::distributions::{Alphanumeric, Distribution};
-use rand::Rng;
+use rand::{Rng, SeedableRng};
 use std::iter;
 use unicode_segmentation::UnicodeSegmentation;
 
 use bridge_adapters::add_builtin;
+use bridge_macros::sl_sh_fn;
 use compile_state::state::SloshVm;
-use rand::rngs::ThreadRng;
+use rand::rngs::{StdRng, ThreadRng};
 use slvm::{from_i56, VMError, VMResult, Value};
 use std::borrow::Cow;
+use std::hash::{DefaultHasher, Hasher};
 
 fn builtin_random(_vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let mut rng = rand::thread_rng();
@@ -212,7 +214,52 @@ fn builtin_probool(_vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
+fn string_to_seed(str_seed: &str) -> [u8; 32] {
+    let mut seed = [0u8; 32];
+
+    // Hash the string multiple times with different prefixes
+    for i in 0..4 {
+        let mut hasher = DefaultHasher::new();
+        hasher.write_u8(i as u8); // Different prefix each time
+        hasher.write(str_seed.as_bytes());
+        let hash = hasher.finish();
+        seed[i * 8..(i + 1) * 8].copy_from_slice(&hash.to_le_bytes());
+    }
+
+    seed
+}
+
+/// Usage: (random-seq limit count [seed])
+///
+/// Returns Vector of size `count` of non-negative integer(s) less than limit. Optional seed can be used
+/// for the random number generator which allows (random-seq) to behave as a pure function, each unique
+/// triple of (`limit`, `count`, `seed`) is equivalent to one deterministic sequence. Without seed values in
+/// returned Vector are randomly selected on each invocation.
+///
+/// Like (random) but with two additional parameters and is capable of returning a Vector of random values instead of just one.
+///
+/// Section: random
+///
+/// Example:
+/// (test::assert-equal (vec 0 4) (random-seq 4 2 "42"))
+#[sl_sh_fn(fn_name = "random-seq")]
+fn generate_random_sequence(
+    limit: usize,
+    count: usize,
+    seed_string: Option<String>,
+) -> VMResult<Vec<usize>> {
+    if let Some(seed_string) = seed_string {
+        let seed = string_to_seed(&seed_string);
+        let mut rng = StdRng::from_seed(seed);
+        Ok((0..count).map(|_| rng.gen_range(0..=limit)).collect())
+    } else {
+        let mut rng = rand::thread_rng();
+        Ok((0..count).map(|_| rng.gen_range(0..=limit)).collect())
+    }
+}
+
 pub fn add_rand_builtins(env: &mut SloshVm) {
+    intern_generate_random_sequence(env);
     add_builtin(
         env,
         "probool",

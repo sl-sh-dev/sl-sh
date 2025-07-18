@@ -1,11 +1,15 @@
 #!/usr/bin/env slosh_test
 
+(load "test.slosh")
+(import test)
+
 (let (globals (get-globals-sorted)
       globals-len (len globals)
       i 0
       failing-tests {})
     (while (< i globals-len)
         (prn "Symbol: " globals.~i)
+        (eprn "Symbol: " globals.~i)
         (prn "===")
         (let (doc (doc-map globals.~i))
             (prn "Usage: " (str doc.:usage))

@@ -1,6 +1,7 @@
 #!/usr/bin/env slosh
 
 (load "core.slosh")
+(load "test.slosh")
 ;; benchmark on lists?
 
 (defn build-vec (fst-elem limit)
@@ -25,7 +26,7 @@
           (helper pred x limit)))))
 
 
-(defn is-limit (x limit) (= limit x))
+(defn is-limit (x limit) (== limit x))
 
 (defn run-recursive (limit)
     (test::assert-true (naive-recursive-find is-limit (build-vec limit limit) limit)))

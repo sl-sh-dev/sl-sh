@@ -1,13 +1,13 @@
 use crate::docs::legacy as legacy_docs;
 use bridge_adapters::add_builtin;
 use bridge_adapters::lisp_adapters::SlFrom;
+use bridge_macros::sl_sh_fn;
 use compile_state::state::{SloshVm, SloshVmTrait};
 use lazy_static::lazy_static;
 use mdbook::book::{Book, Chapter};
 use mdbook::{BookItem, MDBook};
 use regex::{Regex, RegexBuilder};
-use sl_compiler::load_eval::run_reader;
-use sl_compiler::Reader;
+use slosh_lib::load_builtins_lisp_less_sloshrc;
 use slvm::vm_hashmap::VMHashMap;
 use slvm::VMErrorObj::Message;
 use slvm::{Interned, VMError, VMResult, Value, SLOSH_NIL};
@@ -44,12 +44,7 @@ lazy_static! {
     pub static ref EXEMPTIONS: HashSet<&'static str> = {
         let mut exemption_set = HashSet::new();
         exemption_set.insert("version");
-        exemption_set.insert("env");
-        exemption_set.insert("sh");
-        exemption_set.insert("$sh");
         exemption_set.insert("this-fn");
-        exemption_set.insert("cons");
-        exemption_set.insert("list-append");
         exemption_set.insert("identical?");
         exemption_set.insert("type");
         exemption_set.insert("call/cc");
@@ -58,19 +53,8 @@ lazy_static! {
         exemption_set.insert("doc-string");
         exemption_set.insert("get");
         exemption_set.insert("return");
-        exemption_set.insert("*euid*");
-        exemption_set.insert("*last-status*");
         exemption_set.insert("*int-min*");
-        exemption_set.insert("*uid*");
         exemption_set.insert("*int-max*");
-        exemption_set.insert("prn");
-        exemption_set.insert("pr");
-        exemption_set.insert("fprn");
-        exemption_set.insert("fpr");
-        exemption_set.insert("eprn");
-        exemption_set.insert("epr");
-        exemption_set.insert("dump-regs");
-        exemption_set.insert("dasm");
         exemption_set.insert("*int-bits*");
         exemption_set.insert("*stdout*");
         exemption_set.insert("*prn*");
@@ -150,9 +134,6 @@ impl Namespace {
                 docs.push(slosh_doc);
             }
             Err(e) => match e {
-                DocError::ExemptFromProperDocString { symbol } => {
-                    eprintln!("Exempt from proper doc string: {symbol}");
-                }
                 _ if !require_proper_format => {
                     let incomplete_doc = SloshDoc::new_incomplete(*interned, vm, self.clone())?;
                     docs.push(incomplete_doc);
@@ -250,17 +231,25 @@ impl DocStringSection {
         raw_doc_string: String,
         backup_usage: String,
     ) -> DocResult<DocStringSection> {
-        let cap = DOC_REGEX.captures(raw_doc_string.as_str()).ok_or_else(|| {
-            if EXEMPTIONS.contains(symbol.as_ref()) {
-                DocError::ExemptFromProperDocString {
+        let cap =
+            DOC_REGEX
+                .captures(raw_doc_string.as_str())
+                .ok_or_else(|| DocError::NoDocString {
                     symbol: symbol.to_string(),
-                }
-            } else {
-                DocError::NoDocString {
-                    symbol: symbol.to_string(),
-                }
-            }
-        })?;
+                });
+        if EXEMPTIONS.contains(symbol.as_ref()) && cap.is_err() {
+            let usage = Some("unknown".to_string());
+            let description = "unknown".to_string();
+            let section = "undocumented".to_string();
+            let example = None;
+            return Ok(DocStringSection {
+                usage,
+                description,
+                section,
+                example,
+            });
+        }
+        let cap = cap?;
         let mut usage = cap.get(2).map(|x| x.as_str().trim().to_string());
         if usage.is_none() && !backup_usage.trim().is_empty() {
             usage = Some(backup_usage);
@@ -320,7 +309,7 @@ impl AsMd for SloshDoc {
         if let Some(usage) = &self.doc_string.usage {
             content += &format!("**Usage:** {}\n\n", usage);
         }
-        //content = content + &format!("section: {}\n", docs.doc_string.section);
+        content = content + &format!("**Namespace:** {}\n\n", self.namespace);
         content = content + &format!("{}\n", self.doc_string.description);
         if let Some(example) = &self.doc_string.example {
             content += "\n\nExample:\n```\n";
@@ -387,6 +376,11 @@ impl SloshDoc {
         if let Some(slot) = slot {
             let doc_string = DocStringSection::from_symbol(slot, sym, vm)?;
             let symbol = sym.display_value(vm);
+            let mut full_name: Vec<_> = symbol.split("::").collect();
+            let symbol = full_name
+                .pop()
+                .expect("Symbol should never be an empty.")
+                .to_string();
             let symbol_type = sym.display_type(vm).to_string();
             let namespace = namespace.display(vm);
             Ok(SloshDoc {
@@ -427,16 +421,6 @@ impl SloshDoc {
     pub fn fully_qualified_name(&self) -> String {
         self.namespace.to_string() + "::" + self.symbol.as_ref()
     }
-
-    /// Return an empty documentation map.
-    fn nil_doc_map(vm: &mut SloshVm) -> VMHashMap {
-        let mut map = VMHashMap::with_capacity(4);
-        insert_nil_section(&mut map, USAGE, vm);
-        insert_nil_section(&mut map, SECTION, vm);
-        insert_nil_section(&mut map, DESCRIPTION, vm);
-        insert_nil_section(&mut map, EXAMPLE, vm);
-        map
-    }
 }
 
 enum DocError {
@@ -444,7 +428,6 @@ enum DocError {
     NoDocString { symbol: String },
     RemoveExemption { symbol: String },
     DocStringMissingSection { symbol: String, section: String },
-    ExemptFromProperDocString { symbol: String },
 }
 
 impl Debug for DocError {
@@ -464,11 +447,6 @@ impl Display for DocError {
             DocError::NoDocString { symbol } => {
                 format!(
                     "Either documentation provided does not conform to conventional layout or no documentation string provided for symbol {symbol} all slosh functions with documentation must have a string that conforms to the conventional layout."
-                )
-            }
-            DocError::ExemptFromProperDocString { symbol } => {
-                format!(
-                    "No documentation exists for provided symbol {symbol}, this should be rectified."
                 )
             }
             DocError::DocStringMissingSection { symbol, section } => {
@@ -551,10 +529,6 @@ fn doc_map(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
 
             let res = match SloshDoc::new(*g, vm, Namespace::Global) {
                 Ok(slosh_doc) => Value::sl_from(slosh_doc, vm),
-                Err(DocError::ExemptFromProperDocString { symbol: _ }) => {
-                    let map = SloshDoc::nil_doc_map(vm);
-                    Ok(vm.alloc_map(map))
-                }
                 Err(e) => Err(VMError::from(e)),
             };
             // Unpause GC, this MUST happen so no early returns (looking at you ?).
@@ -866,16 +840,7 @@ fn build_doc(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         },
     }?;
 
-    {
-        let mut reader = Reader::from_string(
-            r#"(do (load "core.slosh") (load "sh-color.slosh"))"#.to_string(),
-            vm,
-            "",
-            1,
-            0,
-        );
-        _ = run_reader(&mut reader)?;
-    }
+    load_builtins_lisp_less_sloshrc(vm)?;
 
     let mut md_book = MDBook::load(PathBuf::from(path))
         .map_err(|_e| VMError::new("mdbook", "Unable to load the book at provided path."))?;
@@ -933,7 +898,21 @@ fn get_globals_sorted(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> 
     Ok(vm.alloc_vector(v))
 }
 
+/// Usage: (legacy-report)
+///
+/// Output as a string the current legacy report, detailing how much of the former sl-sh project has been covered by the new slosh.
+///
+/// Section: doc
+///
+/// Example:
+/// #t
+#[sl_sh_fn(fn_name = "legacy-report", takes_env = true)]
+fn legacy_report(environment: &mut SloshVm) -> VMResult<String> {
+    legacy::build_report(environment)
+}
+
 pub fn add_builtins(env: &mut SloshVm) {
+    intern_legacy_report(env);
     add_builtin(
         env,
         "doc-map",
@@ -1011,7 +990,10 @@ mod test {
     use super::*;
     use compile_state::state::new_slosh_vm;
     use sl_compiler::Reader;
-    use slosh_lib::{run_reader, set_builtins_and_shell_builtins, set_initial_load_path, ENV};
+    use slosh_lib::{
+        load_builtins_lisp_less_sloshrc, run_reader, set_builtins_and_shell_builtins,
+        set_initial_load_path, ENV,
+    };
     use std::collections::BTreeMap;
     use std::ops::DerefMut;
     use tempfile::TempDir;
@@ -1030,9 +1012,7 @@ mod test {
                 let mut vm = env.borrow_mut();
                 set_builtins_and_shell_builtins(vm.deref_mut());
                 set_initial_load_path(vm.deref_mut(), vec![&home_path]);
-                let mut reader =
-                    Reader::from_string(r#"(load "core.slosh")"#.to_string(), &mut vm, "", 1, 0);
-                _ = run_reader(&mut reader).unwrap();
+                load_builtins_lisp_less_sloshrc(vm.deref_mut()).unwrap();
 
                 let mut docs: Vec<SloshDoc> = vec![];
                 Namespace::Global
