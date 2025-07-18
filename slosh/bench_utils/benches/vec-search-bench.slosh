@@ -25,7 +25,7 @@
           (helper pred x limit)))))
 
 
-(defn is-limit (x limit) (= limit x))
+(defn is-limit (x limit) (== limit x))
 
 (defn run-recursive (limit)
     (test::assert-true (naive-recursive-find is-limit (build-vec limit limit) limit)))

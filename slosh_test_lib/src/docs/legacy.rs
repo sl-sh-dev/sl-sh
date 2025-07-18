@@ -436,7 +436,7 @@ pub(crate) fn full_legacy_sl_sh_forms_metadata() -> &'static [(&'static str, boo
         ("gensym", true, ""),
         ("get-arity", true, ""),
         ("get-dirs", true, ""),
-        ("get-env", true, ""),
+        ("get-env", true, "env"),
         ("get-error", true, ""),
         ("get-home", true, ""),
         ("get-next-params", true, ""),
