@@ -11,7 +11,7 @@ use slvm::vm_hashmap::VMHashMap;
 use slvm::{Interned, SLOSH_NIL, VMError, VMErrorObj, VMResult, Value};
 use std::borrow::Cow;
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 use std::fs::{self, File};
@@ -351,14 +351,21 @@ impl Display for SloshDoc {
 
 impl PartialEq for SloshDoc {
     fn eq(&self, other: &Self) -> bool {
-        self.fully_qualified_name()
-            .eq(&other.fully_qualified_name())
+        // problem is
+        // [DEBUG]λ > (doc-search "vim" {:markdown #t})
+        // 1: root::vcsh
+        // 2: shell-docs::vcsh
+        // 3: root::vim
+        // 4: shell-docs::vim
+        // " ### vcsh
+        self.symbol == other.symbol && self.namespace == other.namespace
     }
 }
 
 impl Hash for SloshDoc {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write(self.fully_qualified_name().as_bytes());
+        state.write(self.symbol.as_bytes());
+        state.write(self.namespace.as_bytes());
     }
 }
 
@@ -370,8 +377,8 @@ impl PartialOrd for SloshDoc {
 
 impl Ord for SloshDoc {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.fully_qualified_name()
-            .cmp(&other.fully_qualified_name())
+        self.symbol.cmp(&other.symbol)
+            .then_with(|| self.namespace.cmp(&other.namespace))
     }
 }
 
@@ -551,8 +558,8 @@ fn doc_map(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
 fn get_docs_by_section(
     vm: &mut SloshVm,
     require_proper_format: bool,
-) -> HashMap<String, Vec<SloshDoc>> {
-    let mut docs_by_section: HashMap<String, Vec<SloshDoc>> = HashMap::new();
+) -> HashMap<String, BTreeSet<SloshDoc>> {
+    let mut docs_by_section: HashMap<String, BTreeSet<SloshDoc>> = HashMap::new();
     let mut docs: Vec<SloshDoc> = vec![];
     Namespace::Global
         .add_docs(&mut docs, vm, require_proper_format)
@@ -564,18 +571,16 @@ fn get_docs_by_section(
             .add_docs(&mut docs, vm, require_proper_format)
             .unwrap();
     }
-    docs.sort();
-    docs.dedup();
     for d in docs {
         let d = d.clone();
         let section = d.doc_string.section.clone();
-        docs_by_section.entry(section).or_default().push(d);
+        docs_by_section.entry(section).or_default().insert(d);
     }
     docs_by_section
 }
 
 fn build_symbols_list(
-    docs_by_section: &BTreeMap<String, Vec<SloshDoc>>,
+    docs_by_section: &BTreeMap<String, BTreeSet<SloshDoc>>,
     namer: fn(&str, &SloshDoc) -> String,
 ) -> BTreeMap<String, String> {
     let mut map = BTreeMap::new();
@@ -617,7 +622,7 @@ fn name_for_section_page(_section: &str, doc: &SloshDoc) -> String {
 
 fn build_all_slosh_forms_listing_chapter(
     name: &str,
-    docs_by_section: &BTreeMap<String, Vec<SloshDoc>>,
+    docs_by_section: &BTreeMap<String, BTreeSet<SloshDoc>>,
 ) -> VMResult<Chapter> {
     let mut all_content = format!("# {}\n\n", name);
     if name == USER_FORMS {
@@ -657,7 +662,7 @@ and `user-doc-load-paths` string arrays in doc/book.toml. The default is to use
 }
 
 fn build_each_docs_section_chapter(
-    docs_by_section: &BTreeMap<String, Vec<SloshDoc>>,
+    docs_by_section: &BTreeMap<String, BTreeSet<SloshDoc>>,
 ) -> VMResult<Vec<Chapter>> {
     let mut sections_as_md_text: BTreeMap<String, String> = BTreeMap::new();
     let lists = build_symbols_list(docs_by_section, name_for_section_page);
@@ -744,13 +749,12 @@ pub fn get_slosh_docs(
     vm: &mut SloshVm,
     md_book: &mut Book,
     write_to_book: bool,
-) -> VMResult<BTreeMap<String, Vec<SloshDoc>>> {
+) -> VMResult<BTreeMap<String, BTreeSet<SloshDoc>>> {
     // get docs by section and then make sure the docs are in alphabetical order
     let docs_by_section_unsorted = get_docs_by_section(vm, true);
     // use a BTreeMap so the sections are in alphabetical order as well as the SloshDoc vec.
     let mut docs_by_section = BTreeMap::new();
-    for (s, mut v) in docs_by_section_unsorted {
-        v.sort();
+    for (s, v) in docs_by_section_unsorted {
         docs_by_section.insert(s, v);
     }
 
@@ -771,21 +775,20 @@ pub fn get_slosh_docs(
 pub fn add_user_docs_to_mdbook_less_provided_sections(
     vm: &mut SloshVm,
     md_book: &mut Book,
-    provided_sections: BTreeMap<String, Vec<SloshDoc>>,
+    provided_sections: BTreeMap<String, BTreeSet<SloshDoc>>,
 ) -> VMResult<()> {
     let docs_by_section_unsorted = get_docs_by_section(vm, false);
     let mut docs_by_section = BTreeMap::new();
     for (s, all_docs) in docs_by_section_unsorted {
         if !provided_sections.contains_key(&s) {
-            let mut set = HashSet::new();
+            let mut set = BTreeSet::new();
             // to set
-            for d in all_docs {
+            for d in all_docs.iter() {
                 let namespace = GLOBAL_NAMESPACE.to_string();
                 if d.namespace != namespace {
                     set.insert(d);
                 }
             }
-            let all_docs = set.into_iter().collect::<Vec<SloshDoc>>();
 
             if !all_docs.is_empty() {
                 docs_by_section.insert(s, all_docs);
@@ -800,7 +803,7 @@ pub fn add_user_docs_to_mdbook_less_provided_sections(
 fn add_forms_to_md_book_part(
     part_title: String,
     md_book: &mut Book,
-    docs_by_section: &BTreeMap<String, Vec<SloshDoc>>,
+    docs_by_section: &BTreeMap<String, BTreeSet<SloshDoc>>,
 ) -> VMResult<()> {
     // First chapter introduces each section and lists all the symbols in that section.
     let all_chapter = build_all_slosh_forms_listing_chapter(&part_title, docs_by_section)?;
@@ -904,6 +907,295 @@ fn get_globals_sorted(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> 
     Ok(vm.alloc_vector(v))
 }
 
+#[derive(Debug, Clone)]
+struct DocSearchQuery {
+    query: String,
+    use_regex: bool,
+    fuzzy: bool,
+    fields: HashSet<String>,
+    namespace_filter: Option<String>,
+    section_filter: Option<String>,
+}
+
+impl DocSearchQuery {
+    fn new(query: String) -> Self {
+        DocSearchQuery {
+            query,
+            use_regex: false,
+            fuzzy: false,
+            fields: HashSet::new(),
+            namespace_filter: None,
+            section_filter: None,
+        }
+    }
+
+    fn with_regex(mut self) -> Self {
+        self.use_regex = true;
+        self.fuzzy = false;
+        self
+    }
+
+    fn with_fuzzy(mut self) -> Self {
+        self.fuzzy = true;
+        self.use_regex = false;
+        self
+    }
+
+    fn with_fields(mut self, fields: Vec<String>) -> Self {
+        self.fields = fields.into_iter().collect();
+        self
+    }
+
+    fn with_namespace(mut self, namespace: String) -> Self {
+        self.namespace_filter = Some(namespace);
+        self
+    }
+
+    fn with_section(mut self, section: String) -> Self {
+        self.section_filter = Some(section);
+        self
+    }
+
+    fn should_search_field(&self, field: &str) -> bool {
+        self.fields.is_empty() || self.fields.contains(field)
+    }
+
+    fn matches_text(&self, text: &str) -> bool {
+        if self.use_regex {
+            if let Ok(re) = Regex::new(&self.query) {
+                re.is_match(text)
+            } else {
+                false
+            }
+        } else if self.fuzzy {
+            fuzzy_match(text, &self.query)
+        } else {
+            text.to_lowercase().contains(&self.query.to_lowercase())
+        }
+    }
+}
+
+fn fuzzy_match(text: &str, pattern: &str) -> bool {
+    let text_lower = text.to_lowercase();
+    let pattern_lower = pattern.to_lowercase();
+    let mut pattern_chars = pattern_lower.chars();
+    let mut current_char = pattern_chars.next();
+
+    for text_char in text_lower.chars() {
+        if let Some(p_char) = current_char {
+            if text_char == p_char {
+                current_char = pattern_chars.next();
+            }
+        } else {
+            return true;
+        }
+    }
+
+    current_char.is_none()
+}
+
+fn search_docs(
+    vm: &mut SloshVm,
+    query: DocSearchQuery,
+    require_proper_format: bool,
+) -> BTreeSet<SloshDoc> {
+    let docs_by_section = get_docs_by_section(vm, require_proper_format);
+    let mut results = BTreeSet::new();
+
+    for (section, docs) in docs_by_section {
+        // Check section filter
+        if let Some(ref section_filter) = query.section_filter {
+            if !query.matches_text(&section) && section != *section_filter {
+                continue;
+            }
+        }
+
+        for doc in docs {
+            // Check namespace filter
+            if let Some(ref ns_filter) = query.namespace_filter {
+                if !doc.namespace.contains(ns_filter) && doc.namespace != *ns_filter {
+                    continue;
+                }
+            }
+
+            let mut matched = false;
+
+            // Search in symbol name
+            if query.should_search_field("name") || query.should_search_field("symbol") {
+                if query.matches_text(&doc.symbol) {
+                    matched = true;
+                }
+            }
+
+            // Search in usage
+            if !matched && query.should_search_field(USAGE) {
+                if let Some(ref usage) = doc.doc_string.usage {
+                    if query.matches_text(usage) {
+                        matched = true;
+                    }
+                }
+            }
+
+            // Search in description
+            if !matched && query.should_search_field(DESCRIPTION) {
+                if query.matches_text(&doc.doc_string.description) {
+                    matched = true;
+                }
+            }
+
+            // Search in section
+            if !matched && query.should_search_field(SECTION) {
+                if query.matches_text(&doc.doc_string.section) {
+                    matched = true;
+                }
+            }
+
+            // Search in example
+            if !matched && query.should_search_field(EXAMPLE) {
+                if let Some(ref example) = doc.doc_string.example {
+                    if query.matches_text(example) {
+                        matched = true;
+                    }
+                }
+            }
+
+            // If no specific fields specified, search all fields
+            if !matched && query.fields.is_empty() {
+                matched = query.matches_text(&doc.symbol)
+                    || doc.doc_string.usage.as_ref().map(|u| query.matches_text(u)).unwrap_or(false)
+                    || query.matches_text(&doc.doc_string.description)
+                    || query.matches_text(&doc.doc_string.section)
+                    || doc.doc_string.example.as_ref().map(|e| query.matches_text(e)).unwrap_or(false);
+            }
+
+            if matched {
+                results.insert(doc);
+            }
+        }
+    }
+
+    results
+}
+
+fn doc_search(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    if registers.is_empty() {
+        return Err(VMError::new_vm("doc-search requires at least a query string".to_string()));
+    }
+
+    let query_str = match &registers[0] {
+        Value::String(s) => vm.get_string(*s).to_string(),
+        Value::StringConst(i) => vm.get_interned(*i).to_string(),
+        _ => return Err(VMError::new_vm("First argument must be a query string".to_string())),
+    };
+
+    let mut query = DocSearchQuery::new(query_str);
+
+    // Parse options if provided as a hash map
+    if registers.len() > 1 {
+        match &registers[1] {
+            Value::Map(handle) => {
+                // Intern all keys first to avoid borrowing issues
+                let regex_key = Value::Keyword(vm.intern_static("regex"));
+                let fuzzy_key = Value::Keyword(vm.intern_static("fuzzy"));
+                let fields_key = Value::Keyword(vm.intern_static("fields"));
+                let ns_key = Value::Keyword(vm.intern_static("namespace"));
+                let section_key = Value::Keyword(vm.intern_static("section"));
+                let markdown_key = Value::Keyword(vm.intern_static("markdown"));
+
+                let map = vm.get_map(*handle);
+
+                // Check for regex option
+                if let Some(Value::True) = map.get(vm, regex_key) {
+                    query = query.with_regex();
+                }
+
+                // Check for fuzzy option
+                if let Some(Value::True) = map.get(vm, fuzzy_key) {
+                    query = query.with_fuzzy();
+                }
+
+                // Check for fields option
+                if let Some(Value::Vector(v_handle)) = map.get(vm, fields_key) {
+                    let vec = vm.get_vector(v_handle);
+                    let mut fields = Vec::new();
+                    for val in vec.iter() {
+                        match val {
+                            Value::String(s) => fields.push(vm.get_string(*s).to_string()),
+                            Value::StringConst(i) => fields.push(vm.get_interned(*i).to_string()),
+                            Value::Keyword(i) => fields.push(vm.get_interned(*i).to_string()),
+                            _ => {}
+                        }
+                    }
+                    query = query.with_fields(fields);
+                }
+
+                // Check for namespace filter
+                if let Some(ns_val) = map.get(vm, ns_key) {
+                    match ns_val {
+                        Value::String(s) => query = query.with_namespace(vm.get_string(s).to_string()),
+                        Value::StringConst(i) => query = query.with_namespace(vm.get_interned(i).to_string()),
+                        _ => {}
+                    }
+                }
+
+                // Check for section filter
+                if let Some(section_val) = map.get(vm, section_key) {
+                    match section_val {
+                        Value::String(s) => query = query.with_section(vm.get_string(s).to_string()),
+                        Value::StringConst(i) => query = query.with_section(vm.get_interned(i).to_string()),
+                        _ => {}
+                    }
+                }
+            }
+            _ => return Err(VMError::new_vm("Second argument must be a map of options".to_string())),
+        }
+    }
+
+    // Check if markdown output is requested
+    let mut use_markdown = false;
+    if registers.len() > 1 {
+        if let Value::Map(handle) = &registers[1] {
+            let markdown_key = Value::Keyword(vm.intern_static("markdown"));
+            let map = vm.get_map(*handle);
+            if let Some(Value::True) = map.get(vm, markdown_key) {
+                use_markdown = true;
+            }
+        }
+    }
+
+    let results = search_docs(vm, query, false);
+
+    let result = if use_markdown {
+        // Generate markdown output
+        let mut markdown_output = String::new();
+        let len = results.len();
+        for (i, doc) in results.iter().enumerate() {
+            println!("{}: {}::{}", i + 1, doc.namespace, doc.symbol);
+            if i > 0 {
+                markdown_output.push_str("\n---\n\n");
+            }
+            markdown_output.push_str(&doc.as_md());
+        }
+        markdown_output.push_str(&format!("Found {len} result{}.", if len == 1 { "" } else { "(s)" }));
+        vm.alloc_string(markdown_output)
+    } else {
+        // Generate vector of doc maps
+        let mut result_values = Vec::new();
+        for doc in results {
+            match Value::sl_from(doc, vm) {
+                Ok(val) => result_values.push(val),
+                Err(e) => {
+                    vm.unpause_gc();
+                    return Err(e);
+                }
+            }
+        }
+        vm.alloc_vector(result_values)
+    };
+
+    Ok(result)
+}
+
 /// Usage: (legacy-report)
 ///
 /// Output as a string the current legacy report, detailing how much of the former sl-sh project has been covered by the new slosh.
@@ -932,6 +1224,36 @@ Section: doc
 
 Example:
 #t
+",
+    );
+
+    add_builtin(
+        env,
+        "doc-search",
+        doc_search,
+        "Usage: (doc-search query-string [options-map])
+
+Search through all documentation for functions matching the query.
+The query string is searched across all documentation fields by default.
+
+Options map can contain:
+- :regex #t - Use regular expressions for matching
+- :fuzzy #t - Use fuzzy matching (characters must appear in order)
+- :fields [\"usage\" \"description\"] - Limit search to specific fields
+- :namespace \"namespace-name\" - Filter by namespace
+- :section \"section-name\" - Filter by section
+- :markdown #t - Return results as a markdown-formatted string instead of vector
+
+Returns a vector of documentation maps for matching functions.
+
+Section: doc
+
+Example:
+(doc-search \"file\")
+(doc-search \"^str-\" {:regex #t})
+(doc-search \"core\" {:fields [\"section\"]})
+(doc-search \"map\" {:fuzzy #t :section \"core\"})
+(doc-search \"string\" {:markdown #t})
 ",
     );
 
