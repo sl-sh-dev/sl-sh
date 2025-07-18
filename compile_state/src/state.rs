@@ -302,11 +302,11 @@ Example:
 (test::assert-equal 11 test-fn1)
 (test::assert-equal 20 test-fn2)
 (test::assert-equal 3 test-fn3)
-((fn (x y z) (set! test-fn1 x)(set! test-fn2 y)(set! test-fn3 z)) 12 21 30)
+(test::assert-equal 63 ((fn (x y z) (set! test-fn1 x)(set! test-fn2 y)(set! test-fn3 z)(+ x y z)) 12 21 30))
 (test::assert-equal 12 test-fn1)
 (test::assert-equal 21 test-fn2)
 (test::assert-equal 30 test-fn3)
-(test::assert-equal 63 ((fn (x y z) (set! test-fn1 x)(set! test-fn2 y)(set! test-fn3 z)(+ x y z)) 12 21 30))"),
+"),
             mac_: add_special(vm, "macro", "Usage: (macro (args) `(apply + ,@args))
 
 Define an anonymous macro.
@@ -480,9 +480,29 @@ Create a proper list from pairs with items 0 - N.
 Section: pair
 
 Example:
-(test::assert-equal '(1 2 3) (list 1 2 3))"),
-            list_append: add_special(vm, "list-append", ""),
-            cons: add_special(vm, "cons", ""),
+(test::assert-equal '(1 2 3) (list 1 2 3))
+(test::assert-not-equal (list-append (list 1 2 3) (list 1)) (list-append (list 1 2 3) 1))
+"),
+            list_append: add_special(vm, "list-append", r#"Usage: (list-append list item)
+
+If second parameter is a list it will be appened to the first list, otherwise
+appends item to list.
+
+Section: pair
+
+Example:
+(test::assert-equal (list-append (list 1 2 3) (list 1)) (list 1 2 3 1))
+(test::assert-not-equal (list-append (list 1 2 3) (list 1)) (list-append (list 1 2 3) 1))
+"#),
+            cons: add_special(vm, "cons", r#"Usage: (cons item collection)
+
+Prepends item to collection, forms a pair.
+
+Section: pair
+
+Example:
+(test::assert-equal '(1 2 3) (cons 1 (list 2 3)))
+"#),
             car: add_special(vm, "car", "Usage: (car pair)
 
 Return the car (first item) from a pair.  If used on a proper list this will be the first element.

@@ -6,6 +6,7 @@
 //! f32 is simpler and faster.
 //! Additionally, there are questions about whether to impl the Eq and Hash Traits <https://github.com/sl-sh-dev/sl-sh/issues/125>
 
+use bridge_types::LooseFloat;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
@@ -34,30 +35,37 @@ use std::str::FromStr;
 /// A f64 number like 1.000000000001 with 13 decimal digits will be converted to 1.0
 #[derive(Copy, Clone)]
 pub struct F56(pub [u8; 7]);
+
 impl Eq for F56 {}
+
+/// appropriate for `identical?` comparison
 impl PartialEq for F56 {
     fn eq(&self, other: &Self) -> bool {
-        self.strictest_equal(other) // appropriate for `identical?` comparison
+        self.strictest_equal(other)
     }
 }
+
+/// In order to use F56 as a key in a hash map, we need to ensure:
+/// If a == b then hash(a) == hash(b)
 impl Hash for F56 {
-    // In order to use F56 as a key in a hash map, we need to ensure:
-    // If a == b then hash(a) == hash(b)
     fn hash<H: Hasher>(&self, state: &mut H) {
         state.write_u64(self.hash_for_strictest_equal())
     }
 }
+
 impl std::fmt::Debug for F56 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "F56({:?})", self.0)
     }
 }
+
 impl Display for F56 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         // write!(f, "{}", f64::from(*self))
         write!(f, "{}", F56::round_f64_to_f56_precision(f64::from(*self)))
     }
 }
+
 impl From<f64> for F56 {
     fn from(f: f64) -> F56 {
         let f64_bytes = f.to_be_bytes();
@@ -140,6 +148,18 @@ impl From<f64> for F56 {
             f56_bytes[6],
             f56_bytes[7],
         ])
+    }
+}
+
+impl From<LooseFloat> for F56 {
+    fn from(value: LooseFloat) -> Self {
+        F56(value.0)
+    }
+}
+
+impl From<F56> for LooseFloat {
+    fn from(value: F56) -> Self {
+        LooseFloat(value.0)
     }
 }
 
@@ -296,6 +316,7 @@ impl F56 {
         ])
     }
 
+    /// TODO PC #125 this ticket is outdated now but this may need to be used somewhere?
     /// Returns true if the two F56s are bitwise identical OR if they are both NaN or both 0
     pub fn strictly_equal_except_nan_and_0(&self, other: &F56) -> bool {
         // if the bit patterns are identical, then they are equal
@@ -318,6 +339,7 @@ impl F56 {
         false
     }
 
+    /// TODO PC #125 this ticket is outdated now but this may need to be used somewhere?
     pub fn hash_for_strictly_equal_except_nan_and_0(&self) -> u64 {
         let f56_word = u64::from_be_bytes([
             0, self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5], self.0[6],

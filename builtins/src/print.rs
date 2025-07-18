@@ -223,7 +223,6 @@ pub fn add_print_builtins(env: &mut SloshVm) {
     env.set_global_builtin("epr", epr);
     env.set_global_builtin("prn", prn);
     env.set_global_builtin("eprn", eprn);
-    env.set_global_builtin("dump-globals", dasm);
     env.set_global_builtin("dasm", dasm);
     env.set_global_builtin("fpr", fpr);
     env.set_global_builtin("fprn", fprn);

@@ -78,7 +78,7 @@ True if the supplied command is a system command.
 Section: shell
 
 Example:
-(test::assert-true (sys-command? "ls"))
+(test::assert-true (sys-command? "sh"))
 (test::assert-false (sys-command? "rst-not-a-command-strsnt"))
 %#
 (defn sys-command? (com)

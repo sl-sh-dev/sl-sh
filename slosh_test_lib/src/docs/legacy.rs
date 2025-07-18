@@ -1,5 +1,7 @@
-use crate::docs::legacy_docs;
+use crate::docs::{legacy, legacy_docs};
+use bridge_macros::sl_sh_fn;
 use compile_state::state::{SloshVm, SloshVmTrait};
+use slosh_lib::load_builtins_lisp_less_sloshrc;
 use slvm::{VMResult, Value};
 use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
@@ -103,11 +105,42 @@ pub(crate) fn build_report(vm: &mut SloshVm) -> VMResult<String> {
 
 pub(crate) fn unimplemented_report(vm: &mut SloshVm) -> VMResult<StatusReport> {
     let mut slosh_forms = HashSet::new();
+
+    crate::vm_with_stdout_disabled(vm);
+    load_builtins_lisp_less_sloshrc(vm)?;
+    crate::vm_with_stdout_enabled(vm);
+    // Add all global symbols
     for g in vm.globals().keys() {
         let sym = Value::Symbol(*g);
         let val: String = sym.display_value(vm);
+
+        // Also add the symbol without namespace prefix if it has one
+        if let Some(pos) = val.rfind("::") {
+            let without_namespace = &val[pos + 2..];
+            slosh_forms.insert(without_namespace.to_string());
+        }
+
         slosh_forms.insert(val);
     }
+
+    // Also check all namespaces for symbols
+    let namespaces = builtins::get_namespaces_interned(vm);
+    for ns_interned in namespaces {
+        let symbols = builtins::retrieve_in_namespace(vm, &ns_interned);
+        for symbol_value in symbols {
+            if let Value::Symbol(_sym) = symbol_value {
+                let full_name = symbol_value.display_value(vm);
+                slosh_forms.insert(full_name.clone());
+
+                // Also add the symbol without namespace prefix
+                if let Some(pos) = full_name.rfind("::") {
+                    let without_namespace = &full_name[pos + 2..];
+                    slosh_forms.insert(without_namespace.to_string());
+                }
+            }
+        }
+    }
+
     let metadata = legacy_docs::full_legacy_sl_sh_forms_metadata();
     let mut completed = 0;
     let mut yet_to_be_implemented = 0;
@@ -116,6 +149,7 @@ pub(crate) fn unimplemented_report(vm: &mut SloshVm) -> VMResult<StatusReport> {
         let (impl_status, form_name, notes) = match (will_implement, notes.is_empty()) {
             (true, true) => {
                 // will implement and name is/has not yet been changed.
+                // Check both the exact name and common namespace prefixes
                 if slosh_forms.contains(*old_sym_name) {
                     (
                         ImplStatus::Implemented,
@@ -182,6 +216,19 @@ pub(crate) fn unimplemented_report(vm: &mut SloshVm) -> VMResult<StatusReport> {
     })
 }
 
+/// Usage: (legacy-report)
+///
+/// Outputs the current list of functions that have/haven't been implemented from sl-sh to slosh transition.
+///
+/// Section: doc
+///
+/// Example:
+/// #t
+#[sl_sh_fn(fn_name = "legacy-report", takes_env = true)]
+pub fn legacy_report(environment: &mut SloshVm) -> VMResult<String> {
+    legacy::build_report(environment)
+}
+
 pub fn get_legacy_sl_sh_form_syms(vm: &mut SloshVm, _registers: &[Value]) -> VMResult<Value> {
     let v = full_legacy_sl_sh_forms_metadata();
     let v = v
@@ -236,13 +283,13 @@ pub(crate) fn full_legacy_sl_sh_forms_metadata() -> &'static [(&'static str, boo
         ("*iterator-src*", false, UNNECESSARY_IN_SLOSH),
         ("*last-command*", true, ""),
         ("*last-status*", true, ""),
-        ("*lib-src*", true, UNNECESSARY_IN_SLOSH),
+        ("*lib-src*", false, UNNECESSARY_IN_SLOSH),
         ("*load-path*", true, ""),
         ("*ns*", true, ""),
-        ("*ns-exports*", true, ""),
+        ("*ns-exports*", false, UNNECESSARY_IN_SLOSH),
         ("*pi*", true, ""),
-        ("*read-table*", true, ""),
-        ("*read-table-terminal*", true, ""),
+        ("*read-table*", false, UNNECESSARY_IN_SLOSH),
+        ("*read-table-terminal*", false, UNNECESSARY_IN_SLOSH),
         ("*repl-settings*", true, ""),
         ("*run-script*", true, ""),
         ("*seq-src*", false, UNNECESSARY_IN_SLOSH),
@@ -324,7 +371,7 @@ pub(crate) fn full_legacy_sl_sh_forms_metadata() -> &'static [(&'static str, boo
         ("chain", true, ""),
         ("chain-and", true, ""),
         ("chain-when", true, ""),
-        ("char->int", true, ""),
+        ("char->int", true, "->int"),
         ("char-lower", true, ""),
         ("char-upper", true, ""),
         ("char-whitespace?", true, ""),
@@ -408,7 +455,7 @@ pub(crate) fn full_legacy_sl_sh_forms_metadata() -> &'static [(&'static str, boo
         ("first-quartile", true, ""),
         ("fix-one-arg-bindings", true, ""),
         ("flatten-args", true, ""),
-        ("float->int", true, ""),
+        ("float->int", true, "->int"),
         ("float?", true, ""),
         ("floor", true, ""),
         ("flush", true, "fflush"),
@@ -436,7 +483,7 @@ pub(crate) fn full_legacy_sl_sh_forms_metadata() -> &'static [(&'static str, boo
         ("gensym", true, ""),
         ("get-arity", true, ""),
         ("get-dirs", true, ""),
-        ("get-env", true, ""),
+        ("get-env", true, "env"),
         ("get-error", true, ""),
         ("get-home", true, ""),
         ("get-next-params", true, ""),
@@ -459,11 +506,11 @@ pub(crate) fn full_legacy_sl_sh_forms_metadata() -> &'static [(&'static str, boo
         ("handle-process", true, ""),
         ("hash-clear!", true, ""),
         ("hash-get", true, ""),
-        ("hash-haskey", true, ""),
+        ("hash-haskey", true, "hash-haskey?"),
         ("hash-keys", true, ""),
         ("hash-remove!", true, ""),
-        ("hash-set!", true, ""),
-        ("hash?", true, ""),
+        ("hash-set!", false, "(set! my-set.key \"value\")"),
+        ("hash?", true, "hash-set?"),
         ("history-context", true, ""),
         ("history-empty?", true, ""),
         ("history-length", true, ""),
@@ -475,7 +522,7 @@ pub(crate) fn full_legacy_sl_sh_forms_metadata() -> &'static [(&'static str, boo
         ("import", true, ""),
         ("in?", true, ""),
         ("inc!", true, ""),
-        ("int->float", true, ""),
+        ("int->float", true, "->float"),
         ("int?", true, ""),
         ("interleave", true, ""),
         ("interleave-iter", true, ""),
@@ -490,7 +537,7 @@ pub(crate) fn full_legacy_sl_sh_forms_metadata() -> &'static [(&'static str, boo
         ("iterator", true, ""),
         ("jobs", true, ""),
         ("join", true, ""),
-        ("lambda?", true, ""),
+        ("lambda?", true, "callable?"),
         ("last", true, ""),
         ("len0?", true, ""),
         ("len>0?", true, ""),
@@ -659,8 +706,8 @@ pub(crate) fn full_legacy_sl_sh_forms_metadata() -> &'static [(&'static str, boo
         ("sqrt", true, ""),
         ("std-dev", true, ""),
         ("str", true, ""),
-        ("str->float", true, ""),
-        ("str->int", true, ""),
+        ("str->float", true, "->float"),
+        ("str->int", true, "->int"),
         ("str-append", true, ""),
         ("str-bytes", true, ""),
         ("str-cat-list", true, ""),
@@ -733,14 +780,14 @@ pub(crate) fn full_legacy_sl_sh_forms_metadata() -> &'static [(&'static str, boo
         ("var-or-env", true, ""),
         ("vec", true, ""),
         ("vec-clear!", true, ""),
-        ("vec-empty?", true, ""),
+        ("vec-empty?", true, "empty?"),
         ("vec-insert!", true, ""),
         ("vec-iter", true, ""),
-        ("vec-nth", true, ""),
+        ("vec-nth", true, "get"),
         ("vec-pop!", true, ""),
         ("vec-push!", true, ""),
         ("vec-remove!", true, ""),
-        ("vec-set!", true, ""),
+        ("vec-set!", true, "set!"),
         ("vec-slice", true, ""),
         ("vec?", true, ""),
         (
