@@ -2,9 +2,17 @@ use crate::SloshVm;
 use bridge_macros::sl_sh_fn;
 use slvm::{VMError, VMResult, Value};
 
-/// Usage: (abs arg)
+/// Usage: (abs number) => absolute-value
 ///
-/// Returns absolute value of arg.
+/// Returns the absolute value of number.
+///
+/// Arguments:
+/// - number: A real number (integer, float, or byte).
+/// - absolute-value: A non-negative number of the same type as number.
+///
+/// The absolute value of a real number is its magnitude without regard to sign.
+/// For non-negative numbers, abs returns the number unchanged.
+/// For negative numbers, abs returns the negation of the number.
 ///
 /// Section: math
 ///
@@ -33,14 +41,18 @@ pub fn abs(v: Value) -> VMResult<Value> {
     }
 }
 
-/// Usage: (% int int)
+/// Usage: (% dividend divisor) => remainder
 ///
-/// Remainder from dividing (arg 1) by (arg 2).
-/// Note: Remainder and Modulo are two similar mathematical operations,
-/// called `rem` and `rem-euclid`.
-/// This function uses `rem` which is the same as the `%` operator in C.
-/// With `rem`, the sign of the result is the same as the dividend (arg 1).
-/// With `rem-euclid`, the sign of the result is always positive.
+/// Returns the remainder of dividing dividend by divisor.
+///
+/// Arguments:
+/// - dividend: An integer.
+/// - divisor: A non-zero integer.
+/// - remainder: An integer with the same sign as dividend.
+///
+/// This function computes the remainder using truncated division (same as C's % operator).
+/// The sign of the result matches the sign of the dividend.
+/// For Euclidean remainder with always non-negative results, use rem-euclid.
 ///
 /// Section: math
 ///

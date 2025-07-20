@@ -452,16 +452,25 @@ Example:
       (err "Not a vector or list")))
 
 #%
-Produces the first element of the provided list or vector.  Nil if the
-list/vector is nil/empty.  Note this is like car that works for lists and
-vectors.
+Usage: (first sequence) => object
 
+Returns the first element of sequence, which must be a list or vector.
+
+Arguments:
+- sequence: A list or vector.
+- object: The first element of sequence, or nil/[] if sequence is empty.
+
+If sequence is a non-empty list, returns the first element (equivalent to car).
+If sequence is a non-empty vector, returns the element at index 0.
+If sequence is nil or an empty list, returns nil.
+If sequence is an empty vector, returns an empty vector.
 
 Section: sequence
 
 Example:
 (test::assert-equal 1 (first '(1 2 3)))
 (test::assert-equal 1 (first [1 2 3]))
+(test::assert-equal 'a (first '(a b c)))
 (test::assert-equal nil (first '()))
 (test::assert-equal nil (first nil))
 (test::assert-equal [] (first []))
@@ -473,17 +482,25 @@ Example:
       (err (str "Not a vector or list, " (type obj)))))
 
 #%
-Produces the provided list or vector minus the first element.  Nil if the
-list/vector is nil/empty or one element.  Note this is like cdr that works for
-lists and vectors.  This calls vec-slice to create a new vector when called with
-a vector (i.e. is much more efficient with lists).
+Usage: (rest sequence) => object
+
+Returns a sequence of the elements of sequence except the first.
+
+Arguments:
+- sequence: A list or vector.
+- object: A sequence containing all but the first element, or nil/[] if sequence has one or zero elements.
+
+If sequence is a list with more than one element, returns the cdr of the list.
+If sequence is a single-element list or nil, returns nil.
+If sequence is a vector with more than one element, returns a new vector containing all elements except the first.
+If sequence is a single-element or empty vector, returns an empty vector.
 
 Section: sequence
-
 
 Example:
 (test::assert-equal '(2 3) (rest '(1 2 3)))
 (test::assert-equal [2 3] (rest [1 2 3]))
+(test::assert-equal '(b c) (rest '(a b c)))
 (test::assert-equal nil (rest '(1)))
 (test::assert-equal [] (rest [1]))
 (test::assert-equal nil (rest '()))

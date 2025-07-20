@@ -472,40 +472,111 @@ Example:
   (test::assert-equal 4 dec-test)
   (test::assert-equal 1 (dec! dec-test 3))
   (test::assert-equal 1 dec-test))"#),
-            list: add_special(vm, "list", "
-Usage: (list item0 item1 .. itemN)
+            list: add_special(vm, "list", r#"Usage: (list &rest objects) => list
 
-Create a proper list from pairs with items 0 - N.
+Returns a list containing the supplied objects.
 
-Section: pair
+Arguments:
+- objects: Zero or more objects.
+- list: A list of the supplied objects.
 
-Example:
-(test::assert-equal '(1 2 3) (list 1 2 3))"),
-            list_append: add_special(vm, "list-append", ""),
-            cons: add_special(vm, "cons", ""),
-            car: add_special(vm, "car", "Usage: (car pair)
-
-Return the car (first item) from a pair.  If used on a proper list this will be the first element.
+list returns a list of its arguments in the order they are supplied.
+If no arguments are given, nil (the empty list) is returned.
+The resulting list is a proper list built from cons cells.
 
 Section: pair
 
 Example:
-(def tst-pairs-two (list 'x 'y 'z))
-(test::assert-equal 'x (car tst-pairs-two))
-(test::assert-equal 10 (car '(10)))
-(test::assert-equal 9 (car '(9 11 13)))"),
-            cdr: add_special(vm, "cdr", "Usage: (cdr pair)
+(test::assert-equal '(a b c d) (list 'a 'b 'c 'd))
+(test::assert-equal '(1 2 3) (list 1 2 3))
+(test::assert-equal '((a b) c) (list '(a b) 'c))
+(test::assert-equal nil (list))
+(test::assert-equal '(nil nil) (list nil nil))"#),
+            list_append: add_special(vm, "list-append", r#"Usage: (list-append &rest lists) => result
 
-Return the cdr (second item) from a pair.  If used on a proper list this will be the list minus the first element.
+Returns a new list that is the concatenation of the copies of the supplied lists.
+
+Arguments:
+- lists: Zero or more lists. Each must be a proper list except the last, which may be any object.
+- result: A list, unless the last argument was not a list and all preceding lists were empty.
+
+The lists are left unchanged; the list structure of each list except the last is copied.
+The last argument is not copied; it becomes the cdr of the final dotted pair of the
+concatenation of the preceding lists, or is returned directly if there are no preceding
+non-empty lists.
 
 Section: pair
 
 Example:
-(def tst-pairs-three (list 'x 'y 'z))
-(test::assert-equal '(y z) (cdr tst-pairs-three))
-(test::assert-equal nil (cdr '(10)))
-(test::assert-equal '(13) (cdr '(9 13)))
-(test::assert-equal '(11 13) (cdr '(9 11 13)))"),
+(test::assert-equal '(a b c d e f g) (list-append '(a b c) '(d e f) '() '(g)))
+(test::assert-equal '(a b c . d) (list-append '(a b c) 'd))
+(def lst '(a b c))
+(test::assert-equal '(a b c d) (list-append lst '(d)))
+(test::assert-equal '(a b c) lst)  ; Original list unchanged
+(test::assert-equal nil (list-append))
+(test::assert-equal 'a (list-append 'a))"#),
+            cons: add_special(vm, "cons", r#"Usage: (cons object-1 object-2) => cons
+
+Creates a new cons cell (pair) whose car is object-1 and whose cdr is object-2.
+
+Arguments:
+- object-1: Any object that becomes the car of the cons.
+- object-2: Any object that becomes the cdr of the cons.
+- cons: A fresh cons cell containing the two objects.
+
+The resulting cons cell is a fundamental building block for lists in Lisp.
+When object-2 is a list, cons creates a new list with object-1 as its first element.
+When object-2 is not a list, cons creates a dotted pair.
+
+Section: pair
+
+Example:
+(test::assert-equal '(a . b) (cons 'a 'b))
+(test::assert-equal '(1 2 3) (cons 1 '(2 3)))
+(test::assert-equal '((a b) c d) (cons '(a b) '(c d)))
+(test::assert-equal '(nil) (cons nil nil))
+(test::assert-equal '(a) (cons 'a nil))"#),
+            car: add_special(vm, "car", r#"Usage: (car list) => object
+
+Returns the car of list, which must be a cons or nil.
+
+Arguments:
+- list: A cons cell or nil.
+- object: The object that is the car of the cons, or nil if list is nil.
+
+If list is a cons, car returns the first element. If list is nil, car returns nil.
+The car of a cons can be any object. For a proper list, car returns the first element.
+
+Section: pair
+
+Example:
+(test::assert-equal 'a (car '(a b c)))
+(test::assert-equal 1 (car '(1 . 2)))
+(test::assert-equal nil (car nil))
+(test::assert-equal '(a) (car '((a) b c)))
+(def x (cons 'foo 'bar))
+(test::assert-equal 'foo (car x))"#),
+            cdr: add_special(vm, "cdr", r#"Usage: (cdr list) => object
+
+Returns the cdr of list, which must be a cons or nil.
+
+Arguments:
+- list: A cons cell or nil.
+- object: The object that is the cdr of the cons, or nil if list is nil.
+
+If list is a cons, cdr returns the rest of the list after the first element.
+If list is nil, cdr returns nil. For a proper list, cdr returns a list of
+all elements except the first. For a dotted pair, cdr returns the second element.
+
+Section: pair
+
+Example:
+(test::assert-equal '(b c) (cdr '(a b c)))
+(test::assert-equal 2 (cdr '(1 . 2)))
+(test::assert-equal nil (cdr nil))
+(test::assert-equal nil (cdr '(a)))
+(def x (cons 'foo 'bar))
+(test::assert-equal 'bar (cdr x))"#),
             xar: add_special(
                 vm,
                 "xar!",
@@ -890,23 +961,32 @@ Example:
             len: add_special(
                 vm,
                 "len",
-                r#"Usage: (len expression) -> int
+                r#"Usage: (len sequence) => length
 
-Return length of supplied expression.  The length of an atom is 1.
+Returns the length of sequence.
+
+Arguments:
+- sequence: A sequence (string, list, vector, hash-map) or any other object.
+- length: A non-negative integer representing the length.
+
+For strings, returns the number of characters (not bytes).
+For lists, returns the number of elements.
+For vectors, returns the number of elements.
+For hash-maps, returns the number of key-value pairs.
+For nil, returns 0.
+For atoms (numbers, symbols, booleans, characters), returns 1.
 
 Section: core
 
 Example:
 (test::assert-equal 0 (len nil))
 (test::assert-equal 5 (len "12345"))
-; Note the unicode symbol is only one char even though it is more then one byte.
-(test::assert-equal 6 (len "12345Σ"))
+(test::assert-equal 6 (len "12345Σ"))  ; Unicode counts as one char
 (test::assert-equal 3 (len '(1 2 3)))
 (test::assert-equal 3 (len [1 2 3]))
-(test::assert-equal 3 (len (list 1 2 3)))
-(test::assert-equal 3 (len (vec 1 2 3)))
+(test::assert-equal 2 (len {:a 1 :b 2}))
 (test::assert-equal 1 (len 100))
-(test::assert-equal 1 (len 100.0))
+(test::assert-equal 1 (len 'symbol))
 (test::assert-equal 1 (len \tab))
 "#,
             ),
