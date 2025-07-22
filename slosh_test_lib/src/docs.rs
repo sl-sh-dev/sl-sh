@@ -1,7 +1,7 @@
 use crate::docs::legacy as legacy_docs;
 use bridge_adapters::add_builtin;
 use bridge_adapters::lisp_adapters::SlFrom;
-use bridge_adapters::{BridgeResult, BridgeError};
+use bridge_adapters::{BridgeError, BridgeResult};
 use compile_state::state::{SloshVm, SloshVmTrait};
 use lazy_static::lazy_static;
 use mdbook::book::{Book, Chapter};

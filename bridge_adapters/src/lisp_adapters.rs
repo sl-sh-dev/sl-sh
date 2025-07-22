@@ -243,8 +243,8 @@ use bridge_types::BridgedType;
 use bridge_types::{Keyword, KeywordAsString, LooseString, SloshChar, Symbol, SymbolAsString};
 use compile_state::state::SloshVm;
 
-use slvm::Value;
 use crate::BridgeResult;
+use slvm::Value;
 
 mod collections;
 pub mod numbers;

@@ -1,5 +1,5 @@
 use crate::lisp_adapters::{SlFrom, SlFromRef};
-use crate::{BridgeResult, BridgeError};
+use crate::{BridgeError, BridgeResult};
 use bridge_types::{ErrorStrings, LooseFloat, LooseInt, LooseString};
 use compile_state::state::SloshVm;
 use slvm::float::F56;
@@ -16,12 +16,10 @@ impl<'a> SlFromRef<'a, Value> for () {
     fn sl_from_ref(value: Value, _vm: &'a SloshVm) -> BridgeResult<()> {
         match value {
             Value::Nil => Ok(()),
-            _ => Err(BridgeError::Error(
-                ErrorStrings::mismatched_type(
-                    <&'static str>::from(ValueType::Nil),
-                    value.display_type(_vm),
-                ),
-            )),
+            _ => Err(BridgeError::Error(ErrorStrings::mismatched_type(
+                <&'static str>::from(ValueType::Nil),
+                value.display_type(_vm),
+            ))),
         }
     }
 }
@@ -52,12 +50,10 @@ impl<'a> SlFromRef<'a, Value> for LooseFloat {
                     .map_err(|_e| BridgeError::Error("Not a valid float.".to_string()))?;
                 Ok(F56::from(f).0)
             }
-            _ => Err(BridgeError::Error(
-                ErrorStrings::invalid_string(
-                    <&'static str>::from(ValueType::Int),
-                    value.display_type(vm),
-                ),
-            )),
+            _ => Err(BridgeError::Error(ErrorStrings::invalid_string(
+                <&'static str>::from(ValueType::Int),
+                value.display_type(vm),
+            ))),
         };
         res.map(LooseFloat::from)
     }
@@ -76,7 +72,8 @@ impl<'a> SlFromRef<'a, Value> for LooseInt {
             Value::Int(i) => Ok(i),
             Value::Float(f) => {
                 let f = f64::from(f);
-                let i56 = I56::into_i56_fallible(f).map_err(|e| BridgeError::Error(e.to_string()))?;
+                let i56 =
+                    I56::into_i56_fallible(f).map_err(|e| BridgeError::Error(e.to_string()))?;
                 Ok(I56::into_inner(i56))
             }
             v @ (Value::CodePoint(_)
@@ -90,15 +87,15 @@ impl<'a> SlFromRef<'a, Value> for LooseInt {
                 .or(LooseString::sl_from_ref(v, vm)?
                     .parse::<f64>()
                     .map_err(|_e| BridgeError::Error("Not a valid integer.".to_string()))
-                    .and_then(|f| I56::into_i56_fallible(f).map_err(|e| BridgeError::Error(e.to_string()))))
+                    .and_then(|f| {
+                        I56::into_i56_fallible(f).map_err(|e| BridgeError::Error(e.to_string()))
+                    }))
                 .map(I56::into_inner)
                 .map_err(|_e| BridgeError::Error("Not a valid integer.".to_string())),
-            _ => Err(BridgeError::Error(
-                ErrorStrings::mismatched_type(
-                    <&'static str>::from(ValueType::Int),
-                    value.display_type(vm),
-                ),
-            )),
+            _ => Err(BridgeError::Error(ErrorStrings::mismatched_type(
+                <&'static str>::from(ValueType::Int),
+                value.display_type(vm),
+            ))),
         };
         res.map(LooseInt::from)
     }
@@ -137,12 +134,10 @@ impl<'a> SlFromRef<'a, Value> for i32 {
                     )
                 })
             }
-            _ => Err(BridgeError::Error(
-                ErrorStrings::mismatched_type(
-                    <&'static str>::from(ValueType::Int),
-                    value.display_type(vm),
-                ),
-            )),
+            _ => Err(BridgeError::Error(ErrorStrings::mismatched_type(
+                <&'static str>::from(ValueType::Int),
+                value.display_type(vm),
+            ))),
         }
     }
 }
@@ -157,12 +152,10 @@ impl<'a> SlFromRef<'a, Value> for f64 {
     fn sl_from_ref(value: Value, vm: &'a SloshVm) -> BridgeResult<Self> {
         match value {
             Value::Float(float) => Ok(f64::from(float)),
-            _ => Err(BridgeError::Error(
-                ErrorStrings::mismatched_type(
-                    <&'static str>::from(ValueType::Float),
-                    value.display_type(vm),
-                ),
-            )),
+            _ => Err(BridgeError::Error(ErrorStrings::mismatched_type(
+                <&'static str>::from(ValueType::Float),
+                value.display_type(vm),
+            ))),
         }
     }
 }
@@ -177,12 +170,10 @@ impl<'a> SlFromRef<'a, Value> for u8 {
     fn sl_from_ref(value: Value, vm: &'a SloshVm) -> BridgeResult<Self> {
         match value {
             Value::Byte(i) => Ok(i),
-            _ => Err(BridgeError::Error(
-                ErrorStrings::mismatched_type(
-                    String::from(ValueTypes::from([ValueType::Byte])),
-                    value.display_type(vm),
-                ),
-            )),
+            _ => Err(BridgeError::Error(ErrorStrings::mismatched_type(
+                String::from(ValueTypes::from([ValueType::Byte])),
+                value.display_type(vm),
+            ))),
         }
     }
 }
@@ -208,12 +199,10 @@ impl<'a> SlFromRef<'a, Value> for usize {
                     value.display_type(vm),
                 ))
             }),
-            _ => Err(BridgeError::Error(
-                ErrorStrings::mismatched_type(
-                    String::from(ValueTypes::from([ValueType::Int])),
-                    value.display_type(vm),
-                ),
-            )),
+            _ => Err(BridgeError::Error(ErrorStrings::mismatched_type(
+                String::from(ValueTypes::from([ValueType::Int])),
+                value.display_type(vm),
+            ))),
         }
     }
 }
@@ -222,12 +211,10 @@ impl<'a> SlFromRef<'a, Value> for i64 {
     fn sl_from_ref(value: Value, vm: &'a SloshVm) -> BridgeResult<Self> {
         match value {
             Value::Int(i) => Ok(I56::from_inner(&i)),
-            _ => Err(BridgeError::Error(
-                ErrorStrings::mismatched_type(
-                    <&'static str>::from(ValueType::Int),
-                    value.display_type(vm),
-                ),
-            )),
+            _ => Err(BridgeError::Error(ErrorStrings::mismatched_type(
+                <&'static str>::from(ValueType::Int),
+                value.display_type(vm),
+            ))),
         }
     }
 }

@@ -286,12 +286,12 @@ pub struct Param {
 pub struct ErrorStrings {}
 
 impl ErrorStrings {
-    pub fn mismatched_type(
+    pub fn mismatched_type_context(
         expected: impl AsRef<str>,
         got: impl AsRef<str>,
-        additional: impl AsRef<str>,
+        context: impl AsRef<str>,
     ) -> String {
-        if additional.as_ref().is_empty() {
+        if context.as_ref().is_empty() {
             format!(
                 "mismatched type input, expected value of type {}, got {}.",
                 expected.as_ref(),
@@ -302,17 +302,17 @@ impl ErrorStrings {
                 "mismatched type input, expected value of type {}, got {}. {}",
                 expected.as_ref(),
                 got.as_ref(),
-                additional.as_ref(),
+                context.as_ref(),
             )
         }
     }
 
-    pub fn invalid_string(expected: impl AsRef<str>, got: impl AsRef<str>) -> String {
-        Self::mismatched_type(expected, got, "")
+    pub fn mismatched_type(expected: impl AsRef<str>, got: impl AsRef<str>) -> String {
+        Self::mismatched_type_context(expected, got, "")
     }
 
-    pub fn mismatched_type(expected: impl AsRef<str>, got: impl AsRef<str>) -> String {
-        Self::mismatched_type(expected, got, "")
+    pub fn invalid_string(expected: impl AsRef<str>, got: impl AsRef<str>) -> String {
+        Self::mismatched_type_context(expected, got, "")
     }
 
     pub fn mismatched_type_with_context(
@@ -320,6 +320,6 @@ impl ErrorStrings {
         got: impl AsRef<str>,
         additional: impl AsRef<str>,
     ) -> String {
-        Self::mismatched_type(expected, got, additional)
+        Self::mismatched_type_context(expected, got, additional)
     }
 }
