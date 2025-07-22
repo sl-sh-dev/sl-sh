@@ -3,7 +3,7 @@
 //! and Value::False, Value::Nil, and Value::Undefined map to bool false.
 
 use crate::lisp_adapters::{SlFrom, SlFromRef};
-use crate::{BridgeResult, BridgeError};
+use crate::{BridgeError, BridgeResult};
 use bridge_types::{ErrorStrings, Keyword, KeywordAsString, Symbol, SymbolAsString};
 use compile_state::state::SloshVm;
 use slvm::{Value, ValueType, ValueTypes};
@@ -51,12 +51,10 @@ impl SlFromRef<'_, Value> for KeywordAsString {
                 let ret = KeywordAsString::from(vm.get_interned(i).to_string());
                 Ok(ret)
             }
-            _ => Err(BridgeError::Error(
-                ErrorStrings::mismatched_type(
-                    String::from(ValueTypes::from([ValueType::Keyword])),
-                    value.display_type(vm),
-                ),
-            )),
+            _ => Err(BridgeError::Error(ErrorStrings::mismatched_type(
+                String::from(ValueTypes::from([ValueType::Keyword])),
+                value.display_type(vm),
+            ))),
         }
     }
 }
@@ -74,12 +72,10 @@ impl SlFromRef<'_, Value> for SymbolAsString {
                 let ret = SymbolAsString::from(vm.get_interned(i).to_string());
                 Ok(ret)
             }
-            _ => Err(BridgeError::Error(
-                ErrorStrings::mismatched_type(
-                    String::from(ValueTypes::from([ValueType::Symbol])),
-                    value.display_type(vm),
-                ),
-            )),
+            _ => Err(BridgeError::Error(ErrorStrings::mismatched_type(
+                String::from(ValueTypes::from([ValueType::Symbol])),
+                value.display_type(vm),
+            ))),
         }
     }
 }
@@ -94,12 +90,10 @@ impl SlFromRef<'_, Value> for Keyword {
     fn sl_from_ref(value: Value, vm: &'_ SloshVm) -> BridgeResult<Self> {
         match value {
             Value::Keyword(i) => Ok(Keyword::from(i.id)),
-            _ => Err(BridgeError::Error(
-                ErrorStrings::mismatched_type(
-                    String::from(ValueTypes::from([ValueType::Keyword])),
-                    value.display_type(vm),
-                ),
-            )),
+            _ => Err(BridgeError::Error(ErrorStrings::mismatched_type(
+                String::from(ValueTypes::from([ValueType::Keyword])),
+                value.display_type(vm),
+            ))),
         }
     }
 }
@@ -114,12 +108,10 @@ impl SlFromRef<'_, Value> for Symbol {
     fn sl_from_ref(value: Value, vm: &'_ SloshVm) -> BridgeResult<Self> {
         match value {
             Value::Symbol(i) => Ok(Symbol::from(i.id)),
-            _ => Err(BridgeError::Error(
-                ErrorStrings::mismatched_type(
-                    String::from(ValueTypes::from([ValueType::Symbol])),
-                    value.display_type(vm),
-                ),
-            )),
+            _ => Err(BridgeError::Error(ErrorStrings::mismatched_type(
+                String::from(ValueTypes::from([ValueType::Symbol])),
+                value.display_type(vm),
+            ))),
         }
     }
 }

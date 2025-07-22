@@ -1,5 +1,5 @@
 use crate::lisp_adapters::{SlAsMut, SlAsRef, SlFrom, SlFromRef, SlFromRefMut};
-use crate::{BridgeResult, BridgeError};
+use crate::{BridgeError, BridgeResult};
 use bridge_types::{ErrorStrings, LooseString, SloshChar};
 use compile_state::state::SloshVm;
 use slvm::value::ValueType;
@@ -34,20 +34,18 @@ impl<'a> SlFromRef<'a, Value> for LooseString<'a> {
             Value::Symbol(i) => Ok(LooseString::Borrowed(vm.get_interned(i))),
             Value::Keyword(i) => Ok(LooseString::Borrowed(vm.get_interned(i))),
             Value::StringConst(i) => Ok(LooseString::Borrowed(vm.get_interned(i))),
-            _ => Err(BridgeError::Error(
-                ErrorStrings::mismatched_type(
-                    String::from(ValueTypes::from([
-                        ValueType::String,
-                        ValueType::StringConst,
-                        ValueType::Symbol,
-                        ValueType::Keyword,
-                        ValueType::CharCluster,
-                        ValueType::CharClusterLong,
-                        ValueType::CodePoint,
-                    ])),
-                    value.display_type(vm),
-                ),
-            )),
+            _ => Err(BridgeError::Error(ErrorStrings::mismatched_type(
+                String::from(ValueTypes::from([
+                    ValueType::String,
+                    ValueType::StringConst,
+                    ValueType::Symbol,
+                    ValueType::Keyword,
+                    ValueType::CharCluster,
+                    ValueType::CharClusterLong,
+                    ValueType::CodePoint,
+                ])),
+                value.display_type(vm),
+            ))),
         }
     }
 }
@@ -85,15 +83,13 @@ impl<'a> SlAsRef<'a, str> for &Value {
         match self {
             Value::String(h) => Ok(vm.get_string(*h)),
             Value::StringConst(i) => Ok(vm.get_interned(*i)),
-            _ => Err(BridgeError::Error(
-                ErrorStrings::mismatched_type(
-                    String::from(ValueTypes::from([
-                        ValueType::String,
-                        ValueType::StringConst,
-                    ])),
-                    self.display_type(vm),
-                ),
-            )),
+            _ => Err(BridgeError::Error(ErrorStrings::mismatched_type(
+                String::from(ValueTypes::from([
+                    ValueType::String,
+                    ValueType::StringConst,
+                ])),
+                self.display_type(vm),
+            ))),
         }
     }
 }
@@ -107,16 +103,14 @@ impl<'a> SlFromRef<'a, Value> for SloshChar<'a> {
                 String::from_utf8_lossy(&c[0..l as usize])
             )))),
             Value::CharClusterLong(h) => Ok(SloshChar::String(Cow::Borrowed(vm.get_string(h)))),
-            _ => Err(BridgeError::Error(
-                ErrorStrings::mismatched_type(
-                    String::from(ValueTypes::from([
-                        ValueType::CharCluster,
-                        ValueType::CharClusterLong,
-                        ValueType::CodePoint,
-                    ])),
-                    value.display_type(vm),
-                ),
-            )),
+            _ => Err(BridgeError::Error(ErrorStrings::mismatched_type(
+                String::from(ValueTypes::from([
+                    ValueType::CharCluster,
+                    ValueType::CharClusterLong,
+                    ValueType::CodePoint,
+                ])),
+                value.display_type(vm),
+            ))),
         }
     }
 }
@@ -131,13 +125,13 @@ impl<'a> SlFromRefMut<'a, Value> for &'a mut String {
 impl<'a> SlAsMut<'a, String> for &Value {
     fn sl_as_mut(&mut self, vm: &'a mut SloshVm) -> BridgeResult<&'a mut String> {
         match self {
-            Value::String(h) => vm.get_string_mut(*h).map_err(|e| BridgeError::Error(e.to_string())),
-            _ => Err(BridgeError::Error(
-                ErrorStrings::mismatched_type(
-                    <&'static str>::from(ValueType::String),
-                    self.display_type(vm),
-                ),
-            )),
+            Value::String(h) => vm
+                .get_string_mut(*h)
+                .map_err(|e| BridgeError::Error(e.to_string())),
+            _ => Err(BridgeError::Error(ErrorStrings::mismatched_type(
+                <&'static str>::from(ValueType::String),
+                self.display_type(vm),
+            ))),
         }
     }
 }
@@ -171,12 +165,10 @@ impl<'a> SlFromRef<'a, Value> for String {
         match value {
             Value::String(h) => Ok(vm.get_string(h).to_string()),
             Value::StringConst(i) => Ok(vm.get_interned(i).to_string()),
-            _ => Err(BridgeError::Error(
-                ErrorStrings::mismatched_type(
-                    <&'static str>::from(ValueType::String),
-                    value.display_type(vm),
-                ),
-            )),
+            _ => Err(BridgeError::Error(ErrorStrings::mismatched_type(
+                <&'static str>::from(ValueType::String),
+                value.display_type(vm),
+            ))),
         }
     }
 }
@@ -300,33 +292,37 @@ mod tests {
 
         let param = arg_types[0usize];
         match param.handle {
-            bridge_types::TypeHandle::Direct => match args.get(0usize) {
-                None => {
-                    Err(BridgeError::Error(
-                        format!("{} not given enough arguments, expected at least {} arguments, got {}.", fn_name, 1usize, args.len())
-                    ))
-                }
-                Some(mut arg_0) => match args.get(PARAMS_LEN) {
-                    Some(_)
-                        if PARAMS_LEN == 0
-                            || arg_types[PARAMS_LEN - 1].handle
-                                != bridge_types::TypeHandle::VarArgs =>
-                    {
-                        let res =
+            bridge_types::TypeHandle::Direct => {
+                match args.get(0usize) {
+                    None => Err(BridgeError::Error(format!(
+                        "{} not given enough arguments, expected at least {} arguments, got {}.",
+                        fn_name,
+                        1usize,
+                        args.len()
+                    ))),
+                    Some(mut arg_0) => match args.get(PARAMS_LEN) {
+                        Some(_)
+                            if PARAMS_LEN == 0
+                                || arg_types[PARAMS_LEN - 1].handle
+                                    != bridge_types::TypeHandle::VarArgs =>
+                        {
+                            let res =
                             format!("{} given too many arguments, expected at least {} arguments, got {}.",
                                     fn_name, 1usize, args.len());
-                        Err(BridgeError::Error(res))
-                    }
-                    _ => {
-                        let arg: &mut String = arg_0.sl_as_mut(vm)?;
-                        arg.push_str("0");
-                        Ok(())
-                    }
-                },
-            },
-            _ => {
-                Err(BridgeError::Error(format!("{} failed to parse its arguments, internal error.", fn_name)))
+                            Err(BridgeError::Error(res))
+                        }
+                        _ => {
+                            let arg: &mut String = arg_0.sl_as_mut(vm)?;
+                            arg.push_str("0");
+                            Ok(())
+                        }
+                    },
+                }
             }
+            _ => Err(BridgeError::Error(format!(
+                "{} failed to parse its arguments, internal error.",
+                fn_name
+            ))),
         }
     }
 
@@ -344,9 +340,12 @@ mod tests {
         match param.handle {
             bridge_types::TypeHandle::Direct => match args.get(0usize) {
                 None => {
-                    return Err(BridgeError::Error(
-                        format!("{} not given enough arguments, expected at least {} arguments, got {}.", fn_name, 1usize, args.len())
-                    ));
+                    return Err(BridgeError::Error(format!(
+                        "{} not given enough arguments, expected at least {} arguments, got {}.",
+                        fn_name,
+                        1usize,
+                        args.len()
+                    )));
                 }
                 Some(arg_0) => match args.get(PARAMS_LEN) {
                     Some(_)
@@ -354,24 +353,23 @@ mod tests {
                             || arg_types[PARAMS_LEN - 1].handle
                                 != bridge_types::TypeHandle::VarArgs =>
                     {
-                        Err(BridgeError::Error(
-                                            format!("{} given too many arguments, expected at least {} arguments, got {}.",
-                                                    fn_name, 1usize, args.len())
-                        ))
+                        Err(BridgeError::Error(format!(
+                            "{} given too many arguments, expected at least {} arguments, got {}.",
+                            fn_name,
+                            1usize,
+                            args.len()
+                        )))
                     }
                     _ => {
-                        {
-                            let arg: String = (*arg_0).sl_into_ref(vm)?;
-                            arg.trim().to_string().sl_into(vm)
-                        };
+                        let arg: String = (*arg_0).sl_into_ref(vm)?;
+                        arg.trim().to_string().sl_into(vm)
                     }
                 },
             },
-            _ => {
-                Err(BridgeError::Error(
-                    format!("{} failed to parse its arguments, internal error.", fn_name)
-                ))
-            }
+            _ => Err(BridgeError::Error(format!(
+                "{} failed to parse its arguments, internal error.",
+                fn_name
+            ))),
         }
     }
 
