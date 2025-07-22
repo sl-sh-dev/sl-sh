@@ -3,18 +3,19 @@
 //! and Value::False, Value::Nil, and Value::Undefined map to bool false.
 
 use crate::lisp_adapters::{SlFrom, SlFromRef};
+use crate::{BridgeResult, BridgeError};
 use bridge_types::{ErrorStrings, Keyword, KeywordAsString, Symbol, SymbolAsString};
 use compile_state::state::SloshVm;
-use slvm::{VMError, VMResult, Value, ValueType, ValueTypes};
+use slvm::{Value, ValueType, ValueTypes};
 
 impl SlFromRef<'_, Value> for Value {
-    fn sl_from_ref(value: Value, _vm: &SloshVm) -> VMResult<Self> {
+    fn sl_from_ref(value: Value, _vm: &SloshVm) -> BridgeResult<Self> {
         Ok(value)
     }
 }
 
 impl SlFromRef<'_, Value> for bool {
-    fn sl_from_ref(value: Value, _vm: &SloshVm) -> VMResult<Self> {
+    fn sl_from_ref(value: Value, _vm: &SloshVm) -> BridgeResult<Self> {
         match value {
             Value::True => Ok(true),
             Value::False => Ok(false),
@@ -28,7 +29,7 @@ impl SlFromRef<'_, Value> for bool {
 }
 
 impl SlFrom<bool> for Value {
-    fn sl_from(value: bool, _vm: &mut SloshVm) -> VMResult<Self> {
+    fn sl_from(value: bool, _vm: &mut SloshVm) -> BridgeResult<Self> {
         if value {
             Ok(Value::True)
         } else {
@@ -38,19 +39,19 @@ impl SlFrom<bool> for Value {
 }
 
 impl SlFrom<KeywordAsString> for Value {
-    fn sl_from(value: KeywordAsString, vm: &mut SloshVm) -> VMResult<Self> {
+    fn sl_from(value: KeywordAsString, vm: &mut SloshVm) -> BridgeResult<Self> {
         Ok(Value::Keyword(vm.intern(value.as_ref())))
     }
 }
 
 impl SlFromRef<'_, Value> for KeywordAsString {
-    fn sl_from_ref(value: Value, vm: &'_ SloshVm) -> VMResult<Self> {
+    fn sl_from_ref(value: Value, vm: &'_ SloshVm) -> BridgeResult<Self> {
         match value {
             Value::Keyword(i) => {
                 let ret = KeywordAsString::from(vm.get_interned(i).to_string());
                 Ok(ret)
             }
-            _ => Err(VMError::new_conversion(
+            _ => Err(BridgeError::Error(
                 ErrorStrings::fix_me_mismatched_type(
                     String::from(ValueTypes::from([ValueType::Keyword])),
                     value.display_type(vm),
@@ -61,19 +62,19 @@ impl SlFromRef<'_, Value> for KeywordAsString {
 }
 
 impl SlFrom<SymbolAsString> for Value {
-    fn sl_from(value: SymbolAsString, vm: &mut SloshVm) -> VMResult<Self> {
+    fn sl_from(value: SymbolAsString, vm: &mut SloshVm) -> BridgeResult<Self> {
         Ok(Value::Symbol(vm.intern(value.as_ref())))
     }
 }
 
 impl SlFromRef<'_, Value> for SymbolAsString {
-    fn sl_from_ref(value: Value, vm: &'_ SloshVm) -> VMResult<Self> {
+    fn sl_from_ref(value: Value, vm: &'_ SloshVm) -> BridgeResult<Self> {
         match value {
             Value::Symbol(i) => {
                 let ret = SymbolAsString::from(vm.get_interned(i).to_string());
                 Ok(ret)
             }
-            _ => Err(VMError::new_conversion(
+            _ => Err(BridgeError::Error(
                 ErrorStrings::fix_me_mismatched_type(
                     String::from(ValueTypes::from([ValueType::Symbol])),
                     value.display_type(vm),
@@ -84,16 +85,16 @@ impl SlFromRef<'_, Value> for SymbolAsString {
 }
 
 impl SlFrom<Keyword> for Value {
-    fn sl_from(value: Keyword, _vm: &mut SloshVm) -> VMResult<Self> {
+    fn sl_from(value: Keyword, _vm: &mut SloshVm) -> BridgeResult<Self> {
         Ok(Value::Keyword(value.into()))
     }
 }
 
 impl SlFromRef<'_, Value> for Keyword {
-    fn sl_from_ref(value: Value, vm: &'_ SloshVm) -> VMResult<Self> {
+    fn sl_from_ref(value: Value, vm: &'_ SloshVm) -> BridgeResult<Self> {
         match value {
             Value::Keyword(i) => Ok(Keyword::from(i.id)),
-            _ => Err(VMError::new_conversion(
+            _ => Err(BridgeError::Error(
                 ErrorStrings::fix_me_mismatched_type(
                     String::from(ValueTypes::from([ValueType::Keyword])),
                     value.display_type(vm),
@@ -104,16 +105,16 @@ impl SlFromRef<'_, Value> for Keyword {
 }
 
 impl SlFrom<Symbol> for Value {
-    fn sl_from(value: Symbol, _vm: &mut SloshVm) -> VMResult<Self> {
+    fn sl_from(value: Symbol, _vm: &mut SloshVm) -> BridgeResult<Self> {
         Ok(Value::Symbol(value.into()))
     }
 }
 
 impl SlFromRef<'_, Value> for Symbol {
-    fn sl_from_ref(value: Value, vm: &'_ SloshVm) -> VMResult<Self> {
+    fn sl_from_ref(value: Value, vm: &'_ SloshVm) -> BridgeResult<Self> {
         match value {
             Value::Symbol(i) => Ok(Symbol::from(i.id)),
-            _ => Err(VMError::new_conversion(
+            _ => Err(BridgeError::Error(
                 ErrorStrings::fix_me_mismatched_type(
                     String::from(ValueTypes::from([ValueType::Symbol])),
                     value.display_type(vm),
@@ -127,7 +128,7 @@ impl<T> SlFrom<Value> for Option<T>
 where
     T: SlFrom<Value>,
 {
-    fn sl_from(value: Value, vm: &mut SloshVm) -> VMResult<Self> {
+    fn sl_from(value: Value, vm: &mut SloshVm) -> BridgeResult<Self> {
         if value.is_nil() {
             Ok(None)
         } else {
@@ -141,7 +142,7 @@ impl<'a, T> SlFromRef<'a, Value> for Option<T>
 where
     T: SlFromRef<'a, Value>,
 {
-    fn sl_from_ref(value: Value, vm: &'a SloshVm) -> VMResult<Self> {
+    fn sl_from_ref(value: Value, vm: &'a SloshVm) -> BridgeResult<Self> {
         if value.is_nil() {
             Ok(None)
         } else {

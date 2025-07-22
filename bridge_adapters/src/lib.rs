@@ -1,7 +1,32 @@
 use compile_state::state::{CompileEnvironment, SloshVm, SloshVmTrait};
-use slvm::{CallFuncSig, Value};
+use slvm::{CallFuncSig, Value, VMError, VMResult};
+use std::error::Error;
+use std::fmt::{Display, Formatter};
 
 pub mod lisp_adapters;
+
+pub type BridgeResult<T> = Result<T, BridgeError>;
+
+#[derive(Debug, Clone)]
+pub enum BridgeError {
+    Error(String),
+}
+
+impl Error for BridgeError {}
+
+impl BridgeError {
+    pub fn with_fn<T>(br: BridgeResult<T>, fn_name: impl AsRef<str>) -> VMResult<T> {
+        br.map_err(|e| VMError::new_conversion(format!("{}: {}", fn_name.as_ref(), e)))
+    }
+}
+
+impl Display for BridgeError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BridgeError::Error(s) => write!(f, "{s}"),
+        }
+    }
+}
 
 pub fn add_builtin(
     env: &mut SloshVm,

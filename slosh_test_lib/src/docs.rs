@@ -1,6 +1,7 @@
 use crate::docs::legacy as legacy_docs;
 use bridge_adapters::add_builtin;
 use bridge_adapters::lisp_adapters::SlFrom;
+use bridge_adapters::{BridgeResult, BridgeError};
 use bridge_macros::sl_sh_fn;
 use compile_state::state::{SloshVm, SloshVmTrait};
 use lazy_static::lazy_static;
@@ -492,7 +493,7 @@ fn insert_nil_section(map: &mut VMHashMap, key: &'static str, vm: &mut SloshVm) 
 }
 
 impl SlFrom<SloshDoc> for VMHashMap {
-    fn sl_from(value: SloshDoc, vm: &mut SloshVm) -> VMResult<Self> {
+    fn sl_from(value: SloshDoc, vm: &mut SloshVm) -> BridgeResult<Self> {
         let mut map = Self::with_capacity(4);
         match (value.doc_string.usage, value.doc_string.example) {
             (Some(usage), Some(example)) => {
@@ -519,7 +520,7 @@ impl SlFrom<SloshDoc> for VMHashMap {
 }
 
 impl SlFrom<SloshDoc> for Value {
-    fn sl_from(value: SloshDoc, vm: &mut SloshVm) -> VMResult<Self> {
+    fn sl_from(value: SloshDoc, vm: &mut SloshVm) -> BridgeResult<Self> {
         let map = VMHashMap::sl_from(value, vm)?;
         Ok(vm.alloc_map(map))
     }
@@ -534,7 +535,7 @@ fn doc_map(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
             vm.pause_gc();
 
             let res = match SloshDoc::new(*g, vm, Namespace::Global) {
-                Ok(slosh_doc) => Value::sl_from(slosh_doc, vm),
+                Ok(slosh_doc) => BridgeError::with_fn(Value::sl_from(slosh_doc, vm), "doc-map"),
                 Err(e) => Err(VMError::from(e)),
             };
             // Unpause GC, this MUST happen so no early returns (looking at you ?).

@@ -1,21 +1,22 @@
 use crate::lisp_adapters::{SlFrom, SlFromRef};
+use crate::{BridgeResult, BridgeError};
 use bridge_types::{ErrorStrings, LooseFloat, LooseInt, LooseString};
 use compile_state::state::SloshVm;
 use slvm::float::F56;
 use slvm::value::ValueType;
-use slvm::{I56, VMError, VMResult, Value, ValueTypes, to_i56};
+use slvm::{to_i56, Value, ValueTypes, I56};
 
 impl SlFrom<()> for Value {
-    fn sl_from(_value: (), _vm: &mut SloshVm) -> VMResult<Self> {
+    fn sl_from(_value: (), _vm: &mut SloshVm) -> BridgeResult<Self> {
         Ok(Value::Nil)
     }
 }
 
 impl<'a> SlFromRef<'a, Value> for () {
-    fn sl_from_ref(value: Value, _vm: &'a SloshVm) -> VMResult<()> {
+    fn sl_from_ref(value: Value, _vm: &'a SloshVm) -> BridgeResult<()> {
         match value {
             Value::Nil => Ok(()),
-            _ => Err(VMError::new_conversion(
+            _ => Err(BridgeError::Error(
                 ErrorStrings::fix_me_mismatched_type(
                     <&'static str>::from(ValueType::Nil),
                     value.display_type(_vm),
@@ -26,7 +27,7 @@ impl<'a> SlFromRef<'a, Value> for () {
 }
 
 impl<'a> SlFromRef<'a, Value> for LooseFloat {
-    fn sl_from_ref(value: Value, vm: &'a SloshVm) -> VMResult<Self> {
+    fn sl_from_ref(value: Value, vm: &'a SloshVm) -> BridgeResult<Self> {
         let res = match value {
             Value::Byte(byte) => {
                 let f = byte as f64;
@@ -48,10 +49,10 @@ impl<'a> SlFromRef<'a, Value> for LooseFloat {
             | Value::StringConst(_)) => {
                 let f = LooseString::sl_from_ref(v, vm)?
                     .parse::<f64>()
-                    .map_err(|_e| VMError::new_string_conversion("Not a valid float."))?;
+                    .map_err(|_e| BridgeError::Error("Not a valid float.".to_string()))?;
                 Ok(F56::from(f).0)
             }
-            _ => Err(VMError::new_conversion(
+            _ => Err(BridgeError::Error(
                 ErrorStrings::fix_me_invalid_string(
                     <&'static str>::from(ValueType::Int),
                     value.display_type(vm),
@@ -63,19 +64,19 @@ impl<'a> SlFromRef<'a, Value> for LooseFloat {
 }
 
 impl SlFrom<LooseFloat> for Value {
-    fn sl_from(value: LooseFloat, _vm: &mut SloshVm) -> VMResult<Self> {
+    fn sl_from(value: LooseFloat, _vm: &mut SloshVm) -> BridgeResult<Self> {
         Ok(Value::Float(F56(value.0)))
     }
 }
 
 impl<'a> SlFromRef<'a, Value> for LooseInt {
-    fn sl_from_ref(value: Value, vm: &'a SloshVm) -> VMResult<Self> {
+    fn sl_from_ref(value: Value, vm: &'a SloshVm) -> BridgeResult<Self> {
         let res = match value {
             Value::Byte(byte) => Ok(I56::into_inner(byte as i64)),
             Value::Int(i) => Ok(i),
             Value::Float(f) => {
                 let f = f64::from(f);
-                let i56 = I56::into_i56_fallible(f)?;
+                let i56 = I56::into_i56_fallible(f).map_err(|e| BridgeError::Error(e.to_string()))?;
                 Ok(I56::into_inner(i56))
             }
             v @ (Value::CodePoint(_)
@@ -88,11 +89,11 @@ impl<'a> SlFromRef<'a, Value> for LooseInt {
                 .parse::<i64>()
                 .or(LooseString::sl_from_ref(v, vm)?
                     .parse::<f64>()
-                    .map_err(|_e| VMError::new_string_conversion("Not a valid integer."))
-                    .and_then(I56::into_i56_fallible))
+                    .map_err(|_e| BridgeError::Error("Not a valid integer.".to_string()))
+                    .and_then(|f| I56::into_i56_fallible(f).map_err(|e| BridgeError::Error(e.to_string()))))
                 .map(I56::into_inner)
-                .map_err(|_e| VMError::new_string_conversion("Not a valid integer.")),
-            _ => Err(VMError::new_conversion(
+                .map_err(|_e| BridgeError::Error("Not a valid integer.".to_string())),
+            _ => Err(BridgeError::Error(
                 ErrorStrings::fix_me_mismatched_type(
                     <&'static str>::from(ValueType::Int),
                     value.display_type(vm),
@@ -104,39 +105,39 @@ impl<'a> SlFromRef<'a, Value> for LooseInt {
 }
 
 impl SlFrom<LooseInt> for Value {
-    fn sl_from(value: LooseInt, _vm: &mut SloshVm) -> VMResult<Self> {
+    fn sl_from(value: LooseInt, _vm: &mut SloshVm) -> BridgeResult<Self> {
         Ok(Value::Int(value.0))
     }
 }
 
 impl SlFrom<i32> for Value {
-    fn sl_from(value: i32, _vm: &mut SloshVm) -> VMResult<Self> {
+    fn sl_from(value: i32, _vm: &mut SloshVm) -> BridgeResult<Self> {
         Ok(to_i56(value as i64))
     }
 }
 impl SlFrom<u32> for Value {
-    fn sl_from(value: u32, _vm: &mut SloshVm) -> VMResult<Self> {
+    fn sl_from(value: u32, _vm: &mut SloshVm) -> BridgeResult<Self> {
         Ok(to_i56(value as i64))
     }
 }
 
 impl SlFrom<i64> for Value {
-    fn sl_from(value: i64, _vm: &mut SloshVm) -> VMResult<Self> {
+    fn sl_from(value: i64, _vm: &mut SloshVm) -> BridgeResult<Self> {
         Ok(to_i56(value))
     }
 }
 impl<'a> SlFromRef<'a, Value> for i32 {
-    fn sl_from_ref(value: Value, vm: &'a SloshVm) -> VMResult<i32> {
+    fn sl_from_ref(value: Value, vm: &'a SloshVm) -> BridgeResult<i32> {
         match value {
             Value::Int(num) => {
                 let num = I56::from_inner(&num);
                 num.try_into().map_err(|_| {
-                    VMError::new_conversion(
+                    BridgeError::Error(
                         "Provided slosh value too small to fit desired type.".to_string(),
                     )
                 })
             }
-            _ => Err(VMError::new_conversion(
+            _ => Err(BridgeError::Error(
                 ErrorStrings::fix_me_mismatched_type(
                     <&'static str>::from(ValueType::Int),
                     value.display_type(vm),
@@ -147,16 +148,16 @@ impl<'a> SlFromRef<'a, Value> for i32 {
 }
 
 impl SlFrom<f64> for Value {
-    fn sl_from(value: f64, _vm: &mut SloshVm) -> VMResult<Self> {
+    fn sl_from(value: f64, _vm: &mut SloshVm) -> BridgeResult<Self> {
         Ok(Value::Float(value.into()))
     }
 }
 
 impl<'a> SlFromRef<'a, Value> for f64 {
-    fn sl_from_ref(value: Value, vm: &'a SloshVm) -> VMResult<Self> {
+    fn sl_from_ref(value: Value, vm: &'a SloshVm) -> BridgeResult<Self> {
         match value {
             Value::Float(float) => Ok(f64::from(float)),
-            _ => Err(VMError::new_conversion(
+            _ => Err(BridgeError::Error(
                 ErrorStrings::fix_me_mismatched_type(
                     <&'static str>::from(ValueType::Float),
                     value.display_type(vm),
@@ -167,16 +168,16 @@ impl<'a> SlFromRef<'a, Value> for f64 {
 }
 
 impl SlFrom<u8> for Value {
-    fn sl_from(value: u8, _vm: &mut SloshVm) -> VMResult<Self> {
+    fn sl_from(value: u8, _vm: &mut SloshVm) -> BridgeResult<Self> {
         Ok(Value::Byte(value))
     }
 }
 
 impl<'a> SlFromRef<'a, Value> for u8 {
-    fn sl_from_ref(value: Value, vm: &'a SloshVm) -> VMResult<Self> {
+    fn sl_from_ref(value: Value, vm: &'a SloshVm) -> BridgeResult<Self> {
         match value {
             Value::Byte(i) => Ok(i),
-            _ => Err(VMError::new_conversion(
+            _ => Err(BridgeError::Error(
                 ErrorStrings::fix_me_mismatched_type(
                     String::from(ValueTypes::from([ValueType::Byte])),
                     value.display_type(vm),
@@ -187,27 +188,27 @@ impl<'a> SlFromRef<'a, Value> for u8 {
 }
 
 impl SlFrom<usize> for Value {
-    fn sl_from(value: usize, _vm: &mut SloshVm) -> VMResult<Self> {
+    fn sl_from(value: usize, _vm: &mut SloshVm) -> BridgeResult<Self> {
         Ok(to_i56(value as i64))
     }
 }
 
 impl SlFrom<u64> for Value {
-    fn sl_from(value: u64, _vm: &mut SloshVm) -> VMResult<Self> {
+    fn sl_from(value: u64, _vm: &mut SloshVm) -> BridgeResult<Self> {
         Ok(to_i56(value as i64))
     }
 }
 
 impl<'a> SlFromRef<'a, Value> for usize {
-    fn sl_from_ref(value: Value, vm: &'a SloshVm) -> VMResult<Self> {
+    fn sl_from_ref(value: Value, vm: &'a SloshVm) -> BridgeResult<Self> {
         match value {
             Value::Int(i) => usize::try_from(I56::from_inner(&i)).map_err(|_| {
-                VMError::new_conversion(ErrorStrings::fix_me_mismatched_type(
+                BridgeError::Error(ErrorStrings::fix_me_mismatched_type(
                     <&'static str>::from(ValueType::Int),
                     value.display_type(vm),
                 ))
             }),
-            _ => Err(VMError::new_conversion(
+            _ => Err(BridgeError::Error(
                 ErrorStrings::fix_me_mismatched_type(
                     String::from(ValueTypes::from([ValueType::Int])),
                     value.display_type(vm),
@@ -218,10 +219,10 @@ impl<'a> SlFromRef<'a, Value> for usize {
 }
 
 impl<'a> SlFromRef<'a, Value> for i64 {
-    fn sl_from_ref(value: Value, vm: &'a SloshVm) -> VMResult<Self> {
+    fn sl_from_ref(value: Value, vm: &'a SloshVm) -> BridgeResult<Self> {
         match value {
             Value::Int(i) => Ok(I56::from_inner(&i)),
-            _ => Err(VMError::new_conversion(
+            _ => Err(BridgeError::Error(
                 ErrorStrings::fix_me_mismatched_type(
                     <&'static str>::from(ValueType::Int),
                     value.display_type(vm),
