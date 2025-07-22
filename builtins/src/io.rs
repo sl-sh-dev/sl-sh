@@ -181,9 +181,16 @@ fn builtin_flush(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-/// Usage: (fs-rm \"/dir/or/file/to/remove\")
+/// Usage: (fs-rm path) => boolean
 ///
-/// Takes a file or directory as a string and removes it. Works recursively for directories.
+/// Remove a file or directory (recursively).
+///
+/// Arguments:
+/// - path: A string. Path to the file or directory to remove.
+/// - boolean: A boolean. True on successful removal.
+///
+/// Directories are removed recursively with all their contents.
+/// Returns an error if the path doesn't exist.
 ///
 /// Section: file
 ///
@@ -221,20 +228,25 @@ pub fn add_io_builtins(env: &mut SloshVm) {
         env,
         "fopen",
         fopen,
-        "Usage: (fopen filename option*)
+        "Usage: (fopen filename & options) => file-handle
 
-Open a file.  If you use :read and :write then you get a read/write unbuffered file.  Including
+Open a file and return a file handle.
+
+Arguments:
+- filename: A string. Path to the file to open. Can also be :stdin, :stdout, or :stderr.
+- options: Keywords. Zero or more option keywords:
+  - :read - Open for reading
+  - :write - Open for writing  
+  - :append - Append to end of file (implies :write)
+  - :truncate - Truncate file to zero length (implies :write)
+  - :create - Create file if it doesn't exist (implies :write)
+  - :create-new - Create new file, fail if exists (implies :write)
+  - :on-error-nil - Return nil on error instead of throwing
+- file-handle: A file handle object or nil (with :on-error-nil).
+
+If you use :read and :write then you get a read/write unbuffered file. Including
 one of :read or :write will provide a file buffered for read or write (this is faster).
-Note: :append, :truncate, :create, :create-new all imply :write.
-
-Options are:
-    :read
-    :write
-    :append
-    :truncate
-    :create
-    :create-new
-    :on-error-nil
+Defaults to :read if no options specified.
 
 Section: file
 
@@ -252,9 +264,13 @@ Example:
         env,
         "fclose",
         fclose,
-        "Usage: (fclose file)
+        "Usage: (fclose file-handle) => true
 
-Close a file.
+Close an open file handle.
+
+Arguments:
+- file-handle: A file handle. The file to close.
+- true: Always returns true.
 
 Section: file
 
@@ -272,9 +288,16 @@ Example:
         env,
         "read-line",
         builtin_read_line,
-        r#"Usage: (read-line file) -> string
+        r#"Usage: (read-line file-handle) => string-or-nil
 
-Read a line from a file.  Returns Nil if there is nothing left to read.
+Read a line from a file.
+
+Arguments:
+- file-handle: A file handle. The file to read from.
+- string-or-nil: A string containing the line (including newline), or nil at EOF.
+
+Reads characters until a newline is found or end of file is reached.
+The returned string includes the terminating newline character.
 
 Section: file
 
@@ -294,9 +317,15 @@ Example:
         env,
         "fflush",
         builtin_flush,
-        "Usage: (flush file)
+        "Usage: (fflush file-handle) => true
 
-Flush a file.
+Flush buffered data to a file.
+
+Arguments:
+- file-handle: A file handle. The file to flush.
+- true: Always returns true.
+
+Forces any buffered output to be written immediately.
 
 Section: file
 

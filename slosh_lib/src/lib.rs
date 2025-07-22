@@ -196,10 +196,16 @@ fn load_sloshrc_inner() {
     });
 }
 
-/// Usage: (load-rc) | (load-rc "init.slosh)
+/// Usage: (load-rc & filename) => nil
 ///
-/// Read and eval user's rc file, by default "init.slosh" or a user provided file path
-/// found in '$HOME/.config/slosh/'.
+/// Load and evaluate the user's configuration file.
+///
+/// Arguments:
+/// - filename: A string (optional). Config file name (defaults to "init.slosh").
+/// - nil: Always returns nil.
+///
+/// Loads the file from '$HOME/.config/slosh/'. If the directory doesn't exist,
+/// it will be created with a default configuration file.
 ///
 /// Section: core
 #[sl_sh_fn(fn_name = "load-rc", takes_env = true)]

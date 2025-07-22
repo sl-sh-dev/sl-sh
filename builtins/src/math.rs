@@ -81,9 +81,15 @@ pub fn rem_as_percent(dividend: i64, divisor: i64) -> VMResult<i64> {
     })
 }
 
-/// Usage: (rem int int)
+/// Usage: (rem dividend divisor) => remainder
 ///
-/// Remainder from dividing (arg 1) by (arg 2).
+/// Returns the remainder of dividing dividend by divisor.
+///
+/// Arguments:
+/// - dividend: An integer. The number being divided.
+/// - divisor: An integer. The non-zero number to divide by.
+/// - remainder: An integer. The remainder with the same sign as dividend.
+///
 /// Note: Remainder and Modulo are two similar mathematical operations,
 /// called `rem` and `rem-euclid` in Rust.
 /// This function uses `rem` which is the same as the `%` operator in C.
@@ -109,13 +115,19 @@ pub fn rem_as_rem(dividend: i64, divisor: i64) -> VMResult<i64> {
     rem_as_percent(dividend, divisor)
 }
 
-/// Usage: (rem-euclid int int)
+/// Usage: (rem-euclid dividend divisor) => remainder
 ///
-/// Least Non-negative number that can be added to a multiple of the divisor (arg 2) to get the dividend (arg 1).
-/// The result should always be 0 <= result < divisor (arg 2).
+/// Returns the Euclidean remainder of dividing dividend by divisor.
+///
+/// Arguments:
+/// - dividend: An integer. The number being divided.
+/// - divisor: An integer. The non-zero number to divide by.
+/// - remainder: An integer. Always non-negative (0 <= result < |divisor|).
+///
+/// Least non-negative number that can be added to a multiple of the divisor to get the dividend.
 /// Note: Remainder and Modulo are two similar mathematical operations,
 /// called `rem` and `rem-euclid` in Rust.
-/// With `rem`, the sign of the result is the same as the dividend (arg 1).
+/// With `rem`, the sign of the result is the same as the dividend.
 /// With `rem-euclid`, the sign of the result is always positive.
 ///
 /// Section: math

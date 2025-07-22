@@ -95,9 +95,14 @@ pub fn hash_remove(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-/// Usage: (hash-haskey hashmap key)
+/// Usage: (hash-haskey? hashmap key) => boolean
 ///
-/// Checks if a key is in a hashmap.
+/// Tests whether a key exists in a hashmap.
+///
+/// Arguments:
+/// - hashmap: A hashmap. The map to search.
+/// - key: Any type. The key to look for.
+/// - boolean: A boolean. True if key exists, false otherwise.
 ///
 /// Section: hashmap
 ///
@@ -124,9 +129,14 @@ pub fn hash_hashkey(environment: &mut SloshVm, map: &VMHashMap, key: Value) -> V
     }
 }
 
-/// Usage: (occurs (list 1 2 ...) 7)
+/// Usage: (occurs sequence item) => count
 ///
-/// Counts instances of item in sequence.
+/// Count occurrences of item in sequence.
+///
+/// Arguments:
+/// - sequence: A sequence. The collection to search (list, vector, etc.).
+/// - item: Any type. The value to count.
+/// - count: An integer. Number of times item appears in sequence.
 ///
 /// Section: core
 ///
@@ -145,9 +155,16 @@ pub fn occurs(environment: &mut SloshVm, haystack: Value, needle: Value) -> VMRe
     Ok(occurrences)
 }
 
-/// Usage: (in? needle haystack)
+/// Usage: (in? haystack needle) => boolean
 ///
-/// In provided sequence, haystack, find a specific value, needle.
+/// Test whether needle is found within haystack.
+///
+/// Arguments:
+/// - haystack: A sequence. The collection to search (list, vector, etc.).
+/// - needle: Any type. The value to search for.
+/// - boolean: A boolean. True if needle is found, false otherwise.
+///
+/// Recursively searches nested sequences.
 ///
 /// Section: collection
 ///
@@ -180,10 +197,16 @@ pub fn is_in(environment: &mut SloshVm, haystack: Value, needle: Value) -> VMRes
     Ok(Value::False)
 }
 
-/// Usage: (to-list any)
+/// Usage: (to-vec value) => vector
 ///
-/// Turns any one value into a vector. If that value or if it was a sequence
-/// a new sequence with the same values.
+/// Convert any value to a vector.
+///
+/// Arguments:
+/// - value: Any type. Value to convert (single value or sequence).
+/// - vector: A vector. Contains the value(s) from input.
+///
+/// Single values become a one-element vector.
+/// Sequences are converted to vectors with the same elements.
 ///
 /// Section: core
 #[sl_sh_fn(fn_name = "to-vec", takes_env = true)]
@@ -191,10 +214,16 @@ pub fn to_vec(environment: &mut SloshVm, src: Value) -> VMResult<Value> {
     Ok(environment.alloc_vector(src.iter_all(environment).collect::<Vec<Value>>()))
 }
 
-/// Usage: (to-list any)
+/// Usage: (to-list value) => list
 ///
-/// Turns any one value into a list. If that value or if it was a sequence
-/// a new sequence with the same values.
+/// Convert any value to a list.
+///
+/// Arguments:
+/// - value: Any type. Value to convert (single value or sequence).
+/// - list: A list. Contains the value(s) from input.
+///
+/// Single values become a one-element list.
+/// Sequences are converted to lists with the same elements.
 ///
 /// Section: core
 #[sl_sh_fn(fn_name = "to-list", takes_env = true)]
@@ -204,11 +233,15 @@ pub fn to_list(environment: &mut SloshVm, src: Value) -> VMResult<Value> {
     Ok(Value::List(h, 0))
 }
 
-///  Usage: (hash-keys hashmap)
+/// Usage: (hash-keys hashmap) => vector
 ///
-///  Returns a vector of all the hashmaps keys.  The keys will be unordered.
+/// Return all keys from a hashmap.
 ///
-///  Section: hashmap
+/// Arguments:
+/// - hashmap: A hashmap. The map to get keys from.
+/// - vector: A vector. Contains all keys (unordered).
+///
+/// Section: hashmap
 ///
 ///  Example:
 ///  (def tst-hash {:key1  "val one" 'key2 "val two" "key3" "val three" \S "val S"})
@@ -246,9 +279,13 @@ pub fn flatten(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     Ok(vm.alloc_vector(flat))
 }
 
-/// Usage: (reverse items)
+/// Usage: (reverse sequence) => vector
 ///
-/// Produce a vector that is the reverse of items.
+/// Return a reversed copy of the sequence.
+///
+/// Arguments:
+/// - sequence: A sequence. The list or vector to reverse.
+/// - vector: A vector. Contains elements in reverse order.
 ///
 /// Section: collection
 ///
@@ -283,6 +320,7 @@ pub fn setup_collection_builtins(env: &mut SloshVm) {
     intern_occurs(env);
     intern_reverse(env);
     intern_hash_keys(env);
+    intern_hash_hashkey(env);
     intern_is_in(env);
     intern_to_vec(env);
     intern_to_list(env);
@@ -291,9 +329,16 @@ pub fn setup_collection_builtins(env: &mut SloshVm) {
         env,
         "hash-remove!",
         hash_remove,
-        r#"Usage: (hash-remove! hashmap key)
+        r#"Usage: (hash-remove! hashmap key) => value-or-nil
 
-Remove a key from a hashmap. This is a destructive form!
+Remove a key from a hashmap destructively.
+
+Arguments:
+- hashmap: A hashmap. The map to modify.
+- key: Any type. The key to remove.
+- value-or-nil: The removed value, or nil if key not found.
+
+This modifies the hashmap in place.
 
 Section: hashmap
 
@@ -324,10 +369,16 @@ Example:
         env,
         "flatten",
         flatten,
-        "Usage: (flatten & rest)
+        "Usage: (flatten & values) => vector
 
-Takes a sequence composed of individual values or sequences of values and turns
-it into one vector of values.
+Flatten nested sequences into a single vector.
+
+Arguments:
+- values: Any types. Values and/or sequences to flatten.
+- vector: A vector. Contains all values with nesting removed.
+
+Recursively flattens all nested sequences.
+Nil values are omitted from the result.
 
 Section: collection
 
@@ -342,9 +393,15 @@ Example:
         env,
         "vec-slice",
         vec_slice,
-        "Usage: (vec-slice vector start end)
+        "Usage: (vec-slice vector start & end) => vector
 
-Returns a slice of a vector (0 based indexes, end is exclusive).
+Extract a slice from a vector.
+
+Arguments:
+- vector: A vector. The source vector.
+- start: An integer. Starting index (0-based, inclusive).
+- end: An integer (optional). Ending index (exclusive). Defaults to vector length.
+- vector: A vector. The extracted slice.
 
 Section: vector
 
@@ -359,9 +416,13 @@ Example:
         env,
         "vec->list",
         vec_to_list,
-        "Usage: (vec->list vector)
+        "Usage: (vec->list vector) => list
 
 Convert a vector to a list.
+
+Arguments:
+- vector: A vector. The vector to convert.
+- list: A list. Contains the same elements as the vector.
 
 Section: vector
 ",

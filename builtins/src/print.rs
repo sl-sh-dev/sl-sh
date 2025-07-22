@@ -1,4 +1,5 @@
 use crate::SloshVm;
+use bridge_adapters::add_builtin;
 use bridge_macros::sl_sh_fn;
 use compile_state::state::{CompileState, SloshVmTrait};
 use sl_compiler::compile;
@@ -219,13 +220,163 @@ pub fn dasm(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
 }
 
 pub fn add_print_builtins(env: &mut SloshVm) {
-    env.set_global_builtin("pr", pr);
-    env.set_global_builtin("epr", epr);
-    env.set_global_builtin("prn", prn);
-    env.set_global_builtin("eprn", eprn);
-    env.set_global_builtin("dump-globals", dasm);
-    env.set_global_builtin("dasm", dasm);
-    env.set_global_builtin("fpr", fpr);
-    env.set_global_builtin("fprn", fprn);
+    add_builtin(
+        env,
+        "pr",
+        pr,
+        r#"Usage: (pr & values) => nil
+
+Print values to standard output without a newline.
+
+Arguments:
+- values: Any type. Zero or more values to print.
+- nil: Always returns nil.
+
+Prints the string representation of each value in sequence.
+Strings are printed without quotes.
+
+Section: io
+
+Example:
+(pr "Hello" " " "World") ; prints: Hello World
+(pr 42 " is the answer") ; prints: 42 is the answer
+"#,
+    );
+    add_builtin(
+        env,
+        "epr",
+        epr,
+        r#"Usage: (epr & values) => nil
+
+Print values to standard error without a newline.
+
+Arguments:
+- values: Any type. Zero or more values to print.
+- nil: Always returns nil.
+
+Prints the string representation of each value to stderr.
+Strings are printed without quotes.
+
+Section: io
+
+Example:
+(epr "Error: " "File not found") ; prints to stderr: Error: File not found
+"#,
+    );
+    add_builtin(
+        env,
+        "prn",
+        prn,
+        r#"Usage: (prn & values) => nil
+
+Print values to standard output followed by a newline.
+
+Arguments:
+- values: Any type. Zero or more values to print.
+- nil: Always returns nil.
+
+Prints the string representation of each value in sequence,
+then prints a newline character. Strings are printed without quotes.
+
+Section: io
+
+Example:
+(prn "Hello World") ; prints: Hello World\n
+(prn "The answer is" 42) ; prints: The answer is42\n
+"#,
+    );
+    add_builtin(
+        env,
+        "eprn",
+        eprn,
+        r#"Usage: (eprn & values) => nil
+
+Print values to standard error followed by a newline.
+
+Arguments:
+- values: Any type. Zero or more values to print.
+- nil: Always returns nil.
+
+Prints the string representation of each value to stderr,
+then prints a newline character. Strings are printed without quotes.
+
+Section: io
+
+Example:
+(eprn "Error:" "File not found") ; prints to stderr: Error:File not found\n
+"#,
+    );
+    add_builtin(
+        env,
+        "fpr",
+        fpr,
+        r#"Usage: (fpr file-handle & values) => nil
+
+Print values to a file without a newline.
+
+Arguments:
+- file-handle: A file handle. The file to write to (must be writable).
+- values: Any type. Zero or more values to print.
+- nil: Always returns nil.
+
+Writes the string representation of each value to the file.
+Strings are printed without quotes.
+
+Section: io
+
+Example:
+(let ((f (fopen "output.txt" :create :truncate)))
+    (fpr f "Hello" " " "World")
+    (fclose f))
+"#,
+    );
+    add_builtin(
+        env,
+        "fprn",
+        fprn,
+        r#"Usage: (fprn file-handle & values) => nil
+
+Print values to a file followed by a newline.
+
+Arguments:
+- file-handle: A file handle. The file to write to (must be writable).
+- values: Any type. Zero or more values to print.
+- nil: Always returns nil.
+
+Writes the string representation of each value to the file,
+then writes a newline character. Strings are printed without quotes.
+
+Section: io
+
+Example:
+(let ((f (fopen "output.txt" :create :truncate)))
+    (fprn f "Hello World")
+    (fprn f "Line 2")
+    (fclose f))
+"#,
+    );
+    add_builtin(
+        env,
+        "dasm",
+        dasm,
+        r#"Usage: (dasm function-or-expression) => nil
+
+Disassemble a function or compile and disassemble an expression.
+
+Arguments:
+- function-or-expression: A function or list. The item to disassemble.
+- nil: Always returns nil.
+
+If given a lambda or closure, disassembles its bytecode.
+If given a list expression, compiles it first then disassembles.
+Prints the disassembly to standard output.
+
+Section: core
+
+Example:
+(dasm (fn (x) (+ x 1))) ; disassembles the function
+(dasm '(+ 2 3)) ; compiles and disassembles the expression
+"#,
+    );
     intern_dump_globals(env);
 }
