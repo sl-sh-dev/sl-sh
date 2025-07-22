@@ -478,12 +478,12 @@ fn make_orig_fn_call(
         },
         (Some(_), Some(SupportedGenericReturnTypes::VMResult), false) => quote! {
             use bridge_adapters::lisp_adapters::SlInto;
-            return #fn_body.and_then(|x| x.sl_into(environment));
+            return #fn_body.and_then(|x| bridge_adapters::BridgeError::with_fn(x.sl_into(environment), fn_name));
         },
         (Some(_), Some(SupportedGenericReturnTypes::Option), false) => quote! {
             if let Some(val) = #fn_body {
                 use bridge_adapters::lisp_adapters::SlFrom;
-                let val = slvm::Value::sl_from(val, environment)?;
+                let val = bridge_adapters::BridgeError::with_fn(slvm::Value::sl_from(val, environment), fn_name)?;
                 Ok(val)
             } else {
                 return Ok(slvm::Value::Nil);
@@ -492,7 +492,7 @@ fn make_orig_fn_call(
         // coerce to Expression
         (Some(_), None, _) => quote! {
             use bridge_adapters::lisp_adapters::SlInto;
-            return #fn_body.sl_into(environment);
+            return bridge_adapters::BridgeError::with_fn(#fn_body.sl_into(environment), fn_name);
         },
         (None, Some(_), _) => {
             unreachable!("If this functions returns a VMResult it must also return a value.");
@@ -590,7 +590,7 @@ fn parse_variadic_args_type(
                             .iter(environment)
                             .map(|#arg_name| {
                                 use bridge_adapters::lisp_adapters::SlIntoRef;
-                                #arg_name.sl_into_ref(environment)
+                                bridge_adapters::BridgeError::with_fn(#arg_name.sl_into_ref(environment), #fn_name)
                             })
                             .collect::<slvm::VMResult<#ty>>()?;
                         #inner
@@ -607,7 +607,7 @@ fn parse_variadic_args_type(
                         .flat_map(|#arg_name| #arg_name.iter_all(environment))
                         .map(|#arg_name| {
                             use bridge_adapters::lisp_adapters::SlIntoRef;
-                            #arg_name.sl_into_ref(environment)
+                            bridge_adapters::BridgeError::with_fn(#arg_name.sl_into_ref(environment), #fn_name)
                         })
                         .collect::<slvm::VMResult<#ty>>()?;
                     #inner
@@ -648,8 +648,7 @@ fn parse_variadic_args_type(
                     });
                     args.push(quote! {
                         use bridge_adapters::lisp_adapters::SlInto;
-                        //TODO put #fn_name back in
-                        let #arg_name: #elem = #arg_name.sl_into(environment)?;
+                        let #arg_name: #elem = bridge_adapters::BridgeError::with_fn(#arg_name.sl_into(environment), #fn_name)?;
                     })
                 }
                 Ok(quote! {{
@@ -661,7 +660,7 @@ fn parse_variadic_args_type(
                         .iter()
                         .map(|#arg_name| {
                             let #arg_name = #arg_name.iter().collect::<Vec<slvm::Value>>();
-                            match #arg_name.sl_into(environment) {
+                            match bridge_adapters::BridgeError::with_fn(#arg_name.sl_into(environment), #fn_name) {
                                 Ok(#arg_name) => {
                                     let #arg_name: [slvm::Value; #tuple_len] = #arg_name;
                                     let [#(#arg_names),*] = #arg_name;
@@ -800,17 +799,17 @@ fn parse_direct_type(
                 match passing_style {
                     PassingStyle::Value => Ok(quote! {{
                         use bridge_adapters::lisp_adapters::SlIntoRef;
-                        let #arg_name: #ty = #arg_name.sl_into_ref(environment)?;
+                        let #arg_name: #ty = bridge_adapters::BridgeError::with_fn(#arg_name.sl_into_ref(environment), fn_name)?;
                         #inner
                     }}),
                     PassingStyle::Reference => Ok(quote! {{
                         use bridge_adapters::lisp_adapters::SlIntoRef;
-                        let #arg_name: #ty = #arg_name.sl_into_ref(environment)?;
+                        let #arg_name: #ty = bridge_adapters::BridgeError::with_fn(#arg_name.sl_into_ref(environment), fn_name)?;
                         #inner
                     }}),
                     PassingStyle::MutReference => Ok(quote! {{
                         use bridge_adapters::lisp_adapters::SlIntoRefMut;
-                        let #arg_name: #ty = #arg_name.sl_into_ref_mut(environment)?;
+                        let #arg_name: #ty = bridge_adapters::BridgeError::with_fn(#arg_name.sl_into_ref_mut(environment), fn_name)?;
                         #inner
                     }}),
                 }
@@ -1308,7 +1307,7 @@ fn parse_type_tuple(
             return Err(slvm::VMError::new_vm(err_str));
         }
         let #arg_name = #arg_name.iter().collect::<Vec<slvm::Value>>();
-        match #arg_name.sl_into(environment) {
+        match bridge_adapters::BridgeError::with_fn(#arg_name.sl_into(environment), #fn_name) {
             Ok(#arg_name) => {
                 let #arg_name: [slvm::Value; #tuple_len] = #arg_name;
                 let [#(#arg_names),*] = #arg_name;
