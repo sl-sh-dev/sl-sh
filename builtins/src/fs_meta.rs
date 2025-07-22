@@ -41,10 +41,15 @@ fn cd_expand_all_dots(cd: String) -> String {
     }
 }
 
-/// Usage: (sleep milliseconds) -> nil
+/// Usage: (sleep milliseconds) => nil
 ///
-/// Sleep for *at least* the provided milliseconds (must be a positive integer),
-/// otherwise function will no-op.
+/// Sleep for *at least* the provided milliseconds.
+///
+/// Arguments:
+/// - milliseconds: An integer. Number of milliseconds to sleep (must be positive).
+/// - nil: Always returns nil.
+///
+/// If milliseconds is not positive, the function does nothing.
 ///
 /// Section: system
 ///
@@ -61,9 +66,18 @@ fn sleep(millis: i64) -> VMResult<()> {
     Ok(())
 }
 
-/// Usage: (cd dir-to-change-to)
+/// Usage: (cd & directory) => boolean
 ///
-/// Change directory.
+/// Change the current working directory.
+///
+/// Arguments:
+/// - directory: A string (optional). Path to change to (defaults to $HOME).
+/// - boolean: A boolean. True on success, nil on failure.
+///
+/// Special values:
+/// - No argument: Changes to home directory
+/// - "-": Changes to previous directory ($OLDPWD)
+/// - "...", "....", etc: Changes up multiple directories
 ///
 /// Section: file
 ///
@@ -126,9 +140,13 @@ fn file_test(path: &str, test: fn(path: &Path) -> bool, fn_name: &str) -> VMResu
     }
 }
 
-/// Usage: (fs-exists? path-to-test)
+/// Usage: (fs-exists? path) => boolean
 ///
-/// Does the given path exist?
+/// Tests whether the given path exists.
+///
+/// Arguments:
+/// - path: A string. The file system path to test.
+/// - boolean: A boolean. True if the path exists, false otherwise.
 ///
 /// Section: file
 ///
@@ -143,9 +161,13 @@ fn path_exists(path: &str) -> VMResult<Value> {
     file_test(path, |path| path.exists(), "fs-exists?")
 }
 
-/// Usage: (fs-file? path-to-test)
+/// Usage: (fs-file? path) => boolean
 ///
-/// Is the given path a file?
+/// Tests whether the given path is a regular file.
+///
+/// Arguments:
+/// - path: A string. The file system path to test.
+/// - boolean: A boolean. True if the path is a file, false otherwise.
 ///
 /// Section: file
 ///
@@ -160,9 +182,13 @@ fn is_file(path: &str) -> VMResult<Value> {
     file_test(path, |path| path.is_file(), "fs-file?")
 }
 
-/// Usage: (fs-dir? path-to-test)
+/// Usage: (fs-dir? path) => boolean
 ///
-/// Is the given path a directory?
+/// Tests whether the given path is a directory.
+///
+/// Arguments:
+/// - path: A string. The file system path to test.
+/// - boolean: A boolean. True if the path is a directory, false otherwise.
 ///
 /// Section: file
 ///
@@ -177,9 +203,17 @@ fn is_dir(path: &str) -> VMResult<Value> {
     file_test(path, |path| path.is_dir(), "fs-dir?")
 }
 
-/// Usage: (glob /path/with/*)
+/// Usage: (glob & patterns) => vector
 ///
-/// Takes a list/varargs of globs and return the list of them expanded.
+/// Expands glob patterns and returns matching file paths.
+///
+/// Arguments:
+/// - patterns: Strings. One or more glob patterns to expand.
+/// - vector: A vector of strings. The matching file paths.
+///
+/// Supports standard glob patterns: *, ?, [abc], [a-z].
+/// If no matches are found, returns the original pattern.
+/// Escaped characters (\*, \?, etc.) are preserved.
 ///
 /// Section: file
 ///
@@ -261,9 +295,16 @@ fn do_glob(environment: &mut SloshVm, args: VarArgs<String>) -> VMResult<Value> 
     Ok(environment.alloc_vector(files))
 }
 
-/// Usage: (fs-parent /path/to/file/or/dir)
+/// Usage: (fs-parent path) => parent-path
 ///
-/// Returns base name of file or directory passed to function.
+/// Returns the parent directory of the given path.
+///
+/// Arguments:
+/// - path: A string. A file or directory path.
+/// - parent-path: A string. The parent directory path.
+///
+/// The path is canonicalized before finding the parent.
+/// Returns an error if the path is invalid.
 ///
 /// Section: file
 /// Example:
@@ -290,9 +331,13 @@ fn fs_parent(path: &str) -> VMResult<String> {
     }
 }
 
-/// Usage: (fs-base /path/to/file/or/dir)
+/// Usage: (fs-base path) => base-name
 ///
-/// Returns base name of file or directory passed to function.
+/// Returns the base name (last component) of a path.
+///
+/// Arguments:
+/// - path: A string. A file or directory path.
+/// - base-name: A string. The final component of the path.
 ///
 /// Section: file
 /// Example:
@@ -317,9 +362,17 @@ fn fs_base(path: &str) -> VMResult<String> {
     }
 }
 
-/// Usage: (fs-same? /path/to/file/or/dir /path/to/file/or/dir)
+/// Usage: (fs-same? path1 path2) => boolean
 ///
-/// Returns true if the two provided file paths refer to the same file or directory.
+/// Tests whether two paths refer to the same file or directory.
+///
+/// Arguments:
+/// - path1: A string. First path to compare.
+/// - path2: A string. Second path to compare.
+/// - boolean: A boolean. True if paths refer to the same file/directory.
+///
+/// This function follows symbolic links and compares the actual files.
+/// Returns an error if there are insufficient permissions.
 ///
 /// Section: file
 ///
@@ -348,17 +401,20 @@ fn is_same_file(path_0: &str, path_1: &str) -> VMResult<Value> {
     }
 }
 
-/// Usage: (fs-crawl /path/to/file/or/dir (fn (x) (prn "found path" x) [max-depth]
-///              [:follow-syms])
+/// Usage: (fs-crawl path function & max-depth :follow-syms) => true
 ///
-/// If a directory is provided the path is recursively searched and every
-/// file and directory is called as an argument to the provided function.
-/// If a file is provided the path is provided as an argument to the provided
-/// function. Takes two optional arguments (in any order) an integer,
-/// representing max depth to traverse if file is a directory, or the
-/// symbol, :follow-syms, to follow symbol links when traversing if
-/// desired.
+/// Recursively traverse a directory tree, calling function for each entry.
 ///
+/// Arguments:
+/// - path: A string. The file or directory path to traverse.
+/// - function: A function. Called with each file/directory path found.
+/// - max-depth: An integer (optional). Maximum depth to traverse.
+/// - :follow-syms: A keyword (optional). If present, follow symbolic links.
+/// - true: Always returns true on success.
+///
+/// If path is a file, calls function once with that path.
+/// If path is a directory, recursively traverses it.
+/// The optional arguments can be provided in any order.
 ///
 /// Section: file
 ///
@@ -528,9 +584,15 @@ fn fs_crawl(
     }
 }
 
-/// Usage: (fs-len /path/to/file/or/dir)
+/// Usage: (fs-len path) => size
 ///
-/// Returns the size of the file in bytes.
+/// Returns the size of a file in bytes.
+///
+/// Arguments:
+/// - path: A string. Path to the file to measure.
+/// - size: An integer. The file size in bytes.
+///
+/// For directories, returns the metadata size, not the total size of contents.
 ///
 /// Section: file
 ///
@@ -591,9 +653,13 @@ fn get_file_time(
     }
 }
 
-/// Usage: (fs-modified /path/to/file/or/dir)
+/// Usage: (fs-modified path) => timestamp
 ///
-/// Returns the unix time file last modified in ms.
+/// Returns when the file was last modified.
+///
+/// Arguments:
+/// - path: A string. Path to the file or directory.
+/// - timestamp: An integer. Unix timestamp in milliseconds.
 ///
 /// Section: file
 ///
@@ -612,9 +678,13 @@ fn fs_modified(file_or_dir: &str) -> VMResult<i64> {
     get_file_time(file_or_dir, "fs-modified", |md| md.modified())
 }
 
-/// Usage: (fs-accessed /path/to/file/or/dir)
+/// Usage: (fs-accessed path) => timestamp
 ///
-/// Returns the unix time file last accessed in ms.
+/// Returns when the file was last accessed.
+///
+/// Arguments:
+/// - path: A string. Path to the file or directory.
+/// - timestamp: An integer. Unix timestamp in milliseconds.
 ///
 /// Section: file
 ///
@@ -690,9 +760,16 @@ pub fn add_fs_meta_builtins(env: &mut SloshVm) {
         env,
         "fs-meta",
         fs_meta,
-        r#"Usage: (fs-meta [FILENAME]) -> map
+        r#"Usage: (fs-meta filename) => map
 
-Returns a map of a files meta data.
+Returns metadata information about a file.
+
+Arguments:
+- filename: A string. Path to the file to examine.
+- map: A map. Contains metadata with these keys:
+  - :type - A keyword (:file, :dir, :symlink, or :unknown)
+  - :len - An integer. File size in bytes.
+  - :readonly - A boolean. True if file is read-only.
 
 Section: io
 "#,

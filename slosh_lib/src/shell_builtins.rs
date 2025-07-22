@@ -90,9 +90,13 @@ fn sh(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-/// Usage: (exit int)
+/// Usage: (exit & exit-code) => no-return
 ///
-/// Exit shell with provided exit code.
+/// Exit the shell with the specified exit code.
+///
+/// Arguments:
+/// - exit-code: An integer (optional). The exit status code (defaults to 0).
+/// - no-return: This function never returns.
 ///
 /// Section: core
 ///

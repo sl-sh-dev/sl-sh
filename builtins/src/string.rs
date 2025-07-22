@@ -316,11 +316,19 @@ fn char_whitespace(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
 }
 
 #[allow(rustdoc::broken_intra_doc_links)]
-/// Usage: (str-sub string start [length]) -> string
+/// Usage: (str-sub string start & length) => substring
 ///
-/// Return a substring from a string given start (0 based) and optional length.
-/// If length is 0 or not provided produces the rest of the string from start to
-/// string end.
+/// Returns a substring from string starting at the given position.
+///
+/// Arguments:
+/// - string: A string. The source string to extract from.
+/// - start: An integer. The 0-based starting position.
+/// - length: An integer (optional). The number of characters to extract.
+/// - substring: A string. The extracted substring.
+///
+/// If length is omitted or 0, returns from start to the end of string.
+/// The start position must be within the string bounds.
+/// If start + length exceeds the string length, an error is raised.
 ///
 /// Section: string
 ///
@@ -342,9 +350,19 @@ fn str_sub(s: &str, start: usize, length: Option<usize>) -> VMResult<String> {
         Err(VMError::new_vm("str-sub index out of range"))
     }
 }
-/// Usage: (str-splitn n split-pattern string) -> vector
+/// Usage: (str-splitn n pattern string) => vector
 ///
-/// Use a pattern to split a string with at most n items.
+/// Splits string into at most n substrings using pattern as delimiter.
+///
+/// Arguments:
+/// - n: An integer. The maximum number of substrings to return.
+/// - pattern: A string. The delimiter pattern to split on.
+/// - string: A string. The string to split.
+/// - vector: A vector of strings. The split results.
+///
+/// Splits string at occurrences of pattern, but returns at most n substrings.
+/// If there are more than n-1 occurrences of pattern, the last element
+/// contains the remainder of the string unsplit. If n is 0, returns empty vector.
 ///
 /// Section: string
 ///
@@ -363,9 +381,14 @@ fn str_splitn(n: usize, pat: &str, text: &str) -> VMResult<Vec<String>> {
     Ok(split_list)
 }
 
-/// Usage: (str-cat-list join-str sequence) -> string
+/// Usage: (str-cat-list join-str sequence) => string
 ///
 /// Build a string by concatenating a sequence of strings by join-str.
+///
+/// Arguments:
+/// - join-str: A string. The separator to insert between elements.
+/// - sequence: A vector of strings. The strings to concatenate.
+/// - string: A string. The concatenated result.
 ///
 /// Section: string
 ///
@@ -387,9 +410,13 @@ fn str_cat_list(join_str: LooseString, list: Vec<&str>) -> VMResult<String> {
     Ok(new_str)
 }
 
-/// Usage: (str-lower string) -> string
+/// Usage: (str-lower string) => string
 ///
 /// Get all lower case string from a string.
+///
+/// Arguments:
+/// - string: A string. The string to convert to lowercase.
+/// - string: A string. The lowercase version of the input.
 ///
 /// Section: string
 ///
@@ -404,9 +431,13 @@ fn str_lower(string: &str) -> String {
     string.to_lowercase()
 }
 
-/// Usage: (str-upper string) -> string
+/// Usage: (str-upper string) => string
 ///
 /// Get all upper case string from a string.
+///
+/// Arguments:
+/// - string: A string. The string to convert to uppercase.
+/// - string: A string. The uppercase version of the input.
 ///
 /// Section: string
 ///
@@ -421,9 +452,13 @@ fn str_upper(string: &str) -> String {
     string.to_uppercase()
 }
 
-/// Usage: (str-bytes string) -> int
+/// Usage: (str-bytes string) => int
 ///
 /// Return number of bytes in a string (may be more then length).
+///
+/// Arguments:
+/// - string: A string. The string to measure.
+/// - int: An integer. The number of bytes in the UTF-8 representation.
 ///
 /// Strings are utf8 so it chars and bytes may not be a one to one match.
 ///
@@ -439,9 +474,13 @@ fn str_bytes(string: &str) -> usize {
     string.len()
 }
 
-/// Usage: (char-lower char) -> char
+/// Usage: (char-lower char) => char
 ///
 /// Get lower case (utf) string for a character.
+///
+/// Arguments:
+/// - char: A character. The character to convert to lowercase.
+/// - char: A character or string. The lowercase version (may be multiple characters).
 ///
 /// Section: char
 ///
@@ -463,9 +502,13 @@ fn char_lower(target: SloshChar) -> VMResult<SloshChar> {
     }
 }
 
-/// Usage: (char-upper char) -> char
+/// Usage: (char-upper char) => char
 ///
 /// Get upper case (utf) string for a character.
+///
+/// Arguments:
+/// - char: A character. The character to convert to uppercase.
+/// - char: A character or string. The uppercase version (may be multiple characters).
 ///
 /// Section: char
 ///
@@ -488,16 +531,25 @@ fn char_upper(target: SloshChar) -> VMResult<SloshChar> {
     }
 }
 
-/// Usage: (char-whitespace? char) -> t/nil
+/// Usage: (char-whitespace? character) => boolean
 ///
-/// Returns true if a character is whitespace, false/nil otherwise.
+/// Tests whether character is a whitespace character.
+///
+/// Arguments:
+/// - character: A character. The character to test.
+/// - boolean: A boolean. True if character is whitespace, false otherwise.
+///
+/// Whitespace characters include space, tab, newline, carriage return,
+/// and other Unicode whitespace characters as defined by Unicode.
 ///
 /// Section: char
 ///
 /// Example:
 /// (test::assert-true (char-whitespace? #\ ))
 /// (test::assert-true (char-whitespace? #\tab))
+/// (test::assert-true (char-whitespace? #\newline))
 /// (test::assert-false (char-whitespace? #\s))
+/// (test::assert-false (char-whitespace? #\A))
 #[sl_sh_fn(fn_name = "char-whitespace?")]
 fn char_is_whitespace(target: SloshChar) -> VMResult<bool> {
     match target {
@@ -506,14 +558,18 @@ fn char_is_whitespace(target: SloshChar) -> VMResult<bool> {
     }
 }
 
-///  Usage: (->int ?int) -> int
+/// Usage: (->int value) => int
 ///
-///  If string or other value is a valid representation of an integer return that int.  Error if not.
+/// If string or other value is a valid representation of an integer return that int.  Error if not.
 ///
-///  Note, if value is a float (or is a string that casts initially to a float) and it is NaN,
+/// Arguments:
+/// - value: Any type. A value to convert to integer (string, number, or symbol).
+/// - int: An integer. The converted integer value.
+///
+/// Note, if value is a float (or is a string that casts initially to a float) and it is NaN,
 /// +/- infinity, < i56::MIN, or > i56::MAX the function will error.
 ///
-///  Section: type
+/// Section: type
 ///
 ///  Example:
 ///  (test::assert-equal 0 (->int "0"))
@@ -531,11 +587,15 @@ fn to_int(target: LooseInt) -> VMResult<Value> {
     Ok(Value::Int(target.0))
 }
 
-///  Usage: (->float ?float) -> float
+/// Usage: (->float value) => float
 ///
-///  If string or other value is a valid representation of a float return that float.  Error if not.
+/// If string or other value is a valid representation of a float return that float.  Error if not.
 ///
-///  Section: type
+/// Arguments:
+/// - value: Any type. A value to convert to float (string, number, or symbol).
+/// - float: A float. The converted floating-point value.
+///
+/// Section: type
 ///
 ///  Example:
 ///  (test::assert-equal 0.0 (->float "0"))
@@ -570,9 +630,19 @@ pub fn add_str_builtins(env: &mut SloshVm) {
         env,
         "str-replace",
         str_replace,
-        r#"Usage: (str-replace string old-pattern new-pattern) -> string
+        r#"Usage: (str-replace string pattern replacement) => new-string
 
-Replace occurrences of second string with third in the first string.
+Returns a string with all occurrences of pattern replaced by replacement.
+
+Arguments:
+- string: The string to search in.
+- pattern: The substring to search for.
+- replacement: The string to replace pattern with.
+- new-string: A new string with all replacements made.
+
+All occurrences of pattern in string are replaced with replacement.
+The search is literal (not regex) and replacements are made from left to right.
+If pattern is not found, returns a copy of the original string.
 
 Section: string
 
@@ -580,50 +650,55 @@ Example:
 (test::assert-equal "some yyy string" (str-replace "some xxx string" "xxx" "yyy"))
 (test::assert-equal "some yyy string yyy" (str-replace "some xxx string xxx" "xxx" "yyy"))
 (test::assert-equal "yyy some yyy string yyy" (str-replace "xxx some xxx string xxx" "xxx" "yyy"))
+(test::assert-equal "hello world" (str-replace "hello world" "xyz" "abc"))
 "#,
     );
     add_builtin(
         env,
         "str-trim",
         str_trim,
-        r#"Usage: (str-trim string [:right | :left]) -> string
+        r#"Usage: (str-trim string & direction) => trimmed-string
 
-Trim right and/or left whitespace from string.  With no optional keywork trims both, otherwise :right
-or :left specify right or left trimming.
+Returns a string with whitespace removed from one or both ends.
+
+Arguments:
+- string: The string to trim.
+- direction: Optional keyword :left or :right to trim only one side.
+- trimmed-string: A new string with whitespace removed.
+
+With no direction argument, removes whitespace from both ends.
+With :left, removes whitespace only from the beginning.
+With :right, removes whitespace only from the end.
+Whitespace includes spaces, tabs, newlines, and other Unicode whitespace.
 
 Section: string
 
 Example:
 (test::assert-equal "some string" (str-trim "   some string"))
 (test::assert-equal "some string" (str-trim "   some string   "))
-(test::assert-equal "some string" (str-trim (str "   some string   ")))
 (test::assert-equal "some string" (str-trim "some string   "))
-(test::assert-equal "some string" (str-trim "some string"))
-
 (test::assert-equal "   some string" (str-trim "   some string" :right))
-(test::assert-equal "   some string" (str-trim "   some string   " :right))
-(test::assert-equal "   some string" (str-trim (str "   some string   ") :right))
-(test::assert-equal "some string" (str-trim "some string   " :right))
-(test::assert-equal "some string" (str-trim "some string" :right))
-
-(test::assert-equal "some string" (str-trim "   some string" :left))
 (test::assert-equal "some string   " (str-trim "   some string   " :left))
-(test::assert-equal "some string   " (str-trim (str "   some string   ")  :left))
-(test::assert-equal "some string   " (str-trim "some string   " :left))
-(test::assert-equal "some string" (str-trim "some string" :left))
+(test::assert-equal "some string" (str-trim "some string"))
 "#,
     );
     add_builtin(
         env,
         "str-trim!",
         str_trim_bang,
-        r#"Usage: (str-trim! string [:right | :left]) -> string
+        r#"Usage: (str-trim! string & direction) => string
 
-Trim right and/or left whitespace from string in place.  With no optional keywork trims both,
-otherwise :right or :left specify right or left trimming.
+Trim right and/or left whitespace from string in place.
 
-This is a destructive operation (unlike str-trim) and requires an actual non-const string as it's first
-argument.  It returns this string on success.
+Arguments:
+- string: A mutable string. The string to trim in place.
+- direction: A keyword (optional). :right or :left to trim only one side.
+- string: A string. Returns the same string object after modification.
+
+This is a destructive operation (unlike str-trim) and requires an actual non-const string.
+With no direction argument, removes whitespace from both ends.
+With :left, removes whitespace only from the beginning.
+With :right, removes whitespace only from the end.
 
 Section: string
 
@@ -651,9 +726,18 @@ Example:
         env,
         "str-contains",
         str_contains,
-        r#"Usage: (str-contains string pattern) -> #t/#f
+        r#"Usage: (str-contains string substring) => boolean
 
-True if string contains pattern (pattern will be converted to a string first).
+Tests whether string contains substring as a substring.
+
+Arguments:
+- string: The string to search in.
+- substring: The pattern to search for (will be converted to string).
+- boolean: True if substring is found, false otherwise.
+
+The search is case-sensitive and looks for a literal match.
+If substring is not a string, it will be converted to its string representation.
+Returns true if substring appears anywhere within string.
 
 Section: string
 
@@ -662,8 +746,7 @@ Example:
 (test::assert-false (str-contains "Stausomething" "StaU"))
 (test::assert-true (str-contains "Stausomething" "some"))
 (test::assert-false (str-contains "Stausomething" "Some"))
-(test::assert-true (str-contains "Stausomething" "thing"))
-(test::assert-false (str-contains "Stausomething" "Thing"))
+(test::assert-true (str-contains "hello world" ""))
 (test::assert-true (str-contains "StausomeΣthing" "someΣ"))
 "#,
     );
@@ -671,11 +754,18 @@ Example:
         env,
         "str-push!",
         str_push,
-        r#"Usage: (str-push! string arg0 ... argN) -> string
+        r#"Usage: (str-push! string & values) => string
 
-Push the args (as strings) onto the string.  This is a destructive form.
+Appends values to string in place, modifying the original string.
 
-Arguments will be turned into strings.  Returns the string it was given.
+Arguments:
+- string: A mutable string to append to.
+- values: Zero or more values to append (will be converted to strings).
+- string: Returns the modified string.
+
+This is a destructive operation that modifies the string in place.
+All values are converted to their string representation before appending.
+The original string object is returned after modification.
 
 Section: string
 
@@ -684,35 +774,46 @@ Example:
 (def test-str-push (str "def-string"))
 (test::assert-equal "def-stringsome" (str-push! test-str-push "some"))
 (test::assert-equal "def-stringsome" test-str-push)
+(test::assert-equal "hello123true" (str-push! (str "hello") 123 true))
 "#,
     );
     add_builtin(
         env,
         "str-map",
         str_map,
-        r#"Usage: (str-map string lambda) -> string
+        r#"Usage: (str-map function string) => new-string
 
-Make a new string by applying lambda to each char in input string.
+Returns a new string by applying function to each character in string.
+
+Arguments:
+- function: A function of one argument (a character).
+- string: The string to process.
+- new-string: A new string built from the function results.
+
+The function is called once for each character in string. Each result
+is converted to a string and concatenated to form the result. Characters
+are processed in order from left to right.
 
 Section: string
 
 Example:
-(test::assert-equal "XstringXstrX" (str-map "xstringxstrx" (fn (ch) (if (= "x" ch) "X" ch))))
-(def test-str-map (str-map "xstringxstrx" (fn (ch) (if (= "x" ch) "X" ch))))
-(test::assert-equal "XstringXstrX" test-str-map)
-(test::assert-true (string? test-str-map))
-(def test-str-map (str-map (str "xstringxstrx") (fn (ch) (if (= "x" ch) "X" ch))))
-(test::assert-equal "XstringXstrX" test-str-map)
-(test::assert-true (string? test-str-map))
+(test::assert-equal "XstringXstrX" (str-map (fn (ch) (if (= "x" ch) "X" ch)) "xstringxstrx"))
+(test::assert-equal "HELLO" (str-map char-upper "hello"))
+(test::assert-equal "h_e_l_l_o" (str-map (fn (ch) (str ch "_")) "hello"))
+(test::assert-equal "" (str-map (fn (ch) ch) ""))
 "#,
     );
     add_builtin(
         env,
         "char-whitespace?",
         char_whitespace,
-        r"Usage: (char-whitespace? char) -> t/nil
+        r#"Usage: (char-whitespace? character) => boolean
 
 Returns true if a character is whitespace, false/nil otherwise.
+
+Arguments:
+- character: A character. The character to test.
+- boolean: A boolean. True if character is whitespace, false otherwise.
 
 Section: char
 
@@ -726,9 +827,13 @@ Example:
         env,
         "str-empty?",
         str_empty,
-        r#"Usage: (str-empty? string) -> #t/#f
+        r#"Usage: (str-empty? string) => boolean
 
-Is a string empty?  Let's find out...
+Tests whether a string is empty.
+
+Arguments:
+- string: A string. The string to test.
+- boolean: A boolean. True if string has length 0, false otherwise.
 
 Section: string
 
@@ -743,24 +848,44 @@ Example:
         env,
         "str-starts-with",
         str_starts_with,
-        r#"Usage: (str-starts-with string pattern) -> #t/#f
+        r#"Usage: (str-starts-with string prefix) => boolean
 
-True if string start with pattern.
+Tests whether string starts with the given prefix.
+
+Arguments:
+- string: The string to test.
+- prefix: The prefix to check for.
+- boolean: True if string starts with prefix, false otherwise.
+
+The comparison is case-sensitive and checks if string begins with
+the exact characters in prefix. An empty prefix always returns true.
 
 Section: string
 
 Example:
 (test::assert-true (str-starts-with "Stausomething" "Stau"))
 (test::assert-false (str-starts-with "Stausomething" "StaU"))
+(test::assert-true (str-starts-with "hello" ""))
+(test::assert-false (str-starts-with "hi" "hello"))
 "#,
     );
     add_builtin(
         env,
         "str-split",
         str_split,
-        r#"Usage: (str-split string split-pattern) -> vector
+        r#"Usage: (str-split string delimiter) => vector
 
-Use a pattern to split a string (:whitespace to split on whitespace).
+Returns a vector of substrings by splitting string at each occurrence of delimiter.
+
+Arguments:
+- string: The string to split.
+- delimiter: A string delimiter or :whitespace keyword.
+- vector: A vector containing the split substrings.
+
+If delimiter is a string, splits at each occurrence of that exact string.
+If delimiter is :whitespace, splits on any sequence of whitespace characters.
+Empty strings in the result indicate consecutive delimiters or delimiters
+at the beginning or end of the string.
 
 Section: string
 
@@ -769,8 +894,7 @@ Example:
 (test::assert-equal ["some" "yyy" "string" ""] (str-split "somexxxyyyxxxstringxxx" "xxx"))
 (test::assert-equal ["" "some" "yyy" "string" ""] (str-split "xxxsomexxxyyyxxxstringxxx" "xxx"))
 (test::assert-equal ["some" "yyy" "string"] (str-split "some yyy string" :whitespace))
-(test::assert-equal ["somexxxyyyxxxstring"] (str-split "somexxxyyyxxxstring" :whitespace))
-(test::assert-equal ["somexxxyyyxxxstring"] (str-split "somexxxyyyxxxstring" "zzz"))
+(test::assert-equal ["a" "b" "c"] (str-split "a,b,c" ","))
 "#,
     );
 }

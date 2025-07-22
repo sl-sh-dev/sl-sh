@@ -86,9 +86,16 @@ pub fn add_conv_builtins(env: &mut SloshVm) {
         "->sym",
         to_sym,
         //space is needed here for test to pass do not know why
-        r#" Usage: (->sym exp) -> symbol
+        r#" Usage: (->sym value) => symbol
 
-Converts exp to a symbol.
+Convert a value to a symbol.
+
+Arguments:
+- value: Any type. The value to convert (string, keyword, symbol, or other).
+- symbol: A symbol. The converted symbol.
+
+If value is already a symbol or keyword, returns the corresponding symbol.
+Other values are converted to their string representation first.
 
 Section: conversion
 "#,
@@ -97,9 +104,16 @@ Section: conversion
         env,
         "->key",
         to_key,
-        r#"Usage: (->key exp) -> keyword
+        r#"Usage: (->key value) => keyword
 
-Converts exp to a keyword.
+Convert a value to a keyword.
+
+Arguments:
+- value: Any type. The value to convert (string, symbol, keyword, or other).
+- keyword: A keyword. The converted keyword.
+
+If value is already a keyword or symbol, returns the corresponding keyword.
+Other values are converted to their string representation first.
 
 Section: conversion
 "#,
@@ -108,9 +122,15 @@ Section: conversion
         env,
         "ref",
         global_ref,
-        r#"Usage: (ref symbol) -> Value
+        r#"Usage: (ref symbol) => value
 
-If symbol is defined then return the thing it references.
+Get the value of a global symbol.
+
+Arguments:
+- symbol: A symbol. The global variable name to dereference.
+- value: Any type. The value stored in the global variable.
+
+Returns an error if the symbol is not defined as a global variable.
 
 Section: conversion
 "#,
@@ -119,9 +139,13 @@ Section: conversion
         env,
         "def?",
         is_def,
-        r#"Usage: (def? symbol) -> #t/#f
+        r#"Usage: (def? symbol) => boolean
 
-If symbol is defined then return true else false.
+Test whether a symbol is defined as a global variable.
+
+Arguments:
+- symbol: A symbol. The symbol to test.
+- boolean: A boolean. True if defined, false otherwise.
 
 Section: conversion
 "#,

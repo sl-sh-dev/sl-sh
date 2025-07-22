@@ -472,7 +472,7 @@ Example:
   (test::assert-equal 4 dec-test)
   (test::assert-equal 1 (dec! dec-test 3))
   (test::assert-equal 1 dec-test))"#),
-            list: add_special(vm, "list", r#"Usage: (list &rest objects) => list
+            list: add_special(vm, "list", r#"Usage: (list & objects) => list
 
 Returns a list containing the supplied objects.
 
@@ -492,7 +492,7 @@ Example:
 (test::assert-equal '((a b) c) (list '(a b) 'c))
 (test::assert-equal nil (list))
 (test::assert-equal '(nil nil) (list nil nil))"#),
-            list_append: add_special(vm, "list-append", r#"Usage: (list-append &rest lists) => result
+            list_append: add_special(vm, "list-append", r#"Usage: (list-append & lists) => result
 
 Returns a new list that is the concatenation of the copies of the supplied lists.
 
@@ -744,7 +744,7 @@ Example:
             recur: add_special(
                 vm,
                 "recur",
-                "Usage: (recur &rest)
+                "Usage: (recur & args)
 
 Recursively call the enclosing function with the given parameters.  Recur uses
 tail call optimization and must be in the tail position or it is an error.  For
@@ -771,7 +771,28 @@ Example:
     (if (> idx 1) (recur (- idx 1)))))5)
 (test::assert-equal 5 tot)",
             ),
-            this_fn: add_special(vm, "this-fn", ""),
+            this_fn: add_special(vm, "this-fn", r#"Usage: (this-fn) => function
+
+Returns the currently executing function.
+
+Arguments: None.
+Returns: The function object that is currently being executed.
+
+this-fn provides access to the current function for recursive calls without
+needing to know the function's name. This is particularly useful for anonymous
+functions or when you want to write recursive code that doesn't depend on the
+function being bound to a specific name.
+
+Section: core
+
+Example:
+(def factorial
+  (fn (n)
+    (if (<= n 1)
+        1
+        (* n ((this-fn) (- n 1))))))
+(test::assert-equal 120 (factorial 5))
+(test::assert-equal 3628800 (factorial 10))"#),
             numeq: add_special(vm, "==", r#"Usage: (== val0 ... valN)
 
 Equals.  Works for numeric types (int, float).
@@ -893,7 +914,30 @@ Example:
 (test::assert-true (>= 100.00000000001 100.000000000001))
 (test::assert-true (>= 1000.00000000001 1000.000000000001))
 "#),
-            eq: add_special(vm, "identical?", ""),
+            eq: add_special(vm, "identical?", r#"Usage: (identical? object-1 object-2) => boolean
+
+Tests whether object-1 and object-2 are the same object.
+
+Arguments:
+- object-1: Any object.
+- object-2: Any object.
+- boolean: True if the objects are identical, false otherwise.
+
+identical? tests for object identity, not value equality. Two objects are
+identical if they are the same object in memory. Numbers and characters of
+the same value are always identical. Strings, symbols, lists, and vectors
+are only identical if they refer to the exact same object.
+
+Section: conditional
+
+Example:
+(test::assert-true (identical? 5 5))
+(test::assert-true (identical? 'a 'a))
+(test::assert-false (identical? (list 1 2) (list 1 2)))
+(def x (list 1 2))
+(test::assert-true (identical? x x))
+(test::assert-false (identical? "hello" "hello"))
+(test::assert-false (identical? [1 2] [1 2]))"#),
             equal: add_special(vm, "=", r#"Usage: (= val0 val1)
 
 Test equality, works for most value types where it makes sense, not just primitives.
@@ -909,7 +953,32 @@ Example:
 (test::assert-false (= "aaa" "aab"))
 (test::assert-true (= (get-error (/ 1 0)) (get-error (/ 1 0))))
 "#),
-            type_: add_special(vm, "type", ""),
+            type_: add_special(vm, "type", r#"Usage: (type object) => type-specifier
+
+Returns a type specifier for the type of object.
+
+Arguments:
+- object: Any object.
+- type-specifier: A keyword representing the object's type.
+
+The returned type specifier is one of the following keywords:
+:nil, :bool, :char, :string, :int, :float, :symbol, :keyword,
+:list, :vec, :map, :lambda, :closure, :macro, :continuation,
+:builtin, :file, :process, :error, :pair
+
+Section: type
+
+Example:
+(test::assert-equal :int (type 42))
+(test::assert-equal :float (type 3.14))
+(test::assert-equal :string (type "hello"))
+(test::assert-equal :symbol (type 'foo))
+(test::assert-equal :keyword (type :bar))
+(test::assert-equal :list (type '(1 2 3)))
+(test::assert-equal :vec (type [1 2 3]))
+(test::assert-equal :map (type {:a 1}))
+(test::assert-equal :lambda (type (fn (x) x)))
+(test::assert-equal :nil (type nil))"#),
             not: add_special(vm, "not", "Usage: (not expression)
 
 Return true(#t) if expression is nil, false(#f) otherwise.
@@ -1020,7 +1089,7 @@ Example:
 (test::assert-equal "string" (str "string" ""))
 (test::assert-equal "string 50" (str "string" " " 50))
 "#),
-            let_: add_special(vm, "let", r#"Usage: (let vals &rest let-body)
+            let_: add_special(vm, "let", r#"Usage: (let vals & let-body)
 
 Takes list, vals, of form ((binding0 sexp0) (binding1 sexp1) ...) and evaluates
 let-body with all values of binding bound to the result of the evaluation of
@@ -1073,8 +1142,52 @@ Example:
   (test::assert-equal 2 y)
   (test::assert-equal 3 z))
 "#),
-            call_cc: add_special(vm, "call/cc", ""),
-            defer: add_special(vm, "defer", ""),
+            call_cc: add_special(vm, "call/cc", r#"Usage: (call/cc function) => value
+
+Calls function with the current continuation as its argument.
+
+Arguments:
+- function: A function of one argument (the continuation).
+- value: The value returned by function or passed to the continuation.
+
+call/cc (call-with-current-continuation) captures the current continuation
+and passes it as an argument to function. The continuation is itself a
+function that, when called with a value, abandons the current computation
+and returns that value as the result of the call/cc expression.
+
+Section: core
+
+Example:
+(test::assert-equal 10 
+  (call/cc (fn (k) (+ 5 (k 10) 20))))  ; k called with 10, rest ignored
+
+(def saved-cont nil)
+(test::assert-equal 42
+  (call/cc (fn (k) (set! saved-cont k) 42)))
+(test::assert-equal 100 (saved-cont 100))  ; Jump back with value 100"#),
+            defer: add_special(vm, "defer", r#"Usage: (defer expression) => unspecified
+
+Schedules expression to be executed when the current scope exits.
+
+Arguments:
+- expression: Any expression to be evaluated on scope exit.
+- unspecified: The defer form itself returns an unspecified value.
+
+The deferred expression is guaranteed to execute when control leaves the
+enclosing scope, whether by normal flow, early return, or error. Multiple
+defer expressions in the same scope are executed in reverse order (LIFO).
+This is useful for cleanup operations like closing files or releasing resources.
+
+Section: core
+
+Example:
+(def test-defer-order nil)
+(do
+  (defer (set! test-defer-order (str test-defer-order "3")))
+  (defer (set! test-defer-order (str test-defer-order "2")))
+  (defer (set! test-defer-order (str test-defer-order "1")))
+  (set! test-defer-order ""))
+(test::assert-equal "123" test-defer-order)"#),
             on_error: add_special(vm, "on-raised-error", r#"Usage: (on-raised-error (fn (error) ...))
 
 Low level (consider this unstable) interface to the raised error machinery.
@@ -1104,9 +1217,73 @@ Example:
 (test::assert-equal (cons :ok 6) (get-error-test (let (x 1, y 5) (+ x y))))
 (test::assert-equal '(:test . "error") (get-error-test (let (x 1, y 5) (err :test "error")(+ x y))))
 "#),
-            while_: add_special(vm, "while", ""),
-            doc_string: add_special(vm, "doc-string", ""),
-            get: add_special(vm, "get", ""),
+            while_: add_special(vm, "while", r#"Usage: (while test-expression & body) => value
+
+Repeatedly executes body while test-expression evaluates to true.
+
+Arguments:
+- test-expression: An expression evaluated before each iteration.
+- body: Zero or more expressions to execute while test is true.
+- value: Always returns nil.
+
+The while loop evaluates test-expression before each iteration. If it
+evaluates to a true value (non-nil), the body expressions are executed
+in order and the loop continues. If test-expression evaluates to nil,
+the loop terminates. The loop always returns nil.
+
+Section: core
+
+Example:
+(def counter 0)
+(def sum 0)
+(while (< counter 5)
+  (set! sum (+ sum counter))
+  (set! counter (+ counter 1)))
+(test::assert-equal 10 sum)  ; 0+1+2+3+4
+(test::assert-equal 5 counter)"#),
+            doc_string: add_special(vm, "doc-string", r#"Usage: (doc-string string) => string
+
+Associates a documentation string with the next defined symbol.
+
+Arguments:
+- string: The documentation string to attach.
+- string: Returns the documentation string.
+
+doc-string is used internally by the reader when it encounters #%...%# 
+documentation blocks. The documentation string is stored in the compile
+state and attached to the next symbol that is defined (via def, defn, etc.).
+This is generally not used directly but through the #%...%# reader syntax.
+
+Section: core
+
+Example:
+(doc-string "This function adds two numbers")
+(defn my-add (x y) (+ x y))
+(test::assert-true (str-contains? (doc-raw 'my-add) "adds two numbers"))"#),
+            get: add_special(vm, "get", r#"Usage: (get collection key & default) => value
+
+Retrieves a value from a collection by key.
+
+Arguments:
+- collection: A hash-map, vector, string, or object supporting get.
+- key: The key/index to look up (type depends on collection).
+- default: Optional default value if key is not found (defaults to nil).
+- value: The value associated with key, or default if not found.
+
+For hash-maps, key can be any hashable value.
+For vectors and strings, key must be a non-negative integer index.
+For strings, returns the character at the given index.
+If the key/index is out of bounds or not found, returns default.
+
+Section: collection
+
+Example:
+(test::assert-equal 2 (get {:a 1 :b 2} :b))
+(test::assert-equal nil (get {:a 1} :b))
+(test::assert-equal "default" (get {:a 1} :b "default"))
+(test::assert-equal \e (get "hello" 1))
+(test::assert-equal 20 (get [10 20 30] 1))
+(test::assert-equal nil (get [1 2 3] 10))"#),
             err: add_special(vm, "err", r#"Usage: (err :keyword value)
 
 Raises an error with keyword and value.  By default this will break into the
@@ -1153,7 +1330,29 @@ Example:
 (test::assert-false (ok? (mk-err :arr "test")))
 (test::assert-true (ok? nil))
 "#),
-            ret: add_special(vm, "return", ""),
+            ret: add_special(vm, "return", r#"Usage: (return & value) => |
+
+Returns immediately from the current function with an optional value.
+
+Arguments:
+- value: Optional value to return (defaults to nil).
+- |: Control never reaches past a return expression.
+
+return causes an immediate exit from the enclosing function, returning
+the specified value (or nil if no value is given). Any code after return
+in the same block is not executed. This provides early exit capability
+similar to return statements in other languages.
+
+Section: core
+
+Example:
+(defn find-first-negative (lst)
+  (for item lst
+    (if (< item 0)
+        (return item)))
+  nil)
+(test::assert-equal -5 (find-first-negative [1 2 -5 3 -2]))
+(test::assert-equal nil (find-first-negative [1 2 3]))"#),
             ns: add_special(vm, "ns", r#"Usage: (ns SYMBOL)
 
 Changes to namespace.  This is "open-ended" change and is intended for use with

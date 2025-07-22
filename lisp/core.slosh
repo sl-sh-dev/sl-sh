@@ -1,6 +1,11 @@
 #%
+Usage: (nil? value) => boolean
 
-True if the expression is nil, false otherwise
+Test whether a value is nil.
+
+Arguments:
+- value: Any type. The value to test.
+- boolean: A boolean. True if value is nil, false otherwise.
 
 Section: type
 
@@ -14,9 +19,13 @@ Example:
 (def nil? (fn (v) (identical? (type v) :Nil)))
 
 #%
-Usage: (char? expression)
+Usage: (char? value) => boolean
 
-True if the expression is a char, false otherwise.
+Test whether a value is a character.
+
+Arguments:
+- value: Any type. The value to test.
+- boolean: A boolean. True if value is a character, false otherwise.
 
 Section: type
 
@@ -28,9 +37,13 @@ Example:
 (def char? (fn (v) (identical? (type v) :Char)))
 
 #%
-Usage: (pair? expression)
+Usage: (pair? value) => boolean
 
-True if the expression is a pair, false otherwise.
+Test whether a value is a pair.
+
+Arguments:
+- value: Any type. The value to test.
+- boolean: A boolean. True if value is a pair, false otherwise.
 
 Section: type
 
@@ -45,9 +58,13 @@ Example:
 (def pair? (fn (v) (identical? (type v) :Pair)))
 
 #%
-Usage: (string? expression)
+Usage: (string? value) => boolean
 
-True if the expression is a string, false otherwise.
+Test whether a value is a string.
+
+Arguments:
+- value: Any type. The value to test.
+- boolean: A boolean. True if value is a string, false otherwise.
 
 Section: type
 
@@ -58,9 +75,13 @@ Example:
 (def string? (fn (v) (identical? (type v) :String)))
 
 #%
-Usage: (symbol? expression)
+Usage: (symbol? value) => boolean
 
-True if the expression is a symbol, false otherwise.
+Test whether a value is a symbol.
+
+Arguments:
+- value: Any type. The value to test.
+- boolean: A boolean. True if value is a symbol, false otherwise.
 
 Section: type
 
@@ -71,9 +92,13 @@ Example:
 (def symbol? (fn (v) (identical? (type v) :Symbol)))
 
 #%
-Usage: (vec? expression)
+Usage: (vec? value) => boolean
 
-True if the expression is a vector, false otherwise.
+Test whether a value is a vector.
+
+Arguments:
+- value: Any type. The value to test.
+- boolean: A boolean. True if value is a vector, false otherwise.
 
 Section: type
 
@@ -88,9 +113,13 @@ Example:
 (def vec? (fn (v) (identical? (type v) :Vector)))
 
 #%
-Usage: (list? expression)
+Usage: (list? value) => boolean
 
-True if the expression is a list, false otherwise.
+Test whether a value is a proper list.
+
+Arguments:
+- value: Any type. The value to test.
+- boolean: A boolean. True if value is a proper list, false otherwise.
 
 Section: type
 
@@ -105,9 +134,13 @@ Example:
 (def list? (fn (v) (if (or (nil? v)(pair? v))(if (nil? (cdr v)) #t (recur (cdr v))) #f)))
 
 #%
-Usage: (seq? expression)
+Usage: (seq? value) => boolean
 
-True if expression is a list or vector, false otherwise.
+Test whether a value is a sequence (list or vector).
+
+Arguments:
+- value: Any type. The value to test.
+- boolean: A boolean. True if value is a list or vector, false otherwise.
 
 Section: type
 
@@ -121,11 +154,15 @@ Example:
 (def seq? (fn (v) (or (pair? v)(vec? v))))
 
 #%
-Usage (empty? s)
+Usage: (empty? sequence) => boolean
+
+Test whether a sequence has zero length.
+
+Arguments:
+- sequence: A sequence. The collection to test (list, vector, string, etc.).
+- boolean: A boolean. True if sequence is empty, false otherwise.
 
 Section: collection
-
-Return false if length of s is 0, true otherwise.
 
 Example:
 (test::assert-true (empty? nil))
@@ -135,11 +172,15 @@ Example:
 (def empty? (fn (v) (= (len v) 0)))
 
 #%
-Usage (not-empty? s)
+Usage: (not-empty? sequence) => boolean
+
+Test whether a sequence has non-zero length.
+
+Arguments:
+- sequence: A sequence. The collection to test (list, vector, string, etc.).
+- boolean: A boolean. True if sequence is not empty, false otherwise.
 
 Section: collection
-
-Return true if length of s is not 0, false otherwise.
 
 Example:
 (test::assert-false (empty? nil))
@@ -149,11 +190,15 @@ Example:
 (def not-empty? (fn (v) (> (len v) 0)))
 
 #%
-Usage: (callable? to-test)
+Usage: (callable? value) => boolean
+
+Test whether a value can be called as a function.
+
+Arguments:
+- value: Any type. The value to test.
+- boolean: A boolean. True if value can be called (function, macro, etc.), false otherwise.
 
 Section: type
-
-True if the to-test can be called as the first argument in an expression.
 %#
 (def callable? (fn (v) (let (t (type v))(or (identical? t :Lambda)
                                              (identical? t :Continuation)
@@ -164,9 +209,13 @@ True if the to-test can be called as the first argument in an expression.
                                              (identical? t :Pair)))))
 
 #%
-Usage: (io? expression)
+Usage: (io? value) => boolean
 
-True if the expression is an IO object (file), false otherwise.
+Test whether a value is an I/O object (file handle).
+
+Arguments:
+- value: Any type. The value to test.
+- boolean: A boolean. True if value is an I/O object, false otherwise.
 
 Section: type
 
@@ -180,9 +229,15 @@ Example:
 (def io? (fn (v) (identical? (type v) :Io)))
 
 #%
-Usage: (defmacro name argument_list body)
+Usage: (defmacro name arguments & body) => nil
 
-Create a macro and bind it to a symbol in the current scope.
+Define a macro and bind it to a symbol.
+
+Arguments:
+- name: A symbol. The name of the macro.
+- arguments: A list. The parameter list for the macro.
+- body: Forms. The macro expansion template.
+- nil: Always returns nil.
 
 Section: core
 
@@ -200,13 +255,16 @@ Example:
       `(comp-time (def ~name (macro ~args ~@body))nil))) nil)
 
 #%
-Usage: (get-error exp0 ... expN) -> pair
+Usage: (get-error & expressions) => pair
 
-Evaluate each form (like do) but on error return (:error msg backtrace) instead of aborting.
-On success return (:ok . expN-result).
+Evaluate expressions and capture any errors.
 
-If there is no error will return the value of the last expression as the cdr of
-the pair.  Always returns a pair with the first value either being :ok or :error.
+Arguments:
+- expressions: Forms. One or more expressions to evaluate.
+- pair: A pair. Either (:ok . result) or (:error . error-info).
+
+Evaluates each form in sequence. On error returns (:error msg backtrace) instead of aborting.
+On success returns (:ok . last-result). Always returns a pair with car being :ok or :error.
 
 Section: core
 
@@ -226,11 +284,30 @@ Example:
                      ~@body)))))
 
 
+#%
+Usage: (block & body) => result
+
+Create a block that can be exited early with return-from.
+
+Arguments:
+- body: Forms. The expressions to evaluate in the block.
+- result: Any type. The result of the last expression or return-from value.
+
+Section: core
+%#
 (defmacro block (& body)
     `(call/cc (fn (return-from) ~@body)))
 
 #%
+Usage: (defn name arguments & body) => nil
+
 Define a named function in the current namespace.
+
+Arguments:
+- name: A symbol. The name of the function.
+- arguments: A list. The parameter list for the function.
+- body: Forms. The function body expressions.
+- nil: Always returns nil.
 
 Section: core
 
@@ -343,10 +420,14 @@ Example:
 
 
 #%
-Usage: (when provided-condition if-true)
+Usage: (when condition body) => result-or-nil
 
-when is a convenience function used to check a form, provided-condition,
-and run some form, if-true, if provided-condition evaluates to true.
+Evaluate body only if condition is true.
+
+Arguments:
+- condition: Any type. The condition to test.
+- body: A form. The expression to evaluate if condition is true.
+- result-or-nil: Any type. The result of body if condition is true, nil otherwise.
 
 Section: conditional
 
@@ -361,16 +442,18 @@ Example:
     `(if ~provided-condition ~if-true))
 
 #%
-Usage: (dyn key value expression) -> result_of_expression
+Usage: (dyn symbol value & body) => result
 
-Creates a dynamic binding for key, assigns value to it and evals expression under it.
-Note that if key must be a symbol and is not evaluated.
+Create a dynamic binding and evaluate body.
 
-The binding is gone once the dyn form ends. This is basically a set! on the
-binding in an unwind protect to reset it when done.  When used on a global will
-set the first binding found and reset it when done.
-Calls to dyn can be nested and previous dynamic values will
-be restored as interior dyn's exit.
+Arguments:
+- symbol: A symbol. The variable to dynamically bind (not evaluated).
+- value: Any type. The value to bind to the symbol.
+- body: Forms. The expressions to evaluate with the binding.
+- result: Any type. The result of the last expression in body.
+
+The binding is restored to its previous value when the dyn form exits.
+Calls to dyn can be nested and previous values are properly restored.
 
 Section: core
 
@@ -392,7 +475,13 @@ Example:
       (do (set! ~key ~value) ~@expression))))
 
 #%
-Identity function.
+Usage: (identity value) => value
+
+Return the argument unchanged.
+
+Arguments:
+- value: Any type. The value to return.
+- value: The same value, unchanged.
 
 Section: core
 
@@ -403,7 +492,13 @@ Example:
 (defn identity (x) x)
 
 #%
-Produces the last element in a list or vector.  Nil if the list/vector is empty.
+Usage: (last sequence) => element-or-nil
+
+Return the last element of a sequence.
+
+Arguments:
+- sequence: A sequence. A list or vector to get the last element from.
+- element-or-nil: Any type. The last element, or nil if sequence is empty.
 
 Section: sequence
 
@@ -532,11 +627,18 @@ Example:
     `(let-while (~lst ~items) (~bind (first ~lst), done (empty? ~lst), ~lst (rest ~lst)) (not done) ~@body)))
 
 #%
-Usage: (match condition (value form*)*) -> result
+Usage: (match value & branches) => result
 
-Evaluate condition and look for matching value in each branch of type
-(value form*). Form(s) will be wrapped in an implicit do. Use nil to take
-action if no match (encouraged!).
+Pattern match a value against multiple cases.
+
+Arguments:
+- value: Any type. The value to match against.
+- branches: Lists. Each branch is (match-value & forms).
+- result: Any type. The result of the matching branch's forms, or nil.
+
+Evaluates value once and compares against each match-value in order.
+When a match is found, evaluates the corresponding forms in an implicit do.
+Use nil as the match-value for a default case.
 
 Section: conditional
 
@@ -579,11 +681,17 @@ Example:
 
 
 #%
-Usage: (cond ((test form*)*) -> result
+Usage: (cond & clauses) => result
 
-Evaluate each test in order.  If it is true then evaluate the form(s) in an
-implicit do and return the result.  Stop evaluating at the first true test.
-Return nil if no conditions are true.
+Evaluate conditions and execute the first true branch.
+
+Arguments:
+- clauses: Lists. Each clause is (test & forms).
+- result: Any type. The result of the first true branch, or nil.
+
+Evaluates each test expression in order. When a test returns true,
+evaluates the corresponding forms in an implicit do and returns the result.
+Stops at the first true test. Returns nil if no tests are true.
 
 Section: conditional
 
@@ -642,12 +750,18 @@ Example:
     `(if ~provided-condition ~if-true))
 
 #%
-Usage: (with-temp-file (fn (x) (println "given temp file:" x)) ["optional-prefix" "optional-suffix" length])
+Usage: (with-temp-file function & prefix suffix length) => result
 
-Takes a function that accepts a temporary file. This file will be removed when the provided function
-is finished executing. Also accepts an optional prefix, an optional suffix, and an optional
-length for the random number of characters in the temporary file created. Defaults to prefix of
-".tmp", no suffix, and five random characters.
+Create a temporary file and pass it to a function.
+
+Arguments:
+- function: A function. Takes one argument (the temp file path).
+- prefix: A string (optional). Prefix for filename (defaults to ".tmp").
+- suffix: A string (optional). Suffix for filename (defaults to empty).
+- length: An integer (optional). Random character count (defaults to 5).
+- result: Any type. The result of calling function.
+
+The temporary file is automatically removed after function completes.
 
 Section: file
 
@@ -688,12 +802,18 @@ Example:
         (func file-name)))
 
 #%
-Usage: (with-temp (fn (x) (println "given temp dir:" x)) ["optional-prefix" "optional-suffix" length])
+Usage: (with-temp function & prefix suffix length) => result
 
-Takes a function that accepts a temporary directory. This directory will be recursively removed
-when the provided function is finished executing. Also accepts an optional prefix, an optional
-suffix, and an optional length for the random number of characters in the temporary directory
-created. Defaults to prefix of \".tmp\", no suffix, and five random characters.
+Create a temporary directory and pass it to a function.
+
+Arguments:
+- function: A function. Takes one argument (the temp directory path).
+- prefix: A string (optional). Prefix for dirname (defaults to ".tmp").
+- suffix: A string (optional). Suffix for dirname (defaults to empty).
+- length: An integer (optional). Random character count (defaults to 5).
+- result: Any type. The result of calling function.
+
+The temporary directory is recursively removed after function completes.
 
 Section: file
 
@@ -735,9 +855,13 @@ Example:
         (func dir)))
 
 #%
-Usage: (identity arg)
+Usage: (identity value) => value
 
-Identity function.
+Return the argument unchanged.
+
+Arguments:
+- value: Any type. The value to return.
+- value: The same value, unchanged.
 
 Section: core
 
@@ -748,9 +872,14 @@ Example:
 (defn identity (x) x)
 
 #%
-Usage: (not= arg1 arg2)
+Usage: (not= value1 value2) => boolean
 
-Test if two values are not equal using `=`
+Test if two values are not equal.
+
+Arguments:
+- value1: Any type. First value to compare.
+- value2: Any type. Second value to compare.
+- boolean: A boolean. True if values are not equal (using =).
 
 Section: core
 
@@ -765,9 +894,14 @@ Example:
 )
 
 #%
-Usage: (not== arg1 arg2)
+Usage: (not== value1 value2) => boolean
 
-Test if two values are not numerically equal using `==`
+Test if two values are not numerically equal.
+
+Arguments:
+- value1: Any type. First value to compare.
+- value2: Any type. Second value to compare.
+- boolean: A boolean. True if values are not numerically equal (using ==).
 
 Section: core
 

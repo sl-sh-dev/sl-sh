@@ -11,12 +11,19 @@ use std::{env, fs};
 
 const LEN: i64 = 5;
 
-/// Usage: (get-temp ["/path/to/directory/to/use/as/base" "optional-prefix" "optional-suffix" length])
+/// Usage: (get-temp & base-path prefix suffix length) => directory-path
 ///
-/// Creates a directory inside of an OS specific temporary directory. See [temp-dir](root::temp-dir)
-/// for OS specific notes. Also accepts an optional prefix, an optional suffix, and an optional
-/// length for the random number of characters in the temporary file created. Defaults to prefix of
-/// ".tmp", no suffix, and five random characters.
+/// Creates a directory inside of an OS specific temporary directory.
+///
+/// Arguments:
+/// - base-path: A string (optional). Directory to use as base instead of system temp directory.
+/// - prefix: A string (optional). Prefix for the directory name (defaults to ".tmp").
+/// - suffix: A string (optional). Suffix for the directory name (defaults to empty).
+/// - length: An integer (optional). Number of random characters (defaults to 5).
+/// - directory-path: A string. Path to the newly created temporary directory.
+///
+/// See [temp-dir](root::temp-dir) for OS specific notes. The directory name is
+/// constructed as: prefix + random-characters + suffix.
 ///
 /// Section: file
 ///
@@ -66,10 +73,14 @@ fn get_temp(
     }
 }
 
-/// Usage: (temp-dir)
+/// Usage: (temp-dir) => directory-path
 ///
-/// Returns a string representing the temporary directory. See [get-temp](root::get-temp) for higher
-/// level temporary directory creation mechanism.
+/// Returns the OS-specific temporary directory path.
+///
+/// Arguments:
+/// - directory-path: A string. The system temporary directory path.
+///
+/// See [get-temp](root::get-temp) for higher level temporary directory creation mechanism.
 ///
 /// On Unix:
 /// Returns the value of the TMPDIR environment variable if it is set, otherwise for non-Android it
@@ -175,12 +186,19 @@ fn create_temp_file(
     Ok(file)
 }
 
-/// Usage: (get-temp-file ["/path/to/directory/to/use/as/base" "optional-prefix" "optional-suffix" length])
+/// Usage: (get-temp-file & base-path prefix suffix length) => file-path
 ///
-/// Returns name of file created inside temporary directory. Optionally takes a directory to use as
-/// the parent directory of the temporary file. Also accepts an optional prefix, an optional suffix,
-/// and an optional length for the random number of characters in the temporary files created. Defaults
-/// to prefix of ".tmp", no suffix, and five random characters.
+/// Creates a temporary file and returns its path.
+///
+/// Arguments:
+/// - base-path: A string (optional). Directory to create the file in (defaults to system temp).
+/// - prefix: A string (optional). Prefix for the file name (defaults to ".tmp").
+/// - suffix: A string (optional). Suffix for the file name (defaults to empty).
+/// - length: An integer (optional). Number of random characters (defaults to 5).
+/// - file-path: A string. Path to the newly created temporary file.
+///
+/// The file name is constructed as: prefix + random-characters + suffix.
+/// The file is created empty and ready for writing.
 ///
 /// Section: file
 ///
