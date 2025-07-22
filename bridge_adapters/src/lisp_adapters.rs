@@ -41,7 +41,7 @@
 //!             Value::String(h) => Ok(vm.get_string(*h)),
 //!             Value::StringConst(i) => Ok(vm.get_interned(*i)),
 //!             _ => Err(VMError::new_conversion(
-//!                 ErrorStrings::fix_me_mismatched_type(
+//!                 ErrorStrings::mismatched_type(
 //!                     String::from(ValueTypes::from([
 //!                         ValueType::String,
 //!                         ValueType::StringConst,
@@ -70,7 +70,7 @@
 //!         match self {
 //!             Value::String(h) => vm.get_string_mut(*h),
 //!             _ => Err(VMError::new_conversion(
-//!                 ErrorStrings::fix_me_mismatched_type(
+//!                 ErrorStrings::mismatched_type(
 //!                     <&'static str>::from(ValueType::String),
 //!                     self.display_type(vm),
 //!                 ),

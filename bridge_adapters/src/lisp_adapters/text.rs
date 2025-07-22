@@ -35,7 +35,7 @@ impl<'a> SlFromRef<'a, Value> for LooseString<'a> {
             Value::Keyword(i) => Ok(LooseString::Borrowed(vm.get_interned(i))),
             Value::StringConst(i) => Ok(LooseString::Borrowed(vm.get_interned(i))),
             _ => Err(BridgeError::Error(
-                ErrorStrings::fix_me_mismatched_type(
+                ErrorStrings::mismatched_type(
                     String::from(ValueTypes::from([
                         ValueType::String,
                         ValueType::StringConst,
@@ -57,7 +57,7 @@ impl<'a> SlFromRef<'a, Value> for char {
         match value {
             Value::CodePoint(char) => Ok(char),
             _ => Err(BridgeError::Error(
-                ErrorStrings::fix_me_mismatched_type_with_context(
+                ErrorStrings::mismatched_type_with_context(
                     String::from(ValueTypes::from([ValueType::CodePoint])),
                     value.display_type(vm),
                     "Provided value can not be more than one byte, e.g. a char.",
@@ -86,7 +86,7 @@ impl<'a> SlAsRef<'a, str> for &Value {
             Value::String(h) => Ok(vm.get_string(*h)),
             Value::StringConst(i) => Ok(vm.get_interned(*i)),
             _ => Err(BridgeError::Error(
-                ErrorStrings::fix_me_mismatched_type(
+                ErrorStrings::mismatched_type(
                     String::from(ValueTypes::from([
                         ValueType::String,
                         ValueType::StringConst,
@@ -108,7 +108,7 @@ impl<'a> SlFromRef<'a, Value> for SloshChar<'a> {
             )))),
             Value::CharClusterLong(h) => Ok(SloshChar::String(Cow::Borrowed(vm.get_string(h)))),
             _ => Err(BridgeError::Error(
-                ErrorStrings::fix_me_mismatched_type(
+                ErrorStrings::mismatched_type(
                     String::from(ValueTypes::from([
                         ValueType::CharCluster,
                         ValueType::CharClusterLong,
@@ -133,7 +133,7 @@ impl<'a> SlAsMut<'a, String> for &Value {
         match self {
             Value::String(h) => vm.get_string_mut(*h).map_err(|e| BridgeError::Error(e.to_string())),
             _ => Err(BridgeError::Error(
-                ErrorStrings::fix_me_mismatched_type(
+                ErrorStrings::mismatched_type(
                     <&'static str>::from(ValueType::String),
                     self.display_type(vm),
                 ),
@@ -172,7 +172,7 @@ impl<'a> SlFromRef<'a, Value> for String {
             Value::String(h) => Ok(vm.get_string(h).to_string()),
             Value::StringConst(i) => Ok(vm.get_interned(i).to_string()),
             _ => Err(BridgeError::Error(
-                ErrorStrings::fix_me_mismatched_type(
+                ErrorStrings::mismatched_type(
                     <&'static str>::from(ValueType::String),
                     value.display_type(vm),
                 ),
@@ -264,7 +264,7 @@ mod tests {
         let value = create_string(&mut vm);
         let c: BridgeResult<char> = value.sl_into_ref(&vm);
         assert!(c.is_err());
-        let expected_err = BridgeError::Error(ErrorStrings::fix_me_mismatched_type_with_context(
+        let expected_err = BridgeError::Error(ErrorStrings::mismatched_type_with_context(
             String::from(ValueTypes::from([ValueType::CodePoint])),
             value.display_type(&mut vm),
             "Provided value can not be more than one byte, e.g. a char.",

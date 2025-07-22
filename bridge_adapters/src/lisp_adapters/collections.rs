@@ -11,7 +11,7 @@ impl<'a> SlFromRef<'a, Value> for &'a VMHashMap {
         match value {
             Value::Map(h) => Ok(vm.get_map(h)),
             _ => Err(BridgeError::Error(
-                ErrorStrings::fix_me_mismatched_type(
+                ErrorStrings::mismatched_type(
                     <&'static str>::from(ValueType::Map),
                     value.display_type(vm),
                 ),
@@ -25,7 +25,7 @@ impl<'a> SlFromRefMut<'a, Value> for &'a mut VMHashMap {
         match value {
             Value::Map(h) => vm.get_map_mut(h).map_err(|e| BridgeError::Error(e.to_string())),
             _ => Err(BridgeError::Error(
-                ErrorStrings::fix_me_mismatched_type(
+                ErrorStrings::mismatched_type(
                     <&'static str>::from(ValueType::Map),
                     value.display_type(vm),
                 ),

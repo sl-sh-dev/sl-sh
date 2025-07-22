@@ -50,7 +50,7 @@ impl SlFromRef<'_, Value> for KeywordAsString {
                 Ok(ret)
             }
             _ => Err(BridgeError::Error(
-                ErrorStrings::fix_me_mismatched_type(
+                ErrorStrings::mismatched_type(
                     String::from(ValueTypes::from([ValueType::Keyword])),
                     value.display_type(vm),
                 ),
@@ -73,7 +73,7 @@ impl SlFromRef<'_, Value> for SymbolAsString {
                 Ok(ret)
             }
             _ => Err(BridgeError::Error(
-                ErrorStrings::fix_me_mismatched_type(
+                ErrorStrings::mismatched_type(
                     String::from(ValueTypes::from([ValueType::Symbol])),
                     value.display_type(vm),
                 ),
@@ -93,7 +93,7 @@ impl SlFromRef<'_, Value> for Keyword {
         match value {
             Value::Keyword(i) => Ok(Keyword::from(i.id)),
             _ => Err(BridgeError::Error(
-                ErrorStrings::fix_me_mismatched_type(
+                ErrorStrings::mismatched_type(
                     String::from(ValueTypes::from([ValueType::Keyword])),
                     value.display_type(vm),
                 ),
@@ -113,7 +113,7 @@ impl SlFromRef<'_, Value> for Symbol {
         match value {
             Value::Symbol(i) => Ok(Symbol::from(i.id)),
             _ => Err(BridgeError::Error(
-                ErrorStrings::fix_me_mismatched_type(
+                ErrorStrings::mismatched_type(
                     String::from(ValueTypes::from([ValueType::Symbol])),
                     value.display_type(vm),
                 ),
