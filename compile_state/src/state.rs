@@ -485,14 +485,24 @@ Example:
 "),
             list_append: add_special(vm, "list-append", r#"Usage: (list-append list item)
 
-If second parameter is a list it will be appened to the first list, otherwise
-appends item to list.
+If last parameter is a list it will be appened to the first list, otherwise
+adds item as pair.
 
 Section: pair
 
 Example:
 (test::assert-equal (list-append (list 1 2 3) (list 1)) (list 1 2 3 1))
+;; demonstrates that appending two lists is different than appending a non-list value
 (test::assert-not-equal (list-append (list 1 2 3) (list 1)) (list-append (list 1 2 3) 1))
+(test::assert-equal (list 1 2 3 4 5 6 7 8 9) (list-append (list 1 2 3) (list 4 5 6) (list 7 8 9)))
+(test::assert-equal (list-append '(:a :b :c) '(:d :e :f) '() '(:g))  '(:a :b :c :d :e :f :g))
+;; TODO PC unrepresentable?
+;;(test::assert-equal (list-append '(a b c) 'd)  (A B C . D)
+(def lst '(:a :b :c))
+(test::assert-equal (list-append lst (list :d)) (list :a :b :c :d))
+(test::assert-equal lst '(:a :b :c))
+(test::assert-equal (list-append) nil)
+(test::assert-equal (list-append :a) :a)
 "#),
             cons: add_special(vm, "cons", r#"Usage: (cons item collection)
 

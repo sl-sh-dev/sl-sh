@@ -332,7 +332,7 @@ where
 {
     let mut args = args.map(|v| v.resolve_arg(jobs).unwrap_or_default());
     let command_str = command.to_string_lossy();
-    // TODO sls how can we document builtins?
+    // TODO #247 how can we document builtins?
     let status = match &*command_str {
         "cd" => {
             let arg = args.next();
