@@ -307,15 +307,15 @@ impl ErrorStrings {
         }
     }
 
-    pub fn fix_me_invalid_string(expected: impl AsRef<str>, got: impl AsRef<str>) -> String {
+    pub fn invalid_string(expected: impl AsRef<str>, got: impl AsRef<str>) -> String {
         Self::mismatched_type(expected, got, "")
     }
 
-    pub fn fix_me_mismatched_type(expected: impl AsRef<str>, got: impl AsRef<str>) -> String {
+    pub fn mismatched_type(expected: impl AsRef<str>, got: impl AsRef<str>) -> String {
         Self::mismatched_type(expected, got, "")
     }
 
-    pub fn fix_me_mismatched_type_with_context(
+    pub fn mismatched_type_with_context(
         expected: impl AsRef<str>,
         got: impl AsRef<str>,
         additional: impl AsRef<str>,
