@@ -1,0 +1,42 @@
+name: Nix Build
+
+on:
+  push:
+    branches: [ main, devops/nixos ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  nix-build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Nix
+      uses: cachix/install-nix-action@v26
+      with:
+        extra_nix_config: |
+          experimental-features = nix-command flakes
+
+    # Use GitHub's cache for Nix store
+    - name: Cache Nix store
+      uses: DeterminateSystems/magic-nix-cache-action@v2
+
+    - name: Check flake
+      run: nix flake check
+
+    - name: Build slosh
+      run: nix build .#slosh -L
+
+    - name: Test slosh binary
+      run: |
+        ./result/bin/slosh -c "(prn \"Slosh built successfully with Nix!\")"
+
+    - name: Run development shell
+      run: |
+        nix develop --command cargo --version
+        nix develop --command rustc --version
