@@ -44,12 +44,7 @@ lazy_static! {
     pub static ref EXEMPTIONS: HashSet<&'static str> = {
         let mut exemption_set = HashSet::new();
         exemption_set.insert("version");
-        exemption_set.insert("env");
-        exemption_set.insert("sh");
-        exemption_set.insert("$sh");
         exemption_set.insert("this-fn");
-        exemption_set.insert("cons");
-        exemption_set.insert("list-append");
         exemption_set.insert("identical?");
         exemption_set.insert("type");
         exemption_set.insert("call/cc");
@@ -150,9 +145,6 @@ impl Namespace {
                 docs.push(slosh_doc);
             }
             Err(e) => match e {
-                DocError::ExemptFromProperDocString { symbol } => {
-                    eprintln!("Exempt from proper doc string: {symbol}");
-                }
                 _ if !require_proper_format => {
                     let incomplete_doc = SloshDoc::new_incomplete(*interned, vm, self.clone())?;
                     docs.push(incomplete_doc);
@@ -250,17 +242,25 @@ impl DocStringSection {
         raw_doc_string: String,
         backup_usage: String,
     ) -> DocResult<DocStringSection> {
-        let cap = DOC_REGEX.captures(raw_doc_string.as_str()).ok_or_else(|| {
-            if EXEMPTIONS.contains(symbol.as_ref()) {
-                DocError::ExemptFromProperDocString {
+        let cap =
+            DOC_REGEX
+                .captures(raw_doc_string.as_str())
+                .ok_or_else(|| DocError::NoDocString {
                     symbol: symbol.to_string(),
-                }
-            } else {
-                DocError::NoDocString {
-                    symbol: symbol.to_string(),
-                }
-            }
-        })?;
+                });
+        if EXEMPTIONS.contains(symbol.as_ref()) && cap.is_err() {
+            let usage = Some("unknown".to_string());
+            let description = "unknown".to_string();
+            let section = "undocumented".to_string();
+            let example = None;
+            return Ok(DocStringSection {
+                usage,
+                description,
+                section,
+                example,
+            });
+        }
+        let cap = cap?;
         let mut usage = cap.get(2).map(|x| x.as_str().trim().to_string());
         if usage.is_none() && !backup_usage.trim().is_empty() {
             usage = Some(backup_usage);
@@ -427,16 +427,6 @@ impl SloshDoc {
     pub fn fully_qualified_name(&self) -> String {
         self.namespace.to_string() + "::" + self.symbol.as_ref()
     }
-
-    /// Return an empty documentation map.
-    fn nil_doc_map(vm: &mut SloshVm) -> VMHashMap {
-        let mut map = VMHashMap::with_capacity(4);
-        insert_nil_section(&mut map, USAGE, vm);
-        insert_nil_section(&mut map, SECTION, vm);
-        insert_nil_section(&mut map, DESCRIPTION, vm);
-        insert_nil_section(&mut map, EXAMPLE, vm);
-        map
-    }
 }
 
 enum DocError {
@@ -444,7 +434,6 @@ enum DocError {
     NoDocString { symbol: String },
     RemoveExemption { symbol: String },
     DocStringMissingSection { symbol: String, section: String },
-    ExemptFromProperDocString { symbol: String },
 }
 
 impl Debug for DocError {
@@ -464,11 +453,6 @@ impl Display for DocError {
             DocError::NoDocString { symbol } => {
                 format!(
                     "Either documentation provided does not conform to conventional layout or no documentation string provided for symbol {symbol} all slosh functions with documentation must have a string that conforms to the conventional layout."
-                )
-            }
-            DocError::ExemptFromProperDocString { symbol } => {
-                format!(
-                    "No documentation exists for provided symbol {symbol}, this should be rectified."
                 )
             }
             DocError::DocStringMissingSection { symbol, section } => {
@@ -551,10 +535,6 @@ fn doc_map(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
 
             let res = match SloshDoc::new(*g, vm, Namespace::Global) {
                 Ok(slosh_doc) => Value::sl_from(slosh_doc, vm),
-                Err(DocError::ExemptFromProperDocString { symbol: _ }) => {
-                    let map = SloshDoc::nil_doc_map(vm);
-                    Ok(vm.alloc_map(map))
-                }
                 Err(e) => Err(VMError::from(e)),
             };
             // Unpause GC, this MUST happen so no early returns (looking at you ?).

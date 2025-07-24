@@ -122,6 +122,23 @@ fn file_test(path: &str, test: fn(path: &Path) -> bool, fn_name: &str) -> VMResu
     }
 }
 
+/// Usage: (fs-fullpath "~/some/filepath/../") -> nil
+///
+/// Return absolute 'canonical' file path.
+///
+/// Section: file
+///
+/// Example:
+/// #t
+#[sl_sh_fn(fn_name = "fs-fullpath")]
+fn fs_fullpath(path: &str) -> Option<String> {
+    let path = expand_tilde(path.into());
+    Path::new(&path)
+        .canonicalize()
+        .ok()
+        .map(|path| path.to_string_lossy().into_owned())
+}
+
 /// Usage: (fs-exists? path-to-test)
 ///
 /// Does the given path exist?
@@ -673,6 +690,7 @@ fn fs_meta(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
 
 pub fn add_fs_meta_builtins(env: &mut SloshVm) {
     intern_cd(env);
+    intern_fs_fullpath(env);
     intern_path_exists(env);
     intern_is_file(env);
     intern_is_dir(env);

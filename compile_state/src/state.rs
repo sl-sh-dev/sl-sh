@@ -480,9 +480,47 @@ Create a proper list from pairs with items 0 - N.
 Section: pair
 
 Example:
-(test::assert-equal '(1 2 3) (list 1 2 3))"),
-            list_append: add_special(vm, "list-append", ""),
-            cons: add_special(vm, "cons", ""),
+(test::assert-equal '(1 2 3) (list 1 2 3))
+(test::assert-equal '() (list))
+"),
+            list_append: add_special(vm, "list-append", r#"Usage: (list-append list item)
+
+If last parameter is a list it will be appened to the first list, otherwise
+adds item as pair.
+
+Section: pair
+
+Example:
+(test::assert-equal (list-append (list 1 2 3) (list 1)) (list 1 2 3 1))
+;; demonstrates that appending two lists is different than appending a non-list value
+(test::assert-not-equal (list-append (list 1 2 3) (list 1)) (list-append (list 1 2 3) 1))
+(test::assert-equal (list 1 2 3 4 5 6 7 8 9) (list-append (list 1 2 3) (list 4 5 6) (list 7 8 9)))
+(test::assert-equal (list-append '(:a :b :c) '(:d :e :f) '() '(:g))  '(:a :b :c :d :e :f :g))
+;; TODO PC unrepresentable?
+(test::assert-equal (list-append '(1 2 3) 4)  '(1 2 3 . 4))
+(def lst '(:a :b :c))
+(test::assert-equal (list-append lst (list :d)) (list :a :b :c :d))
+(test::assert-equal lst '(:a :b :c))
+(test::assert-equal (list-append) nil)
+(test::assert-equal (list-append :a) :a)
+"#),
+            cons: add_special(vm, "cons", r#"Usage: (cons item collection)
+
+Prepends item to collection, forms a pair.
+
+Section: pair
+
+Example:
+(test::assert-equal '(1 2 3) (cons 1 (list 2 3)))
+(test::assert-equal (cons 1 (cons 2 (cons 3 '()))) '(1 2 3))
+(test::assert-equal (cons 1 2) (1 . 2))
+(test::assert-equal (cons 1 nil) (1))
+(test::assert-equal (cons nil 2) (nil . 3))
+(test::assert-equal (cons nil nil) (nil))
+(test::assert-equal (cons 1 (cons 2 (cons 3 (cons 4 nil)))) '(1 2 3 4))
+(test::assert-equal (cons 1 2) (1 . 2))
+(test::assert-equal (cons 1 '(2 3 4)) (1 2 3 4))
+"#),
             car: add_special(vm, "car", "Usage: (car pair)
 
 Return the car (first item) from a pair.  If used on a proper list this will be the first element.
