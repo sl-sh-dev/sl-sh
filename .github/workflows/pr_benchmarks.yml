@@ -68,6 +68,8 @@ jobs:
       - name: Track Benchmarks with Bencher
         run: |
           echo "Running bencher for branch ${BRANCH}."
+          echo "Lower threshold: ${{ vars.BENCHER_LOWER_THRESHOLD_IAI }}"
+          echo "Upper threshold: ${{ vars.BENCHER_UPPER_THRESHOLD_IAI }}"
           bencher run \
           --testbed "ubuntu-latest" \
           --github-actions "${{ secrets.GITHUB_TOKEN }}" \
@@ -78,8 +80,8 @@ jobs:
           --threshold-measure estimated_cycles \
           --threshold-min-sample-size 4 \
           --threshold-test z_score \
-          --threshold-lower-boundary 0.90 \
-          --threshold-upper-boundary 0.90 \
+          --threshold-lower-boundary ${{ vars.BENCHER_LOWER_THRESHOLD_IAI }} \
+          --threshold-upper-boundary ${{ vars.BENCHER_UPPER_THRESHOLD_IAI }} \
           --branch-reset \
           "cargo bench --all"
 
@@ -121,6 +123,8 @@ jobs:
 
       - name: Track Benchmarks with Bencher
         run: |
+          echo "Lower threshold: ${{ vars.BENCHER_LOWER_THRESHOLD_CRITERION }}"
+          echo "Upper threshold: ${{ vars.BENCHER_UPPER_THRESHOLD_CRITERION }}"
           echo "Running bencher for branch $BRANCH."
           bencher run \
           --testbed "ubuntu-latest" \
@@ -132,7 +136,7 @@ jobs:
           --threshold-measure latency \
           --threshold-min-sample-size 4 \
           --threshold-test z_score \
-          --threshold-lower-boundary 0.95 \
-          --threshold-upper-boundary 0.95 \
+          --threshold-lower-boundary ${{ vars.BENCHER_LOWER_THRESHOLD_CRITERION }} \
+          --threshold-upper-boundary ${{ vars.BENCHER_UPPER_THRESHOLD_CRITERION }} \
           --branch-reset \
           "cargo bench --all"
