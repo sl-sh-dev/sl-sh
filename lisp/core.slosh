@@ -918,3 +918,5 @@ Example:
  %#
   (defmacro substitute (lst old-item new-item & mods)
        `(nsubstitute! (to-list ~lst) ~old-item ~new-item ~@mods))
+       
+(load "iterator.slosh")
