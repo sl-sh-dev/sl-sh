@@ -1,0 +1,54 @@
+(load "test.slosh")
+
+;; Test vec-clear!
+(def test-clear-vec [1 2 3])
+(test::assert-false (empty? test-clear-vec))
+(vec-clear! test-clear-vec)
+(test::assert-true (empty? test-clear-vec))
+(test::assert-equal [] test-clear-vec)
+
+;; Test that cleared vector can be reused by inserting
+(vec-insert! test-clear-vec 0 42)
+(test::assert-equal [42] test-clear-vec)
+
+;; Test vec-remove!
+(def test-remove-vec [1 2 3 4 5])
+(test::assert-equal [1 2 3 4 5] test-remove-vec)
+
+;; Remove from middle
+(vec-remove! test-remove-vec 2)
+(test::assert-equal [1 2 4 5] test-remove-vec)
+
+;; Remove from beginning
+(vec-remove! test-remove-vec 0)
+(test::assert-equal [2 4 5] test-remove-vec)
+
+;; Remove from end
+(vec-remove! test-remove-vec 2)
+(test::assert-equal [2 4] test-remove-vec)
+
+;; Remove until empty
+(vec-remove! test-remove-vec 0)
+(vec-remove! test-remove-vec 0)
+(test::assert-equal [] test-remove-vec)
+
+;; Test vec-insert!
+(def test-insert-vec [1 2 3])
+(test::assert-equal [1 2 3] test-insert-vec)
+
+;; Insert at beginning
+(vec-insert! test-insert-vec 0 0)
+(test::assert-equal [0 1 2 3] test-insert-vec)
+
+;; Insert in middle
+(vec-insert! test-insert-vec 2 1.5)
+(test::assert-equal [0 1 1.5 2 3] test-insert-vec)
+
+;; Insert at end
+(vec-insert! test-insert-vec 5 4)
+(test::assert-equal [0 1 1.5 2 3 4] test-insert-vec)
+
+;; Test edge cases
+(def empty-vec [])
+(vec-insert! empty-vec 0 "first")
+(test::assert-equal ["first"] empty-vec)

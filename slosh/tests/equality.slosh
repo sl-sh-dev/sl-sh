@@ -1,5 +1,6 @@
 #!/usr/bin/env slosh
 
+(load "test.slosh")
 (import test)
 
 (assert-true (= 1 1))

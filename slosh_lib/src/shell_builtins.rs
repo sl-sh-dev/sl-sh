@@ -160,10 +160,12 @@ fn sh_str(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
 /// Example:
 /// #t
 #[sl_sh_fn(fn_name = "unset-env")]
-fn unset_env(var: LooseString) {
+fn unset_env(key: LooseString) -> VMResult<()> {
+    sanitize(key.as_ref(), None)?;
     unsafe {
-        env::remove_var(var.as_ref());
+        env::remove_var(key.as_ref());
     }
+    Ok(())
 }
 
 /// Usage: (set-env "NAME_OF_ENVIRONMENT_VARIABLE" "Value variable should be assigned")
@@ -176,9 +178,28 @@ fn unset_env(var: LooseString) {
 /// Example:
 /// #t
 #[sl_sh_fn(fn_name = "set-env")]
-fn set_env(var: LooseString, value: LooseString) {
+fn set_env(key: LooseString, val: LooseString) -> VMResult<()> {
+    sanitize(key.as_ref(), Some(val.as_ref()))?;
     unsafe {
-        env::set_var(var.as_ref(), value.as_ref());
+        env::set_var(key.as_ref(), val.as_ref());
+    }
+    Ok(())
+}
+
+fn sanitize(key: &str, val: Option<&str>) -> VMResult<()> {
+    let val = val.unwrap_or_default();
+    if val.contains('\0') {
+        Err(VMError::new(
+            "env",
+            "export: Invalid val (contains NUL character ('\\0')'",
+        ))
+    } else if key.is_empty() || key.contains('=') || key.contains('\0') {
+        Err(VMError::new(
+            "env",
+            "Invalid key, maye not contain '=' or '\\0'",
+        ))
+    } else {
+        Ok(())
     }
 }
 

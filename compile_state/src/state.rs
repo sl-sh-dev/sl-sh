@@ -302,11 +302,11 @@ Example:
 (test::assert-equal 11 test-fn1)
 (test::assert-equal 20 test-fn2)
 (test::assert-equal 3 test-fn3)
-((fn (x y z) (set! test-fn1 x)(set! test-fn2 y)(set! test-fn3 z)) 12 21 30)
+(test::assert-equal 63 ((fn (x y z) (set! test-fn1 x)(set! test-fn2 y)(set! test-fn3 z)(+ x y z)) 12 21 30))
 (test::assert-equal 12 test-fn1)
 (test::assert-equal 21 test-fn2)
 (test::assert-equal 30 test-fn3)
-(test::assert-equal 63 ((fn (x y z) (set! test-fn1 x)(set! test-fn2 y)(set! test-fn3 z)(+ x y z)) 12 21 30))"),
+"),
             mac_: add_special(vm, "macro", "Usage: (macro (args) `(apply + ,@args))
 
 Define an anonymous macro.
@@ -481,7 +481,7 @@ Section: pair
 
 Example:
 (test::assert-equal '(1 2 3) (list 1 2 3))
-(test::assert-not-equal (list-append (list 1 2 3) (list 1)) (list-append (list 1 2 3) 1))
+(test::assert-equal '() (list))
 "),
             list_append: add_special(vm, "list-append", r#"Usage: (list-append list item)
 
@@ -497,7 +497,7 @@ Example:
 (test::assert-equal (list 1 2 3 4 5 6 7 8 9) (list-append (list 1 2 3) (list 4 5 6) (list 7 8 9)))
 (test::assert-equal (list-append '(:a :b :c) '(:d :e :f) '() '(:g))  '(:a :b :c :d :e :f :g))
 ;; TODO PC unrepresentable?
-;;(test::assert-equal (list-append '(a b c) 'd)  (A B C . D)
+(test::assert-equal (list-append '(1 2 3) 4)  '(1 2 3 . 4))
 (def lst '(:a :b :c))
 (test::assert-equal (list-append lst (list :d)) (list :a :b :c :d))
 (test::assert-equal lst '(:a :b :c))
@@ -512,6 +512,14 @@ Section: pair
 
 Example:
 (test::assert-equal '(1 2 3) (cons 1 (list 2 3)))
+(test::assert-equal (cons 1 (cons 2 (cons 3 '()))) '(1 2 3))
+(test::assert-equal (cons 1 2) (1 . 2))
+(test::assert-equal (cons 1 nil) (1))
+(test::assert-equal (cons nil 2) (nil . 3))
+(test::assert-equal (cons nil nil) (nil))
+(test::assert-equal (cons 1 (cons 2 (cons 3 (cons 4 nil)))) '(1 2 3 4))
+(test::assert-equal (cons 1 2) (1 . 2))
+(test::assert-equal (cons 1 '(2 3 4)) (1 2 3 4))
 "#),
             car: add_special(vm, "car", "Usage: (car pair)
 

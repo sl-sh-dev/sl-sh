@@ -1,0 +1,56 @@
+;; Tests for log function
+;; Testing natural logarithm and logarithm with specified base
+(load "core.slosh")
+(load "test.slosh")
+(import test)
+
+;; Natural logarithm (base e)
+(assert-equal 0.0 (log 1))
+(assert-true (< 0.693 (log 2) 0.694)) ; ln(2)
+(assert-true (< 1.098 (log 3) 1.099)) ; ln(3)
+(assert-true (< 2.302 (log 10) 2.303)) ; ln(10)
+
+;; Logarithm with base e (should match natural log)
+(assert-true (< -0.694 (log 0.5) -0.693)) ; ln(0.5) = -ln(2)
+
+;; Logarithm with specified base
+(assert-equal 0.0 (log 1 10))     ; log_10(1) = 0
+(assert-equal 1.0 (log 10 10))    ; log_10(10) = 1
+(assert-equal 2.0 (log 100 10))   ; log_10(100) = 2
+;; For more on equality see https://sl-sh-dev.github.io/sl-sh/equality.html
+(assert-compare == 3.0 (log 1000 10))  ; log_10(1000) = 3
+
+;; Base 2 logarithms
+(assert-equal 0.0 (log 1 2))      ; log_2(1) = 0
+(assert-equal 1.0 (log 2 2))      ; log_2(2) = 1
+(assert-equal 3.0 (log 8 2))      ; log_2(8) = 3
+(assert-equal 4.0 (log 16 2))     ; log_2(16) = 4
+(assert-equal 10.0 (log 1024 2))  ; log_2(1024) = 10
+
+;; Other bases
+(assert-equal 2.0 (log 9 3))      ; log_3(9) = 2
+(assert-equal 3.0 (log 125 5))    ; log_5(125) = 3
+(assert-equal 4.0 (log 625 5))    ; log_5(625) = 4
+
+;; Fractional results
+(assert-equal -1.0 (log 0.1 10))  ; log_10(0.1) = -1
+(assert-equal -2.0 (log 0.01 10)) ; log_10(0.01) = -2
+(assert-equal -1.0 (log 0.5 2))   ; log_2(0.5) = -1
+
+;; Error cases - invalid arguments
+(assert-error (log))              ; No arguments
+(assert-error (log -1))           ; Negative argument
+(assert-error (log 0))            ; Zero argument
+(assert-error (log -10 2))        ; Negative number
+(assert-error (log 0 10))         ; Zero
+
+;; Error cases - invalid bases
+(assert-error (log 10 -2))        ; Negative base
+(assert-error (log 10 0))         ; Zero base
+(assert-error (log 10 1))         ; Base 1 is undefined
+(assert-error (log 10 -5))        ; Negative base
+
+;; Error cases - type errors
+(assert-error (log "ten"))
+(assert-error (log 10 "two"))
+(assert-error (log nil 2))
