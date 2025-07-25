@@ -363,7 +363,7 @@ impl F56 {
         ]);
         let f56_biased_exponent: u16 = (f56_word >> 45) as u16 & 0x3FF; // first 10 bits after the sign bit
         let f56_mantissa: u64 = f56_word & 0x1FFF_FFFF_FFFF; // the rightmost 45 bits
-                                                             // all 1s in the exponent and a nonzero mantissa means NaN
+        // all 1s in the exponent and a nonzero mantissa means NaN
         f56_biased_exponent == 0b11_1111_1111 && f56_mantissa > 0u64
     }
 }
@@ -384,7 +384,7 @@ mod tests {
             true_exponent = 0;
         }
         let f32_mantissa = word & 0x007f_ffff; // everything after first 9 bits
-                                               // print the f32 in scientific notation, the true exponent in decimal, and the mantissa in decimal, and the hex word
+        // print the f32 in scientific notation, the true exponent in decimal, and the mantissa in decimal, and the hex word
         format!(
             "f32: {:.5e}, true exponent: {}, mantissa: {:016x}, word: {:016x}",
             f, true_exponent, f32_mantissa, word
@@ -668,7 +668,11 @@ mod tests {
             println!("f64: {} not quite equal\nF56: {}", f64_string, f56_string);
             // let abs: f64 = f64_value.abs();
             if f64_value.abs() > f64::from(F56::MAX) && f56_string.contains("inf") {
-                println!("But F56 is expected to be infinite if f64 is outside of its range. {:.0e} > {:.0e}\n", f64_value, f64::from(F56::MAX));
+                println!(
+                    "But F56 is expected to be infinite if f64 is outside of its range. {:.0e} > {:.0e}\n",
+                    f64_value,
+                    f64::from(F56::MAX)
+                );
                 return;
             }
             if f64_value.abs() < F56::MIN_POSITIVE_SUBNORMAL.into() && f64::from(f56_value) == 0.0 {

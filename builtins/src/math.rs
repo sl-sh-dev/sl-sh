@@ -203,7 +203,7 @@ pub fn min(vals: VarArgs<Value>) -> VMResult<Value> {
             _ => {
                 return Err(VMError::new_vm(
                     "min: all arguments must be numbers".to_string(),
-                ))
+                ));
             }
         }
     }
@@ -270,7 +270,7 @@ pub fn max(vals: VarArgs<Value>) -> VMResult<Value> {
             _ => {
                 return Err(VMError::new_vm(
                     "max: all arguments must be numbers".to_string(),
-                ))
+                ));
             }
         }
     }

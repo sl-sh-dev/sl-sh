@@ -25,16 +25,16 @@
 use bridge_types::Param;
 use bridge_types::PassingStyle;
 use bridge_types::TypeHandle;
-use quote::quote;
-use quote::ToTokens;
 use quote::__private::TokenStream;
+use quote::ToTokens;
+use quote::quote;
 use std::fmt::{Display, Formatter};
 use syn::__private::{Span, TokenStream2};
 use syn::spanned::Spanned;
 use syn::{
-    parse_macro_input, AttributeArgs, Error, FnArg, GenericArgument, Generics, Ident, Item, ItemFn,
-    Lit, Meta, NestedMeta, PathArguments, ReturnType, Type, TypeBareFn, TypePath, TypeReference,
-    TypeTuple,
+    AttributeArgs, Error, FnArg, GenericArgument, Generics, Ident, Item, ItemFn, Lit, Meta,
+    NestedMeta, PathArguments, ReturnType, Type, TypeBareFn, TypePath, TypeReference, TypeTuple,
+    parse_macro_input,
 };
 extern crate static_assertions;
 
@@ -264,9 +264,7 @@ fn get_attribute_name_value(nested_meta: &NestedMeta) -> MacroResult<(String, St
                     (Some(ident), Lit::Str(partial_name)) => {
                         Ok((ident.to_string(), partial_name.value()))
                     }
-                    (Some(ident), Lit::Bool(b)) => {
-                        Ok((ident.to_string(), b.value.to_string()))
-                    }
+                    (Some(ident), Lit::Bool(b)) => Ok((ident.to_string(), b.value.to_string())),
                     (_, _) => Err(Error::new(
                         meta.span(),
                         "sl_sh_fn requires one name-value pair, 'fn_name'. Supports optional name-value pair 'eval_values = true')",
@@ -1442,7 +1440,7 @@ fn parse_src_function_arguments(
                 return Err(Error::new(
                     original_item_fn.span(),
                     "Associated functions that take the self argument are not supported.",
-                ))
+                ));
             }
             FnArg::Typed(ty) => {
                 parsed_args.push(get_param_from_type(
@@ -1533,7 +1531,7 @@ fn parse_attributes(
             return Err(Error::new(
                 original_item_fn.sig.generics.span(),
                 "sl_sh_fn only supports functions with 0 or 1 generic lifetime parameters.",
-            ))
+            ));
         }
     };
     Ok((fn_name, fn_name_ident, takes_env, inline, generics))

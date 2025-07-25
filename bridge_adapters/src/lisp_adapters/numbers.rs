@@ -3,7 +3,7 @@ use bridge_types::{ErrorStrings, LooseFloat, LooseInt, LooseString};
 use compile_state::state::SloshVm;
 use slvm::float::F56;
 use slvm::value::ValueType;
-use slvm::{to_i56, VMError, VMResult, Value, ValueTypes, I56};
+use slvm::{I56, VMError, VMResult, Value, ValueTypes, to_i56};
 
 impl SlFrom<()> for Value {
     fn sl_from(_value: (), _vm: &mut SloshVm) -> VMResult<Self> {
@@ -236,7 +236,7 @@ mod tests {
     use crate::lisp_adapters::SlFromRef;
     use crate::lisp_adapters::SlInto;
     use compile_state::state::new_slosh_vm;
-    use slvm::{to_i56, Value};
+    use slvm::{Value, to_i56};
 
     #[test]
     fn test_i32_conversions_rust_to_value() {

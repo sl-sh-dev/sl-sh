@@ -29,7 +29,7 @@ pub fn vec_slice(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         _ => {
             return Err(VMError::new_vm(
                 "vec-slice: Invalid arguments (requires two or three)".to_string(),
-            ))
+            ));
         }
     };
     let len = vector.len();

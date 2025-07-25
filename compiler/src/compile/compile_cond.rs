@@ -1,4 +1,4 @@
-use crate::{compile, CompileState, SloshVm};
+use crate::{CompileState, SloshVm, compile};
 use compile_state::state::SloshVmTrait;
 use slvm::*;
 

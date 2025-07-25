@@ -7,10 +7,10 @@ use slvm::opcodes::*;
 use slvm::{Interned, VMError, VMResult, Value};
 
 use crate::compile::destructure::{
-    resolve_destruct_containers, setup_dbg, DestructState, DestructType,
+    DestructState, DestructType, resolve_destruct_containers, setup_dbg,
 };
 use crate::compile::util::get_args_iter;
-use crate::{compile, SloshVm, SloshVmTrait};
+use crate::{SloshVm, SloshVmTrait, compile};
 
 type RightSideExp = (Option<Interned>, Option<usize>, Value, Option<DestructType>);
 
@@ -77,7 +77,7 @@ fn add_right_side_exp(
         _ => {
             return Err(VMError::new_compile(
                 "must be a symbol or destructure pattern",
-            ))
+            ));
         }
     }
     Ok(())

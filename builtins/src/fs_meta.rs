@@ -3,7 +3,7 @@ use bridge_types::VarArgs;
 use compile_state::state::SloshVm;
 use shell::builtins::expand_tilde;
 use sl_compiler::load_eval::apply_callable;
-use slvm::{from_i56, VMError, VMResult, Value};
+use slvm::{VMError, VMResult, Value, from_i56};
 use std::path::{Path, PathBuf};
 use std::{env, fs, io, time};
 
@@ -93,13 +93,17 @@ fn cd(arg: Option<String>) -> VMResult<Value> {
     let new_dir = cd_expand_all_dots(new_dir.to_string());
     let root = Path::new(&new_dir);
     if let Ok(oldpwd) = env::current_dir() {
-        unsafe { env::set_var("OLDPWD", oldpwd); }
+        unsafe {
+            env::set_var("OLDPWD", oldpwd);
+        }
     }
     if let Err(e) = env::set_current_dir(root) {
         eprintln!("{} Error changing to {}, {}", fn_name, root.display(), e);
         Ok(Value::Nil)
     } else {
-        unsafe { env::set_var("PWD", env::current_dir()?); }
+        unsafe {
+            env::set_var("PWD", env::current_dir()?);
+        }
         Ok(Value::True)
     }
 }
@@ -345,11 +349,7 @@ fn is_same_file(path_0: &str, path_1: &str) -> VMResult<Value> {
     match (get_file(path_0), get_file(path_1)) {
         (Some(path_0), Some(path_1)) => {
             if let Ok(b) = same_file::is_same_file(path_0.as_path(), path_1.as_path()) {
-                if b {
-                    Ok(Value::True)
-                } else {
-                    Ok(Value::False)
-                }
+                if b { Ok(Value::True) } else { Ok(Value::False) }
             } else {
                 let msg = format!(
                     "{} there were insufficient permissions to access one or both of the provided files.",
@@ -482,7 +482,7 @@ fn fs_crawl(
                         "invalid argument {}",
                         depth_or_symlink.display_value(environment)
                     ),
-                ))
+                ));
             }
         }
     }

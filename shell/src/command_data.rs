@@ -1,5 +1,5 @@
 use crate::jobs::Jobs;
-use crate::platform::{FileDesc, FromFileDesc, Platform, Sys, STDIN_FILENO, STDOUT_FILENO};
+use crate::platform::{FileDesc, FromFileDesc, Platform, STDIN_FILENO, STDOUT_FILENO, Sys};
 use std::collections::HashSet;
 use std::ffi::OsString;
 use std::fmt::{Display, Formatter};
@@ -758,10 +758,7 @@ impl Run {
             match self {
                 Run::Command(current) => current.push_stdin_front(Some(fd)),
                 Run::BackgroundCommand(current) => current.push_stdin_front(Some(fd)),
-                Run::Pipe(seq)
-                | Run::Sequence(seq)
-                | Run::And(seq)
-                | Run::Or(seq) => {
+                Run::Pipe(seq) | Run::Sequence(seq) | Run::And(seq) | Run::Or(seq) => {
                     if let Some(run) = seq.first_mut() {
                         run.push_stdin_front(Some(fd));
                     }
@@ -778,10 +775,7 @@ impl Run {
             match self {
                 Run::Command(current) => current.push_stdout_front(Some(fd)),
                 Run::BackgroundCommand(current) => current.push_stdout_front(Some(fd)),
-                Run::Pipe(seq)
-                | Run::Sequence(seq)
-                | Run::And(seq)
-                | Run::Or(seq) => {
+                Run::Pipe(seq) | Run::Sequence(seq) | Run::And(seq) | Run::Or(seq) => {
                     if let Some(run) = seq.last_mut() {
                         run.push_stdout_front(Some(fd));
                     }
@@ -810,10 +804,7 @@ impl Run {
         match self {
             Run::Command(current) => current.fds_to_internal(fd_set),
             Run::BackgroundCommand(current) => current.fds_to_internal(fd_set),
-            Run::Pipe(seq)
-            | Run::Sequence(seq)
-            | Run::And(seq)
-            | Run::Or(seq) => {
+            Run::Pipe(seq) | Run::Sequence(seq) | Run::And(seq) | Run::Or(seq) => {
                 for run in seq {
                     run.fds_to_internal(fd_set);
                 }
@@ -835,10 +826,7 @@ impl Run {
         match self {
             Run::Command(current) => current.push_arg(arg),
             Run::BackgroundCommand(current) => current.push_arg(arg),
-            Run::Pipe(seq)
-            | Run::Sequence(seq)
-            | Run::And(seq)
-            | Run::Or(seq) => {
+            Run::Pipe(seq) | Run::Sequence(seq) | Run::And(seq) | Run::Or(seq) => {
                 if let Some(run) = seq.last_mut() {
                     run.push_arg_end(arg);
                 }
@@ -853,10 +841,7 @@ impl Run {
         match self {
             Run::Command(current) => current.extend_stdios(redirs),
             Run::BackgroundCommand(current) => current.extend_stdios(redirs),
-            Run::Pipe(seq)
-            | Run::Sequence(seq)
-            | Run::And(seq)
-            | Run::Or(seq) => {
+            Run::Pipe(seq) | Run::Sequence(seq) | Run::And(seq) | Run::Or(seq) => {
                 if let Some(run) = seq.last_mut() {
                     run.extend_redirs_end(redirs);
                 }

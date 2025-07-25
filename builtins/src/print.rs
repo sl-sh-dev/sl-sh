@@ -4,7 +4,7 @@ use compile_state::state::{CompileState, SloshVmTrait};
 use sl_compiler::compile;
 use sl_compiler::pass1::pass1;
 use slvm::{Interned, VMError, VMResult, Value};
-use std::io::{stderr, stdout, Write};
+use std::io::{Write, stderr, stdout};
 
 fn is_sym(vm: &SloshVm, name: &str, intern: Interned) -> bool {
     if let Some(i) = vm.get_if_interned(name) {
