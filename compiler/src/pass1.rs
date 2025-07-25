@@ -1,6 +1,6 @@
 use crate::compile_fn::mk_state;
 use crate::{CompileState, SloshVm};
-use slvm::{from_i56, VMResult, Value};
+use slvm::{VMResult, Value, from_i56};
 
 pub fn pass1(env: &mut SloshVm, state: &mut CompileState, exp: Value) -> VMResult<()> {
     let fn_ = env.intern("fn");

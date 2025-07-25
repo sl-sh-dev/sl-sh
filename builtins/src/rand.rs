@@ -7,7 +7,7 @@ use bridge_adapters::add_builtin;
 use bridge_macros::sl_sh_fn;
 use compile_state::state::SloshVm;
 use rand::rngs::{StdRng, ThreadRng};
-use slvm::{from_i56, VMError, VMResult, Value};
+use slvm::{VMError, VMResult, Value, from_i56};
 use std::borrow::Cow;
 use std::hash::{DefaultHasher, Hasher};
 

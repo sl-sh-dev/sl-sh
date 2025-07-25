@@ -1,4 +1,4 @@
-use crate::{decode2, decode3, decode_u16, set_register, GVm, VMError, VMResult, Value};
+use crate::{GVm, VMError, VMResult, Value, decode_u16, decode2, decode3, set_register};
 
 impl<ENV> GVm<ENV> {
     pub(super) fn list(&mut self, wide: bool) -> VMResult<()> {
@@ -41,7 +41,7 @@ impl<ENV> GVm<ENV> {
                                 *cdr = last_cdr;
                             }
                             Value::List(_, _) => {
-                                return Err(VMError::new_heap("Pair is not mutable!"))
+                                return Err(VMError::new_heap("Pair is not mutable!"));
                             }
                             _ => {}
                         }
@@ -64,7 +64,7 @@ impl<ENV> GVm<ENV> {
                                             *cdr = last_cdr;
                                         }
                                         Value::List(_, _) => {
-                                            return Err(VMError::new_heap("Pair is not mutable!"))
+                                            return Err(VMError::new_heap("Pair is not mutable!"));
                                         }
                                         _ => {}
                                     }
@@ -80,7 +80,7 @@ impl<ENV> GVm<ENV> {
                                             Value::List(_, _) => {
                                                 return Err(VMError::new_heap(
                                                     "Pair is not mutable!",
-                                                ))
+                                                ));
                                             }
                                             _ => {}
                                         }
@@ -101,7 +101,7 @@ impl<ENV> GVm<ENV> {
                                     *cdr = lst;
                                 }
                                 Value::List(_, _) => {
-                                    return Err(VMError::new_heap("Pair is not mutable!"))
+                                    return Err(VMError::new_heap("Pair is not mutable!"));
                                 }
                                 _ => {}
                             }

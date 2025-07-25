@@ -1,5 +1,5 @@
 use crate::bits::{
-    is_live, is_marked, is_mutable, is_traced, FLAG_MARK, FLAG_MUT, FLAG_STICKY, FLAG_TRACED,
+    FLAG_MARK, FLAG_MUT, FLAG_STICKY, FLAG_TRACED, is_live, is_marked, is_mutable, is_traced,
 };
 use crate::{clear_bit, is_bit_set, set_bit};
 

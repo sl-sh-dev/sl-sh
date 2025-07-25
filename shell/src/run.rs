@@ -36,15 +36,21 @@ fn finish_run(background: bool, mut job: Job, jobs: &mut Jobs) -> i32 {
     job.mark_running();
     let status = if !background {
         if let Some(status) = Sys::wait_job(&mut job) {
-            env::set_var("LAST_STATUS", format!("{}", status));
+            unsafe {
+                env::set_var("LAST_STATUS", format!("{}", status));
+            }
             status
         } else {
-            env::set_var("LAST_STATUS", format!("{}", -66));
+            unsafe {
+                env::set_var("LAST_STATUS", format!("{}", -66));
+            }
             jobs.push_job(job);
             -66
         }
     } else {
-        env::set_var("LAST_STATUS", format!("{}", 0));
+        unsafe {
+            env::set_var("LAST_STATUS", format!("{}", 0));
+        }
         let pid = if let Some(p) = job.pids().last() {
             p.pid().try_into().unwrap_or(0)
         } else {

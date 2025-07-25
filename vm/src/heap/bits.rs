@@ -5,9 +5,7 @@ pub const FLAG_TRACED: u8 = 0x08;
 
 #[macro_export]
 macro_rules! is_bit_set {
-    ($val:expr, $bit:expr) => {{
-        ($val & $bit) != 0
-    }};
+    ($val:expr, $bit:expr) => {{ ($val & $bit) != 0 }};
 }
 
 #[macro_export]

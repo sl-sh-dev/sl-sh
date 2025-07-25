@@ -1,7 +1,7 @@
 use crate::{GVm, Value};
 use bridge_types::BridgedType;
-use std::collections::hash_map::Keys;
 use std::collections::HashMap;
+use std::collections::hash_map::Keys;
 use std::hash::{BuildHasher, Hash, Hasher};
 
 /**

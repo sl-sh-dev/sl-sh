@@ -1,9 +1,9 @@
-use crate::compile::destructure::{resolve_destruct_containers, DestructState, DestructType};
+use crate::compile::destructure::{DestructState, DestructType, resolve_destruct_containers};
 use crate::compile::util::get_args_iter;
 use crate::pass1::pass1;
-use crate::{compile, CompileState, SloshVm};
+use crate::{CompileState, SloshVm, compile};
 use compile_state::state::SloshVmTrait;
-use slvm::{VMError, VMResult, Value, CLOSE, CONST, JMPNU, MOV, SRET};
+use slvm::{CLOSE, CONST, JMPNU, MOV, SRET, VMError, VMResult, Value};
 use std::sync::Arc;
 
 pub fn mk_state(
@@ -94,7 +94,7 @@ pub fn mk_state(
                     "invalid args, must be symbols got {}/{}",
                     a.display_type(env),
                     a.display_value(env)
-                )))
+                )));
             }
         }
     }

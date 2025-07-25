@@ -13,9 +13,7 @@ macro_rules! inc_ip {
 
 #[macro_export]
 macro_rules! get_code {
-    ($chunk:expr) => {{
-        $chunk.code.as_ptr()
-    }};
+    ($chunk:expr) => {{ $chunk.code.as_ptr() }};
 }
 
 #[macro_export]
@@ -29,9 +27,7 @@ macro_rules! get_code_at {
 
 #[macro_export]
 macro_rules! decode_u8 {
-    ($code:expr) => {{
-        $crate::inc_ip!($code)
-    }};
+    ($code:expr) => {{ $crate::inc_ip!($code) }};
 }
 
 #[macro_export]
@@ -138,7 +134,7 @@ macro_rules! compare_numeric_eq {
                                 op1.display_value($vm)
                             )),
                             $chunk.clone(),
-                        ))
+                        ));
                     }
                 };
                 let f56_2 = match op2 {
@@ -152,7 +148,7 @@ macro_rules! compare_numeric_eq {
                                 op2.display_value($vm)
                             )),
                             $chunk.clone(),
-                        ))
+                        ));
                     }
                 };
                 f56_1.roughly_equal_using_relative_difference(&f56_2)

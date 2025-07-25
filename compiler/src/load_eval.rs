@@ -1,7 +1,7 @@
 use crate::pass1::pass1;
-use crate::{compile, ReadError, Reader};
+use crate::{ReadError, Reader, compile};
 use compile_state::state::{CompileEnvironment, CompileState, Namespace, SloshVm, SloshVmTrait};
-use slvm::{CallFuncSig, Chunk, VMError, VMResult, Value, RET};
+use slvm::{CallFuncSig, Chunk, RET, VMError, VMResult, Value};
 use std::borrow::Cow;
 use std::ffi::OsString;
 use std::io::{Seek, SeekFrom};
