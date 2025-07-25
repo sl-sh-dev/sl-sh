@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use std::process::Command;
 
-use shell::glob::{expand_glob, GlobOutput};
+use shell::glob::{GlobOutput, expand_glob};
 
 /// returns ./slosh/tests/ PathBuf
 pub fn get_tests_directory() -> PathBuf {

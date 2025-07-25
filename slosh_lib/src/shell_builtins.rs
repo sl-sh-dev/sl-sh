@@ -160,7 +160,7 @@ fn env_var(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
             _ => {
                 return Err(VMError::new_compile(
                     "env: requires string or symbol argument",
-                ))
+                ));
             }
         };
         match env::var(name) {

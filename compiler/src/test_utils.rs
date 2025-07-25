@@ -1,7 +1,7 @@
 use crate::pass1::pass1;
-use crate::{compile, ReadError, Reader};
+use crate::{ReadError, Reader, compile};
 use compile_state::state::{CompileState, SloshVm, SloshVmTrait};
-use slvm::{Value, RET};
+use slvm::{RET, Value};
 use std::sync::Arc;
 
 /// Read text for a test.  Will convert multiple forms into a vector of Values.

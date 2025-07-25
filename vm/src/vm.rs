@@ -3,8 +3,8 @@ use std::alloc::Layout;
 use std::sync::Arc;
 
 use crate::{
-    from_i56, CallFrame, CallFunc, CallFuncSig, Chunk, Globals, Handle, Heap, Interner, VMError,
-    VMErrorObj, VMResult, Value, HALT,
+    CallFrame, CallFunc, CallFuncSig, Chunk, Globals, HALT, Handle, Heap, Interner, VMError,
+    VMErrorObj, VMResult, Value, from_i56,
 };
 
 mod cons;

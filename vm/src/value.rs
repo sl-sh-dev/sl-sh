@@ -1,4 +1,4 @@
-use crate::{float, FxHasher, Handle, Heap, Interned, VMError, VMResult};
+use crate::{FxHasher, Handle, Heap, Interned, VMError, VMResult, float};
 use bridge_types::BridgedType;
 use std::collections::{BTreeSet, HashMap};
 use std::fmt;

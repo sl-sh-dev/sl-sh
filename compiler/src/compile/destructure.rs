@@ -3,7 +3,7 @@ use slvm::opcodes::*;
 use slvm::vm_hashmap::VMHashMap;
 use slvm::{Handle, Interned, VMError, VMResult, Value};
 
-use crate::{compile, mkconst, SloshVm, SloshVmTrait};
+use crate::{SloshVm, SloshVmTrait, compile, mkconst};
 
 pub enum Register {
     Named(Interned, u16),

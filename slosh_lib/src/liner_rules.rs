@@ -1,6 +1,6 @@
 use sl_liner::{
-    last_non_ws_char_was_not_backslash, Buffer, DefaultEditorRules, EditorRules, NewlineRule,
-    WordDivideRule,
+    Buffer, DefaultEditorRules, EditorRules, NewlineRule, WordDivideRule,
+    last_non_ws_char_was_not_backslash,
 };
 
 /// ensures all provided delimiters are balanced for a lisp sexp.

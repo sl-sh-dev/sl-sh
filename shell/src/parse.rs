@@ -4,7 +4,7 @@
 
 use crate::builtins::expand_tilde;
 use crate::command_data::{Arg, CommandWithArgs, Redirects, Run};
-use crate::glob::{expand_glob, GlobOutput};
+use crate::glob::{GlobOutput, expand_glob};
 use crate::jobs::Jobs;
 use crate::platform::{FileDesc, STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use std::fmt::{Display, Formatter};

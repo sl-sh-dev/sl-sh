@@ -154,7 +154,7 @@ fn str_map_inner(vm: &mut SloshVm, func: Value, string: Value) -> VMResult<Strin
         _ => {
             return Err(VMError::new_vm(
                 "str-map: first arg must be a string".to_string(),
-            ))
+            ));
         }
     };
     let mut res = String::new();
@@ -187,7 +187,7 @@ fn str_map_inner(vm: &mut SloshVm, func: Value, string: Value) -> VMResult<Strin
             _ => {
                 return Err(VMError::new_vm(
                     "str-map: callable must return a string or char".to_string(),
-                ))
+                ));
             }
         }
     }

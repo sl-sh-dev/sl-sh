@@ -313,7 +313,7 @@ mod tests {
     use super::*;
     use crate::{ReadError, Reader};
     use compile_state::state::new_slosh_vm;
-    use slvm::{VMError, VMResult, Value, RET};
+    use slvm::{RET, VMError, VMResult, Value};
     use std::sync::Arc;
 
     fn read_test(vm: &mut SloshVm, text: &'static str) -> Result<Value, ReadError> {

@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use nix::{
     libc,
-    sys::signal::{self, sigaction, SigHandler, Signal},
+    sys::signal::{self, SigHandler, Signal, sigaction},
 };
 
 static SIG_INT: AtomicBool = AtomicBool::new(false);

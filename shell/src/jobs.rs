@@ -1,6 +1,6 @@
 use crate::command_data::Run;
 use crate::parse::parse_line;
-use crate::platform::{OsSignal, Pid, Platform, Sys, TermSettings, STDIN_FILENO};
+use crate::platform::{OsSignal, Pid, Platform, STDIN_FILENO, Sys, TermSettings};
 use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
 use std::fmt::{Display, Formatter};

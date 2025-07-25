@@ -6,11 +6,11 @@ use lazy_static::lazy_static;
 use mdbook::book::{Book, Chapter};
 use mdbook::{BookItem, MDBook};
 use regex::{Regex, RegexBuilder};
-use sl_compiler::load_eval::run_reader;
 use sl_compiler::Reader;
-use slvm::vm_hashmap::VMHashMap;
+use sl_compiler::load_eval::run_reader;
 use slvm::VMErrorObj::Message;
-use slvm::{Interned, VMError, VMResult, Value, SLOSH_NIL};
+use slvm::vm_hashmap::VMHashMap;
+use slvm::{Interned, SLOSH_NIL, VMError, VMResult, Value};
 use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -1011,7 +1011,7 @@ mod test {
     use super::*;
     use compile_state::state::new_slosh_vm;
     use sl_compiler::Reader;
-    use slosh_lib::{run_reader, set_builtins_and_shell_builtins, set_initial_load_path, ENV};
+    use slosh_lib::{ENV, run_reader, set_builtins_and_shell_builtins, set_initial_load_path};
     use std::collections::BTreeMap;
     use std::ops::DerefMut;
     use tempfile::TempDir;
@@ -1081,7 +1081,11 @@ mod test {
             .add_docs(&mut docs, &mut env, true)
             .unwrap();
         for d in docs {
-            assert!(d.doc_string.usage.is_some(), "All global builtins must have a usage section, because it can NOT be inferred from the environment: {}.", d.symbol);
+            assert!(
+                d.doc_string.usage.is_some(),
+                "All global builtins must have a usage section, because it can NOT be inferred from the environment: {}.",
+                d.symbol
+            );
         }
     }
 

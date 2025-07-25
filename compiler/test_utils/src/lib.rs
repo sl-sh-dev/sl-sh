@@ -1,7 +1,7 @@
 use compile_state::state::{CompileState, SloshVm, SloshVmTrait};
 use sl_compiler::pass1::pass1;
-use sl_compiler::{compile, ReadError, Reader};
-use slvm::{Value, RET};
+use sl_compiler::{ReadError, Reader, compile};
+use slvm::{RET, Value};
 use std::sync::Arc;
 
 /// Read text for a test.  Will convert multiple forms into a vector of Values.

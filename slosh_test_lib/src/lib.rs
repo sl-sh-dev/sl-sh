@@ -1,7 +1,7 @@
-use builtins::{noop_swap_internal, NoopSwap};
+use builtins::{NoopSwap, noop_swap_internal};
 use compile_state::state::SloshVm;
-use sl_compiler::load_eval;
 use sl_compiler::Reader;
+use sl_compiler::load_eval;
 
 pub mod docs;
 

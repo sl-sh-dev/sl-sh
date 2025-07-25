@@ -32,7 +32,10 @@ fn fopen(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
             Value::String(h) => vm.get_string(*h),
             Value::StringConst(i) => vm.get_interned(*i),
             _ => {
-                return Err(VMError::new("io", "fopen: first form must evaluate to a string (filename) or :stdin, :stdout, :stderr"));
+                return Err(VMError::new(
+                    "io",
+                    "fopen: first form must evaluate to a string (filename) or :stdin, :stdout, :stderr",
+                ));
             }
         };
         let file_name = expand_tilde(file_name.into());

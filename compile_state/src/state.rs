@@ -1,4 +1,4 @@
-use slvm::{from_i56, CallFuncSig, Chunk, GVm, Interned, Value};
+use slvm::{CallFuncSig, Chunk, GVm, Interned, Value, from_i56};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;

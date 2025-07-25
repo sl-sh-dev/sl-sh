@@ -1,12 +1,12 @@
-use rand::distributions::{Alphanumeric, Distribution};
 use rand::Rng;
+use rand::distributions::{Alphanumeric, Distribution};
 use std::iter;
 use unicode_segmentation::UnicodeSegmentation;
 
 use bridge_adapters::add_builtin;
 use compile_state::state::SloshVm;
 use rand::rngs::ThreadRng;
-use slvm::{from_i56, VMError, VMResult, Value};
+use slvm::{VMError, VMResult, Value, from_i56};
 use std::borrow::Cow;
 
 fn builtin_random(_vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {

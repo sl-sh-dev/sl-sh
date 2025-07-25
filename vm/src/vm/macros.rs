@@ -13,9 +13,7 @@ macro_rules! inc_ip {
 
 #[macro_export]
 macro_rules! get_code {
-    ($chunk:expr) => {{
-        $chunk.code.as_ptr()
-    }};
+    ($chunk:expr) => {{ $chunk.code.as_ptr() }};
 }
 
 #[macro_export]
@@ -29,9 +27,7 @@ macro_rules! get_code_at {
 
 #[macro_export]
 macro_rules! decode_u8 {
-    ($code:expr) => {{
-        $crate::inc_ip!($code)
-    }};
+    ($code:expr) => {{ $crate::inc_ip!($code) }};
 }
 
 #[macro_export]

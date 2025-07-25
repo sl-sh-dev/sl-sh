@@ -1,7 +1,7 @@
 use bench_utils::{
     eval_pol, run_continuation_search_script, run_float_script, run_recursive_search_script,
 };
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 
 fn criterion_optimized_float_one_hundred(c: &mut Criterion) {
     c.bench_function("optimized_float_one_hundred", |bench| {

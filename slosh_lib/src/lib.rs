@@ -4,14 +4,14 @@ use bridge_macros::sl_sh_fn;
 use std::cell::RefCell;
 use std::ffi::OsString;
 use std::fmt::Debug;
-use std::fs::{create_dir_all, File};
+use std::fs::{File, create_dir_all};
 use std::io::{BufRead, ErrorKind, Write};
 use std::ops::DerefMut;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::{env, fs};
 
-pub use sl_compiler::{compile, Reader};
+pub use sl_compiler::{Reader, compile};
 
 use slvm::opcodes::*;
 
@@ -31,7 +31,7 @@ use builtins::rand::add_rand_builtins;
 use builtins::string::add_str_builtins;
 use builtins::{add_global_value, add_misc_builtins};
 use sl_liner::vi::AlphanumericAndVariableKeywordRule;
-use sl_liner::{keymap, ColorClosure, Context, Prompt};
+use sl_liner::{ColorClosure, Context, Prompt, keymap};
 
 mod completions;
 pub mod debug;
@@ -47,10 +47,10 @@ use crate::shell_builtins::add_shell_builtins;
 use debug::*;
 use shell::builtins::expand_tilde;
 use shell::config::get_config;
-use shell::platform::{Platform, Sys, STDIN_FILENO};
-use sl_compiler::load_eval::{add_load_builtins, load_internal, SLSHRC};
+use shell::platform::{Platform, STDIN_FILENO, Sys};
+use sl_compiler::load_eval::{SLSHRC, add_load_builtins, load_internal};
 use sl_compiler::pass1::pass1;
-use slvm::{VMError, VMResult, Value, INT_BITS, INT_MAX, INT_MIN};
+use slvm::{INT_BITS, INT_MAX, INT_MIN, VMError, VMResult, Value};
 
 thread_local! {
     /// Env (job control status, etc) for the shell.
@@ -502,16 +502,24 @@ pub fn set_shell_builtins(env: &mut SloshVm) {
 
     let uid = Sys::current_uid();
     let euid = Sys::effective_uid();
-    unsafe { env::set_var("UID", format!("{uid}")); }
-    unsafe { env::set_var("EUID", format!("{euid}")); }
+    unsafe {
+        env::set_var("UID", format!("{uid}"));
+    }
+    unsafe {
+        env::set_var("EUID", format!("{euid}"));
+    }
     env.set_named_global("*uid*", uid.into());
     env.set_named_global("*euid*", euid.into());
     env.set_named_global("*last-status*", 0.into());
     // Initialize the HOST variable
     let host: OsString = Sys::gethostname().unwrap_or_else(|| "Operating system hostname is not a string capable of being parsed by native platform???".into());
-    unsafe { env::set_var("HOST", host); }
+    unsafe {
+        env::set_var("HOST", host);
+    }
     if let Ok(dir) = env::current_dir() {
-        unsafe { env::set_var("PWD", dir); }
+        unsafe {
+            env::set_var("PWD", dir);
+        }
     }
     export_args(env);
 }
@@ -780,10 +788,10 @@ fn exec_expression(res: String, env: &mut SloshVm) {
 mod tests {
     use super::*;
 
-    use crate::{set_initial_load_path, ENV};
+    use crate::{ENV, set_initial_load_path};
     use compiler_test_utils::exec;
-    use slvm::{from_i56, Value};
-    use std::fs::{create_dir_all, File};
+    use slvm::{Value, from_i56};
+    use std::fs::{File, create_dir_all};
     use std::io::Write;
     use std::ops::DerefMut;
     use temp_env;

@@ -1,12 +1,12 @@
 use std::path::PathBuf;
 
 use compile_state::state::SloshVm;
-use sl_compiler::load_eval;
 use sl_compiler::Reader;
+use sl_compiler::load_eval;
 use slosh_lib::new_slosh_vm_with_builtins;
 
 use slvm::{
-    Chunk, VMResult, Value, Vm, ADD, CONST, DIV, GET, INC, JMPLT, MUL, RET, SETCOL, VECMKD,
+    ADD, CONST, Chunk, DIV, GET, INC, JMPLT, MUL, RET, SETCOL, VECMKD, VMResult, Value, Vm,
 };
 use std::sync::Arc;
 
@@ -140,8 +140,8 @@ pub fn eval_pol(n: i32, x: f32, expected: f32) -> VMResult<()> {
     chunk.encode2(CONST, 101, one, Some(line))?;
     chunk.encode2(CONST, 103, zerof, Some(line))?;
     chunk.encode3(VECMKD, 10, 100, 103, Some(line))?; // pols
-                                                      //chunk.encode2(VECELS, 10, 100, Some(line))?;
-                                                      // loop i .. n
+    //chunk.encode2(VECELS, 10, 100, Some(line))?;
+    // loop i .. n
     let jmp0_idx = chunk.add_jump(chunk.code.len() as u32);
     chunk.encode2(CONST, 3, zerof, Some(line))?;
     chunk.encode2(CONST, 7, zero, Some(line))?; // j

@@ -29,7 +29,7 @@ pub fn vec_slice(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         _ => {
             return Err(VMError::new_vm(
                 "vec-slice: Invalid arguments (requires two or three)".to_string(),
-            ))
+            ));
         }
     };
     let len = vector.len();
@@ -368,10 +368,10 @@ Section: vector
     );
 
     /*  XXXX add these
-        add_docstring(
-            env,
-            "vec-remove!",
-            "Usage: (vec-remove! vector index) -> vector
+    add_docstring(
+        env,
+        "vec-remove!",
+        "Usage: (vec-remove! vector index) -> vector
 
     Remove the element at index from vector, shifting all elements after it to the left.
     This is destructive!
@@ -388,11 +388,11 @@ Section: vector
     (vec-remove! test-remove-nth-vec 0)
     (test::assert-equal '() test-remove-nth-vec)
     ",
-        );
-        add_docstring(
-            env,
-            "vec-insert!",
-            "Usage: (vec-insert! vector index new-element) -> vector
+    );
+    add_docstring(
+        env,
+        "vec-insert!",
+        "Usage: (vec-insert! vector index new-element) -> vector
 
     Inserts new-element at index and moves following elements right in vector.  This is destructive!
 
@@ -408,6 +408,6 @@ Section: vector
     (vec-insert! test-insert-nth-vec 0 4)
     (test::assert-equal '(4 1 5 6 2 3) test-insert-nth-vec)
     ",
-        );
-         */
+    );
+     */
 }

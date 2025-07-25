@@ -1,5 +1,5 @@
 use compile_state::state::{SloshVm, SloshVmTrait};
-use glob::{glob, glob_with, MatchOptions};
+use glob::{MatchOptions, glob, glob_with};
 use sl_liner::{Completer, CursorPosition, Event, EventKind};
 use std::env;
 use std::path::Path;
