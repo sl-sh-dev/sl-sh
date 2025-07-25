@@ -10,6 +10,7 @@ use compile_state::state::{SloshVm, SloshVmTrait};
 use sl_compiler::Reader;
 use sl_liner::{Context, Prompt};
 use slvm::{CallFrame, Chunk, VMError, VMResult, Value};
+use slvm::vm_hashmap::VMHashMap;
 
 fn dump_regs(vm: &SloshVm, frame: &CallFrame) {
     let start = frame.stack_top;
@@ -354,4 +355,103 @@ macro_rules! file_println {
             }
         }
     };
+}
+
+#[doc = " Usage: (hash-haskey hashmap key)"]
+#[doc = ""]
+#[doc = " Checks if a key is in a hashmap."]
+#[doc = ""]
+#[doc = " Section: hashmap"]
+#[doc = ""]
+#[doc = " Example:"]
+#[doc = " (def tst-hash {:key1  \"val one\" \'key2 \"val two\" \"key3\" \"val three\" \\S \"val S\"})"]
+#[doc = " (test::assert-equal 4 (len (hash-keys tst-hash)))"]
+#[doc = " (test::assert-true (hash-haskey tst-hash :key1))"]
+#[doc = " (test::assert-true (hash-haskey tst-hash \'key2))"]
+#[doc = " (test::assert-true (hash-haskey tst-hash \"key3\"))"]
+#[doc = " (test::assert-true (hash-haskey tst-hash \\S))"]
+#[doc = " (test::assert-false (hash-haskey tst-hash \'key1))"]
+#[doc = " (test::assert-false (hash-haskey tst-hash :key2))"]
+#[doc = " (test::assert-false (hash-haskey tst-hash \"keynone\"))"]
+#[doc = " (hash-remove! tst-hash :key1)"]
+#[doc = " (test::assert-false (hash-haskey tst-hash :key1))"]
+#[doc = " (set! tst-hash :key1 \"val one b\")"]
+#[doc = " (test::assert-true (hash-haskey tst-hash :key1))"]
+
+fn parse_hash_hashkey(environment: &mut compile_state::state::SloshVm, args: &[slvm::Value] ) -> slvm::VMResult<slvm::Value> {
+    let fn_name = "hash-haskey?";   const PARAMS_LEN: usize = 2usize;
+    let arg_types: [bridge_types::Param; PARAMS_LEN] = [bridge_types::Param { handle: bridge_types::TypeHandle::Direct, passing_style: bridge_types::PassingStyle::Reference }, bridge_types::Param { handle: bridge_types::TypeHandle::Direct, passing_style: bridge_types::PassingStyle::Value }];
+    static_assertions::assert_impl_all!(Value : bridge_adapters :: lisp_adapters :: SlInto < slvm :: Value > );
+    let param = arg_types[1usize];
+    match param.handle {
+        bridge_types::TypeHandle::Direct => match args.get(1usize) {
+            None => { return Err(slvm::VMError::new_vm(format!("{} not given enough arguments, expected at least {} arguments, got {}.", fn_name, 2usize, args.len()))); }
+            Some(arg_1) => {
+                let arg_1 = *arg_1;
+                {
+                    use bridge_adapters::lisp_adapters::SlIntoRef;
+                    let arg_1: Value = arg_1.sl_into_ref(environment)?;
+                    let param = arg_types[0usize];
+                    match param.handle {
+                        bridge_types::TypeHandle::Direct => match args.get(0usize) {
+                            None => { return Err(slvm::VMError::new_vm(format!("{} not given enough arguments, expected at least {} arguments, got {}.", fn_name, 2usize, args.len()))); }
+                            Some(arg_0) => {
+                                {
+                                    use bridge_adapters::lisp_adapters::SlAsRef;
+                                    let arg_0: &slvm::vm_hashmap::VMHashMap = arg_0.sl_as_ref(environment)?;
+                                    match args.get(PARAMS_LEN) {
+                                        Some(_) if PARAMS_LEN == 0 || arg_types[PARAMS_LEN - 1].handle != bridge_types::TypeHandle::VarArgs => { return Err(slvm::VMError::new_vm(format!("{} given too many arguments, expected at least {} arguments, got {}.", fn_name, 2usize, args.len()))); }
+                                        _ => {
+                                            use bridge_adapters::lisp_adapters::SlInto;
+                                            if arg_0.contains_key(environment, arg_1) {
+                                                Ok(Value::True)
+                                            } else {
+                                                Ok(Value::False)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        _ => { return Err(slvm::VMError::new_vm(format!("{} failed to parse its arguments, internal error.", fn_name, ))); }
+                    }
+                }
+            }
+        },
+        _ => { return Err(slvm::VMError::new_vm(format!("{} failed to parse its arguments, internal error.", fn_name, ))); }
+    }
+}
+fn intern_hash_hashkey(env: &mut compile_state::state::SloshVm) {
+    let fn_name = "hash-haskey?";
+    bridge_adapters::add_builtin(env, fn_name, parse_hash_hashkey, "Usage: (hash-haskey hashmap key)\n\nChecks if a key is in a hashmap.\n\nSection: hashmap\n\nExample:\n(def tst-hash {:key1  \"val one\" 'key2 \"val two\" \"key3\" \"val three\" \\S \"val S\"})\n(test::assert-equal 4 (len (hash-keys tst-hash)))\n(test::assert-true (hash-haskey tst-hash :key1))\n(test::assert-true (hash-haskey tst-hash 'key2))\n(test::assert-true (hash-haskey tst-hash \"key3\"))\n(test::assert-true (hash-haskey tst-hash \\S))\n(test::assert-false (hash-haskey tst-hash 'key1))\n(test::assert-false (hash-haskey tst-hash :key2))\n(test::assert-false (hash-haskey tst-hash \"keynone\"))\n(hash-remove! tst-hash :key1)\n(test::assert-false (hash-haskey tst-hash :key1))\n(set! tst-hash :key1 \"val one b\")\n(test::assert-true (hash-haskey tst-hash :key1))\n");
+}
+#[allow(dead_code)]
+#[inline(always)]
+#[doc = " Usage: (hash-haskey hashmap key)"]
+#[doc = ""]
+#[doc = " Checks if a key is in a hashmap."]
+#[doc = ""]
+#[doc = " Section: hashmap"]
+#[doc = ""]
+#[doc = " Example:"]
+#[doc = " (def tst-hash {:key1  \"val one\" \'key2 \"val two\" \"key3\" \"val three\" \\S \"val S\"})"]
+#[doc = " (test::assert-equal 4 (len (hash-keys tst-hash)))"]
+#[doc = " (test::assert-true (hash-haskey tst-hash :key1))"]
+#[doc = " (test::assert-true (hash-haskey tst-hash \'key2))"]
+#[doc = " (test::assert-true (hash-haskey tst-hash \"key3\"))"]
+#[doc = " (test::assert-true (hash-haskey tst-hash \\S))"]
+#[doc = " (test::assert-false (hash-haskey tst-hash \'key1))"]
+#[doc = " (test::assert-false (hash-haskey tst-hash :key2))"]
+#[doc = " (test::assert-false (hash-haskey tst-hash \"keynone\"))"]
+#[doc = " (hash-remove! tst-hash :key1)"]
+#[doc = " (test::assert-false (hash-haskey tst-hash :key1))"]
+#[doc = " (set! tst-hash :key1 \"val one b\")"]
+#[doc = " (test::assert-true (hash-haskey tst-hash :key1))"]
+
+pub fn hash_hashkey(environment: &mut SloshVm, map: &slvm::vm_hashmap::VMHashMap, key: Value) -> VMResult<Value> {
+    if map.contains_key(environment, key) {
+        Ok(Value::True)
+    } else {
+        Ok(Value::False)
+    }
 }
