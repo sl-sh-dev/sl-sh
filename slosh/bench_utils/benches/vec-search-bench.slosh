@@ -1,6 +1,7 @@
 #!/usr/bin/env slosh
 
 (load "core.slosh")
+(load "test.slosh")
 ;; benchmark on lists?
 
 (defn build-vec (fst-elem limit)

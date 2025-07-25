@@ -1,0 +1,41 @@
+;; Tests for sqrt function
+;; Testing basic functionality, edge cases, and error conditions
+(load "core.slosh")
+(load "test.slosh")
+(import test)
+
+;; Perfect squares
+(assert-equal 2.0 (sqrt 4))
+(assert-equal 3.0 (sqrt 9))
+(assert-equal 4.0 (sqrt 16))
+(assert-equal 5.0 (sqrt 25))
+(assert-equal 10.0 (sqrt 100))
+(assert-equal 12.0 (sqrt 144))
+
+;; Non-perfect squares (testing with range due to floating point precision)
+(assert-true (< 1.414 (sqrt 2) 1.415))
+(assert-true (< 1.732 (sqrt 3) 1.733))
+(assert-true (< 2.236 (sqrt 5) 2.237))
+(assert-true (< 2.049 (sqrt 4.2) 2.050))
+
+;; Square root of 0 and 1
+(assert-equal 0.0 (sqrt 0))
+(assert-equal 1.0 (sqrt 1))
+
+;; Fractional inputs
+(assert-equal 0.5 (sqrt 0.25))
+;; For more on equality see https://sl-sh-dev.github.io/sl-sh/equality.html
+(assert-compare == 0.1 (sqrt 0.01))
+(assert-true (< 0.707 (sqrt 0.5) 0.708))
+
+;; Large numbers
+(assert-equal 1000.0 (sqrt 1000000))
+(assert-equal 100000.0 (sqrt 10000000000))
+
+;; Error cases
+(assert-error (sqrt))
+(assert-error (sqrt 4 2))
+(assert-error (sqrt -4))
+(assert-error (sqrt -1))
+(assert-error (sqrt -0.5))
+(assert-error (sqrt "four"))

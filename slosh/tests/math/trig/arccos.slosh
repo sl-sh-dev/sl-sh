@@ -1,0 +1,37 @@
+;; Tests for arccos function
+;; Testing arccosine (inverse cosine) calculation
+(load "test.slosh")
+
+;; Basic values
+(test::assert-true (< 1.570 (arccos 0) 1.571))        ; arccos(0) ≈ π/2
+(test::assert-compare == 0 (arccos 1))                ; arccos(1) = 0
+(test::assert-true (< 3.141 (arccos -1) 3.142))       ; arccos(-1) ≈ π
+
+;; Common values (using assert-true with ranges for floating point precision)
+(test::assert-true (< 1.047 (arccos 0.5) 1.048))      ; arccos(0.5) ≈ π/3
+(test::assert-true (< 0.785 (arccos 0.707) 0.786))    ; arccos(√2/2) ≈ π/4
+(test::assert-true (< 0.523 (arccos 0.866) 0.524))    ; arccos(√3/2) ≈ π/6
+
+;; Negative values
+(test::assert-true (< 2.094 (arccos -0.5) 2.095))     ; arccos(-0.5) ≈ 2π/3
+(test::assert-true (< 2.356 (arccos -0.707) 2.357))   ; arccos(-√2/2) ≈ 3π/4
+
+;; Small values
+(test::assert-true (< 1.470 (arccos 0.1) 1.472))      ; Close to π/2
+(test::assert-true (< 1.670 (arccos -0.1) 1.672))     ; Slightly > π/2
+
+;; Type conversion
+(test::assert-compare == 0 (arccos 1))                 ; integer input
+(test::assert-compare == 0 (arccos 1.0))               ; float input
+
+;; Error cases - invalid domain
+(test::assert-error (arccos 2))        ; Value > 1
+(test::assert-error (arccos -2))       ; Value < -1
+(test::assert-error (arccos 1.1))      ; Slightly > 1
+(test::assert-error (arccos -1.1))     ; Slightly < -1
+
+;; Error cases - wrong arguments
+(test::assert-error (arccos))          ; No arguments
+(test::assert-error (arccos 0.5 2))    ; Too many arguments
+(test::assert-error (arccos "half"))   ; String argument
+(test::assert-error (arccos nil))      ; nil argument

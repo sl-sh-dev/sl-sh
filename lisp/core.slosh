@@ -71,6 +71,45 @@ Example:
 (def symbol? (fn (v) (identical? (type v) :Symbol)))
 
 #%
+Usage: (hash-set? expression)
+
+True if the expression is a set, false otherwise.
+
+Section: type
+
+Example:
+(test::assert-true (hash-set? (make-hash)))
+(test::assert-false (hash-set? 1))
+%#
+(def hash-set? (fn (v) (identical? (type v) :Map)))
+
+#%
+Usage: (int? expression)
+
+True if the expression is an int, false otherwise.
+
+Section: type
+
+Example:
+(test::assert-true (int? 7))
+(test::assert-false (int? "7"))
+%#
+(def int? (fn (v) (identical? (type v) :Int)))
+
+#%
+Usage: (float? expression)
+
+True if the expression is a float, false otherwise.
+
+Section: type
+
+Example:
+(test::assert-true (float? 7.0))
+(test::assert-false (float? "7.0"))
+%#
+(def float? (fn (v) (identical? (type v) :Float)))
+
+#%
 Usage: (vec? expression)
 
 True if the expression is a vector, false otherwise.
@@ -178,6 +217,72 @@ Example:
 (test::assert-false (io? (list)))
 %#
 (def io? (fn (v) (identical? (type v) :Io)))
+
+#%
+Usage: (boolean? expression)
+
+True if the expression is a boolean (#t or #f), false otherwise.
+
+Section: type
+
+Example:
+(test::assert-true (boolean? #t))
+(test::assert-true (boolean? #f))
+(test::assert-false (boolean? 1))
+(test::assert-false (boolean? "string"))
+(test::assert-false (boolean? nil))
+%#
+(def boolean? (fn (v) (or (identical? (type v) :True) (identical? (type v) :False))))
+
+#%
+Usage: (true? expression)
+
+True if the expression is the value true (#t), false otherwise.
+
+Section: type
+
+Example:
+(test::assert-true (true? #t))
+(test::assert-false (true? #f))
+(test::assert-false (true? 1))
+(test::assert-false (true? "true"))
+(test::assert-false (true? nil))
+%#
+(def true? (fn (v) (identical? (type v) :True)))
+
+#%
+Usage: (false? expression)
+
+True if the expression is the value false (#f), false otherwise.
+
+Section: type
+
+Example:
+(test::assert-true (false? #f))
+(test::assert-false (false? #t))
+(test::assert-false (false? nil))
+(test::assert-false (false? 0))
+(test::assert-false (false? "false"))
+%#
+(def false? (fn (v) (identical? (type v) :False)))
+
+#%
+Usage: (falsey? expression)
+
+True if the expression is false (#f) or nil, false otherwise.
+This is useful for testing "truthiness" in conditionals.
+
+Section: type
+
+Example:
+(test::assert-true (falsey? #f))
+(test::assert-true (falsey? nil))
+(test::assert-true (falsey? '()))
+(test::assert-false (falsey? #t))
+(test::assert-false (falsey? 0))
+(test::assert-false (falsey? ""))
+%#
+(def falsey? (fn (v) (or (identical? (type v) :False) (identical? (type v) :Nil))))
 
 #%
 Usage: (defmacro name argument_list body)
@@ -813,6 +918,5 @@ Example:
  %#
   (defmacro substitute (lst old-item new-item & mods)
        `(nsubstitute! (to-list ~lst) ~old-item ~new-item ~@mods))
-
+       
 (load "iterator.slosh")
-(load "test.slosh")

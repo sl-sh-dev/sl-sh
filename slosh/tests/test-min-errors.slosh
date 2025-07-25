@@ -1,0 +1,20 @@
+#!/usr/bin/env slosh
+
+;; Test error handling for min function
+(prn "Testing min error cases...")
+
+;; Test with no arguments
+(prn "1. Testing (min):")
+(prn "   Result: " (get-error (min)))
+
+;; Test with string argument
+(prn "2. Testing (min 1 \"two\"):")
+(prn "   Result: " (get-error (min 1 "two")))
+
+;; Test with nil argument
+(prn "3. Testing (min 1 2 nil):")
+(prn "   Result: " (get-error (min 1 2 nil)))
+
+;; Test normal case
+(prn "4. Testing (min 1 2 3):")
+(prn "   Result: " (min 1 2 3))

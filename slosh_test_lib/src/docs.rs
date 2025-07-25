@@ -53,10 +53,7 @@ lazy_static! {
         exemption_set.insert("doc-string");
         exemption_set.insert("get");
         exemption_set.insert("return");
-        exemption_set.insert("*euid*");
-        exemption_set.insert("*last-status*");
         exemption_set.insert("*int-min*");
-        exemption_set.insert("*uid*");
         exemption_set.insert("*int-max*");
         exemption_set.insert("prn");
         exemption_set.insert("pr");
@@ -1010,8 +1007,13 @@ mod test {
                 let mut vm = env.borrow_mut();
                 set_builtins_and_shell_builtins(vm.deref_mut());
                 set_initial_load_path(vm.deref_mut(), vec![&home_path]);
-                let mut reader =
-                    Reader::from_string(r#"(load "core.slosh")"#.to_string(), &mut vm, "", 1, 0);
+                let mut reader = Reader::from_string(
+                    r#"(do (load "core.slosh") (load "test.slosh"))"#.to_string(),
+                    &mut vm,
+                    "",
+                    1,
+                    0,
+                );
                 _ = run_reader(&mut reader).unwrap();
 
                 let mut docs: Vec<SloshDoc> = vec![];
