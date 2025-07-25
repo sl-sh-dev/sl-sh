@@ -1,5 +1,5 @@
 use compile_state::state::{CompileEnvironment, SloshVm, SloshVmTrait};
-use slvm::{CallFuncSig, Value, VMError, VMResult};
+use slvm::{CallFuncSig, VMError, VMResult, Value};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 
