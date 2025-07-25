@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::bits::FLAG_MUT;
-use crate::{get_code, Chunk, FxHashMap, Interned, VMError, VMResult, Value};
+use crate::{Chunk, FxHashMap, Interned, VMError, VMResult, Value, get_code};
 pub mod handle;
 pub use crate::handle::Handle;
 use crate::heap::io::HeapIo;

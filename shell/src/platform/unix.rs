@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use std::convert::Infallible;
-use std::ffi::{c_char, CString, OsStr, OsString};
+use std::ffi::{CString, OsStr, OsString, c_char};
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io::{self, Error, ErrorKind, Read, Write};
@@ -17,7 +17,7 @@ use crate::platform::{FromFileDesc, Platform, RLimit, RLimitVals};
 use crate::run::run_job;
 use crate::signals::test_clear_sigint;
 use nix::libc;
-use nix::sys::signal::{self, kill, SigHandler, Signal};
+use nix::sys::signal::{self, SigHandler, Signal, kill};
 use nix::sys::termios;
 use nix::sys::wait::{self, WaitPidFlag, WaitStatus};
 use nix::unistd::{self, Uid};
@@ -592,14 +592,18 @@ unsafe fn send_error_to_parent(output: i32, err: io::Error) {
     if let Err(e) = unsafe { File::from_raw_fd(output) }.write_all(&bytes) {
         eprintln!("Error on child reporting error (err) to parent: {e}");
     }
-    unsafe { libc::_exit(1); }
+    unsafe {
+        libc::_exit(1);
+    }
 }
 
 unsafe fn close_extra_fds(opened: &HashSet<UnixFileDesc>) {
     let fd_max = unsafe { libc::sysconf(libc::_SC_OPEN_MAX) } as i32;
     for fd in 3..fd_max {
         if !opened.contains(&UnixFileDesc(fd)) {
-            unsafe { libc::close(fd); }
+            unsafe {
+                libc::close(fd);
+            }
         }
     }
 }

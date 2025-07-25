@@ -40,7 +40,7 @@ pub trait Platform {
     fn wait_job(job: &mut Job) -> Option<i32>;
     /// Move the job for job_num to te foreground.
     fn foreground_job(job: &mut Job, term_settings: &Option<TermSettings>)
-        -> Result<(), io::Error>;
+    -> Result<(), io::Error>;
     /// Move the job for job_num to te background and running (start a stopped job in the background).
     fn background_job(job: &mut Job) -> Result<(), io::Error>;
     /// Duplicate a raw file descriptor to another file descriptor.

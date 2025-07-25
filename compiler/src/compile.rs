@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use compile_state::state::{CompileState, Namespace, SloshVm, SloshVmTrait};
 use slvm::opcodes::*;
-use slvm::{from_i56, Handle, VMError, VMResult, Value};
+use slvm::{Handle, VMError, VMResult, Value, from_i56};
 
 use crate::backquote;
 use crate::compile::compile_call::{
@@ -514,7 +514,9 @@ fn compile_list(
                 }
             } else {
                 let sym = env.get_interned(i);
-                return Err(VMError::new_compile(format!("Symbol {sym} not defined (maybe you need to use 'def {sym}' to pre-declare it).")));
+                return Err(VMError::new_compile(format!(
+                    "Symbol {sym} not defined (maybe you need to use 'def {sym}' to pre-declare it)."
+                )));
             }
         }
         Value::Builtin(builtin) => compile_call(env, state, Value::Builtin(builtin), cdr, result)?,
@@ -623,7 +625,9 @@ pub fn compile(
                     .encode_refi(result as u16, slot, env.own_line())?;
             } else {
                 let sym = env.get_interned(i);
-                return Err(VMError::new_compile(format!("Symbol {sym} not defined (maybe you need to use 'def {sym}' to pre-declare it).")));
+                return Err(VMError::new_compile(format!(
+                    "Symbol {sym} not defined (maybe you need to use 'def {sym}' to pre-declare it)."
+                )));
             }
         }
         Value::True => state.chunk.encode1(REGT, result as u16, env.own_line())?,

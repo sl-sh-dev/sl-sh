@@ -1255,7 +1255,7 @@ impl<'vm> Reader<'vm> {
                 "~" => {
                     return Err(ReadError {
                         reason: "Unquote outside of a back-quote".to_string(),
-                    })
+                    });
                 }
                 "\\" => {
                     return Ok(Some(self.do_char(buffer, &read_table_term)?));
@@ -1340,7 +1340,7 @@ impl<'vm> Reader<'vm> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use compile_state::state::{new_slosh_vm, SloshVm};
+    use compile_state::state::{SloshVm, new_slosh_vm};
 
     fn to_strs(vm: &mut SloshVm, output: &mut Vec<String>, exp: Value) {
         match exp {
@@ -1815,8 +1815,7 @@ two""#
         assert!(tokens[7] == "String:\"slash/x/:;\"");
         assert!(tokens[8] == "]");
 
-        let input =
-            "\"\\u{03bb} two \" \"\\x20 \\u{03BB} end\" \"fo\\\"u\\\\r\" 5 6 \"slash\\x2fx\\x2F\\x3a\\x3b\"";
+        let input = "\"\\u{03bb} two \" \"\\x20 \\u{03BB} end\" \"fo\\\"u\\\\r\" 5 6 \"slash\\x2fx\\x2F\\x3a\\x3b\"";
         let tokens = tokenize(&mut vm, input);
         assert!(tokens.len() == 8);
         assert!(tokens[0] == "[");
@@ -1828,8 +1827,7 @@ two""#
         assert!(tokens[6] == "String:\"slash/x/:;\"");
         assert!(tokens[7] == "]");
 
-        let input =
-            "\"\\u03bb two \" \"\\x20 \\u03BB \nend\" \"fo\\\"u\\\\r\" 5 6 \"slash\\x2fx\\x2F\\x3a\\x3b\"";
+        let input = "\"\\u03bb two \" \"\\x20 \\u03BB \nend\" \"fo\\\"u\\\\r\" 5 6 \"slash\\x2fx\\x2F\\x3a\\x3b\"";
         let tokens = tokenize(&mut vm, input);
         assert!(tokens.len() == 8);
         assert!(tokens[0] == "[");

@@ -1,4 +1,4 @@
-use crate::{compile, CompileState, SloshVm};
+use crate::{CompileState, SloshVm, compile};
 use compile_state::state::SloshVmTrait;
 use slvm::*;
 
@@ -68,7 +68,9 @@ pub(crate) fn compile_set(
                     .encode_def(result as u16, si_const, env.own_line(), false)?;
             } else {
                 let sym = env.get_interned(si);
-                return Err(VMError::new_compile(format!("Symbol {sym} not defined (maybe you need to use 'def {sym}' to pre-declare it).")));
+                return Err(VMError::new_compile(format!(
+                    "Symbol {sym} not defined (maybe you need to use 'def {sym}' to pre-declare it)."
+                )));
             }
         } else {
             match cdr[0].get_pair(env) {
