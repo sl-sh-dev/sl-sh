@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_shell_builtins","exit","get_env","intern_exit","intern_get_env","intern_set_env","intern_unset_env","parse_exit","parse_get_env","parse_set_env","parse_unset_env","sanitize","set_env","sh","sh_str","unset_env"]};

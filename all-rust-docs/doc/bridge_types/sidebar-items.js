@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["PassingStyle","SloshChar","TypeHandle"],"struct":["ErrorStrings","Keyword","KeywordAsString","LooseFloat","LooseInt","Param","Symbol","SymbolAsString"],"trait":["BridgedType"],"type":["LooseString","VarArgs"]};
