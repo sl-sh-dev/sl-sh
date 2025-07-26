@@ -228,13 +228,12 @@ impl<ENV> GVm<ENV> {
     pub fn is_equal_pair(&self, val1: Value, val2: Value) -> VMResult<Value> {
         let mut val = Value::False;
         match (val1, val2) {
-            (_, _) if val1 == val2 => val = Value::True,
-            (Value::Int(i1), Value::Int(i2)) if from_i56(&i1) == from_i56(&i2) => val = Value::True,
             (Value::Float(f1), Value::Float(f2))
                 if f1.roughly_equal_using_relative_difference(&f2) =>
             {
                 val = Value::True
             }
+            (_, _) if val1 == val2 => val = Value::True,
             (Value::Int(i), Value::Byte(b)) | (Value::Byte(b), Value::Int(i))
                 if from_i56(&i) == i64::from(b) =>
             {
@@ -251,12 +250,6 @@ impl<ENV> GVm<ENV> {
                 let s2 = format!("{c}");
                 let s1 = self.get_interned(s1);
                 if s1 == s2 {
-                    val = Value::True;
-                }
-            }
-            (Value::StringConst(s1), Value::StringConst(s2)) => {
-                let s1 = self.get_interned(s1);
-                if s1 == self.get_interned(s2) {
                     val = Value::True;
                 }
             }
@@ -377,17 +370,22 @@ impl<ENV> GVm<ENV> {
                 let v1 = self.get_value(v1);
                 val = self.is_equal_pair(v1, val2)?;
             }
-            (Value::Nil | Value::Undefined, Value::True) => val = Value::False,
-            (Value::Nil | Value::Undefined, Value::False) => val = Value::True,
-            (Value::True, Value::Nil | Value::Undefined) => val = Value::False,
-            (Value::False, Value::Nil | Value::Undefined) => val = Value::True,
-            (Value::Nil | Value::Undefined, Value::Nil | Value::Undefined) => val = Value::True,
+            (Value::Nil, Value::True) => val = Value::False,
+            (Value::Nil, Value::False) => val = Value::True,
+            (Value::True, Value::Nil) => val = Value::False,
+            (Value::False, Value::Nil) => val = Value::True,
             (Value::Error(e1), Value::Error(e2)) => {
                 let err1 = self.get_error(e1);
                 let err2 = self.get_error(e2);
                 if self.get_interned(err1.keyword) == self.get_interned(err2.keyword) {
                     val = self.is_equal_pair(err1.data, err2.data)?;
                 }
+            }
+            (Value::Undefined, _) => {
+                panic!("is_equal_pair: internal error, given left hand value is Undefined.")
+            }
+            (_, Value::Undefined) => {
+                panic!("is_equal_pair: internal error, given right hand value is Undefined.")
             }
             (_, _) => {}
         }
