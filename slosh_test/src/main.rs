@@ -1,7 +1,7 @@
 use bridge_adapters::add_builtin;
 use compile_state::state::SloshVm;
-use sl_compiler::load_eval::{run_reader, CORE_LISP_NAME, TEST_LISP_NAME};
 use sl_compiler::Reader;
+use sl_compiler::load_eval::{CORE_LISP_NAME, TEST_LISP_NAME, run_reader};
 use slosh_lib::{load_builtins_lisp_less_sloshrc, run};
 use slosh_test_lib::docs;
 use slvm::{VMError, VMResult, Value};

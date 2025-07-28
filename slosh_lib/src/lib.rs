@@ -47,10 +47,10 @@ use crate::shell_builtins::add_shell_builtins;
 use debug::*;
 use shell::builtins::expand_tilde;
 use shell::config::get_config;
-use shell::platform::{Platform, Sys, STDIN_FILENO};
+use shell::platform::{Platform, STDIN_FILENO, Sys};
 use sl_compiler::load_eval::{
-    add_load_builtins, load_internal, BUILTINS, COLORS_LISP_NAME, CORE_LISP_NAME, SLSHRC,
-    SLSHRC_NAME,
+    BUILTINS, COLORS_LISP_NAME, CORE_LISP_NAME, SLSHRC, SLSHRC_NAME, add_load_builtins,
+    load_internal,
 };
 use sl_compiler::pass1::pass1;
 use slvm::float::F56;

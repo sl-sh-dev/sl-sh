@@ -7,10 +7,8 @@ use lazy_static::lazy_static;
 use mdbook::book::{Book, Chapter};
 use mdbook::{BookItem, MDBook};
 use regex::{Regex, RegexBuilder};
-use sl_compiler::Reader;
-use sl_compiler::load_eval::run_reader;
 use slvm::vm_hashmap::VMHashMap;
-use slvm::{Interned, SLOSH_NIL, VMError, VMResult, Value, VMErrorObj};
+use slvm::{Interned, SLOSH_NIL, VMError, VMErrorObj, VMResult, Value};
 use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -999,8 +997,8 @@ mod test {
     use compile_state::state::new_slosh_vm;
     use sl_compiler::Reader;
     use slosh_lib::{
-        load_builtins_lisp_less_sloshrc, run_reader, set_builtins_and_shell_builtins,
-        set_initial_load_path, ENV,
+        ENV, load_builtins_lisp_less_sloshrc, run_reader, set_builtins_and_shell_builtins,
+        set_initial_load_path,
     };
     use std::collections::BTreeMap;
     use std::ops::DerefMut;
