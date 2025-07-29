@@ -18,6 +18,7 @@ pub mod math;
 pub mod print;
 pub mod rand;
 pub mod string;
+pub mod vm_inspect;
 
 pub const NOOP: &str = "noop";
 

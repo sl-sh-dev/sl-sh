@@ -12,6 +12,9 @@ pub fn do_to_vm_stdout_fcns(env: &mut SloshVm, noop_swap_type: NoopSwap) {
     let _ = noop_swap_internal(env, "prn".to_string(), noop_swap_type);
     let _ = noop_swap_internal(env, "dasm".to_string(), noop_swap_type);
     let _ = noop_swap_internal(env, "dump-globals".to_string(), noop_swap_type);
+    let _ = noop_swap_internal(env, "dump-regs-raw".to_string(), noop_swap_type);
+    let _ = noop_swap_internal(env, "dump-regs".to_string(), noop_swap_type);
+    let _ = noop_swap_internal(env, "dump-stack".to_string(), noop_swap_type);
 }
 
 /// pr/prn/dasm/dump-globals which write directly to stdout are mapped to noop
