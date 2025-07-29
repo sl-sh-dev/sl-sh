@@ -1,8 +1,8 @@
 use crate::opcodes::*;
 use crate::vm_hashmap::{VMHashMap, ValHash};
 use crate::{
-    from_i56, CallFrame, Chunk, Continuation, Error, GVm, VMError, VMErrorObj, VMResult, Value,
-    STACK_CAP,
+    CallFrame, Chunk, Continuation, Error, GVm, STACK_CAP, VMError, VMErrorObj, VMResult, Value,
+    from_i56,
 };
 use std::marker::PhantomData;
 use std::num::TryFromIntError;
@@ -1091,7 +1091,7 @@ impl<ENV> GVm<ENV> {
                                     op.display_value(self)
                                 )),
                                 chunk,
-                            ))
+                            ));
                         }
                     }
                 }
@@ -1301,7 +1301,7 @@ impl<ENV> GVm<ENV> {
                                     val.display_type(self)
                                 )),
                                 chunk.clone(),
-                            ))
+                            ));
                         }
                     }
                 }

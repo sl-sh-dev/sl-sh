@@ -41,6 +41,7 @@ Contains these crates:
 - shell: contains shell specific code, this includes a shell reader (parser), job control etc
 - bridge_macros: macros for exported Rust functions as slosh functions
 - bridge_types: helper types for code using bridge_macros
+- slosh_test: everything in slosh plus some additional functionality and dependencies related to debugging.
 - legacy (excluded): original sl-sh version, more complete but slower and worse core shell support
 
 ## Running

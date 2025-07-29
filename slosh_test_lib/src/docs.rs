@@ -7,10 +7,8 @@ use lazy_static::lazy_static;
 use mdbook::book::{Book, Chapter};
 use mdbook::{BookItem, MDBook};
 use regex::{Regex, RegexBuilder};
-use slosh_lib::load_builtins_lisp_less_sloshrc;
 use slvm::vm_hashmap::VMHashMap;
-use slvm::VMErrorObj::Message;
-use slvm::{Interned, VMError, VMResult, Value, SLOSH_NIL};
+use slvm::{Interned, SLOSH_NIL, VMError, VMErrorObj, VMResult, Value};
 use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -475,7 +473,7 @@ impl From<DocError> for VMError {
     fn from(value: DocError) -> Self {
         VMError {
             key: "doc",
-            obj: Message(value.to_string()),
+            obj: VMErrorObj::Message(value.to_string()),
         }
     }
 }
@@ -848,7 +846,7 @@ fn build_doc(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         },
     }?;
 
-    load_builtins_lisp_less_sloshrc(vm)?;
+    slosh_lib::load_builtins_lisp_less_sloshrc(vm)?;
 
     let mut md_book = MDBook::load(PathBuf::from(path))
         .map_err(|_e| VMError::new("mdbook", "Unable to load the book at provided path."))?;
@@ -999,8 +997,8 @@ mod test {
     use compile_state::state::new_slosh_vm;
     use sl_compiler::Reader;
     use slosh_lib::{
-        load_builtins_lisp_less_sloshrc, run_reader, set_builtins_and_shell_builtins,
-        set_initial_load_path, ENV,
+        ENV, load_builtins_lisp_less_sloshrc, run_reader, set_builtins_and_shell_builtins,
+        set_initial_load_path,
     };
     use std::collections::BTreeMap;
     use std::ops::DerefMut;
@@ -1069,7 +1067,11 @@ mod test {
             .add_docs(&mut docs, &mut env, true)
             .unwrap();
         for d in docs {
-            assert!(d.doc_string.usage.is_some(), "All global builtins must have a usage section, because it can NOT be inferred from the environment: {}.", d.symbol);
+            assert!(
+                d.doc_string.usage.is_some(),
+                "All global builtins must have a usage section, because it can NOT be inferred from the environment: {}.",
+                d.symbol
+            );
         }
     }
 

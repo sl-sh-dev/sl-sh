@@ -1,6 +1,6 @@
-use crate::{compile, CompileState, SloshVm};
+use crate::{CompileState, SloshVm, compile};
 use compile_state::state::SloshVmTrait;
-use slvm::{VMResult, Value, BMOV, CALL, CALLM, CONST, MOV, TCALL, TCALLM};
+use slvm::{BMOV, CALL, CALLM, CONST, MOV, TCALL, TCALLM, VMResult, Value};
 
 fn compile_params(
     env: &mut SloshVm,

@@ -157,16 +157,25 @@ mod tests {
     fn test_captures() {
         let mut env = new_slosh_vm();
 
-        let result = exec(&mut env, "(do ((fn (a b c) ((fn () (let (x 10, y 20, z 30) (set! x 11) (def fnx (fn () (set! a 5)(set! b 6)`(~a ~b ~c ~x ~y ~z))))(let (s 51, t 52, u 53)(def fny (fn () (list s t u)))))))1 2 3)(fnx))");
+        let result = exec(
+            &mut env,
+            "(do ((fn (a b c) ((fn () (let (x 10, y 20, z 30) (set! x 11) (def fnx (fn () (set! a 5)(set! b 6)`(~a ~b ~c ~x ~y ~z))))(let (s 51, t 52, u 53)(def fny (fn () (list s t u)))))))1 2 3)(fnx))",
+        );
         let expected = read_test(&mut env, "(5 6 3 11 20 30)");
         assert_vals(&env, expected, result);
 
-        let result = exec(&mut env, "(do ((fn (a b c) ((fn () (let (x 10, y 20, z 30) (set! x 11) (def fnx (fn () (set! a 5)(set! b 6)(list a b c x y z))))(let (s 51, t 52, u 53)(def fny (fn () (list s t u)))))))1 2 3)(fnx))");
+        let result = exec(
+            &mut env,
+            "(do ((fn (a b c) ((fn () (let (x 10, y 20, z 30) (set! x 11) (def fnx (fn () (set! a 5)(set! b 6)(list a b c x y z))))(let (s 51, t 52, u 53)(def fny (fn () (list s t u)))))))1 2 3)(fnx))",
+        );
         let expected = read_test(&mut env, "(5 6 3 11 20 30)");
         assert_vals(&env, expected, result);
 
         //let result = crate::test_utils::exec_with_dump(&mut vm, "((fn (a b c) ((fn () (let (x 10, y 20, z 30) (set! x 11) (def fnx (fn () (set! a 5)(set! b 6)(set! c 7)`(~a ~b ~c ~x ~y ~z))))(let (s 51, t 52, u 53)(def fny (fn () `(~s ~t ~u)))))))1 2 3)(fnx)(fny)");
-        let result = exec(&mut env, "((fn (a b c) ((fn () (let (x 10, y 20, z 30) (set! x 11) (def fnx (fn () (set! a 5)(set! b 6)(set! c 7)`(~a ~b ~c ~x ~y ~z))))(let (s 51, t 52, u 53)(def fny (fn () `(~s ~t ~u)))))))1 2 3)(fnx)(fny)");
+        let result = exec(
+            &mut env,
+            "((fn (a b c) ((fn () (let (x 10, y 20, z 30) (set! x 11) (def fnx (fn () (set! a 5)(set! b 6)(set! c 7)`(~a ~b ~c ~x ~y ~z))))(let (s 51, t 52, u 53)(def fny (fn () `(~s ~t ~u)))))))1 2 3)(fnx)(fny)",
+        );
         let expected = read_test(&mut env, "(51 52 53)");
         assert_vals(&env, expected, result);
 

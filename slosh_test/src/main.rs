@@ -1,7 +1,7 @@
 use bridge_adapters::add_builtin;
 use compile_state::state::SloshVm;
-use sl_compiler::load_eval::{run_reader, CORE_LISP_NAME, TEST_LISP_NAME};
 use sl_compiler::Reader;
+use sl_compiler::load_eval::{CORE_LISP_NAME, TEST_LISP_NAME, run_reader};
 use slosh_lib::{load_builtins_lisp_less_sloshrc, run};
 use slosh_test_lib::docs;
 use slvm::{VMError, VMResult, Value};
@@ -47,9 +47,9 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use compiler_test_utils::exec;
-    use slosh_lib::{set_builtins_and_shell_builtins, set_initial_load_path, ENV};
-    use slvm::{from_i56, Value};
-    use std::fs::{create_dir_all, File};
+    use slosh_lib::{ENV, set_builtins_and_shell_builtins, set_initial_load_path};
+    use slvm::{Value, from_i56};
+    use std::fs::{File, create_dir_all};
     use std::io::Write;
     use std::ops::DerefMut;
     use temp_env;

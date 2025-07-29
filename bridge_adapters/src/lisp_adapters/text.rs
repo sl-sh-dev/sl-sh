@@ -302,8 +302,12 @@ mod tests {
             bridge_types::TypeHandle::Direct => match args.get(0usize) {
                 None => {
                     return Err(VMError::new_conversion(&*{
-                        let res =
-                                format!("{} not given enough arguments, expected at least {} arguments, got {}.", fn_name, 1usize, args.len());
+                        let res = format!(
+                            "{} not given enough arguments, expected at least {} arguments, got {}.",
+                            fn_name,
+                            1usize,
+                            args.len()
+                        );
                         res
                     }));
                 }
@@ -314,9 +318,12 @@ mod tests {
                                 != bridge_types::TypeHandle::VarArgs =>
                     {
                         return Err(VMError::new_conversion(&*{
-                            let res =
-                                            format!("{} given too many arguments, expected at least {} arguments, got {}.",
-                                                    fn_name, 1usize, args.len());
+                            let res = format!(
+                                "{} given too many arguments, expected at least {} arguments, got {}.",
+                                fn_name,
+                                1usize,
+                                args.len()
+                            );
                             res
                         }));
                     }
@@ -351,8 +358,12 @@ mod tests {
             bridge_types::TypeHandle::Direct => match args.get(0usize) {
                 None => {
                     return Err(VMError::new_conversion(&*{
-                        let res =
-                                format!("{} not given enough arguments, expected at least {} arguments, got {}.", fn_name, 1usize, args.len());
+                        let res = format!(
+                            "{} not given enough arguments, expected at least {} arguments, got {}.",
+                            fn_name,
+                            1usize,
+                            args.len()
+                        );
                         res
                     }));
                 }
@@ -363,9 +374,12 @@ mod tests {
                                 != bridge_types::TypeHandle::VarArgs =>
                     {
                         return Err(VMError::new_conversion(&*{
-                            let res =
-                                            format!("{} given too many arguments, expected at least {} arguments, got {}.",
-                                                    fn_name, 1usize, args.len());
+                            let res = format!(
+                                "{} given too many arguments, expected at least {} arguments, got {}.",
+                                fn_name,
+                                1usize,
+                                args.len()
+                            );
                             res
                         }));
                     }
@@ -373,7 +387,7 @@ mod tests {
                         return {
                             let arg: String = (*arg_0).sl_into_ref(vm)?;
                             arg.trim().to_string().sl_into(vm)
-                        }
+                        };
                     }
                 },
             },

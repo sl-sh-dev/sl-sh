@@ -45,21 +45,21 @@ fn main() -> Result<(), VMError> {
     chunk.encode2(CONST, 5, pu, None)?;
     chunk.encode2(CONST, 6, zero, None)?; // i
     chunk.encode2(CONST, 7, zero, None)?; // j
-                                          //chunk.encode2(CONST, 7, five_hundred, None)?; // j
+    //chunk.encode2(CONST, 7, five_hundred, None)?; // j
     chunk.encode2(CONST, 8, twof, None)?; // 2.0
     chunk.encode2(CONST, 100, hundred, None)?;
     chunk.encode2(CONST, 101, one, None)?;
     chunk.encode2(CONST, 103, zerof, None)?;
 
     chunk.encode3(VECMKD, 10, 100, 103, None)?; // pols
-                                                //chunk.encode2(VECELS, 10, 100, None)?;
-                                                // loop i .. n
+    //chunk.encode2(VECELS, 10, 100, None)?;
+    // loop i .. n
     chunk.add_jump(chunk.code.len() as u32);
     chunk.encode2(CONST, 3, zerof, None)?;
     chunk.encode2(CONST, 7, zero, None)?; // j
-                                          //chunk.encode2(CONST, 7, five_hundred, None)?; // j
-                                          // loop j .. 100
-                                          // (set! mu (/ (+ mu 2.0) 2.0))
+    //chunk.encode2(CONST, 7, five_hundred, None)?; // j
+    // loop j .. 100
+    // (set! mu (/ (+ mu 2.0) 2.0))
     chunk.add_jump(chunk.code.len() as u32);
     chunk.encode2(ADD, 4, 8, None)?;
     chunk.encode2(DIV, 4, 8, None)?;
@@ -73,9 +73,9 @@ fn main() -> Result<(), VMError> {
     //chunk.encode_jump_offset(-18)?;
 
     chunk.encode2(CONST, 7, zero, None)?; // j
-                                          //chunk.encode2(CONST, 7, five_hundred, None)?; // j
-                                          // (dotimes-i j 100 (j2)
-                                          //   (set! su (+ (vec-nth pol j) (* su x))))
+    //chunk.encode2(CONST, 7, five_hundred, None)?; // j
+    // (dotimes-i j 100 (j2)
+    //   (set! su (+ (vec-nth pol j) (* su x))))
     chunk.add_jump(chunk.code.len() as u32);
     chunk.encode2(MUL, 3, 2, None)?;
     chunk.encode3(GET, 51, 10, 7, None)?;

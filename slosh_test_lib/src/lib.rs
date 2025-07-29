@@ -1,7 +1,6 @@
-use builtins::{noop_swap_internal, NoopSwap};
+use builtins::{NoopSwap, noop_swap_internal};
 use compile_state::state::SloshVm;
 use sl_compiler::load_eval;
-use slosh_lib::load_builtins_lisp_less_sloshrc;
 use slvm::VMResult;
 
 pub mod docs;
@@ -42,7 +41,7 @@ pub fn vm_with_builtins_and_core(env: &mut SloshVm, noop_stdout: bool) -> VMResu
 }
 
 pub fn add_user_builtins(env: &mut SloshVm, load_paths: &[String], files_to_load: &[String]) {
-    let _ = load_builtins_lisp_less_sloshrc(env);
+    let _ = slosh_lib::load_builtins_lisp_less_sloshrc(env);
 
     let load_paths: Vec<&str> = load_paths.iter().map(AsRef::as_ref).collect();
     slosh_lib::set_initial_load_path(env, load_paths);

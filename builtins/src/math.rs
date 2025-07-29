@@ -39,10 +39,10 @@ pub fn abs(v: Value) -> VMResult<Value> {
 ///
 /// Remainder from dividing (arg 1) by (arg 2).
 /// Note: Remainder and Modulo are two similar mathematical operations,
-/// called `rem` and `rem_euclid` in Rust.
+/// called `rem` and `rem-euclid`.
 /// This function uses `rem` which is the same as the `%` operator in C.
 /// With `rem`, the sign of the result is the same as the dividend (arg 1).
-/// With `rem_euclid`, the sign of the result is always positive.
+/// With `rem-euclid`, the sign of the result is always positive.
 ///
 /// Section: math
 ///
@@ -72,10 +72,10 @@ pub fn rem_as_percent(dividend: i64, divisor: i64) -> VMResult<i64> {
 ///
 /// Remainder from dividing (arg 1) by (arg 2).
 /// Note: Remainder and Modulo are two similar mathematical operations,
-/// called `rem` and `rem_euclid` in Rust.
+/// called `rem` and `rem-euclid` in Rust.
 /// This function uses `rem` which is the same as the `%` operator in C.
 /// With `rem`, the sign of the result is the same as the dividend (arg 1).
-/// With `rem_euclid`, the sign of the result is always positive.
+/// With `rem-euclid`, the sign of the result is always positive.
 ///
 /// Section: math
 ///
@@ -96,34 +96,34 @@ pub fn rem_as_rem(dividend: i64, divisor: i64) -> VMResult<i64> {
     rem_as_percent(dividend, divisor)
 }
 
-/// Usage: (rem_euclid int int)
+/// Usage: (rem-euclid int int)
 ///
 /// Least Non-negative number that can be added to a multiple of the divisor (arg 2) to get the dividend (arg 1).
 /// The result should always be 0 <= result < divisor (arg 2).
 /// Note: Remainder and Modulo are two similar mathematical operations,
-/// called `rem` and `rem_euclid` in Rust.
+/// called `rem` and `rem-euclid` in Rust.
 /// With `rem`, the sign of the result is the same as the dividend (arg 1).
-/// With `rem_euclid`, the sign of the result is always positive.
+/// With `rem-euclid`, the sign of the result is always positive.
 ///
 /// Section: math
 ///
 /// Example:
-/// (test::assert-equal 0 (rem_euclid 50 10))
-/// (test::assert-equal 5 (rem_euclid 55 10))
-/// (test::assert-equal 1 (rem_euclid 1 2))
-/// (test::assert-equal 2 (rem_euclid -10 3))
-/// (test::assert-equal 1 (rem_euclid 10 -3))
-/// (test::assert-equal 2 (rem_euclid -10 -3))
+/// (test::assert-equal 0 (rem-euclid 50 10))
+/// (test::assert-equal 5 (rem-euclid 55 10))
+/// (test::assert-equal 1 (rem-euclid 1 2))
+/// (test::assert-equal 2 (rem-euclid -10 3))
+/// (test::assert-equal 1 (rem-euclid 10 -3))
+/// (test::assert-equal 2 (rem-euclid -10 -3))
 ///
-/// (test::assert-error (rem_euclid))
-/// (test::assert-error (rem_euclid 1))
-/// (test::assert-error (rem_euclid 1 2 3))
-/// (test::assert-error (rem_euclid 1 2.0))
-#[sl_sh_fn(fn_name = "rem_euclid")]
+/// (test::assert-error (rem-euclid))
+/// (test::assert-error (rem-euclid 1))
+/// (test::assert-error (rem-euclid 1 2 3))
+/// (test::assert-error (rem-euclid 1 2.0))
+#[sl_sh_fn(fn_name = "rem-euclid")]
 pub fn rem_euclid(dividend: i64, divisor: i64) -> VMResult<i64> {
     dividend.checked_rem_euclid(divisor).ok_or_else(|| {
         VMError::new_vm(format!(
-            "rem_euclid: division by zero or overflow: {} % {}",
+            "rem-euclid: division by zero or overflow: {} % {}",
             dividend, divisor
         ))
     })
@@ -203,7 +203,7 @@ pub fn min(vals: VarArgs<Value>) -> VMResult<Value> {
             _ => {
                 return Err(VMError::new_vm(
                     "min: all arguments must be numbers".to_string(),
-                ))
+                ));
             }
         }
     }
@@ -270,7 +270,7 @@ pub fn max(vals: VarArgs<Value>) -> VMResult<Value> {
             _ => {
                 return Err(VMError::new_vm(
                     "max: all arguments must be numbers".to_string(),
-                ))
+                ));
             }
         }
     }
