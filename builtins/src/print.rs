@@ -1,10 +1,10 @@
 use crate::SloshVm;
+use crate::vm_inspect::{disassemble_value, dump_call_stack, dump_regs, dump_stack};
 use bridge_macros::sl_sh_fn;
-use compile_state::state::{CompileState, SloshVmTrait};
-use sl_compiler::compile;
-use sl_compiler::pass1::pass1;
-use slvm::{Interned, VMError, VMResult, Value};
+use compile_state::state::SloshVmTrait;
+use slvm::{Chunk, Interned, VMError, VMResult, Value};
 use std::io::{Write, stderr, stdout};
+use std::sync::Arc;
 
 fn is_sym(vm: &SloshVm, name: &str, intern: Interned) -> bool {
     if let Some(i) = vm.get_if_interned(name)
@@ -174,14 +174,22 @@ pub fn eprn(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
 /// Section: core
 ///
 /// Example:
-/// #t
+/// (dump-globals)  ; prints all global variables and their values
 #[sl_sh_fn(fn_name = "dump-globals", takes_env = true)]
 pub fn dump_globals(environment: &mut SloshVm) -> VMResult<Value> {
     environment.dump_globals();
     Ok(Value::Nil)
 }
 
-/// TODO PC make the other builtins.
+/// Usage: (dasm callable)
+///
+/// Disassembles a callable (function, closure, or expression) and prints the bytecode.
+/// Shows the compiled bytecode instructions, register usage, and constants.
+///
+/// Section: core
+///
+/// Example:
+/// (dasm (fn (x) (+ x 1)))
 pub fn dasm(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if registers.len() != 1 {
         return Err(VMError::new_compile(
@@ -189,42 +197,251 @@ pub fn dasm(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         ));
     }
     let exp = registers[0].unref(vm);
-    match exp {
-        Value::Lambda(handle) => {
-            let l = vm.get_lambda(handle);
-            l.disassemble_chunk(vm, 0)?;
-            Ok(Value::Nil)
-        }
-        Value::Closure(handle) => {
-            let (l, _) = vm.get_closure(handle);
-            l.disassemble_chunk(vm, 0)?;
-            Ok(Value::Nil)
-        }
-        Value::List(_handle, _start_idx) => {
-            let mut state = CompileState::new_state("", 1, None);
-            pass1(vm, &mut state, exp)?;
-            compile(vm, &mut state, exp, 0)?;
-            state.chunk.disassemble_chunk(vm, 0)?;
-            Ok(Value::Nil)
-        }
-        Value::Pair(_handle) => {
-            let mut state = CompileState::new_state("", 1, None);
-            pass1(vm, &mut state, exp)?;
-            compile(vm, &mut state, exp, 0)?;
-            state.chunk.disassemble_chunk(vm, 0)?;
-            Ok(Value::Nil)
-        }
-        _ => Err(VMError::new_vm("DASM: Not a callable.")),
+    disassemble_value(vm, exp)?;
+    Ok(Value::Nil)
+}
+
+/// Usage: (dump-regs)
+///
+/// Dump the registers for the current call frame. Shows register names (if debug info available)
+/// and values. Heap-allocated values are marked with '^'.
+///
+/// Section: core
+///
+/// Example:
+/// (def test-fn (fn (x y)
+///   (dump-regs)  ; shows x in R1, y in R2, plus any scratch registers
+///   (+ x y)))
+/// (test::assert-equal 5 (test-fn 2 3))
+#[sl_sh_fn(takes_env = true, fn_name = "dump-regs")]
+pub fn builtin_dump_regs(environment: &mut SloshVm) -> VMResult<Value> {
+    if let Some(frame) = environment.call_frame() {
+        println!("Previous Call Frames Regs (NOTE: tail calls will be 'missing' Call Frames):");
+        dump_regs(environment, frame);
+        println!();
     }
+    let lambda = if let Some(val) = environment.this_fn() {
+        match val {
+            Value::Lambda(h) => environment.get_lambda(h),
+            Value::Closure(h) => {
+                let (l, _) = environment.get_closure(h);
+                l
+            }
+            _ => Arc::new(Chunk::new("", 0)),
+        }
+    } else {
+        Arc::new(Chunk::new("", 0))
+    };
+    let mut reg_names = lambda.dbg_args.as_ref().map(|iargs| iargs.iter());
+    let regs = environment.get_current_registers();
+    for (i, r) in regs.iter().enumerate() {
+        let aname = if i == 0 {
+            "params/result"
+        } else if let Some(reg_names) = reg_names.as_mut() {
+            if let Some(n) = reg_names.next() {
+                environment.get_interned(*n)
+            } else {
+                "[SCRATCH]"
+            }
+        } else {
+            "[SCRATCH]"
+        };
+        if let Value::Value(_) = r {
+            println!(
+                "{:#03} ^{:#20}: {:#12} {}",
+                i,
+                aname,
+                r.display_type(environment),
+                r.pretty_value(environment)
+            );
+        } else {
+            println!(
+                "{:#03}  {:#20}: {:#12} {}",
+                i,
+                aname,
+                r.display_type(environment),
+                r.pretty_value(environment)
+            );
+        }
+    }
+    Ok(Value::Nil)
+}
+
+/// Usage: (dump-stack)
+///
+/// Dump the call stack frames. Shows each active call frame with file name,
+/// line number, and instruction pointer.
+///
+/// Section: core
+///
+/// Example:
+/// (def recursive-fn (fn (n)
+///   (if (= n 0)
+///     (dump-stack)  ; shows call stack at deepest point
+///     (recursive-fn (- n 1)))))
+/// (recursive-fn 3)
+#[sl_sh_fn(takes_env = true, fn_name = "dump-stack")]
+pub fn builtin_dump_stack(environment: &mut SloshVm) -> VMResult<Value> {
+    dump_call_stack(environment);
+    Ok(Value::Nil)
+}
+
+/// Usage: (dump-regs-raw)
+///
+/// Dump all registers in the VM stack. Shows raw stack contents without
+/// interpreting call frame boundaries.
+///
+/// Section: core
+///
+/// Example:
+/// (dump-regs-raw)  ; prints entire VM stack contents
+#[sl_sh_fn(takes_env = true, fn_name = "dump-regs-raw")]
+pub fn dump_regs_raw(environment: &mut SloshVm) -> VMResult<Value> {
+    dump_stack(environment);
+    Ok(Value::Nil)
 }
 
 pub fn add_print_builtins(env: &mut SloshVm) {
-    env.set_global_builtin("pr", pr);
-    env.set_global_builtin("epr", epr);
-    env.set_global_builtin("prn", prn);
-    env.set_global_builtin("eprn", eprn);
-    env.set_global_builtin("dasm", dasm);
-    env.set_global_builtin("fpr", fpr);
-    env.set_global_builtin("fprn", fprn);
+    bridge_adapters::add_builtin(
+        env,
+        "pr",
+        pr,
+        r#"Usage: (pr value1 value2 ...)
+
+Print values to stdout without a newline. Values are printed in their "pretty" form,
+meaning strings are printed without quotes and character values without delimiters.
+
+Section: core
+
+Example:
+(pr "Hello" " " "World")  ; prints: Hello World
+(pr 'symbol :keyword 42)   ; prints: symbol:keyword42
+"#,
+    );
+    bridge_adapters::add_builtin(
+        env,
+        "epr",
+        epr,
+        r#"Usage: (epr value1 value2 ...)
+
+Print values to stderr without a newline. Values are printed in their "pretty" form,
+meaning strings are printed without quotes and character values without delimiters.
+
+Section: core
+
+Example:
+(epr "Error: " error-msg)  ; prints to stderr: Error: <error message>
+"#,
+    );
+    bridge_adapters::add_builtin(
+        env,
+        "prn",
+        prn,
+        r#"Usage: (prn value1 value2 ...)
+
+Print values to stdout followed by a newline. Values are printed in their "pretty" form,
+meaning strings are printed without quotes and character values without delimiters.
+
+Section: core
+
+Example:
+(prn "Hello World")        ; prints: Hello World\n
+(prn "Line 1")
+(prn "Line 2")             ; prints each on separate lines
+"#,
+    );
+    bridge_adapters::add_builtin(
+        env,
+        "eprn",
+        eprn,
+        r#"Usage: (eprn value1 value2 ...)
+
+Print values to stderr followed by a newline. Values are printed in their "pretty" form,
+meaning strings are printed without quotes and character values without delimiters.
+
+Section: core
+
+Example:
+(eprn "Error occurred!")   ; prints to stderr: Error occurred!\n
+(eprn "Debug:" x "=" y)    ; prints to stderr: Debug:<x value>=<y value>\n
+"#,
+    );
+    bridge_adapters::add_builtin(
+        env,
+        "dasm",
+        dasm,
+        r#"Usage: (dasm callable)
+
+Disassemble a callable (function, closure, or expression) and print its bytecode.
+Shows the compiled bytecode instructions, register usage, and constants.
+
+Section: core
+
+Example:
+(dasm (fn (x) (+ x 1)))
+; Output:
+; INPUTS: 2 args/optional/rest 1/0/false
+; EXTRA REGS: 1
+; 0x00000000  MOV(0x05)    R(0x02) R(0x01)
+; 0x00000003  REGI(0x11)   R(0x03) 0x01
+; 0x00000006  ADD          R(0x02) R(0x03)
+; 0x00000009  SRET(0x03)   R(0x02)
+
+(def my-func (fn (a b) (* a b)))
+(dasm my-func)  ; disassemble a named function
+"#,
+    );
+    bridge_adapters::add_builtin(
+        env,
+        "fpr",
+        fpr,
+        r#"Usage: (fpr file-handle value1 value2 ...)
+
+Print values to a file handle without a newline. The first argument must be
+a writable IO object. Values are printed in their "pretty" form.
+
+Section: core
+
+Example:
+(with-temp-file (tmp-file tmp-name)
+  (fpr tmp-file "Hello" " " "World")
+  (fpr tmp-file "!")
+  (flush tmp-file)
+  (test::assert-equal "Hello World!" (slurp tmp-name)))
+
+; Or with a regular file:
+(def out (open "output.txt" :create :write :truncate))
+(fpr out "Hello" " " "World")
+(close out)
+"#,
+    );
+    bridge_adapters::add_builtin(
+        env,
+        "fprn",
+        fprn,
+        r#"Usage: (fprn file-handle value1 value2 ...)
+
+Print values to a file handle followed by a newline. The first argument must be
+a writable IO object. Values are printed in their "pretty" form.
+
+Section: core
+
+Example:
+(with-temp-file (tmp-file tmp-name)
+  (fprn tmp-file "Line 1")
+  (fprn tmp-file "Line 2")
+  (flush tmp-file)
+  (test::assert-equal "Line 1\nLine 2\n" (slurp tmp-name)))
+
+; Or with a regular file:
+(def log (open "app.log" :create :write :append))
+(fprn log "Log entry:" (time))
+(fprn log "Status: OK")
+(close log)
+"#,
+    );
+    intern_builtin_dump_regs(env);
+    intern_builtin_dump_stack(env);
+    intern_dump_regs_raw(env);
     intern_dump_globals(env);
 }
