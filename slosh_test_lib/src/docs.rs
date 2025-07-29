@@ -448,7 +448,12 @@ impl SloshDoc {
     }
 
     fn into_styled_output(mut self, query: &DocSearchQuery, style: &StyleOptions) -> Self {
-        (self.symbol, self.namespace, self.symbol_type, self.doc_string) = {
+        (
+            self.symbol,
+            self.namespace,
+            self.symbol_type,
+            self.doc_string,
+        ) = {
             // use destructing to force compiler error if structure changes.
             let Self {
                 symbol,
@@ -1227,42 +1232,44 @@ fn search_docs(
             let mut matched = false;
 
             // Search in symbol name
-            if query.should_search_field("name") || query.should_search_field("symbol") {
-                if query.matches_text(&doc.symbol) {
-                    matched = true;
-                }
+            if query.should_search_field("name")
+                || query.should_search_field("symbol") && query.matches_text(&doc.symbol)
+            {
+                matched = true;
             }
 
             // Search in usage
-            if !matched && query.should_search_field(USAGE) {
-                if let Some(ref usage) = doc.doc_string.usage {
-                    if query.matches_text(usage) {
-                        matched = true;
-                    }
-                }
+            if !matched
+                && query.should_search_field(USAGE)
+                && let Some(ref usage) = doc.doc_string.usage
+                && query.matches_text(usage)
+            {
+                matched = true;
             }
 
             // Search in description
-            if !matched && query.should_search_field(DESCRIPTION) {
-                if query.matches_text(&doc.doc_string.description) {
-                    matched = true;
-                }
+            if !matched
+                && query.should_search_field(DESCRIPTION)
+                && query.matches_text(&doc.doc_string.description)
+            {
+                matched = true;
             }
 
             // Search in section
-            if !matched && query.should_search_field(SECTION) {
-                if query.matches_text(&doc.doc_string.section) {
-                    matched = true;
-                }
+            if !matched
+                && query.should_search_field(SECTION)
+                && query.matches_text(&doc.doc_string.section)
+            {
+                matched = true;
             }
 
             // Search in example
-            if !matched && query.should_search_field(EXAMPLE) {
-                if let Some(ref example) = doc.doc_string.example {
-                    if query.matches_text(example) {
-                        matched = true;
-                    }
-                }
+            if !matched
+                && query.should_search_field(EXAMPLE)
+                && let Some(ref example) = doc.doc_string.example
+                && query.matches_text(example)
+            {
+                matched = true;
             }
 
             // If no specific fields specified, search all fields
@@ -1306,7 +1313,7 @@ fn doc_search(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         _ => {
             return Err(VMError::new_vm(
                 "First argument must be a query string".to_string(),
-            ))
+            ));
         }
     };
 
@@ -1395,7 +1402,7 @@ fn doc_search(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
             _ => {
                 return Err(VMError::new_vm(
                     "Second argument must be a map of options".to_string(),
-                ))
+                ));
             }
         }
     }
