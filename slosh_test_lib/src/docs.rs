@@ -53,14 +53,6 @@ lazy_static! {
         exemption_set.insert("return");
         exemption_set.insert("*int-min*");
         exemption_set.insert("*int-max*");
-        exemption_set.insert("prn");
-        exemption_set.insert("pr");
-        exemption_set.insert("fprn");
-        exemption_set.insert("fpr");
-        exemption_set.insert("eprn");
-        exemption_set.insert("epr");
-        exemption_set.insert("dump-regs");
-        exemption_set.insert("dasm");
         exemption_set.insert("*int-bits*");
         exemption_set.insert("*stdout*");
         exemption_set.insert("*prn*");

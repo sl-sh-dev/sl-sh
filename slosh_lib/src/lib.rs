@@ -169,6 +169,13 @@ fn get_home_dir() -> Option<PathBuf> {
     }
 }
 
+pub fn load_test(env: &mut SloshVm) {
+    match load_internal(env, "test.slosh") {
+        Ok(_) => {}
+        Err(err) => eprintln!("ERROR: {err}"),
+    }
+}
+
 pub fn load_builtins_lisp(env: &mut SloshVm) -> VMResult<()> {
     for (name, _) in BUILTINS.iter() {
         load_internal(env, name)?;
@@ -516,14 +523,11 @@ pub fn set_builtins_and_shell_builtins(env: &mut SloshVm) {
 pub fn set_shell_builtins(env: &mut SloshVm) {
     set_environment(env);
     add_shell_builtins(env);
-    env.set_global_builtin("dump-regs", builtin_dump_regs);
 
     let uid = Sys::current_uid();
     let euid = Sys::effective_uid();
     unsafe {
         env::set_var("UID", format!("{uid}"));
-    }
-    unsafe {
         env::set_var("EUID", format!("{euid}"));
     }
     bridge_adapters::add_named_global_doc(
