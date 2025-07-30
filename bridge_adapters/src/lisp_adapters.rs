@@ -30,18 +30,18 @@
 //! ```ignore
 //!
 //! impl<'a> SlFromRef<'a, Value> for &'a str {
-//!     fn sl_from_ref(value: Value, vm: &'a SloshVm) -> VMResult<Self> {
+//!     fn sl_from_ref(value: Value, vm: &'a SloshVm) -> BridgeResult<Self> {
 //!         (&value).sl_as_ref(vm)
 //!     }
 //! }
 //!
 //! impl<'a> SlAsRef<'a, str> for &Value {
-//!     fn sl_as_ref(&self, vm: &'a SloshVm) -> VMResult<&'a str> {
+//!     fn sl_as_ref(&self, vm: &'a SloshVm) -> BridgeResult<&'a str> {
 //!         match self {
 //!             Value::String(h) => Ok(vm.get_string(*h)),
 //!             Value::StringConst(i) => Ok(vm.get_interned(*i)),
 //!             _ => Err(VMError::new_conversion(
-//!                 ErrorStrings::fix_me_mismatched_type(
+//!                 ErrorStrings::mismatched_type(
 //!                     String::from(ValueTypes::from([
 //!                         ValueType::String,
 //!                         ValueType::StringConst,
@@ -60,17 +60,17 @@
 //! ```ignore
 //!
 //! impl<'a> SlFromRefMut<'a, Value> for &'a mut String {
-//!     fn sl_from_ref_mut(value: Value, vm: &'a mut SloshVm) -> VMResult<Self> {
+//!     fn sl_from_ref_mut(value: Value, vm: &'a mut SloshVm) -> BridgeResult<Self> {
 //!         (&value).sl_as_mut(vm)
 //!     }
 //! }
 //!
 //! impl<'a> SlAsMut<'a, String> for &Value {
-//!     fn sl_as_mut(&mut self, vm: &'a mut SloshVm) -> VMResult<&'a mut String> {
+//!     fn sl_as_mut(&mut self, vm: &'a mut SloshVm) -> BridgeResult<&'a mut String> {
 //!         match self {
 //!             Value::String(h) => vm.get_string_mut(*h),
 //!             _ => Err(VMError::new_conversion(
-//!                 ErrorStrings::fix_me_mismatched_type(
+//!                 ErrorStrings::mismatched_type(
 //!                     <&'static str>::from(ValueType::String),
 //!                     self.display_type(vm),
 //!                 ),
@@ -101,7 +101,7 @@
 //! TODO #220 - returning values via annotated or lifetime?
 //!  To avoid allocations when converting a slosh &Value back to a rust type that was mutated
 //!  don't return anything. If it is necessary for the API to return some value.
-//! ...either use an annotation on an input argument `fn myfun(#[likeThis] returnme: &mut String, someotherval: String) -> VMResult<()>`
+//! ...either use an annotation on an input argument `fn myfun(#[likeThis] returnme: &mut String, someotherval: String) -> BridgeResult<()>`
 //! or a lifetime... might be easier to do the annotation.
 //!
 //!
@@ -243,7 +243,9 @@ use bridge_types::BridgedType;
 use bridge_types::{Keyword, KeywordAsString, LooseString, SloshChar, Symbol, SymbolAsString};
 use compile_state::state::SloshVm;
 
-use slvm::{VMResult, Value};
+use crate::BridgeResult;
+use slvm::Value;
+
 mod collections;
 pub mod numbers;
 pub mod primitives;
@@ -255,14 +257,14 @@ where
     Self: BridgedType,
 {
     /// Converts to this type from the input type.
-    fn sl_from(value: T, vm: &mut SloshVm) -> VMResult<Self>;
+    fn sl_from(value: T, vm: &mut SloshVm) -> BridgeResult<Self>;
 }
 
 impl<T> SlFrom<Vec<T>> for Value
 where
     T: SlInto<Value>,
 {
-    fn sl_from(value: Vec<T>, vm: &mut SloshVm) -> VMResult<Self> {
+    fn sl_from(value: Vec<T>, vm: &mut SloshVm) -> BridgeResult<Self> {
         let mut u = Vec::with_capacity(value.len());
         for v in value {
             u.push(v.sl_into(vm)?);
@@ -275,7 +277,7 @@ impl<'a, T> SlFromRef<'a, slvm::Value> for Vec<T>
 where
     T: SlFromRef<'a, Value> + 'a,
 {
-    fn sl_from_ref(value: slvm::Value, vm: &'a SloshVm) -> VMResult<Self> {
+    fn sl_from_ref(value: slvm::Value, vm: &'a SloshVm) -> BridgeResult<Self> {
         let mut res = vec![];
         for val in value.iter(vm) {
             let t: T = val.sl_into_ref(vm)?;
@@ -291,14 +293,14 @@ where
     T: BridgedType,
 {
     /// Converts this type into the (usually inferred) input type.
-    fn sl_into(self, vm: &mut SloshVm) -> VMResult<T>;
+    fn sl_into(self, vm: &mut SloshVm) -> BridgeResult<T>;
 }
 
 impl<T, U> SlInto<U> for T
 where
     U: SlFrom<T>,
 {
-    fn sl_into(self, vm: &mut SloshVm) -> VMResult<U> {
+    fn sl_into(self, vm: &mut SloshVm) -> BridgeResult<U> {
         U::sl_from(self, vm)
     }
 }
@@ -308,7 +310,7 @@ where
     Self: Sized,
 {
     /// Converts to this type from the input type.
-    fn sl_from_ref(value: T, vm: &'a SloshVm) -> VMResult<Self>;
+    fn sl_from_ref(value: T, vm: &'a SloshVm) -> BridgeResult<Self>;
 }
 
 /// Inverse of [`SlFromRef`]
@@ -318,7 +320,7 @@ where
     Self: BridgedType,
 {
     /// Converts to this type from the input type.
-    fn sl_into_ref(self, vm: &'a SloshVm) -> VMResult<T>;
+    fn sl_into_ref(self, vm: &'a SloshVm) -> BridgeResult<T>;
 }
 
 impl<'a, T, U> SlIntoRef<'a, U> for T
@@ -327,7 +329,7 @@ where
     U: SlFromRef<'a, T>,
     U: 'a,
 {
-    fn sl_into_ref(self, vm: &'a SloshVm) -> VMResult<U> {
+    fn sl_into_ref(self, vm: &'a SloshVm) -> BridgeResult<U> {
         U::sl_from_ref(self, vm)
     }
 }
@@ -337,7 +339,7 @@ where
     Self: Sized,
 {
     /// Converts to this type from the input type.
-    fn sl_from_ref_mut(value: T, vm: &'a mut SloshVm) -> VMResult<Self>;
+    fn sl_from_ref_mut(value: T, vm: &'a mut SloshVm) -> BridgeResult<Self>;
 }
 
 /// Inverse of [`SlFromRefMut`]
@@ -347,7 +349,7 @@ where
     Self: BridgedType,
 {
     /// Converts to this type from the input type.
-    fn sl_into_ref_mut(self, vm: &'a mut SloshVm) -> VMResult<T>;
+    fn sl_into_ref_mut(self, vm: &'a mut SloshVm) -> BridgeResult<T>;
 }
 
 impl<'a, T, U> SlIntoRefMut<'a, U> for T
@@ -356,7 +358,7 @@ where
     U: SlFromRefMut<'a, T>,
     U: 'a,
 {
-    fn sl_into_ref_mut(self, vm: &'a mut SloshVm) -> VMResult<U> {
+    fn sl_into_ref_mut(self, vm: &'a mut SloshVm) -> BridgeResult<U> {
         U::sl_from_ref_mut(self, vm)
     }
 }
@@ -367,7 +369,7 @@ where
     Self: BridgedType,
 {
     /// Converts this type into a shared reference of the (usually inferred) input type.
-    fn sl_as_ref(&self, vm: &'a SloshVm) -> VMResult<&'a T>;
+    fn sl_as_ref(&self, vm: &'a SloshVm) -> BridgeResult<&'a T>;
 }
 
 // SlAsRef lifts over &
@@ -377,7 +379,7 @@ where
     &'a T: BridgedType,
 {
     #[inline]
-    fn sl_as_ref(&self, vm: &'a SloshVm) -> VMResult<&'a U> {
+    fn sl_as_ref(&self, vm: &'a SloshVm) -> BridgeResult<&'a U> {
         <T as SlAsRef<'a, U>>::sl_as_ref(*self, vm)
     }
 }
@@ -389,7 +391,7 @@ where
     &'a mut T: BridgedType,
 {
     #[inline]
-    fn sl_as_ref(&self, vm: &'a SloshVm) -> VMResult<&'a U> {
+    fn sl_as_ref(&self, vm: &'a SloshVm) -> BridgeResult<&'a U> {
         <T as SlAsRef<'a, U>>::sl_as_ref(*self, vm)
     }
 }
@@ -399,7 +401,7 @@ where
     Self: BridgedType,
 {
     /// Converts this type into a mutable reference of the (usually inferred) input type.
-    fn sl_as_mut(&mut self, vm: &'a mut SloshVm) -> VMResult<&'a mut T>;
+    fn sl_as_mut(&mut self, vm: &'a mut SloshVm) -> BridgeResult<&'a mut T>;
 }
 
 // SlAsMut lifts over &mut
@@ -409,13 +411,13 @@ where
     &'a mut T: BridgedType,
 {
     #[inline]
-    fn sl_as_mut(&mut self, vm: &'a mut SloshVm) -> VMResult<&'a mut U> {
+    fn sl_as_mut(&mut self, vm: &'a mut SloshVm) -> BridgeResult<&'a mut U> {
         (*self).sl_as_mut(vm)
     }
 }
 
 impl SlFrom<Value> for Value {
-    fn sl_from(value: Value, _vm: &mut SloshVm) -> VMResult<Self> {
+    fn sl_from(value: Value, _vm: &mut SloshVm) -> BridgeResult<Self> {
         Ok(value)
     }
 }
