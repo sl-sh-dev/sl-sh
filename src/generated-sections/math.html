@@ -1,0 +1,592 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Math - Slosh Documentation</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../../favicon.svg">
+        <link rel="shortcut icon" href="../../favicon.png">
+        <link rel="stylesheet" href="../../css/variables.css">
+        <link rel="stylesheet" href="../../css/general.css">
+        <link rel="stylesheet" href="../../css/chrome.css">
+        <link rel="stylesheet" href="../../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../../";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "../../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Slosh Documentation</h1>
+
+                    <div class="right-buttons">
+                        <a href="../../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h2 id="math"><a class="header" href="#math">math</a></h2>
+<p>List of symbols:</p>
+<p><a href="#">%</a>, <a href="#">*</a>, <a href="#euler"><em>euler</em></a>, <a href="#pi"><em>pi</em></a>, <a href="#">+</a>, <a href="#-">-</a>, <a href="#">/</a>, <a href="#pow">2pow</a>, <a href="#abs">abs</a>, <a href="#arccos">arccos</a>, <a href="#arcsin">arcsin</a>, <a href="#arctan">arctan</a>, <a href="#ceil">ceil</a>, <a href="#cos">cos</a>, <a href="#exp">exp</a>, <a href="#floor">floor</a>, <a href="#fract">fract</a>, <a href="#log">log</a>, <a href="#log">log2</a>, <a href="#max">max</a>, <a href="#min">min</a>, <a href="#pow">pow</a>, <a href="#rem">rem</a>, <a href="#rem-euclid">rem-euclid</a>, <a href="#round">round</a>, <a href="#sin">sin</a>, <a href="#sqrt">sqrt</a>, <a href="#tan">tan</a></p>
+<h3 id=""><a class="header" href="#">%</a></h3>
+<p><strong>Usage:</strong> (% int int)</p>
+<p><strong>Namespace:</strong> root</p>
+<p>Remainder from dividing (arg 1) by (arg 2).
+Note: Remainder and Modulo are two similar mathematical operations,
+called <code>rem</code> and <code>rem-euclid</code>.
+This function uses <code>rem</code> which is the same as the <code>%</code> operator in C.
+With <code>rem</code>, the sign of the result is the same as the dividend (arg 1).
+With <code>rem-euclid</code>, the sign of the result is always positive.</p>
+<p>Example:</p>
+<pre><code>(test::assert-equal 0 (% 50 10))
+(test::assert-equal 5 (% 55 10))
+(test::assert-equal 1 (% 1 2))
+(test::assert-equal -1 (% -10 3))
+(test::assert-equal  1 (% 10 -3))
+(test::assert-equal -1 (% -10 -3))
+
+(test::assert-error (%))
+(test::assert-error (% 1))
+(test::assert-error (% 1 2 3))
+(test::assert-error (% 1 2.0))
+</code></pre>
+<h3 id="-1"><a class="header" href="#-1">*</a></h3>
+<p><strong>Usage:</strong> (* number*)</p>
+<p><strong>Namespace:</strong> root</p>
+<p>Multiply a sequence of numbers.  (*) will return 1.</p>
+<p>Example:</p>
+<pre><code>(test::assert-equal 1 (*))
+(test::assert-equal 5 (* 5))
+(test::assert-equal 5 (* 1 5))
+(test::assert-equal 5.0 (* 1.0 5))
+(test::assert-equal 7.5 (* 1.5 5))
+(test::assert-equal 7.5 (* 1.5 5.0))
+(test::assert-equal 15 (* 3 5))
+(test::assert-equal 8 (* 1 2 4))
+(test::assert-equal 16 (* 2 2 4))
+(test::assert-equal 16.0 (* 2 2.0 4))
+(test::assert-equal 16.0 (* 2.0 2.0 4.0))
+(test::assert-equal 54.9999999999999 (* 100 0.55))
+(test::assert-error (* 1 2 4 "5"))
+</code></pre>
+<h3 id="euler"><a class="header" href="#euler"><em>euler</em></a></h3>
+<p><strong>Usage:</strong> (prn <em>euler</em>)</p>
+<p><strong>Namespace:</strong> root</p>
+<p>Float representing euler’s number.</p>
+<p>Example:</p>
+<pre><code>(test::assert-equal 2.718281828459045 *euler*)
+</code></pre>
+<h3 id="pi"><a class="header" href="#pi"><em>pi</em></a></h3>
+<p><strong>Usage:</strong> (prn <em>pi</em>)</p>
+<p><strong>Namespace:</strong> root</p>
+<p>Float representing pi.</p>
+<p>Example:</p>
+<pre><code>(test::assert-equal 3.141592653589793 *pi*)
+</code></pre>
+<h3 id="-2"><a class="header" href="#-2">+</a></h3>
+<p><strong>Usage:</strong> (+ number*)</p>
+<p><strong>Namespace:</strong> root</p>
+<p>Add a sequence of numbers.  (+) will return 0.</p>
+<p>Example:</p>
+<pre><code>(test::assert-equal 0 (+))
+(test::assert-equal 5 (+ 5))
+(test::assert-equal 10 (+ 5 5))
+(test::assert-equal 6 (+ 1 5))
+(test::assert-equal 6.5 (+ 1 5.5))
+(test::assert-equal 7 (+ 1 2 4))
+(test::assert-error (+ 1 2 4 "5"))
+</code></pre>
+<h3 id="-"><a class="header" href="#-">-</a></h3>
+<p><strong>Usage:</strong> (- number+)</p>
+<p><strong>Namespace:</strong> root</p>
+<p>Subtract a sequence of numbers.  Requires at least one number (negate if only one number).</p>
+<p>Example:</p>
+<pre><code>(test::assert-error (- 5 "2"))
+(test::assert-equal -5 (- 5))
+(test::assert-equal -5.0 (- 5.0))
+(test::assert-equal -4 (- 1 5))
+(test::assert-equal -4.5 (- 1 5.5))
+(test::assert-equal 4 (- 10 2 4))
+(test::assert-equal 4.5 (- 10 2 3.5))
+</code></pre>
+<h3 id="-3"><a class="header" href="#-3">/</a></h3>
+<p><strong>Usage:</strong> (/ number+)</p>
+<p><strong>Namespace:</strong> root</p>
+<p>Divide a sequence of numbers.  Requires at least two numbers.</p>
+<p>No Examples</p>
+<h3 id="2pow"><a class="header" href="#2pow">2pow</a></h3>
+<p><strong>Usage:</strong> (2pow base)</p>
+<p><strong>Namespace:</strong> root</p>
+<p>Raise 2 to power of argument.</p>
+<p>Example:</p>
+<pre><code>(test::assert-compare == 1024 (2pow 10))
+(test::assert-compare == (2pow (* 10 2)) (pow (2pow 10) 2))
+</code></pre>
+<h3 id="abs"><a class="header" href="#abs">abs</a></h3>
+<p><strong>Usage:</strong> (abs arg)</p>
+<p><strong>Namespace:</strong> root</p>
+<p>Returns absolute value of arg.</p>
+<p>Example:</p>
+<pre><code>(test::assert-equal 2 (abs 2))
+(test::assert-equal 144 (abs -144))
+(test::assert-equal 4.53 (abs -4.53))
+(test::assert-equal 36028797018963967 (abs -36028797018963967))
+</code></pre>
+<h3 id="arccos"><a class="header" href="#arccos">arccos</a></h3>
+<p><strong>Usage:</strong> (arccos value)</p>
+<p><strong>Namespace:</strong> root</p>
+<p>Calculate the arccosine (inverse cosine) of a value. Returns angle in radians.
+Value must be between -1 and 1.</p>
+<p>Example:</p>
+<pre><code>(test::assert-true (&lt; 1.570 (arccos 0) 1.571))
+(test::assert-equal 0.0 (arccos 1))
+(test::assert-true (&lt; 3.141 (arccos -1) 3.142))
+(test::assert-error (arccos))
+(test::assert-error (arccos 2))
+(test::assert-error (arccos -2))
+</code></pre>
+<h3 id="arcsin"><a class="header" href="#arcsin">arcsin</a></h3>
+<p><strong>Usage:</strong> (arcsin value)</p>
+<p><strong>Namespace:</strong> root</p>
+<p>Calculate the arcsine (inverse sine) of a value. Returns angle in radians.
+Value must be between -1 and 1.</p>
+<p>Example:</p>
+<pre><code>(test::assert-equal 0.0 (arcsin 0))
+(test::assert-true (&lt; 1.570 (arcsin 1) 1.571))
+(test::assert-true (&lt; -1.571 (arcsin -1) -1.570))
+(test::assert-error (arcsin))
+(test::assert-error (arcsin 2))
+(test::assert-error (arcsin -2))
+</code></pre>
+<h3 id="arctan"><a class="header" href="#arctan">arctan</a></h3>
+<p><strong>Usage:</strong> (arctan value)</p>
+<p><strong>Namespace:</strong> root</p>
+<p>Calculate the arctangent (inverse tangent) of a value. Returns angle in radians.</p>
+<p>Example:</p>
+<pre><code>(test::assert-equal 0.0 (arctan 0))
+(test::assert-true (&lt; 0.785 (arctan 1) 0.786))
+(test::assert-true (&lt; -0.786 (arctan -1) -0.785))
+(test::assert-error (arctan))
+(test::assert-error (arctan 1 2))
+</code></pre>
+<h3 id="ceil"><a class="header" href="#ceil">ceil</a></h3>
+<p><strong>Usage:</strong> (ceil num)</p>
+<p><strong>Namespace:</strong> root</p>
+<p>Round a number up to the nearest integer.</p>
+<p>Example:</p>
+<pre><code>(test::assert-compare == 3 (ceil 2.1))
+(test::assert-compare == 3 (ceil 2.9))
+(test::assert-compare == -2 (ceil -2.1))
+(test::assert-compare == -2 (ceil -2.9))
+(test::assert-compare == 5 (ceil 5))
+(test::assert-error (ceil))
+(test::assert-error (ceil 1 2))
+</code></pre>
+<h3 id="cos"><a class="header" href="#cos">cos</a></h3>
+<p><strong>Usage:</strong> (cos radians)</p>
+<p><strong>Namespace:</strong> root</p>
+<p>Calculate the cosine of an angle in radians.</p>
+<p>Example:</p>
+<pre><code>(test::assert-equal 1.0 (cos 0))
+(test::assert-true (&lt; 0.540 (cos 1) 0.541))
+(test::assert-true (&lt; -1.001 (cos 3.14159) -0.999))
+(test::assert-error (cos))
+(test::assert-error (cos 1 2))
+</code></pre>
+<h3 id="exp"><a class="header" href="#exp">exp</a></h3>
+<p><strong>Usage:</strong> (exp power)</p>
+<p><strong>Namespace:</strong> root</p>
+<p>Calculate e raised to the given power.</p>
+<p>Example:</p>
+<pre><code>(test::assert-equal 1.0 (exp 0))
+(test::assert-true (&lt; 2.718 (exp 1) 2.719))
+(test::assert-true (&lt; 7.389 (exp 2) 7.390))
+(test::assert-error (exp))
+(test::assert-error (exp 1 2))
+</code></pre>
+<h3 id="floor"><a class="header" href="#floor">floor</a></h3>
+<p><strong>Usage:</strong> (floor num)</p>
+<p><strong>Namespace:</strong> root</p>
+<p>Round a number down to the nearest integer.</p>
+<p>Example:</p>
+<pre><code>(test::assert-compare == 2 (floor 2.1))
+(test::assert-compare == 2 (floor 2.9))
+(test::assert-compare == -3 (floor -2.1))
+(test::assert-compare == -3 (floor -2.9))
+(test::assert-compare == 5 (floor 5))
+(test::assert-error (floor))
+(test::assert-error (floor 1 2))
+</code></pre>
+<h3 id="fract"><a class="header" href="#fract">fract</a></h3>
+<p><strong>Usage:</strong> (fract num)</p>
+<p><strong>Namespace:</strong> root</p>
+<p>Get the fractional part of a number.</p>
+<p>Example:</p>
+<pre><code>(test::assert-true (&lt; 0.099 (fract 2.1) 0.101))
+(test::assert-true (&lt; 0.899 (fract 2.9) 0.901))
+(test::assert-compare == 0 (fract 5))
+(test::assert-true (&lt; -0.901 (fract -2.9) -0.899))
+(test::assert-true (&lt; -0.101 (fract -2.1) -0.099))
+(test::assert-error (fract))
+(test::assert-error (fract 1 2))
+</code></pre>
+<h3 id="log"><a class="header" href="#log">log</a></h3>
+<p><strong>Usage:</strong> (log num [base])</p>
+<p><strong>Namespace:</strong> root</p>
+<p>Calculate logarithm of num. If base is not provided, uses natural logarithm (base e).</p>
+<p>Example:</p>
+<pre><code>(test::assert-equal 0.0 (log 1))
+(test::assert-true (&lt; 2.302 (log 10) 2.303))
+(test::assert-equal 3.0 (log 8 2))
+(test::assert-equal 2.0 (log 100 10))
+(test::assert-error (log))
+(test::assert-error (log -1))
+(test::assert-error (log 10 -2))
+</code></pre>
+<h3 id="log2"><a class="header" href="#log2">log2</a></h3>
+<p><strong>Usage:</strong> (log2 num)</p>
+<p><strong>Namespace:</strong> root</p>
+<p>Calculate base-2 logarithm of num.</p>
+<p>Example:</p>
+<pre><code>(test::assert-equal 0.0 (log2 1))
+(test::assert-equal 3.0 (log2 8))
+(test::assert-equal 10.0 (log2 1024))
+(test::assert-error (log2))
+(test::assert-error (log2 -1))
+(test::assert-error (log2 0))
+</code></pre>
+<h3 id="max"><a class="header" href="#max">max</a></h3>
+<p><strong>Usage:</strong> (max number+)</p>
+<p><strong>Namespace:</strong> root</p>
+<p>Return the maximum value from one or more numbers.</p>
+<p>Example:</p>
+<pre><code>(test::assert-equal 3 (max 1 2 3))
+(test::assert-equal 10 (max 10 -5 3))
+(test::assert-equal 42 (max 42))
+(test::assert-equal 3.0 (max 3.0 1.5 2.0))
+(test::assert-equal 3.0 (max 1 2.0 3))
+(test::assert-error (max))
+(test::assert-error (max 1 "two"))
+</code></pre>
+<h3 id="min"><a class="header" href="#min">min</a></h3>
+<p><strong>Usage:</strong> (min number+)</p>
+<p><strong>Namespace:</strong> root</p>
+<p>Return the minimum value from one or more numbers.</p>
+<p>Example:</p>
+<pre><code>(test::assert-equal 1 (min 1 2 3))
+(test::assert-equal -5 (min 10 -5 3))
+(test::assert-equal 42 (min 42))
+(test::assert-equal 1.5 (min 3.0 1.5 2.0))
+(test::assert-equal 1 (min 1 2.0 3))
+(test::assert-error (min))
+(test::assert-error (min 1 "two"))
+</code></pre>
+<h3 id="pow"><a class="header" href="#pow">pow</a></h3>
+<p><strong>Usage:</strong> (pow base power)</p>
+<p><strong>Namespace:</strong> root</p>
+<p>Raise first argument to power of second argument.</p>
+<p>Example:</p>
+<pre><code>(test::assert-equal 16.0 (pow 4 2))
+(test::assert-equal 1024.0 (pow 2 10))
+(test::assert-equal 1.0 (pow 85 0))
+(test::assert-equal 0.25 (pow 2 -2))
+(test::assert-error (pow))
+(test::assert-error (pow 2))
+(test::assert-error (pow 2 3 4))
+</code></pre>
+<h3 id="rem"><a class="header" href="#rem">rem</a></h3>
+<p><strong>Usage:</strong> (rem int int)</p>
+<p><strong>Namespace:</strong> root</p>
+<p>Remainder from dividing (arg 1) by (arg 2).
+Note: Remainder and Modulo are two similar mathematical operations,
+called <code>rem</code> and <code>rem-euclid</code> in Rust.
+This function uses <code>rem</code> which is the same as the <code>%</code> operator in C.
+With <code>rem</code>, the sign of the result is the same as the dividend (arg 1).
+With <code>rem-euclid</code>, the sign of the result is always positive.</p>
+<p>Example:</p>
+<pre><code>(test::assert-equal 0 (rem 50 10))
+(test::assert-equal 5 (rem 55 10))
+(test::assert-equal 1 (rem 1 2))
+(test::assert-equal -1 (rem -10 3))
+(test::assert-equal  1 (rem 10 -3))
+(test::assert-equal -1 (rem -10 -3))
+
+(test::assert-error (rem))
+(test::assert-error (rem 1))
+(test::assert-error (rem 1 2 3))
+(test::assert-error (rem 1 2.0))
+</code></pre>
+<h3 id="rem-euclid"><a class="header" href="#rem-euclid">rem-euclid</a></h3>
+<p><strong>Usage:</strong> (rem-euclid int int)</p>
+<p><strong>Namespace:</strong> root</p>
+<p>Least Non-negative number that can be added to a multiple of the divisor (arg 2) to get the dividend (arg 1).
+The result should always be 0 &lt;= result &lt; divisor (arg 2).
+Note: Remainder and Modulo are two similar mathematical operations,
+called <code>rem</code> and <code>rem-euclid</code> in Rust.
+With <code>rem</code>, the sign of the result is the same as the dividend (arg 1).
+With <code>rem-euclid</code>, the sign of the result is always positive.</p>
+<p>Example:</p>
+<pre><code>(test::assert-equal 0 (rem-euclid 50 10))
+(test::assert-equal 5 (rem-euclid 55 10))
+(test::assert-equal 1 (rem-euclid 1 2))
+(test::assert-equal 2 (rem-euclid -10 3))
+(test::assert-equal 1 (rem-euclid 10 -3))
+(test::assert-equal 2 (rem-euclid -10 -3))
+
+(test::assert-error (rem-euclid))
+(test::assert-error (rem-euclid 1))
+(test::assert-error (rem-euclid 1 2 3))
+(test::assert-error (rem-euclid 1 2.0))
+</code></pre>
+<h3 id="round"><a class="header" href="#round">round</a></h3>
+<p><strong>Usage:</strong> (round num)</p>
+<p><strong>Namespace:</strong> root</p>
+<p>Round a number to the nearest integer, with ties rounding away from zero.</p>
+<p>Example:</p>
+<pre><code>(test::assert-compare == 2 (round 2.1))
+(test::assert-compare == 3 (round 2.9))
+(test::assert-compare == 3 (round 2.5))
+(test::assert-compare == -2 (round -2.1))
+(test::assert-compare == -3 (round -2.9))
+(test::assert-compare == -3 (round -2.5))
+(test::assert-compare == 5 (round 5))
+(test::assert-error (round))
+(test::assert-error (round 1 2))
+</code></pre>
+<h3 id="sin"><a class="header" href="#sin">sin</a></h3>
+<p><strong>Usage:</strong> (sin radians)</p>
+<p><strong>Namespace:</strong> root</p>
+<p>Calculate the sine of an angle in radians.</p>
+<p>Example:</p>
+<pre><code>(test::assert-equal 0.0 (sin 0))
+(test::assert-true (&lt; 0.841 (sin 1) 0.842))
+(test::assert-true (&lt; -0.001 (sin 3.14159) 0.001))
+(test::assert-error (sin))
+(test::assert-error (sin 1 2))
+</code></pre>
+<h3 id="sqrt"><a class="header" href="#sqrt">sqrt</a></h3>
+<p><strong>Usage:</strong> (sqrt num)</p>
+<p><strong>Namespace:</strong> root</p>
+<p>Take square root of argument.</p>
+<p>Example:</p>
+<pre><code>(test::assert-equal 2.0 (sqrt 4))
+(test::assert-equal 12.0 (sqrt 144))
+(test::assert-true (&lt; 2.049 (sqrt 4.2) 2.050))
+(test::assert-error (sqrt))
+(test::assert-error (sqrt 4 2))
+(test::assert-error (sqrt -4))
+</code></pre>
+<h3 id="tan"><a class="header" href="#tan">tan</a></h3>
+<p><strong>Usage:</strong> (tan radians)</p>
+<p><strong>Namespace:</strong> root</p>
+<p>Calculate the tangent of an angle in radians.</p>
+<p>Example:</p>
+<pre><code>(test::assert-equal 0.0 (tan 0))
+(test::assert-true (&lt; 1.557 (tan 1) 1.558))
+(test::assert-true (&lt; -0.001 (tan 3.14159) 0.001))
+(test::assert-error (tan))
+(test::assert-error (tan 1 2))
+</code></pre>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../../src/generated-sections/iterator.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../../src/generated-sections/namespace.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../../src/generated-sections/iterator.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../../src/generated-sections/namespace.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../../elasticlunr.min.js"></script>
+        <script src="../../mark.min.js"></script>
+        <script src="../../searcher.js"></script>
+
+        <script src="../../clipboard.min.js"></script>
+        <script src="../../highlight.js"></script>
+        <script src="../../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>
