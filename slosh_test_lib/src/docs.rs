@@ -12,7 +12,7 @@ use slvm::vm_hashmap::VMHashMap;
 use slvm::{Interned, SLOSH_NIL, VMError, VMErrorObj, VMResult, Value};
 use std::borrow::Cow;
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 use std::fs::{self, File};
@@ -302,6 +302,25 @@ impl DocStringSection {
             example: None,
         }
     }
+
+    fn into_styled_output(mut self, query: &DocSearchQuery, style: &StyleOptions) -> Self {
+        (self.usage, self.description, self.section, self.example) = {
+            // use destructing to force compiler error if structure changes.
+            let Self {
+                usage,
+                description,
+                section,
+                example,
+            } = &self;
+            (
+                usage.as_ref().map(|x| highlight_matches(x, query, style)),
+                highlight_matches(description, query, style),
+                highlight_matches(section, query, style),
+                example.as_ref().map(|x| highlight_matches(x, query, style)),
+            )
+        };
+        self
+    }
 }
 
 pub trait AsMd {
@@ -352,14 +371,14 @@ impl Display for SloshDoc {
 
 impl PartialEq for SloshDoc {
     fn eq(&self, other: &Self) -> bool {
-        self.fully_qualified_name()
-            .eq(&other.fully_qualified_name())
+        self.symbol == other.symbol && self.namespace == other.namespace
     }
 }
 
 impl Hash for SloshDoc {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write(self.fully_qualified_name().as_bytes());
+        state.write(self.symbol.as_bytes());
+        state.write(self.namespace.as_bytes());
     }
 }
 
@@ -371,8 +390,9 @@ impl PartialOrd for SloshDoc {
 
 impl Ord for SloshDoc {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.fully_qualified_name()
-            .cmp(&other.fully_qualified_name())
+        self.symbol
+            .cmp(&other.symbol)
+            .then_with(|| self.namespace.cmp(&other.namespace))
     }
 }
 
@@ -428,6 +448,30 @@ impl SloshDoc {
     pub fn fully_qualified_name(&self) -> String {
         self.namespace.to_string() + "::" + self.symbol.as_ref()
     }
+
+    fn into_styled_output(mut self, query: &DocSearchQuery, style: &StyleOptions) -> Self {
+        (
+            self.symbol,
+            self.namespace,
+            self.symbol_type,
+            self.doc_string,
+        ) = {
+            // use destructing to force compiler error if structure changes.
+            let Self {
+                symbol,
+                namespace,
+                symbol_type,
+                doc_string,
+            } = &self;
+            (
+                highlight_matches(symbol, query, style),
+                highlight_matches(namespace, query, style),
+                highlight_matches(symbol_type, query, style),
+                doc_string.clone().into_styled_output(query, style),
+            )
+        };
+        self
+    }
 }
 
 enum DocError {
@@ -480,6 +524,181 @@ impl From<DocError> for VMError {
 }
 
 type DocResult<T> = Result<T, DocError>;
+
+#[derive(Debug, Clone)]
+struct StyleOptions {
+    highlight_color: String,
+    default_color: String,
+    use_background: bool,
+}
+
+impl Default for StyleOptions {
+    fn default() -> Self {
+        StyleOptions {
+            highlight_color: "\x1b[43m\x1b[30m".to_string(), // yellow background with black text
+            default_color: "\x1b[0m".to_string(),            // reset
+            use_background: true,
+        }
+    }
+}
+
+impl StyleOptions {
+    fn from_handle(vm: &mut SloshVm, handle: slvm::Handle) -> Self {
+        let mut options = Self::default();
+
+        // Intern all keys upfront
+        let highlight_color_key = Value::Keyword(vm.intern("highlight-color"));
+        let default_color_key = Value::Keyword(vm.intern("default-color"));
+        let use_background_key = Value::Keyword(vm.intern("use-background"));
+
+        let map = vm.get_map(handle);
+
+        // Extract colors from map
+        if let Some(val) = map.get(vm, highlight_color_key) {
+            match val {
+                Value::String(s) => options.highlight_color = vm.get_string(s).to_string(),
+                Value::StringConst(i) => options.highlight_color = vm.get_interned(i).to_string(),
+                _ => {}
+            }
+        }
+
+        if let Some(val) = map.get(vm, default_color_key) {
+            match val {
+                Value::String(s) => options.default_color = vm.get_string(s).to_string(),
+                Value::StringConst(i) => options.default_color = vm.get_interned(i).to_string(),
+                _ => {}
+            }
+        }
+
+        if let Some(Value::False) = map.get(vm, use_background_key) {
+            options.use_background = false;
+        }
+
+        options
+    }
+}
+
+fn highlight_matches(text: &str, query: &DocSearchQuery, style: &StyleOptions) -> String {
+    if query.use_regex {
+        highlight_regex_matches(text, &query.query, style)
+    } else if query.basic {
+        highlight_basic_matches(text, &query.query, style)
+    } else {
+        highlight_substring_matches(text, &query.query, style)
+    }
+}
+
+fn highlight_substring_matches(text: &str, query: &str, style: &StyleOptions) -> String {
+    let text_lower = text.to_lowercase();
+    let query_lower = query.to_lowercase();
+    let mut result = String::new();
+    let mut last_end = 0;
+
+    for (start, _) in text_lower.match_indices(&query_lower) {
+        // Add text before match
+        result.push_str(&text[last_end..start]);
+        // Add highlighted match
+        result.push_str(&style.highlight_color);
+        result.push_str(&text[start..start + query.len()]);
+        result.push_str(&style.default_color);
+        last_end = start + query.len();
+    }
+
+    // Add remaining text
+    result.push_str(&text[last_end..]);
+    result
+}
+
+fn highlight_regex_matches(text: &str, pattern: &str, style: &StyleOptions) -> String {
+    if let Ok(re) = Regex::new(pattern) {
+        let mut result = String::new();
+        let mut last_end = 0;
+
+        for mat in re.find_iter(text) {
+            // Add text before match
+            result.push_str(&text[last_end..mat.start()]);
+            // Add highlighted match
+            result.push_str(&style.highlight_color);
+            result.push_str(mat.as_str());
+            result.push_str(&style.default_color);
+            last_end = mat.end();
+        }
+
+        // Add remaining text
+        result.push_str(&text[last_end..]);
+        result
+    } else {
+        text.to_string()
+    }
+}
+
+fn highlight_basic_matches(text: &str, pattern: &str, style: &StyleOptions) -> String {
+    let pattern_lower = pattern.to_lowercase();
+    let mut result = String::new();
+    let mut pattern_chars = pattern_lower.chars().peekable();
+    let mut in_match = false;
+
+    for ch in text.chars() {
+        if let Some(&pattern_ch) = pattern_chars.peek() {
+            if ch.to_lowercase().next() == Some(pattern_ch) {
+                if !in_match {
+                    result.push_str(&style.highlight_color);
+                    in_match = true;
+                }
+                result.push(ch);
+                pattern_chars.next();
+            } else {
+                if in_match {
+                    result.push_str(&style.default_color);
+                    in_match = false;
+                }
+                result.push(ch);
+            }
+        } else {
+            if in_match {
+                result.push_str(&style.default_color);
+                in_match = false;
+            }
+            result.push(ch);
+        }
+    }
+
+    if in_match {
+        result.push_str(&style.default_color);
+    }
+
+    result
+}
+
+fn generate_styled_output(
+    _vm: &mut SloshVm,
+    results: &BTreeSet<SloshDoc>,
+    query: &DocSearchQuery,
+    style: &StyleOptions,
+) -> String {
+    let mut output = String::new();
+    let len = results.len();
+
+    for (i, doc) in results.iter().enumerate() {
+        if i > 0 {
+            output.push_str("\n────────────────────────────────────────\n\n");
+        }
+
+        // Result header with highlighted symbol
+        output.push_str(&format!("Result {}: ", i + 1));
+        let mut doc = doc.clone();
+        doc = doc.into_styled_output(query, style);
+        output.push_str(&format!("{doc}"));
+    }
+
+    output.push_str(&format!(
+        "\nFound {} result{}.",
+        len,
+        if len == 1 { "" } else { "s" }
+    ));
+
+    output
+}
 
 fn insert_section(map: &mut VMHashMap, key: &'static str, value: String, vm: &mut SloshVm) {
     let key_const = Value::Keyword(vm.intern_static(key));
@@ -552,8 +771,8 @@ fn doc_map(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
 fn get_docs_by_section(
     vm: &mut SloshVm,
     require_proper_format: bool,
-) -> HashMap<String, Vec<SloshDoc>> {
-    let mut docs_by_section: HashMap<String, Vec<SloshDoc>> = HashMap::new();
+) -> HashMap<String, BTreeSet<SloshDoc>> {
+    let mut docs_by_section: HashMap<String, BTreeSet<SloshDoc>> = HashMap::new();
     let mut docs: Vec<SloshDoc> = vec![];
     Namespace::Global
         .add_docs(&mut docs, vm, require_proper_format)
@@ -565,18 +784,16 @@ fn get_docs_by_section(
             .add_docs(&mut docs, vm, require_proper_format)
             .unwrap();
     }
-    docs.sort();
-    docs.dedup();
     for d in docs {
         let d = d.clone();
         let section = d.doc_string.section.clone();
-        docs_by_section.entry(section).or_default().push(d);
+        docs_by_section.entry(section).or_default().insert(d);
     }
     docs_by_section
 }
 
 fn build_symbols_list(
-    docs_by_section: &BTreeMap<String, Vec<SloshDoc>>,
+    docs_by_section: &BTreeMap<String, BTreeSet<SloshDoc>>,
     namer: fn(&str, &SloshDoc) -> String,
 ) -> BTreeMap<String, String> {
     let mut map = BTreeMap::new();
@@ -618,7 +835,7 @@ fn name_for_section_page(_section: &str, doc: &SloshDoc) -> String {
 
 fn build_all_slosh_forms_listing_chapter(
     name: &str,
-    docs_by_section: &BTreeMap<String, Vec<SloshDoc>>,
+    docs_by_section: &BTreeMap<String, BTreeSet<SloshDoc>>,
 ) -> VMResult<Chapter> {
     let mut all_content = format!("# {}\n\n", name);
     if name == USER_FORMS {
@@ -658,7 +875,7 @@ and `user-doc-load-paths` string arrays in doc/book.toml. The default is to use
 }
 
 fn build_each_docs_section_chapter(
-    docs_by_section: &BTreeMap<String, Vec<SloshDoc>>,
+    docs_by_section: &BTreeMap<String, BTreeSet<SloshDoc>>,
 ) -> VMResult<Vec<Chapter>> {
     let mut sections_as_md_text: BTreeMap<String, String> = BTreeMap::new();
     let lists = build_symbols_list(docs_by_section, name_for_section_page);
@@ -745,13 +962,12 @@ pub fn get_slosh_docs(
     vm: &mut SloshVm,
     md_book: &mut Book,
     write_to_book: bool,
-) -> VMResult<BTreeMap<String, Vec<SloshDoc>>> {
+) -> VMResult<BTreeMap<String, BTreeSet<SloshDoc>>> {
     // get docs by section and then make sure the docs are in alphabetical order
     let docs_by_section_unsorted = get_docs_by_section(vm, true);
     // use a BTreeMap so the sections are in alphabetical order as well as the SloshDoc vec.
     let mut docs_by_section = BTreeMap::new();
-    for (s, mut v) in docs_by_section_unsorted {
-        v.sort();
+    for (s, v) in docs_by_section_unsorted {
         docs_by_section.insert(s, v);
     }
 
@@ -772,24 +988,23 @@ pub fn get_slosh_docs(
 pub fn add_user_docs_to_mdbook_less_provided_sections(
     vm: &mut SloshVm,
     md_book: &mut Book,
-    provided_sections: BTreeMap<String, Vec<SloshDoc>>,
+    provided_sections: BTreeMap<String, BTreeSet<SloshDoc>>,
 ) -> VMResult<()> {
     let docs_by_section_unsorted = get_docs_by_section(vm, false);
     let mut docs_by_section = BTreeMap::new();
     for (s, all_docs) in docs_by_section_unsorted {
         if !provided_sections.contains_key(&s) {
-            let mut set = HashSet::new();
+            let mut set = BTreeSet::new();
             // to set
-            for d in all_docs {
+            for d in all_docs.into_iter() {
                 let namespace = GLOBAL_NAMESPACE.to_string();
                 if d.namespace != namespace {
                     set.insert(d);
                 }
             }
-            let all_docs = set.into_iter().collect::<Vec<SloshDoc>>();
 
-            if !all_docs.is_empty() {
-                docs_by_section.insert(s, all_docs);
+            if !set.is_empty() {
+                docs_by_section.insert(s, set);
             }
         }
     }
@@ -801,7 +1016,7 @@ pub fn add_user_docs_to_mdbook_less_provided_sections(
 fn add_forms_to_md_book_part(
     part_title: String,
     md_book: &mut Book,
-    docs_by_section: &BTreeMap<String, Vec<SloshDoc>>,
+    docs_by_section: &BTreeMap<String, BTreeSet<SloshDoc>>,
 ) -> VMResult<()> {
     // First chapter introduces each section and lists all the symbols in that section.
     let all_chapter = build_all_slosh_forms_listing_chapter(&part_title, docs_by_section)?;
@@ -905,21 +1120,379 @@ fn get_globals_sorted(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> 
     Ok(vm.alloc_vector(v))
 }
 
-/// Usage: (legacy-report)
-///
-/// Output as a string the current legacy report, detailing how much of the former sl-sh project has been covered by the new slosh.
-///
-/// Section: doc
-///
-/// Example:
-/// #t
-#[sl_sh_fn(fn_name = "legacy-report", takes_env = true)]
-fn legacy_report(environment: &mut SloshVm) -> VMResult<String> {
-    legacy::build_report(environment)
+#[derive(Debug, Clone)]
+struct DocSearchQuery {
+    query: String,
+    use_regex: bool,
+    basic: bool,
+    fields: HashSet<String>,
+    namespace_filter: Option<String>,
+    section_filter: Option<String>,
+}
+
+impl DocSearchQuery {
+    fn new(query: String) -> Self {
+        DocSearchQuery {
+            query,
+            use_regex: false,
+            basic: false,
+            fields: HashSet::new(),
+            namespace_filter: None,
+            section_filter: None,
+        }
+    }
+
+    fn with_regex(mut self) -> Self {
+        self.use_regex = true;
+        self.basic = false;
+        self
+    }
+
+    fn with_basic(mut self) -> Self {
+        self.basic = true;
+        self.use_regex = false;
+        self
+    }
+
+    fn with_fields(mut self, fields: Vec<String>) -> Self {
+        self.fields = fields.into_iter().collect();
+        self
+    }
+
+    fn with_namespace(mut self, namespace: String) -> Self {
+        self.namespace_filter = Some(namespace);
+        self
+    }
+
+    fn with_section(mut self, section: String) -> Self {
+        self.section_filter = Some(section);
+        self
+    }
+
+    fn should_search_field(&self, field: &str) -> bool {
+        self.fields.is_empty() || self.fields.contains(field)
+    }
+
+    fn matches_text(&self, text: &str) -> bool {
+        if self.use_regex {
+            if let Ok(re) = Regex::new(&self.query) {
+                re.is_match(text)
+            } else {
+                false
+            }
+        } else if self.basic {
+            basic_match(text, &self.query)
+        } else {
+            text.to_lowercase().contains(&self.query.to_lowercase())
+        }
+    }
+}
+
+fn basic_match(text: &str, pattern: &str) -> bool {
+    let text_lower = text.to_lowercase();
+    let pattern_lower = pattern.to_lowercase();
+    let mut pattern_chars = pattern_lower.chars();
+    let mut current_char = pattern_chars.next();
+
+    for text_char in text_lower.chars() {
+        if let Some(p_char) = current_char {
+            if text_char == p_char {
+                current_char = pattern_chars.next();
+            }
+        } else {
+            return true;
+        }
+    }
+
+    current_char.is_none()
+}
+
+fn search_docs(
+    vm: &mut SloshVm,
+    query: &DocSearchQuery,
+    require_proper_format: bool,
+) -> BTreeSet<SloshDoc> {
+    let docs_by_section = get_docs_by_section(vm, require_proper_format);
+    let mut results = BTreeSet::new();
+
+    for (section, docs) in docs_by_section {
+        // Check section filter
+        if let Some(ref section_filter) = query.section_filter {
+            if !query.matches_text(&section) && section != *section_filter {
+                continue;
+            }
+        }
+
+        for doc in docs {
+            // Check namespace filter
+            if let Some(ref ns_filter) = query.namespace_filter {
+                if !doc.namespace.contains(ns_filter) && doc.namespace != *ns_filter {
+                    continue;
+                }
+            }
+
+            let mut matched = false;
+
+            // Search in symbol name
+            if query.should_search_field("name")
+                || query.should_search_field("symbol") && query.matches_text(&doc.symbol)
+            {
+                matched = true;
+            }
+
+            // Search in usage
+            if !matched
+                && query.should_search_field(USAGE)
+                && let Some(ref usage) = doc.doc_string.usage
+                && query.matches_text(usage)
+            {
+                matched = true;
+            }
+
+            // Search in description
+            if !matched
+                && query.should_search_field(DESCRIPTION)
+                && query.matches_text(&doc.doc_string.description)
+            {
+                matched = true;
+            }
+
+            // Search in section
+            if !matched
+                && query.should_search_field(SECTION)
+                && query.matches_text(&doc.doc_string.section)
+            {
+                matched = true;
+            }
+
+            // Search in example
+            if !matched
+                && query.should_search_field(EXAMPLE)
+                && let Some(ref example) = doc.doc_string.example
+                && query.matches_text(example)
+            {
+                matched = true;
+            }
+
+            // If no specific fields specified, search all fields
+            if !matched && query.fields.is_empty() {
+                matched = query.matches_text(&doc.symbol)
+                    || doc
+                        .doc_string
+                        .usage
+                        .as_ref()
+                        .map(|u| query.matches_text(u))
+                        .unwrap_or(false)
+                    || query.matches_text(&doc.doc_string.description)
+                    || query.matches_text(&doc.doc_string.section)
+                    || doc
+                        .doc_string
+                        .example
+                        .as_ref()
+                        .map(|e| query.matches_text(e))
+                        .unwrap_or(false);
+            }
+
+            if matched {
+                results.insert(doc);
+            }
+        }
+    }
+
+    results
+}
+
+fn doc_search(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    if registers.is_empty() {
+        return Err(VMError::new_vm(
+            "doc-search requires at least a query string".to_string(),
+        ));
+    }
+
+    let query_str = match &registers[0] {
+        Value::String(s) => vm.get_string(*s).to_string(),
+        Value::StringConst(i) => vm.get_interned(*i).to_string(),
+        _ => {
+            return Err(VMError::new_vm(
+                "First argument must be a query string".to_string(),
+            ));
+        }
+    };
+
+    let mut query = DocSearchQuery::new(query_str);
+
+    // Parse options if provided as a hash map
+    let mut use_styled = true;
+    let mut style_options = StyleOptions::default();
+    let mut style_map_handle_opt = None;
+    if registers.len() > 1 {
+        match &registers[1] {
+            Value::Map(handle) => {
+                // Intern all keys first to avoid borrowing issues
+                let regex_key = Value::Keyword(vm.intern_static("regex"));
+                let basic_search_key = Value::Keyword(vm.intern_static("basic"));
+                let fields_key = Value::Keyword(vm.intern_static("fields"));
+                let ns_key = Value::Keyword(vm.intern_static("namespace"));
+                let section_key = Value::Keyword(vm.intern_static("section"));
+                let styled_key = Value::Keyword(vm.intern_static("styled"));
+                let style_key = Value::Keyword(vm.intern_static("style"));
+
+                let map = vm.get_map(*handle);
+
+                // Check for regex option
+                if let Some(Value::True) = map.get(vm, regex_key) {
+                    query = query.with_regex();
+                }
+
+                // Check for basic option
+                if let Some(Value::True) = map.get(vm, basic_search_key) {
+                    query = query.with_basic();
+                }
+
+                // Check for fields option
+                if let Some(Value::Vector(v_handle)) = map.get(vm, fields_key) {
+                    let vec = vm.get_vector(v_handle);
+                    let mut fields = Vec::new();
+                    for val in vec.iter() {
+                        match val {
+                            Value::String(s) => fields.push(vm.get_string(*s).to_string()),
+                            Value::StringConst(i) => fields.push(vm.get_interned(*i).to_string()),
+                            Value::Keyword(i) => fields.push(vm.get_interned(*i).to_string()),
+                            _ => {}
+                        }
+                    }
+                    query = query.with_fields(fields);
+                }
+
+                // Check for namespace filter
+                if let Some(ns_val) = map.get(vm, ns_key) {
+                    match ns_val {
+                        Value::String(s) => {
+                            query = query.with_namespace(vm.get_string(s).to_string())
+                        }
+                        Value::StringConst(i) => {
+                            query = query.with_namespace(vm.get_interned(i).to_string())
+                        }
+                        _ => {}
+                    }
+                }
+
+                // Check for section filter
+                if let Some(section_val) = map.get(vm, section_key) {
+                    match section_val {
+                        Value::String(s) => {
+                            query = query.with_section(vm.get_string(s).to_string())
+                        }
+                        Value::StringConst(i) => {
+                            query = query.with_section(vm.get_interned(i).to_string())
+                        }
+                        _ => {}
+                    }
+                }
+
+                // Check for styled option
+                if let Some(Value::False) = map.get(vm, styled_key) {
+                    use_styled = false;
+                }
+
+                // Check for style customization
+                if let Some(Value::Map(style_handle)) = map.get(vm, style_key) {
+                    use_styled = true; // Enable styling if style options are provided
+                    style_map_handle_opt = Some(style_handle);
+                }
+            }
+            _ => {
+                return Err(VMError::new_vm(
+                    "Second argument must be a map of options".to_string(),
+                ));
+            }
+        }
+    }
+
+    // Process style options after we're done with the initial map
+    if let Some(style_handle) = style_map_handle_opt {
+        style_options = StyleOptions::from_handle(vm, style_handle);
+    }
+
+    // Check if markdown output is requested
+    let mut use_markdown = false;
+    if registers.len() > 1 {
+        if let Value::Map(handle) = &registers[1] {
+            let markdown_key = Value::Keyword(vm.intern_static("markdown"));
+            let map = vm.get_map(*handle);
+            if let Some(Value::True) = map.get(vm, markdown_key) {
+                use_markdown = true;
+            }
+        }
+    }
+
+    let results = search_docs(vm, &query, false);
+
+    let result = if use_markdown {
+        // Generate markdown output
+        let mut markdown_output = String::new();
+        let len = results.len();
+        for (i, doc) in results.iter().enumerate() {
+            // Don't print to stdout when generating markdown - the numbered list is included in the markdown output instead
+            if i > 0 {
+                markdown_output.push_str("\n---\n\n");
+            }
+            // Add a header showing which result this is
+            markdown_output.push_str(&format!(
+                "**Result {}: `{}::{}`**\n\n",
+                i + 1,
+                doc.namespace,
+                doc.symbol
+            ));
+            markdown_output.push_str(&doc.as_md());
+        }
+        markdown_output.push_str(&format!(
+            "\nFound {len} result{}.",
+            if len == 1 { "" } else { "s" }
+        ));
+        vm.alloc_string(markdown_output)
+    } else if use_styled {
+        // Generate styled string output
+        let styled_output = generate_styled_output(vm, &results, &query, &style_options);
+        vm.alloc_string(styled_output)
+    } else {
+        // Generate vector of doc maps
+        let mut result_values = Vec::new();
+        for doc in results {
+            match Value::sl_from(doc, vm) {
+                Ok(val) => result_values.push(val),
+                Err(e) => {
+                    vm.unpause_gc();
+                    return Err(e);
+                }
+            }
+        }
+        vm.alloc_vector(result_values)
+    };
+
+    Ok(result)
+}
+
+fn legacy_report(vm: &mut SloshVm, _registers: &[Value]) -> VMResult<Value> {
+    let report = legacy::build_report(vm)?;
+    Ok(vm.alloc_string(report))
 }
 
 pub fn add_builtins(env: &mut SloshVm) {
-    intern_legacy_report(env);
+    add_builtin(
+        env,
+        "legacy-report",
+        legacy_report,
+        "Usage: (legacy-report)
+
+Output as a string the current legacy report, detailing how much of the former sl-sh project has been covered by the new slosh.
+
+Section: doc
+
+Example:
+#t
+",
+    );
     add_builtin(
         env,
         "doc-map",
@@ -933,6 +1506,48 @@ Section: doc
 
 Example:
 #t
+",
+    );
+
+    add_builtin(
+        env,
+        "doc-search",
+        doc_search,
+        "Usage: (doc-search query-string [options-map])
+
+Search through all documentation for functions matching the query.
+The query string is searched across all documentation fields by default.
+
+Options map can contain:
+- :regex #t - Use regular expressions for matching
+- :basic #t - Use basic matching (characters must appear in order)
+- :fields [\"usage\" \"description\"] - Limit search to specific fields
+- :namespace \"namespace-name\" - Filter by namespace
+- :section \"section-name\" - Filter by section
+- :markdown #t - Return results as a markdown-formatted string instead of vector
+- :styled #t - Return results with highlighted search matches
+- :style {:highlight-color \"\\x1b[43m\\x1b[30m\" ...} - Customize highlight style
+
+Style options (when :style map is provided):
+- :highlight-color - Color for highlighting matches (default: yellow background, black text)
+- :default-color - Color to reset after highlight (default: \\x1b[0m)
+- :use-background #f - Use foreground color instead of background
+
+When :styled is true, matching text in results is highlighted to show why
+each result matched the search query.
+
+Returns a vector of documentation maps, markdown string, or styled string.
+
+Section: doc
+
+Example:
+(doc-search \"file\")
+(doc-search \"^str-\" {:regex #t})
+(doc-search \"core\" {:fields [\"section\"]})
+(doc-search \"map\" {:basic #t :section \"core\"})
+(doc-search \"string\" {:markdown #t})
+(doc-search \"string\" {:styled #t})
+(doc-search \"map\" {:style {:highlight-color *fg-red* :use-background #f}})
 ",
     );
 
