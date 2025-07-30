@@ -174,7 +174,7 @@ pub fn eprn(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
 /// Section: core
 ///
 /// Example:
-/// (dump-globals)  ; prints all global variables and their values
+/// ;;(dump-globals)  ; prints all global variables and their values
 #[sl_sh_fn(fn_name = "dump-globals", takes_env = true)]
 pub fn dump_globals(environment: &mut SloshVm) -> VMResult<Value> {
     environment.dump_globals();
@@ -275,11 +275,7 @@ pub fn builtin_dump_regs(environment: &mut SloshVm) -> VMResult<Value> {
 /// Section: core
 ///
 /// Example:
-/// (def recursive-fn (fn (n)
-///   (if (= n 0)
-///     (dump-stack)  ; shows call stack at deepest point
-///     (recursive-fn (- n 1)))))
-/// (recursive-fn 3)
+/// (dump-stack)
 #[sl_sh_fn(takes_env = true, fn_name = "dump-stack")]
 pub fn builtin_dump_stack(environment: &mut SloshVm) -> VMResult<Value> {
     dump_call_stack(environment);
@@ -294,7 +290,7 @@ pub fn builtin_dump_stack(environment: &mut SloshVm) -> VMResult<Value> {
 /// Section: core
 ///
 /// Example:
-/// (dump-regs-raw)  ; prints entire VM stack contents
+/// (dump-regs-raw)
 #[sl_sh_fn(takes_env = true, fn_name = "dump-regs-raw")]
 pub fn dump_regs_raw(environment: &mut SloshVm) -> VMResult<Value> {
     dump_stack(environment);
@@ -330,7 +326,7 @@ meaning strings are printed without quotes and character values without delimite
 Section: core
 
 Example:
-(epr "Error: " error-msg)  ; prints to stderr: Error: <error message>
+(epr "Error occurred!") ; prints to stderr: Error: <error message>
 "#,
     );
     bridge_adapters::add_builtin(
@@ -363,7 +359,6 @@ Section: core
 
 Example:
 (eprn "Error occurred!")   ; prints to stderr: Error occurred!\n
-(eprn "Debug:" x "=" y)    ; prints to stderr: Debug:<x value>=<y value>\n
 "#,
     );
     bridge_adapters::add_builtin(
@@ -400,19 +395,17 @@ Example:
 Print values to a file handle without a newline. The first argument must be
 a writable IO object. Values are printed in their "pretty" form.
 
-Section: core
+Section: file
 
 Example:
-(with-temp-file (tmp-file tmp-name)
-  (fpr tmp-file "Hello" " " "World")
+(with-temp-file (fn (tmp-name)
+(let (tmp-file (fopen tmp-name :create :truncate))
+  (fpr tmp-file (str "Hello" " " "World"))
   (fpr tmp-file "!")
-  (flush tmp-file)
-  (test::assert-equal "Hello World!" (slurp tmp-name)))
-
-; Or with a regular file:
-(def out (open "output.txt" :create :write :truncate))
-(fpr out "Hello" " " "World")
-(close out)
+  (fclose tmp-file)
+  (let (tmp-file (fopen tmp-name :read))
+  (defer (fclose tmp-file))
+  (test::assert-equal "Hello World!" (read-line tmp-file))))))
 "#,
     );
     bridge_adapters::add_builtin(
@@ -424,20 +417,20 @@ Example:
 Print values to a file handle followed by a newline. The first argument must be
 a writable IO object. Values are printed in their "pretty" form.
 
-Section: core
+Section: file
 
 Example:
-(with-temp-file (tmp-file tmp-name)
+(with-temp-file (fn (tmp-name)
+(let (tmp-file (fopen tmp-name :create :truncate))
   (fprn tmp-file "Line 1")
   (fprn tmp-file "Line 2")
-  (flush tmp-file)
-  (test::assert-equal "Line 1\nLine 2\n" (slurp tmp-name)))
-
-; Or with a regular file:
-(def log (open "app.log" :create :write :append))
-(fprn log "Log entry:" (time))
-(fprn log "Status: OK")
-(close log)
+  (fclose tmp-file)
+  (let (tmp-file (fopen tmp-name :read))
+  (defer (fclose tmp-file))
+  (test::assert-equal "Line 1
+" (read-line tmp-file))
+  (test::assert-equal "Line 2
+" (read-line tmp-file))))))
 "#,
     );
     intern_builtin_dump_regs(env);
