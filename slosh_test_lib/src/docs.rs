@@ -1,8 +1,7 @@
 use crate::docs::legacy as legacy_docs;
 use bridge_adapters::add_builtin;
 use bridge_adapters::lisp_adapters::SlFrom;
-use bridge_adapters::{BridgeResult, BridgeError};
-use bridge_macros::sl_sh_fn;
+use bridge_adapters::{BridgeError, BridgeResult};
 use compile_state::state::{SloshVm, SloshVmTrait};
 use lazy_static::lazy_static;
 use mdbook::book::{Book, Chapter};
@@ -1459,7 +1458,7 @@ fn doc_search(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
         // Generate vector of doc maps
         let mut result_values = Vec::new();
         for doc in results {
-            match Value::sl_from(doc, vm) {
+            match BridgeError::with_fn(Value::sl_from(doc, vm), "doc-search") {
                 Ok(val) => result_values.push(val),
                 Err(e) => {
                     vm.unpause_gc();

@@ -4,7 +4,7 @@ use bridge_types::{ErrorStrings, LooseFloat, LooseInt, LooseString};
 use compile_state::state::SloshVm;
 use slvm::float::F56;
 use slvm::value::ValueType;
-use slvm::{to_i56, Value, ValueTypes, I56};
+use slvm::{I56, Value, ValueTypes, to_i56};
 
 impl SlFrom<()> for Value {
     fn sl_from(_value: (), _vm: &mut SloshVm) -> BridgeResult<Self> {

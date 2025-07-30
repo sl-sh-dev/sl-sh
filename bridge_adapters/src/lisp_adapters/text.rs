@@ -292,33 +292,34 @@ mod tests {
 
         let param = arg_types[0usize];
         match param.handle {
-            bridge_types::TypeHandle::Direct => {
-                match args.get(0usize) {
-                    None => Err(BridgeError::Error(format!(
-                        "{} not given enough arguments, expected at least {} arguments, got {}.",
-                        fn_name,
-                        1usize,
-                        args.len()
-                    ))),
-                    Some(mut arg_0) => match args.get(PARAMS_LEN) {
-                        Some(_)
-                            if PARAMS_LEN == 0
-                                || arg_types[PARAMS_LEN - 1].handle
-                                    != bridge_types::TypeHandle::VarArgs =>
-                        {
-                            let res =
-                            format!("{} given too many arguments, expected at least {} arguments, got {}.",
-                                    fn_name, 1usize, args.len());
-                            Err(BridgeError::Error(res))
-                        }
-                        _ => {
-                            let arg: &mut String = arg_0.sl_as_mut(vm)?;
-                            arg.push_str("0");
-                            Ok(())
-                        }
-                    },
-                }
-            }
+            bridge_types::TypeHandle::Direct => match args.get(0usize) {
+                None => Err(BridgeError::Error(format!(
+                    "{} not given enough arguments, expected at least {} arguments, got {}.",
+                    fn_name,
+                    1usize,
+                    args.len()
+                ))),
+                Some(mut arg_0) => match args.get(PARAMS_LEN) {
+                    Some(_)
+                        if PARAMS_LEN == 0
+                            || arg_types[PARAMS_LEN - 1].handle
+                                != bridge_types::TypeHandle::VarArgs =>
+                    {
+                        let res = format!(
+                            "{} given too many arguments, expected at least {} arguments, got {}.",
+                            fn_name,
+                            1usize,
+                            args.len()
+                        );
+                        Err(BridgeError::Error(res))
+                    }
+                    _ => {
+                        let arg: &mut String = arg_0.sl_as_mut(vm)?;
+                        arg.push_str("0");
+                        Ok(())
+                    }
+                },
+            },
             _ => Err(BridgeError::Error(format!(
                 "{} failed to parse its arguments, internal error.",
                 fn_name

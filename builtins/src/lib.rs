@@ -1,8 +1,8 @@
 extern crate core;
 
+use bridge_adapters::BridgeError;
 use bridge_adapters::add_builtin;
 use bridge_adapters::lisp_adapters::SlFromRef;
-use bridge_adapters::BridgeError;
 use bridge_macros::sl_sh_fn;
 use bridge_types::{KeywordAsString, LooseString};
 use compile_state::state::{SloshVm, SloshVmTrait};
