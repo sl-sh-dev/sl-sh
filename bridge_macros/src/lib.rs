@@ -1,21 +1,20 @@
-//! TODO PC MACROS crate wish list
-//! 1. The macro should fail if the structure of the docs is not as expected. e.g. Type/Namespace/.../Usage/Example/
-//! 2. type aliasing, need a gensym type macro so I do not conflict with names.
-//! 3. trybuild tests!
-//! 4. worry about inlining, e.g. are the mechanisms in place to do the type conversions constant time,
+//! TODO PC macro crate wish list
+//! 1. type aliasing, need a gensym-type macro so I do not conflict with names.
+//! 2. worry about inlining, e.g. are the mechanisms in place to do the type conversions constant time,
 //!    and inlined? or is there a way to make them so?
-//! 5. can yet another crate solve the problem of housing typehandle/passingstyle/param/errorstrings/typedwrapper in the same place?
-//! 6. EVERY macro doesn't need the check for VarArgs, only signatures that have
+//! 3. can yet another crate solve the problem of housing typehandle/passingstyle/param/errorstrings/typedwrapper in the same place?
+//! 4. EVERY macro doesn't need the check for VarArgs, only signatures that have
 //!    VarArgs, this can be addressed in the macro.
-//! 7. Port tuple tests: <https://github.com/sl-sh-dev/sl-sh/blob/83cd1c93d1eea726ba138a83610155bdbfcab7aa/src/builtins_types.rs#L628>
-//! 8. To avoid needing to do lifetimes, if the return value is one of the INPUT values have
+//! 5. Port tuple tests: <https://github.com/sl-sh-dev/sl-sh/blob/83cd1c93d1eea726ba138a83610155bdbfcab7aa/src/builtins_types.rs#L628>
+//! 6. To avoid needing to do lifetimes, if the return value is one of the INPUT values have
 //!    that marked in the annotation... OTHERWISE data may be copied!
 //!    OR allow for simple lifetimes?
-//! 9. VMError should not be new_vm
-//! 10. Optional duplicates code. With the ownership model from SlFromRef, being *the* primary mechanism
+//! 7. VMError should not be new_vm
+//! 8. Optional duplicates code. With the ownership model from SlFromRef, being *the* primary mechanism
 //!     for crossing the boundary, it's possible having Some and None blocks multiple times is not necessary.
-//! 11. Support for slices? to avoid Vec allocation? Is it a big deal to only be able to accept Vec?
+//! 9. Support for slices? to avoid Vec allocation? Is it a big deal to only be able to accept Vec?
 //!     The decision should at least be documented.
+
 //! 12. SINCE WHEN is it a requirement like that it *has* to return VMResult or Option
 ///  - functions that return Values, tuple return types?
 ///  - functions that accept iters?
@@ -1620,6 +1619,7 @@ pub fn sl_sh_fn(
                     #generated_code
 
                     #[allow(dead_code)]
+                    #[inline(always)]
                     #original_fn_code
                 }
             }
