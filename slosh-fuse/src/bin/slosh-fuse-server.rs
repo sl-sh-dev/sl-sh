@@ -2,7 +2,7 @@ use fuser::{MountOption, Session};
 use slosh_fuse::{EvalFs, FileMapping};
 use std::sync::{Arc, Mutex};
 use std::env;
-use std::os::unix::io::{RawFd, FromRawFd};
+use std::os::unix::io::RawFd;
 
 fn main() {
     env_logger::init();
@@ -37,7 +37,7 @@ fn main() {
         MountOption::DefaultPermissions,
     ];
     
-    let session = Session::new(fs, &mount_point, &options).expect("Failed to mount");
+    let mut session = Session::new(fs, mount_point.as_ref(), &options).expect("Failed to mount");
     
     // Run until unmounted
     session.run().expect("Failed to run session");

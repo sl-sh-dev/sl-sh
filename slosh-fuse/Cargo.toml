@@ -10,9 +10,9 @@ log = "0.4"
 env_logger = "0.11"
 
 # Local slosh dependencies
-vm = { path = "../vm" }
-compile_state = { path = "../compile_state" }
-slosh_lib = { path = "../slosh_lib" }
+slosh_lib.workspace = true
+slvm.workspace = true
+compile_state.workspace = true
 
 [dependencies.nix]
 version = "0.27"

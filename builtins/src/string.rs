@@ -225,6 +225,9 @@ fn str_empty(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
                     Ok(Value::False)
                 }
             }
+            Value::Nil => {
+                Ok(Value::True)
+            }
             _ => Err(VMError::new_vm(format!(
                 "str-empty?: takes a string, got a {}",
                 string.display_type(vm)

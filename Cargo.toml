@@ -34,6 +34,7 @@ debug = true
 version = "0.11.1"
 
 [workspace.dependencies]
+slosh_lib = { path = "slosh_lib" }
 bridge_adapters = { path = "bridge_adapters" }
 bridge_macros = { path = "bridge_macros" }
 bridge_types = { path = "bridge_types" }

@@ -6,7 +6,7 @@ use libc::{ENOENT, ENOTDIR};
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime};
 use std::os::unix::io::{RawFd, FromRawFd, IntoRawFd};
 use std::io::{Read, Write};
 
@@ -35,11 +35,14 @@ impl EvalFs {
         };
         
         // Pre-populate inodes for registered files
-        let mapping = fs.file_mapping.lock().unwrap();
-        for path in mapping.list_files() {
-            fs.allocate_inode(&path);
+        {
+            let mapping = fs.file_mapping.lock().unwrap();
+            let paths = mapping.list_files();
+            drop(mapping);
+            for path in paths {
+                fs.allocate_inode(&path);
+            }
         }
-        drop(mapping);
         
         fs
     }
@@ -157,9 +160,13 @@ impl Filesystem for EvalFs {
         }
         
         let name_str = name.to_string_lossy();
-        let mapping = self.file_mapping.lock().unwrap();
         
-        if mapping.get(&name_str).is_some() {
+        let found = {
+            let mapping = self.file_mapping.lock().unwrap();
+            mapping.get(&name_str).is_some()
+        };
+        
+        if found {
             let inode = self.allocate_inode(&name_str);
             reply.entry(&TTL, &Self::file_attr(inode, 0), 0);
         } else {
@@ -171,15 +178,22 @@ impl Filesystem for EvalFs {
         if ino == FUSE_ROOT_ID {
             reply.attr(&TTL, &Self::dir_attr(FUSE_ROOT_ID));
         } else if let Some(path) = self.get_path_for_inode(ino) {
-            let mapping = self.file_mapping.lock().unwrap();
-            if let Some(entry) = mapping.get(path) {
-                // Get content to determine size
-                let content = if entry.is_cache_valid() {
-                    entry.cached_value.as_ref().unwrap().clone()
+            let (is_valid, expression) = {
+                let mapping = self.file_mapping.lock().unwrap();
+                if let Some(entry) = mapping.get(path) {
+                    if entry.is_cache_valid() {
+                        let content = entry.cached_value.as_ref().unwrap().clone();
+                        reply.attr(&TTL, &Self::file_attr(ino, content.len() as u64));
+                        return;
+                    }
+                    (true, entry.expression.clone())
                 } else {
-                    drop(mapping);
-                    self.evaluate_expression(&entry.expression)
-                };
+                    (false, String::new())
+                }
+            };
+            
+            if is_valid {
+                let content = self.evaluate_expression(&expression);
                 reply.attr(&TTL, &Self::file_attr(ino, content.len() as u64));
             } else {
                 reply.error(ENOENT);
