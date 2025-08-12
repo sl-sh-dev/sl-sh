@@ -13,6 +13,7 @@ pub mod collections;
 pub mod conversions;
 pub mod fs_meta;
 pub mod fs_temp;
+pub mod fuse;
 pub mod io;
 pub mod math;
 pub mod print;

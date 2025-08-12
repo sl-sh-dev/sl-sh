@@ -15,6 +15,7 @@ members = [
     "bridge_adapters",
     "slosh_test",
     "slosh_test_lib",
+    "slosh-fuse",
 ]
 
 exclude = ["legacy"]

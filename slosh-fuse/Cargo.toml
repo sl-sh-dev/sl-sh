@@ -1,0 +1,19 @@
+[package]
+name = "slosh-fuse"
+version.workspace = true
+edition = "2024"
+
+[dependencies]
+fuser = "0.14"
+libc = "0.2"
+log = "0.4"
+env_logger = "0.11"
+
+# Local slosh dependencies
+vm = { path = "../vm" }
+compile_state = { path = "../compile_state" }
+slosh_lib = { path = "../slosh_lib" }
+
+[dependencies.nix]
+version = "0.27"
+features = ["signal", "process", "fs"]
