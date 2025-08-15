@@ -21,12 +21,12 @@ impl FuseMount {
             process_handle: None,
         }
     }
-    
+
     pub fn register_file(&self, path: &str, expression: String) {
         let mut mapping = self.file_mapping.lock().unwrap();
         mapping.register(path, expression);
     }
-    
+
     pub fn unmount(&mut self) -> Result<(), std::io::Error> {
         if let Some(mut handle) = self.process_handle.take() {
             handle.kill()?;

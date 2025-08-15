@@ -44,7 +44,7 @@ The implementation consists of:
 
 The current implementation provides:
 - Basic FUSE filesystem structure
-- File registration and mapping system  
+- File registration and mapping system
 - Builtin functions for mounting and file management
 - Example scripts demonstrating the concept
 

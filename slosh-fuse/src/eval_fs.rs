@@ -33,7 +33,7 @@ impl EvalFs {
             eval_pipe_read,
             eval_pipe_write,
         };
-        
+
         // Pre-populate inodes for registered files
         {
             let mapping = fs.file_mapping.lock().unwrap();
@@ -43,30 +43,30 @@ impl EvalFs {
                 fs.allocate_inode(&path);
             }
         }
-        
+
         fs
     }
-    
+
     fn allocate_inode(&mut self, path: &str) -> u64 {
         if let Some(&inode) = self.path_to_inode.get(path) {
             return inode;
         }
-        
+
         let inode = self.next_inode;
         self.next_inode += 1;
         self.inode_to_path.insert(inode, path.to_string());
         self.path_to_inode.insert(path.to_string(), inode);
         inode
     }
-    
+
     fn get_inode_for_path(&self, path: &str) -> Option<u64> {
         self.path_to_inode.get(path).copied()
     }
-    
+
     fn get_path_for_inode(&self, inode: u64) -> Option<&str> {
         self.inode_to_path.get(&inode).map(|s| s.as_str())
     }
-    
+
     fn evaluate_expression(&self, expression: &str) -> String {
         // Send expression to parent process for evaluation
         let msg = format!("{}\n", expression);
@@ -79,12 +79,12 @@ impl EvalFs {
         }
         // Prevent closing the fd when File is dropped
         let _ = pipe_write.into_raw_fd();
-        
+
         // Read response
         let mut pipe_read = unsafe { std::fs::File::from_raw_fd(self.eval_pipe_read) };
         let mut response = String::new();
         let mut buffer = [0u8; 4096];
-        
+
         loop {
             match pipe_read.read(&mut buffer) {
                 Ok(0) => break,
@@ -105,10 +105,10 @@ impl EvalFs {
         }
         // Prevent closing the fd when File is dropped
         let _ = pipe_read.into_raw_fd();
-        
+
         response
     }
-    
+
     fn file_attr(inode: u64, size: u64) -> FileAttr {
         let now = SystemTime::now();
         FileAttr {
@@ -129,7 +129,7 @@ impl EvalFs {
             flags: 0,
         }
     }
-    
+
     fn dir_attr(inode: u64) -> FileAttr {
         let now = SystemTime::now();
         FileAttr {
@@ -158,14 +158,14 @@ impl Filesystem for EvalFs {
             reply.error(ENOENT);
             return;
         }
-        
+
         let name_str = name.to_string_lossy();
-        
+
         let found = {
             let mapping = self.file_mapping.lock().unwrap();
             mapping.get(&name_str).is_some()
         };
-        
+
         if found {
             let inode = self.allocate_inode(&name_str);
             reply.entry(&TTL, &Self::file_attr(inode, 0), 0);
@@ -173,7 +173,7 @@ impl Filesystem for EvalFs {
             reply.error(ENOENT);
         }
     }
-    
+
     fn getattr(&mut self, _req: &Request, ino: u64, reply: ReplyAttr) {
         if ino == FUSE_ROOT_ID {
             reply.attr(&TTL, &Self::dir_attr(FUSE_ROOT_ID));
@@ -191,7 +191,7 @@ impl Filesystem for EvalFs {
                     (false, String::new())
                 }
             };
-            
+
             if is_valid {
                 let content = self.evaluate_expression(&expression);
                 reply.attr(&TTL, &Self::file_attr(ino, content.len() as u64));
@@ -202,7 +202,7 @@ impl Filesystem for EvalFs {
             reply.error(ENOENT);
         }
     }
-    
+
     fn read(
         &mut self,
         _req: &Request,
@@ -223,7 +223,7 @@ impl Filesystem for EvalFs {
                     let expr = entry.expression.clone();
                     drop(mapping);
                     let result = self.evaluate_expression(&expr);
-                    
+
                     // Update cache if caching is enabled
                     let mut mapping = self.file_mapping.lock().unwrap();
                     if let Some(entry) = mapping.get_mut(path) {
@@ -233,11 +233,11 @@ impl Filesystem for EvalFs {
                     }
                     result
                 };
-                
+
                 let data = content.as_bytes();
                 let start = offset as usize;
                 let end = (start + size as usize).min(data.len());
-                
+
                 if start < data.len() {
                     reply.data(&data[start..end]);
                 } else {
@@ -250,7 +250,7 @@ impl Filesystem for EvalFs {
             reply.error(ENOENT);
         }
     }
-    
+
     fn readdir(
         &mut self,
         _req: &Request,
@@ -263,12 +263,12 @@ impl Filesystem for EvalFs {
             reply.error(ENOTDIR);
             return;
         }
-        
+
         let entries = vec![
             (FUSE_ROOT_ID, FileType::Directory, "."),
             (FUSE_ROOT_ID, FileType::Directory, ".."),
         ];
-        
+
         for (i, (inode, file_type, name)) in entries.iter().enumerate() {
             if offset <= i as i64 {
                 if reply.add(*inode, (i + 1) as i64, *file_type, name) {
@@ -276,11 +276,11 @@ impl Filesystem for EvalFs {
                 }
             }
         }
-        
+
         let mapping = self.file_mapping.lock().unwrap();
         let files = mapping.list_files();
         drop(mapping);
-        
+
         for (i, path) in files.iter().enumerate() {
             let index = i + entries.len();
             if offset <= index as i64 {
@@ -290,7 +290,7 @@ impl Filesystem for EvalFs {
                 }
             }
         }
-        
+
         reply.ok();
     }
 }

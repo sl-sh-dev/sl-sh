@@ -25,7 +25,7 @@
 ;; Function to create a background process that updates the file periodically
 (defn start-dynamic-env-updater [path interval-ms]
   "Start a background process that updates the env file every interval-ms milliseconds"
-  (fork 
+  (fork
     (loop []
       (generate-env-file path)
       (sleep interval-ms)

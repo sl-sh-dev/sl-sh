@@ -21,25 +21,25 @@ fn mount_eval_fs(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
             "mount-eval-fs: requires one argument (mount-path)".to_string(),
         ));
     }
-    
+
     let mount_path = registers[0].get_string(vm)?;
     let mount_point = PathBuf::from(mount_path);
-    
+
     // Create mount point if it doesn't exist
     if !mount_point.exists() {
         std::fs::create_dir_all(&mount_point)
             .map_err(|e| VMError::new_vm(format!("Failed to create mount point: {}", e)))?;
     }
-    
+
     let mount_id = format!("mount-{}", uuid::Uuid::new_v4());
-    
+
     let info = FuseInfo {
         mount_point: mount_point.clone(),
         expressions: HashMap::new(),
     };
-    
+
     FUSE_REGISTRY.lock().unwrap().insert(mount_id.clone(), info);
-    
+
     // For now, return the mount ID. The actual FUSE mounting will be done separately
     Ok(vm.alloc_string(mount_id))
 }
@@ -50,11 +50,11 @@ fn register_eval_file(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> 
             "register-eval-file: requires three arguments (mount-id path expression)".to_string(),
         ));
     }
-    
+
     let mount_id = registers[0].get_string(vm)?;
     let path = registers[1].get_string(vm)?;
     let expression = registers[2].get_string(vm)?;
-    
+
     let mut registry = FUSE_REGISTRY.lock().unwrap();
     if let Some(info) = registry.get_mut(mount_id) {
         info.expressions.insert(path.to_string(), expression.to_string());
@@ -70,9 +70,9 @@ fn unmount_eval_fs(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
             "unmount-eval-fs: requires one argument (mount-id)".to_string(),
         ));
     }
-    
+
     let mount_id = registers[0].get_string(vm)?;
-    
+
     let mut registry = FUSE_REGISTRY.lock().unwrap();
     if registry.remove(mount_id).is_some() {
         Ok(Value::True)
@@ -87,9 +87,9 @@ fn list_eval_files(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
             "list-eval-files: requires one argument (mount-id)".to_string(),
         ));
     }
-    
+
     let mount_id = registers[0].get_string(vm)?;
-    
+
     let registry = FUSE_REGISTRY.lock().unwrap();
     if let Some(info) = registry.get(mount_id) {
         let files: Vec<Value> = info.expressions.keys()
@@ -101,6 +101,25 @@ fn list_eval_files(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
+fn list_mounts(vm: &mut SloshVm, _registers: &[Value]) -> VMResult<Value> {
+    let registry = FUSE_REGISTRY.lock().unwrap();
+    let mut mounts = Vec::new();
+
+    for (mount_id, info) in registry.iter() {
+        let mount_info = vec![
+            vm.alloc_string("mount-id"),
+            vm.alloc_string(mount_id.clone()),
+            vm.alloc_string("mount-point"),
+            vm.alloc_string(info.mount_point.display().to_string()),
+            vm.alloc_string("file-count"),
+            vm.alloc_int(info.expressions.len() as i64),
+        ];
+        mounts.push(vm.alloc_vector(mount_info));
+    }
+
+    Ok(vm.alloc_vector(mounts))
+}
+
 // For testing - evaluate an expression for a file
 fn eval_file_expression(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if registers.len() != 2 {
@@ -108,10 +127,10 @@ fn eval_file_expression(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value
             "eval-file-expression: requires two arguments (mount-id path)".to_string(),
         ));
     }
-    
+
     let mount_id = registers[0].get_string(vm)?;
     let path = registers[1].get_string(vm)?;
-    
+
     let registry = FUSE_REGISTRY.lock().unwrap();
     if let Some(info) = registry.get(mount_id) {
         if let Some(expression) = info.expressions.get(path) {
@@ -141,7 +160,7 @@ Example:
 (def mount-id (mount-eval-fs "/tmp/eval-fs"))
 "#,
     );
-    
+
     add_builtin(
         env,
         "register-eval-file",
@@ -156,7 +175,7 @@ Example:
 (register-eval-file mount-id "config.env" "(str \"HOST=\" (hostname))")
 "#,
     );
-    
+
     add_builtin(
         env,
         "unmount-eval-fs",
@@ -171,7 +190,7 @@ Example:
 (unmount-eval-fs mount-id)
 "#,
     );
-    
+
     add_builtin(
         env,
         "list-eval-files",
@@ -186,7 +205,24 @@ Example:
 (list-eval-files mount-id)
 "#,
     );
-    
+
+    add_builtin(
+        env,
+        "list-mounts",
+        list_mounts,
+        r#"Usage: (list-mounts)
+
+List all active FUSE mounts with their mount IDs, mount points, and file counts.
+
+Section: fuse
+
+Example:
+(list-mounts)
+; Returns a list of vectors, each containing:
+; ["mount-id" <id> "mount-point" <path> "file-count" <count>]
+"#,
+    );
+
     add_builtin(
         env,
         "eval-file-expression",

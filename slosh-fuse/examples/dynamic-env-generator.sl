@@ -27,7 +27,7 @@
 ;; Example: Register systemd environment files
 
 ;; Define some global configuration
-(def *app-config* 
+(def *app-config*
   {:environment "production"
    :version "1.0.0"
    :debug false})
@@ -47,8 +47,8 @@
 (register-env-file "/tmp/database.env"
   (fn []
     (str "# Database configuration\n"
-         "DB_HOST=" (if (= (:environment *app-config*) "production") 
-                      "prod-db.example.com" 
+         "DB_HOST=" (if (= (:environment *app-config*) "production")
+                      "prod-db.example.com"
                       "localhost") "\n"
          "DB_PORT=5432\n"
          "DB_NAME=" (:environment *app-config*) "_db\n"
@@ -66,14 +66,14 @@
   (println (read-string file 10000))
   (close file))
 
-(println "--- Generated database.env ---")  
+(println "--- Generated database.env ---")
 (let [file (open "/tmp/database.env" :read)]
   (println (read-string file 10000))
   (close file))
 
 ;; Demonstrate dynamic updates
 (println "\n--- Updating configuration to development ---")
-(set! *app-config* (assoc *app-config* 
+(set! *app-config* (assoc *app-config*
                      :environment "development"
                      :debug true))
 

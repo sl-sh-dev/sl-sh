@@ -8,7 +8,7 @@
 
 ;; Register a systemd-style environment file
 ;; This would dynamically generate content based on slosh expressions
-(register-eval-file mount-id "my-service.env" 
+(register-eval-file mount-id "my-service.env"
   "(str \"HOST=\" (or (env \"HOSTNAME\") \"localhost\") \"\\n\"
         \"CUSTOM_TYPE=\" (or *custom-type* \"default\") \"\\n\"
         \"TIMESTAMP=\" (current-time-millis) \"\\n\")")
