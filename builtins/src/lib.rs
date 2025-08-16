@@ -1,5 +1,6 @@
 extern crate core;
 
+use bridge_adapters::BridgeError;
 use bridge_adapters::add_builtin;
 use bridge_adapters::lisp_adapters::SlFromRef;
 use bridge_macros::sl_sh_fn;
@@ -35,7 +36,8 @@ fn get_builtin_slot_and_value(vm: &mut SloshVm, s: impl AsRef<str>) -> (u32, Val
 pub fn noop_fn(environment: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if registers.len() == 1 {
         let v = registers[0];
-        let fcn = LooseString::sl_from_ref(v, environment)?.to_string();
+        let fcn =
+            BridgeError::with_fn(LooseString::sl_from_ref(v, environment), "noop-fn")?.to_string();
         noop_swap_internal(environment, fcn, NoopSwap::MakeNoop)
     } else {
         Err(VMError::new_vm(
@@ -47,7 +49,8 @@ pub fn noop_fn(environment: &mut SloshVm, registers: &[Value]) -> VMResult<Value
 pub fn un_noop_fn(environment: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if registers.len() == 1 {
         let v = registers[0];
-        let fcn = LooseString::sl_from_ref(v, environment)?.to_string();
+        let fcn = BridgeError::with_fn(LooseString::sl_from_ref(v, environment), "un-noop-fn")?
+            .to_string();
         noop_swap_internal(environment, fcn, NoopSwap::MakeNotNoop)
     } else {
         Err(VMError::new_vm(
@@ -93,7 +96,8 @@ pub fn noop_swap_internal(
 fn is_noop(environment: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if registers.len() == 1 {
         let v = registers[0];
-        let fcn = LooseString::sl_from_ref(v, environment)?.to_string();
+        let fcn =
+            BridgeError::with_fn(LooseString::sl_from_ref(v, environment), "is-noop")?.to_string();
         let (_sym_slot, inplace_val) = get_builtin_slot_and_value(environment, fcn);
         let (_noop_slot, noop_val) = get_builtin_slot_and_value(environment, NOOP);
 

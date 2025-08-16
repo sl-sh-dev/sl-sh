@@ -1,4 +1,4 @@
-error: Functions can only return GenericArguments of type ["VMResult", "Option"], try wrapping this value in Option or VMResult.
+error: Functions can only return GenericArguments of type ["VMResult", "Option", "slvm::VMResult"], try wrapping this value in Option or VMResult.
  --> trybuild/tests/enforce_return_fail.rs:7:28
   |
 7 | pub fn invalid_return() -> Result<(), ()> {

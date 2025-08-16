@@ -1,24 +1,25 @@
 use crate::lisp_adapters::{SlAsMut, SlAsRef, SlFrom, SlFromRef, SlFromRefMut};
+use crate::{BridgeError, BridgeResult};
 use bridge_types::{ErrorStrings, LooseString, SloshChar};
 use compile_state::state::SloshVm;
 use slvm::value::ValueType;
-use slvm::{VMError, VMResult, Value, ValueTypes};
+use slvm::{Value, ValueTypes};
 use std::borrow::Cow;
 
 impl<'a> SlFrom<Cow<'a, str>> for Value {
-    fn sl_from(value: Cow<'a, str>, vm: &mut SloshVm) -> VMResult<Self> {
+    fn sl_from(value: Cow<'a, str>, vm: &mut SloshVm) -> BridgeResult<Self> {
         Value::sl_from(value.to_string(), vm)
     }
 }
 
 impl<'a> SlFrom<SloshChar<'a>> for Value {
-    fn sl_from(value: SloshChar<'a>, vm: &mut SloshVm) -> VMResult<Self> {
+    fn sl_from(value: SloshChar<'a>, vm: &mut SloshVm) -> BridgeResult<Self> {
         Value::sl_from(value.to_string(), vm)
     }
 }
 
 impl<'a> SlFromRef<'a, Value> for LooseString<'a> {
-    fn sl_from_ref(value: Value, vm: &'a SloshVm) -> VMResult<Self> {
+    fn sl_from_ref(value: Value, vm: &'a SloshVm) -> BridgeResult<Self> {
         match value {
             Value::String(h) => Ok(LooseString::Borrowed(vm.get_string(h))),
             Value::CodePoint(char) => Ok(LooseString::Owned(char.to_string())),
@@ -33,30 +34,28 @@ impl<'a> SlFromRef<'a, Value> for LooseString<'a> {
             Value::Symbol(i) => Ok(LooseString::Borrowed(vm.get_interned(i))),
             Value::Keyword(i) => Ok(LooseString::Borrowed(vm.get_interned(i))),
             Value::StringConst(i) => Ok(LooseString::Borrowed(vm.get_interned(i))),
-            _ => Err(VMError::new_conversion(
-                ErrorStrings::fix_me_mismatched_type(
-                    String::from(ValueTypes::from([
-                        ValueType::String,
-                        ValueType::StringConst,
-                        ValueType::Symbol,
-                        ValueType::Keyword,
-                        ValueType::CharCluster,
-                        ValueType::CharClusterLong,
-                        ValueType::CodePoint,
-                    ])),
-                    value.display_type(vm),
-                ),
-            )),
+            _ => Err(BridgeError::Error(ErrorStrings::mismatched_type(
+                String::from(ValueTypes::from([
+                    ValueType::String,
+                    ValueType::StringConst,
+                    ValueType::Symbol,
+                    ValueType::Keyword,
+                    ValueType::CharCluster,
+                    ValueType::CharClusterLong,
+                    ValueType::CodePoint,
+                ])),
+                value.display_type(vm),
+            ))),
         }
     }
 }
 
 impl<'a> SlFromRef<'a, Value> for char {
-    fn sl_from_ref(value: Value, vm: &'a SloshVm) -> VMResult<Self> {
+    fn sl_from_ref(value: Value, vm: &'a SloshVm) -> BridgeResult<Self> {
         match value {
             Value::CodePoint(char) => Ok(char),
-            _ => Err(VMError::new_conversion(
-                ErrorStrings::fix_me_mismatched_type_with_context(
+            _ => Err(BridgeError::Error(
+                ErrorStrings::mismatched_type_with_context(
                     String::from(ValueTypes::from([ValueType::CodePoint])),
                     value.display_type(vm),
                     "Provided value can not be more than one byte, e.g. a char.",
@@ -67,38 +66,36 @@ impl<'a> SlFromRef<'a, Value> for char {
 }
 
 impl SlFrom<char> for Value {
-    fn sl_from(value: char, _vm: &mut SloshVm) -> VMResult<Self> {
+    fn sl_from(value: char, _vm: &mut SloshVm) -> BridgeResult<Self> {
         Ok(Value::CodePoint(value))
     }
 }
 
 /// This delegates to [`SlAsRef`] appropriately.
 impl<'a> SlFromRef<'a, Value> for &'a str {
-    fn sl_from_ref(value: Value, vm: &'a SloshVm) -> VMResult<Self> {
+    fn sl_from_ref(value: Value, vm: &'a SloshVm) -> BridgeResult<Self> {
         (&value).sl_as_ref(vm)
     }
 }
 
 impl<'a> SlAsRef<'a, str> for &Value {
-    fn sl_as_ref(&self, vm: &'a SloshVm) -> VMResult<&'a str> {
+    fn sl_as_ref(&self, vm: &'a SloshVm) -> BridgeResult<&'a str> {
         match self {
             Value::String(h) => Ok(vm.get_string(*h)),
             Value::StringConst(i) => Ok(vm.get_interned(*i)),
-            _ => Err(VMError::new_conversion(
-                ErrorStrings::fix_me_mismatched_type(
-                    String::from(ValueTypes::from([
-                        ValueType::String,
-                        ValueType::StringConst,
-                    ])),
-                    self.display_type(vm),
-                ),
-            )),
+            _ => Err(BridgeError::Error(ErrorStrings::mismatched_type(
+                String::from(ValueTypes::from([
+                    ValueType::String,
+                    ValueType::StringConst,
+                ])),
+                self.display_type(vm),
+            ))),
         }
     }
 }
 
 impl<'a> SlFromRef<'a, Value> for SloshChar<'a> {
-    fn sl_from_ref(value: Value, vm: &'a SloshVm) -> VMResult<Self> {
+    fn sl_from_ref(value: Value, vm: &'a SloshVm) -> BridgeResult<Self> {
         match value {
             Value::CodePoint(ch) => Ok(SloshChar::Char(ch)),
             Value::CharCluster(l, c) => Ok(SloshChar::String(Cow::Owned(format!(
@@ -106,43 +103,41 @@ impl<'a> SlFromRef<'a, Value> for SloshChar<'a> {
                 String::from_utf8_lossy(&c[0..l as usize])
             )))),
             Value::CharClusterLong(h) => Ok(SloshChar::String(Cow::Borrowed(vm.get_string(h)))),
-            _ => Err(VMError::new_conversion(
-                ErrorStrings::fix_me_mismatched_type(
-                    String::from(ValueTypes::from([
-                        ValueType::CharCluster,
-                        ValueType::CharClusterLong,
-                        ValueType::CodePoint,
-                    ])),
-                    value.display_type(vm),
-                ),
-            )),
+            _ => Err(BridgeError::Error(ErrorStrings::mismatched_type(
+                String::from(ValueTypes::from([
+                    ValueType::CharCluster,
+                    ValueType::CharClusterLong,
+                    ValueType::CodePoint,
+                ])),
+                value.display_type(vm),
+            ))),
         }
     }
 }
 
 /// This delegates to [`SlAsMut`] appropriately.
 impl<'a> SlFromRefMut<'a, Value> for &'a mut String {
-    fn sl_from_ref_mut(value: Value, vm: &'a mut SloshVm) -> VMResult<Self> {
+    fn sl_from_ref_mut(value: Value, vm: &'a mut SloshVm) -> BridgeResult<Self> {
         (&value).sl_as_mut(vm)
     }
 }
 
 impl<'a> SlAsMut<'a, String> for &Value {
-    fn sl_as_mut(&mut self, vm: &'a mut SloshVm) -> VMResult<&'a mut String> {
+    fn sl_as_mut(&mut self, vm: &'a mut SloshVm) -> BridgeResult<&'a mut String> {
         match self {
-            Value::String(h) => vm.get_string_mut(*h),
-            _ => Err(VMError::new_conversion(
-                ErrorStrings::fix_me_mismatched_type(
-                    <&'static str>::from(ValueType::String),
-                    self.display_type(vm),
-                ),
-            )),
+            Value::String(h) => vm
+                .get_string_mut(*h)
+                .map_err(|e| BridgeError::Error(e.to_string())),
+            _ => Err(BridgeError::Error(ErrorStrings::mismatched_type(
+                <&'static str>::from(ValueType::String),
+                self.display_type(vm),
+            ))),
         }
     }
 }
 
 impl SlFrom<String> for Value {
-    fn sl_from(value: String, vm: &mut SloshVm) -> VMResult<Self> {
+    fn sl_from(value: String, vm: &mut SloshVm) -> BridgeResult<Self> {
         Ok(vm.alloc_string(value))
     }
 }
@@ -151,7 +146,7 @@ impl<T> SlFrom<&T> for Value
 where
     T: ToString + ?Sized,
 {
-    fn sl_from(value: &T, vm: &mut SloshVm) -> VMResult<Self> {
+    fn sl_from(value: &T, vm: &mut SloshVm) -> BridgeResult<Self> {
         Ok(vm.alloc_string(value.to_string()))
     }
 }
@@ -160,22 +155,20 @@ impl<T> SlFrom<&mut T> for Value
 where
     T: ToString + ?Sized,
 {
-    fn sl_from(value: &mut T, vm: &mut SloshVm) -> VMResult<Self> {
+    fn sl_from(value: &mut T, vm: &mut SloshVm) -> BridgeResult<Self> {
         Ok(vm.alloc_string(value.to_string()))
     }
 }
 
 impl<'a> SlFromRef<'a, Value> for String {
-    fn sl_from_ref(value: Value, vm: &'a SloshVm) -> VMResult<Self> {
+    fn sl_from_ref(value: Value, vm: &'a SloshVm) -> BridgeResult<Self> {
         match value {
             Value::String(h) => Ok(vm.get_string(h).to_string()),
             Value::StringConst(i) => Ok(vm.get_interned(i).to_string()),
-            _ => Err(VMError::new_conversion(
-                ErrorStrings::fix_me_mismatched_type(
-                    <&'static str>::from(ValueType::String),
-                    value.display_type(vm),
-                ),
-            )),
+            _ => Err(BridgeError::Error(ErrorStrings::mismatched_type(
+                <&'static str>::from(ValueType::String),
+                value.display_type(vm),
+            ))),
         }
     }
 }
@@ -261,14 +254,14 @@ mod tests {
     fn try_conversion_error() {
         let mut vm = new_slosh_vm();
         let value = create_string(&mut vm);
-        let c: VMResult<char> = value.sl_into_ref(&vm);
+        let c: BridgeResult<char> = value.sl_into_ref(&vm);
         assert!(c.is_err());
-        let err = VMError::new_conversion(ErrorStrings::fix_me_mismatched_type_with_context(
+        let expected_err = BridgeError::Error(ErrorStrings::mismatched_type_with_context(
             String::from(ValueTypes::from([ValueType::CodePoint])),
             value.display_type(&mut vm),
             "Provided value can not be more than one byte, e.g. a char.",
         ));
-        assert_eq!(c.err().unwrap().to_string(), err.to_string());
+        assert_eq!(c.err().unwrap().to_string(), expected_err.to_string());
     }
 
     #[test]
@@ -289,7 +282,7 @@ mod tests {
         }
     }
 
-    fn str_test_mut(vm: &mut SloshVm, args: &[Value]) -> VMResult<()> {
+    fn str_test_mut(vm: &mut SloshVm, args: &[Value]) -> BridgeResult<()> {
         let fn_name = "str_trim";
         const PARAMS_LEN: usize = 1usize;
         let arg_types: [bridge_types::Param; PARAMS_LEN] = [bridge_types::Param {
@@ -300,32 +293,25 @@ mod tests {
         let param = arg_types[0usize];
         match param.handle {
             bridge_types::TypeHandle::Direct => match args.get(0usize) {
-                None => {
-                    return Err(VMError::new_conversion(&*{
-                        let res = format!(
-                            "{} not given enough arguments, expected at least {} arguments, got {}.",
-                            fn_name,
-                            1usize,
-                            args.len()
-                        );
-                        res
-                    }));
-                }
+                None => Err(BridgeError::Error(format!(
+                    "{} not given enough arguments, expected at least {} arguments, got {}.",
+                    fn_name,
+                    1usize,
+                    args.len()
+                ))),
                 Some(mut arg_0) => match args.get(PARAMS_LEN) {
                     Some(_)
                         if PARAMS_LEN == 0
                             || arg_types[PARAMS_LEN - 1].handle
                                 != bridge_types::TypeHandle::VarArgs =>
                     {
-                        return Err(VMError::new_conversion(&*{
-                            let res = format!(
-                                "{} given too many arguments, expected at least {} arguments, got {}.",
-                                fn_name,
-                                1usize,
-                                args.len()
-                            );
-                            res
-                        }));
+                        let res = format!(
+                            "{} given too many arguments, expected at least {} arguments, got {}.",
+                            fn_name,
+                            1usize,
+                            args.len()
+                        );
+                        Err(BridgeError::Error(res))
                     }
                     _ => {
                         let arg: &mut String = arg_0.sl_as_mut(vm)?;
@@ -334,16 +320,14 @@ mod tests {
                     }
                 },
             },
-            _ => {
-                return Err(VMError::new_conversion(&*{
-                    let res = format!("{} failed to parse its arguments, internal error.", fn_name);
-                    res
-                }));
-            }
+            _ => Err(BridgeError::Error(format!(
+                "{} failed to parse its arguments, internal error.",
+                fn_name
+            ))),
         }
     }
 
-    fn str_trim_test(vm: &mut SloshVm, test_str: String) -> VMResult<Value> {
+    fn str_trim_test(vm: &mut SloshVm, test_str: String) -> BridgeResult<Value> {
         let test_str = vm.alloc_string(test_str);
         let args = [test_str];
         let fn_name = "str_trim";
@@ -357,15 +341,12 @@ mod tests {
         match param.handle {
             bridge_types::TypeHandle::Direct => match args.get(0usize) {
                 None => {
-                    return Err(VMError::new_conversion(&*{
-                        let res = format!(
-                            "{} not given enough arguments, expected at least {} arguments, got {}.",
-                            fn_name,
-                            1usize,
-                            args.len()
-                        );
-                        res
-                    }));
+                    return Err(BridgeError::Error(format!(
+                        "{} not given enough arguments, expected at least {} arguments, got {}.",
+                        fn_name,
+                        1usize,
+                        args.len()
+                    )));
                 }
                 Some(arg_0) => match args.get(PARAMS_LEN) {
                     Some(_)
@@ -373,30 +354,23 @@ mod tests {
                             || arg_types[PARAMS_LEN - 1].handle
                                 != bridge_types::TypeHandle::VarArgs =>
                     {
-                        return Err(VMError::new_conversion(&*{
-                            let res = format!(
-                                "{} given too many arguments, expected at least {} arguments, got {}.",
-                                fn_name,
-                                1usize,
-                                args.len()
-                            );
-                            res
-                        }));
+                        Err(BridgeError::Error(format!(
+                            "{} given too many arguments, expected at least {} arguments, got {}.",
+                            fn_name,
+                            1usize,
+                            args.len()
+                        )))
                     }
                     _ => {
-                        return {
-                            let arg: String = (*arg_0).sl_into_ref(vm)?;
-                            arg.trim().to_string().sl_into(vm)
-                        };
+                        let arg: String = (*arg_0).sl_into_ref(vm)?;
+                        arg.trim().to_string().sl_into(vm)
                     }
                 },
             },
-            _ => {
-                return Err(VMError::new_conversion(&*{
-                    let res = format!("{} failed to parse its arguments, internal error.", fn_name);
-                    res
-                }));
-            }
+            _ => Err(BridgeError::Error(format!(
+                "{} failed to parse its arguments, internal error.",
+                fn_name
+            ))),
         }
     }
 
@@ -415,21 +389,21 @@ mod tests {
             .expect("&Value::String can be converted to String");
         let kwd_val = create_keyword(vm);
 
-        let e: VMResult<String> = kwd_val.sl_into_ref(vm);
+        let e: BridgeResult<String> = kwd_val.sl_into_ref(vm);
         e.expect_err("Can not convert keyword to String");
 
         let _s: &str = (&val)
             .sl_as_ref(vm)
             .expect("&Value::String can be converted to &str");
 
-        let e: VMResult<&str> = (&kwd_val).sl_as_ref(vm);
+        let e: BridgeResult<&str> = (&kwd_val).sl_as_ref(vm);
         e.expect_err("Can not convert keyword to &str");
 
         let _s: &mut String = (&val)
             .sl_as_mut(vm)
             .expect("&Value::String can be converted to &mut String");
 
-        let e: VMResult<&mut String> = (&kwd_val).sl_as_mut(vm);
+        let e: BridgeResult<&mut String> = (&kwd_val).sl_as_mut(vm);
         e.expect_err("Can not convert keyword to &mut String");
     }
 
