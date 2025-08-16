@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["BUILTINS","COLORS_LISP_NAME","CORE_LISP_NAME","ITER_LISP_NAME","SLSHRC","SLSHRC_NAME","TEST_LISP_NAME"],"fn":["add_load_builtins","apply_callable","exec_unrooted_chunk","expand_tilde","get_load_name","load","load_internal","load_one_expression","run_reader"]};

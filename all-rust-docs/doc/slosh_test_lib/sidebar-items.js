@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_user_builtins","do_to_vm_stdout_fcns","vm_with_builtins_and_core","vm_with_stdout_disabled","vm_with_stdout_enabled"],"mod":["docs"]};

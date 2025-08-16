@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["NOOP"],"enum":["NoopSwap"],"fn":["add_global_value","add_misc_builtins","get_namespaces_interned","noop_fn","noop_swap_internal","retrieve_in_namespace","un_noop_fn"],"mod":["bridge_macro_tests","collections","conversions","fs_meta","fs_temp","io","math","print","rand","string"]};
