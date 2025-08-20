@@ -11,6 +11,7 @@ pub struct FuseMount {
     pub mount_point: PathBuf,
     pub file_mapping: Arc<Mutex<FileMapping>>,
     pub process_handle: Option<std::process::Child>,
+    pub comm_write_fd: Option<std::os::unix::io::RawFd>,
 }
 
 impl FuseMount {
@@ -19,12 +20,15 @@ impl FuseMount {
             mount_point,
             file_mapping: Arc::new(Mutex::new(FileMapping::new())),
             process_handle: None,
+            comm_write_fd: None,
         }
     }
 
     pub fn register_file(&self, path: &str, expression: String) {
-        let mut mapping = self.file_mapping.lock().unwrap();
-        mapping.register(path, expression);
+        if let Ok(mut mapping) = self.file_mapping.lock() {
+            mapping.register(path, expression);
+        }
+        // Silently ignore lock poisoning - the file just won't be registered
     }
 
     pub fn unmount(&mut self) -> Result<(), std::io::Error> {

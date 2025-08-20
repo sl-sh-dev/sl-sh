@@ -24,7 +24,6 @@ use builtins::collections::setup_collection_builtins;
 use builtins::conversions::add_conv_builtins;
 use builtins::fs_meta::add_fs_meta_builtins;
 use builtins::fs_temp::add_fs_temp_builtins;
-use builtins::fuse::add_fuse_builtins;
 use builtins::io::add_io_builtins;
 use builtins::math::add_math_builtins;
 use builtins::print::{add_print_builtins, display_value};
@@ -439,10 +438,18 @@ pub fn set_builtins(env: &mut SloshVm) {
     add_conv_builtins(env);
     add_fs_meta_builtins(env);
     add_fs_temp_builtins(env);
-    add_fuse_builtins(env);
     add_rand_builtins(env);
     add_math_builtins(env);
     add_doc_builtins(env);
+}
+
+#[cfg(feature = "fuse")]
+mod fuse_bindings;
+
+/// Add FUSE builtins if the feature is enabled
+#[cfg(feature = "fuse")]
+pub fn add_fuse_builtins(env: &mut SloshVm) {
+    fuse_bindings::add_fuse_builtins(env);
 }
 
 /// Loads the user's sloshrc file, has side-effects, and sets some important
@@ -520,6 +527,8 @@ Section: shell"#
 pub fn set_builtins_and_shell_builtins(env: &mut SloshVm) {
     set_builtins(env);
     set_shell_builtins(env);
+    #[cfg(feature = "fuse")]
+    add_fuse_builtins(env);
 }
 
 pub fn set_shell_builtins(env: &mut SloshVm) {
@@ -641,6 +650,8 @@ pub fn run_slosh(modify_vm: impl FnOnce(&mut SloshVm)) -> i32 {
             set_builtins(&mut env);
             modify_vm(&mut env);
             set_shell_builtins(&mut env);
+            #[cfg(feature = "fuse")]
+            add_fuse_builtins(&mut env);
             env.unpause_gc();
         });
         if config.command.is_none() && config.script.is_none() {

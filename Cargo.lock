@@ -228,7 +228,6 @@ dependencies = [
  "bridge_types",
  "compile_state",
  "glob",
- "lazy_static",
  "rand",
  "same-file",
  "shell",
@@ -238,7 +237,6 @@ dependencies = [
  "trybuild",
  "unicode-segmentation",
  "unicode_reader",
- "uuid",
  "walkdir",
 ]
 
@@ -2201,6 +2199,7 @@ dependencies = [
  "shell",
  "sl-compiler",
  "sl-liner",
+ "slosh-fuse",
  "slosh_lib",
  "slvm",
  "temp-env",
@@ -2213,14 +2212,12 @@ dependencies = [
 name = "slosh-fuse"
 version = "0.11.1"
 dependencies = [
- "compile_state",
  "env_logger",
  "fuser",
  "libc",
  "log",
  "nix 0.27.1",
- "slosh_lib",
- "slvm",
+ "uuid",
 ]
 
 [[package]]
@@ -2237,15 +2234,18 @@ dependencies = [
  "criterion",
  "glob",
  "iai-callgrind",
+ "nix 0.27.1",
  "shell",
  "sl-compiler",
  "sl-liner",
+ "slosh-fuse",
  "slvm",
  "static_assertions",
  "temp-env",
  "tempfile",
  "unicode-width 0.2.0",
  "unicode_reader",
+ "uuid",
 ]
 
 [[package]]

@@ -7,12 +7,13 @@ edition = "2024"
 [features]
 default = []
 lisp-test = ["dep:regex", "dep:lazy_static", "dep:mdbook", "dep:env_logger"]
+fuse = ["dep:slosh-fuse", "slosh_lib/fuse"]
 
 [dependencies]
 unicode_reader = { workspace = true }
 sl-compiler = { workspace = true }
 bridge_adapters = { path = "../bridge_adapters" }
-slosh_lib = { path = "../slosh_lib" }
+slosh_lib = { path = "../slosh_lib", features = [] }
 sl-liner = { git = "https://github.com/sl-sh-dev/sl-liner.git" }
 slvm = { workspace = true }
 builtins = { path = "../builtins" }
@@ -20,6 +21,9 @@ compile_state = { workspace = true }
 shell = { path = "../shell" }
 unicode-width = { workspace = true }
 glob = { workspace = true }
+
+# Optional dependencies
+slosh-fuse = { path = "../slosh-fuse", optional = true }
 
 # lisp-test dependencies
 regex = { workspace = true, optional = true }

@@ -24,6 +24,9 @@ fn version(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
 }
 
 fn main() {
+    #[cfg(feature = "fuse")]
+    eprintln!("FUSE feature is enabled in slosh binary!");
+    
     let exit_code = run(modify_vm);
     process::exit(exit_code)
 }

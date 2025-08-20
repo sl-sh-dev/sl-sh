@@ -1,18 +1,20 @@
 [package]
 name = "slosh-fuse"
 version.workspace = true
-edition = "2024"
+edition = "2021"
+
+[[bin]]
+name = "slosh-fuse-server"
+path = "src/bin/slosh-fuse-server.rs"
 
 [dependencies]
 fuser = "0.14"
 libc = "0.2"
 log = "0.4"
 env_logger = "0.11"
+uuid = { version = "1.0", features = ["v4"] }
 
-# Local slosh dependencies
-slosh_lib.workspace = true
-slvm.workspace = true
-compile_state.workspace = true
+# No slosh dependencies to avoid circular dependency
 
 [dependencies.nix]
 version = "0.27"
