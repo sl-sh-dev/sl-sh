@@ -1,5 +1,6 @@
 pub mod eval_fs;
 pub mod file_mapping;
+pub mod proc_subst;
 
 pub use eval_fs::EvalFs;
 pub use file_mapping::{FileMapping, FileEntry};

@@ -446,10 +446,14 @@ pub fn set_builtins(env: &mut SloshVm) {
 #[cfg(feature = "fuse")]
 mod fuse_bindings;
 
+#[cfg(feature = "fuse")]
+mod proc_subst_bindings;
+
 /// Add FUSE builtins if the feature is enabled
 #[cfg(feature = "fuse")]
 pub fn add_fuse_builtins(env: &mut SloshVm) {
     fuse_bindings::add_fuse_builtins(env);
+    proc_subst_bindings::add_proc_subst_builtins(env);
 }
 
 /// Loads the user's sloshrc file, has side-effects, and sets some important
