@@ -5,9 +5,9 @@ use crate::slosh_eval_lib::SloshArtifacts;
 use clap::{Arg, ArgMatches, Command};
 use compile_state::state;
 use compile_state::state::SloshVm;
-use mdbook::book::{Book, BookItem};
-use mdbook::errors::Error;
-use mdbook::preprocess::{CmdPreprocessor, Preprocessor, PreprocessorContext};
+use mdbook_preprocessor::book::{Book, BookItem};
+use mdbook_preprocessor::errors::Error;
+use mdbook_preprocessor::{parse_input, Preprocessor, PreprocessorContext};
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 use pulldown_cmark_to_cmark::cmark;
 use semver::{Version, VersionReq};
@@ -52,18 +52,18 @@ fn main() {
     }
 }
 
-fn handle_preprocessing(pre: &dyn Preprocessor) -> Result<(), Error> {
-    let (ctx, book) = CmdPreprocessor::parse_input(io::stdin())?;
+fn handle_preprocessing(pre: &dyn Preprocessor) -> Result<(), Box<dyn std::error::Error>> {
+    let (ctx, book) = parse_input(io::stdin())?;
 
     let book_version = Version::parse(&ctx.mdbook_version)?;
-    let version_req = VersionReq::parse(mdbook::MDBOOK_VERSION)?;
+    let version_req = VersionReq::parse(mdbook_preprocessor::MDBOOK_VERSION)?;
 
     if !version_req.matches(&book_version) {
         log::debug!(
             "Warning: The {} plugin was built against version {} of mdbook, \
              but we're being called from version {}",
             pre.name(),
-            mdbook::MDBOOK_VERSION,
+            mdbook_preprocessor::MDBOOK_VERSION,
             ctx.mdbook_version
         );
     }
@@ -78,21 +78,43 @@ fn handle_supports(pre: &dyn Preprocessor, sub_args: &ArgMatches) -> ! {
     let renderer = sub_args
         .get_one::<String>("renderer")
         .expect("Required argument");
-    let supported = pre.supports_renderer(renderer);
 
     // Signal whether the renderer is supported by exiting with 1 or 0.
-    if supported {
-        process::exit(0);
-    } else {
-        process::exit(1);
+    match pre.supports_renderer(renderer) {
+        Ok(true) => process::exit(0),
+        Ok(false) | Err(_) => process::exit(1),
     }
 }
 
 mod slosh_eval_lib {
     use super::*;
     use pulldown_cmark::CodeBlockKind;
+    use serde::Deserialize;
     use slosh_lib::Reader;
-    use toml::Value;
+
+    /// Configuration for the slosh-eval preprocessor
+    #[derive(Debug, Deserialize, Default)]
+    #[serde(default)]
+    pub struct SloshEvalConfig {
+        #[serde(rename = "doc-forms")]
+        pub doc_forms: Option<DocFormsConfig>,
+        #[serde(rename = "code-block-label")]
+        pub code_block_label: Option<String>,
+        #[serde(rename = "doc-supplementary")]
+        pub doc_supplementary: Option<bool>,
+    }
+
+    #[derive(Debug, Deserialize, Default)]
+    #[serde(default)]
+    pub struct DocFormsConfig {
+        #[serde(rename = "std-lib")]
+        pub std_lib: Option<bool>,
+        pub user: Option<bool>,
+        #[serde(rename = "user-doc-files")]
+        pub user_doc_files: Option<Vec<String>>,
+        #[serde(rename = "user-doc-load-paths")]
+        pub user_doc_load_paths: Option<Vec<String>>,
+    }
 
     /// Preprocessor to create slosh artifacts
     ///     - eval slosh code
@@ -143,7 +165,7 @@ mod slosh_eval_lib {
                         Event::End(TagEnd::CodeBlock) if tracking => {
                             let mut vm = state::new_slosh_vm();
                             vm.pause_gc();
-                            slosh_test_lib::vm_with_builtins_and_core(&mut vm, false);
+                            let _ = slosh_test_lib::vm_with_builtins_and_core(&mut vm, false);
                             vm.unpause_gc();
                             let eval = exec_code(&mut vm, buf.clone());
 
@@ -238,47 +260,24 @@ mod slosh_eval_lib {
         }
 
         fn run(&self, ctx: &PreprocessorContext, mut book: Book) -> Result<Book, Error> {
-            if let Some(slosh_eval_cfg) = ctx.config.get_preprocessor(self.name()) {
+            // Get the preprocessor config using the new API
+            let preprocessors: std::collections::BTreeMap<String, SloshEvalConfig> =
+                ctx.config.preprocessors().unwrap_or_default();
+
+            if let Some(slosh_eval_cfg) = preprocessors.get(self.name()) {
                 let mut gen_std_lib_docs = false;
                 let mut gen_user_docs = false;
                 let mut user_files = vec![];
                 let mut user_load_paths = vec![];
-                let key = "doc-forms";
-                if let Some(Value::Table(table)) = slosh_eval_cfg.get(key) {
-                    for (k, v) in table {
-                        match k.as_str() {
-                            "std-lib" => {
-                                if let Value::Boolean(b) = v {
-                                    gen_std_lib_docs = *b;
-                                }
-                            }
-                            "user" => {
-                                if let Value::Boolean(b) = v {
-                                    gen_user_docs = *b;
-                                }
-                            }
-                            "user-doc-files" => {
-                                if let Value::Array(arr) = v {
-                                    for s in arr {
-                                        if let Value::String(s) = s {
-                                            user_files.push(s.to_string());
-                                        }
-                                    }
-                                }
-                            }
-                            "user-doc-load-paths" => {
-                                if let Value::Array(arr) = v {
-                                    for s in arr {
-                                        if let Value::String(s) = s {
-                                            user_load_paths.push(s.to_string());
-                                        }
-                                    }
-                                }
-                            }
-                            _ => {
-                                panic!("Invalid config key,value pair: {}, {:?}", k, v.as_str())
-                            }
-                        }
+
+                if let Some(ref doc_forms) = slosh_eval_cfg.doc_forms {
+                    gen_std_lib_docs = doc_forms.std_lib.unwrap_or(false);
+                    gen_user_docs = doc_forms.user.unwrap_or(false);
+                    if let Some(ref files) = doc_forms.user_doc_files {
+                        user_files = files.clone();
+                    }
+                    if let Some(ref paths) = doc_forms.user_doc_load_paths {
+                        user_load_paths = paths.clone();
                     }
                 }
 
@@ -286,11 +285,12 @@ mod slosh_eval_lib {
                     log::info!("Evaluate docs.");
                     let mut vm = state::new_slosh_vm();
                     vm.pause_gc();
-                    slosh_test_lib::vm_with_builtins_and_core(&mut vm, false);
+                    let _ = slosh_test_lib::vm_with_builtins_and_core(&mut vm, false);
                     vm.unpause_gc();
 
-                    log::debug!("Add key {}.", key);
-                    let _ = docs::get_slosh_docs(&mut vm, &mut book, true)?;
+                    log::debug!("Add key doc-forms.");
+                    let _ = docs::get_slosh_docs(&mut vm, &mut book, true)
+                        .map_err(|e| Error::msg(format!("Failed to get slosh docs: {}", e)))?;
                     log::info!("Docs evaluated.");
                 }
 
@@ -298,7 +298,7 @@ mod slosh_eval_lib {
                     // first get provided sections
                     let mut vm = state::new_slosh_vm();
                     vm.pause_gc();
-                    slosh_test_lib::vm_with_builtins_and_core(&mut vm, false);
+                    let _ = slosh_test_lib::vm_with_builtins_and_core(&mut vm, false);
                     vm.unpause_gc();
                     let provided_sections =
                         docs::get_slosh_docs(&mut vm, &mut book, false).unwrap_or_default();
@@ -306,15 +306,19 @@ mod slosh_eval_lib {
                     let modify_vm_local = |vm: &mut SloshVm| {
                         modify_vm(vm);
 
-                        if user_files.is_empty() {
-                            user_files = vec!["~/.config/slosh/init.slosh".to_string()];
-                        }
-                        if user_load_paths.is_empty() {
-                            user_load_paths = vec!["~/.config/slosh/".to_string()];
-                        }
+                        let user_files_local = if user_files.is_empty() {
+                            vec!["~/.config/slosh/init.slosh".to_string()]
+                        } else {
+                            user_files.clone()
+                        };
+                        let user_load_paths_local = if user_load_paths.is_empty() {
+                            vec!["~/.config/slosh/".to_string()]
+                        } else {
+                            user_load_paths.clone()
+                        };
 
                         vm.pause_gc();
-                        slosh_test_lib::vm_with_builtins_and_core(vm, true);
+                        let _ = slosh_test_lib::vm_with_builtins_and_core(vm, true);
                         vm.unpause_gc();
 
                         vm.pause_gc();
@@ -322,8 +326,8 @@ mod slosh_eval_lib {
                         slosh_lib::load_sloshrc(vm, None);
                         slosh_test_lib::add_user_builtins(
                             vm,
-                            user_load_paths.as_slice(),
-                            user_files.as_slice(),
+                            user_load_paths_local.as_slice(),
+                            user_files_local.as_slice(),
                         );
                         vm.unpause_gc();
                         let _ = docs::add_user_docs_to_mdbook_less_provided_sections(
@@ -335,31 +339,27 @@ mod slosh_eval_lib {
                     let _ = slosh_lib::run_slosh(modify_vm_local);
                 }
 
-                let key = "code-block-label";
-                if let Some(Value::String(block)) = slosh_eval_cfg.get(key) {
-                    log::debug!("Use key {}, evaluate code blocks labeled: {}", key, block);
+                if let Some(ref block) = slosh_eval_cfg.code_block_label {
+                    log::debug!("Evaluate code blocks labeled: {}", block);
                     eval_code_blocks(&mut book, block);
                 }
 
-                let key = "doc-supplementary";
-                if let Some(Value::Boolean(b)) = slosh_eval_cfg.get(key) {
-                    if *b {
-                        let mut vm = state::new_slosh_vm();
-                        vm.pause_gc();
-                        slosh_test_lib::vm_with_builtins_and_core(&mut vm, false);
-                        vm.unpause_gc();
+                if slosh_eval_cfg.doc_supplementary.unwrap_or(false) {
+                    let mut vm = state::new_slosh_vm();
+                    vm.pause_gc();
+                    let _ = slosh_test_lib::vm_with_builtins_and_core(&mut vm, false);
+                    vm.unpause_gc();
 
-                        log::debug!("Add key {}.", key);
-                        _ = docs::link_supplementary_docs(&mut vm, &mut book);
-                    }
+                    log::debug!("Add supplementary docs.");
+                    let _ = docs::link_supplementary_docs(&mut vm, &mut book);
                 }
             }
 
             Ok(book)
         }
 
-        fn supports_renderer(&self, renderer: &str) -> bool {
-            renderer != "not-supported"
+        fn supports_renderer(&self, renderer: &str) -> Result<bool, Error> {
+            Ok(renderer != "not-supported")
         }
     }
 }

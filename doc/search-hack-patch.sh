@@ -1,8 +1,12 @@
 ##############################################################
 # Hack to get mdbook to allow searching for symbols like `%` #
 ##############################################################
-# Path to the searcher.js file
-SEARCHER_JS="./book/searcher.js"
+# Path to the searcher.js file (mdbook 0.5+ uses hashed filenames)
+SEARCHER_JS=$(ls ./book/searcher-*.js 2>/dev/null || echo "./book/searcher.js")
+if [ ! -f "$SEARCHER_JS" ]; then
+    echo "Warning: searcher.js not found, skipping search hack patch"
+    exit 0
+fi
 # Line to find
 SEARCH_LINE='        searchindex = elasticlunr.Index.load(config.index);'
 # Lines to insert after the found line
