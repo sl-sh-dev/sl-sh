@@ -17,7 +17,8 @@ slvm = { workspace = true }
 sl-compiler = { workspace = true }
 compile_state = { workspace = true }
 shell = { workspace = true }
-mdbook = {  version = "0.4", default-features = false }
+mdbook-preprocessor = { version = "0.5", default-features = false }
+mdbook-driver = { version = "0.5", default-features = false }
 
 [dev-dependencies]
 tempfile = { workspace = true }
