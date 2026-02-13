@@ -76,19 +76,19 @@ they contain a lot of raw html which must be handled by mdbook.")
 $(cargo build --workspace)
 
 (prn "Build doc extension")
-(def doc-dir (str $PWD))
+(def doc-dir (env "PWD"))
 (def mdbook-eval-dir (str doc-dir "/mdbook-slosh-eval"))
 $(cargo build --manifest-path ~(str mdbook-eval-dir "/Cargo.toml"))
 
 ;; Set PATH with the mdbook-slosh-eval binary for subsequent commands
 (def mdbook-path (str mdbook-eval-dir "/target/debug"))
-(def new-path (str $PATH ":" mdbook-path))
+(def new-path (str (env "PATH") ":" mdbook-path))
 
 (prn "Running mdbook build with PATH=" new-path)
-(sh (str "PATH=" new-path " mdbook build"))
+(sh (str "export PATH=\"" new-path "\" && mdbook build"))
 
 (sh "./search-hack-patch.sh")
 
 (when (= args-local.1 "serve")
     (prn "Starting mdbook serve...")
-    (sh (str "PATH=" new-path " mdbook serve")))
+    (sh (str "export PATH=\"" new-path "\" && mdbook serve")))
