@@ -536,12 +536,12 @@ impl<'vm> Reader<'vm> {
                     }
                     symbol.clear();
                     let ch = self.chars().next();
-                    if let Some(ch) = ch {
-                        if ch? != "}" {
-                            return Err(ReadError {
-                                reason: "invalid str format, missing '}'".to_string(),
-                            });
-                        }
+                    if let Some(ch) = ch
+                        && ch? != "}"
+                    {
+                        return Err(ReadError {
+                            reason: "invalid str format, missing '}'".to_string(),
+                        });
                     }
                 } else if ch == "\\" {
                     last_ch_escape = true;
@@ -753,10 +753,10 @@ impl<'vm> Reader<'vm> {
         while cont {
             let exp = match self.read_inner(buffer, in_back_quote, ReadReturn::Vector) {
                 Ok(exp) => {
-                    if let Some(Value::Symbol(i)) = &exp {
-                        if *i == close_intern {
-                            return Ok(self.alloc_list(v, line, column));
-                        }
+                    if let Some(Value::Symbol(i)) = &exp
+                        && *i == close_intern
+                    {
+                        return Ok(self.alloc_list(v, line, column));
                     }
                     exp
                 }
@@ -789,10 +789,10 @@ impl<'vm> Reader<'vm> {
         while cont {
             let key = match self.read_inner(buffer, in_back_quote, ReadReturn::Map) {
                 Ok(exp) => {
-                    if let Some(Value::Symbol(i)) = &exp {
-                        if *i == close_intern {
-                            return Ok(self.alloc_list(list, line, column));
-                        }
+                    if let Some(Value::Symbol(i)) = &exp
+                        && *i == close_intern
+                    {
+                        return Ok(self.alloc_list(list, line, column));
                     }
                     exp
                 }
@@ -802,12 +802,12 @@ impl<'vm> Reader<'vm> {
             };
             let val = match self.read_inner(buffer, in_back_quote, ReadReturn::Map) {
                 Ok(exp) => {
-                    if let Some(Value::Symbol(i)) = &exp {
-                        if *i == close_intern {
-                            return Err(ReadError {
-                                reason: "Map missing value".to_string(),
-                            });
-                        }
+                    if let Some(Value::Symbol(i)) = &exp
+                        && *i == close_intern
+                    {
+                        return Err(ReadError {
+                            reason: "Map missing value".to_string(),
+                        });
                     }
                     exp
                 }
@@ -832,10 +832,10 @@ impl<'vm> Reader<'vm> {
         if let Value::Pair(h) = exp {
             let uq = self.vm.intern("unquote");
             let (car, cdr) = self.vm.get_pair(h);
-            if let Value::Symbol(si) = car {
-                if si == uq {
-                    return Some(cdr);
-                }
+            if let Value::Symbol(si) = car
+                && si == uq
+            {
+                return Some(cdr);
             }
         }
         None
@@ -843,15 +843,15 @@ impl<'vm> Reader<'vm> {
 
     fn unquote_splice(&mut self, exp: Value) -> bool {
         fn is_splice(vm: &mut SloshVm, car: Value) -> bool {
-            if let Value::Symbol(si) = car {
-                if si == vm.intern("unquote-splice") {
-                    return true;
-                }
+            if let Value::Symbol(si) = car
+                && si == vm.intern("unquote-splice")
+            {
+                return true;
             }
-            if let Value::Symbol(si) = car {
-                if si == vm.intern("unquote-splice!") {
-                    return true;
-                }
+            if let Value::Symbol(si) = car
+                && si == vm.intern("unquote-splice!")
+            {
+                return true;
             }
             false
         }

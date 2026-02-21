@@ -465,12 +465,11 @@ fn find_exes(comps: &mut Vec<String>, start: &str) {
                     for p in paths {
                         match p {
                             Ok(p) => {
-                                if let Some(p) = p.file_name() {
-                                    if let Some(p) = p.to_str() {
-                                        if p.starts_with(start) {
-                                            comps.push(p.to_string());
-                                        }
-                                    }
+                                if let Some(p) = p.file_name()
+                                    && let Some(p) = p.to_str()
+                                    && p.starts_with(start)
+                                {
+                                    comps.push(p.to_string());
                                 }
                             }
                             Err(_err) => {}

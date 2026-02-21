@@ -121,7 +121,9 @@ syn cluster sloshDocStringGroup	contains=sloshParen0,sloshParen1,sloshParen2,slo
 syn match   sloshComment	";.*$"				contains=@sloshCommentGroup
 syn region  sloshCommentRegion	start="#|" end="|#"		contains=sloshCommentRegion,@sloshCommentGroup
 "syn region  sloshCommentDocStr	start="#!" end="!#"	contains=sloshComment,sloshCommentRegion,@sloshDocStringGroup,@sloshCommentGroup
-syn region  sloshCommentDocStr	start="#%" end="%#"	contains=sloshComment,sloshCommentRegion,@sloshCommentGroup
+syn region  sloshCommentDocStr	start="#%" end="%#"	contains=sloshComment,sloshCommentRegion,@sloshDocStringGroup,@sloshCommentGroup,sloshString,sloshNumber,sloshFunc,sloshKey,sloshDocCodeBlock,sloshDocInlineCode
+syn region  sloshDocCodeBlock	contained	start="```" end="```"
+syn match   sloshDocInlineCode	contained	"`[^`]\+`"
 syn match   sloshTodo		contained	"todo.*$"
 syn match   sloshTodo		contained	"TODO.*$"
 
@@ -155,7 +157,11 @@ if !exists("skip_slosh_syntax_inits")
   hi def link sloshVar			Statement
 
   "hi def hlDocString ctermfg=blue	guifg=darkslateblue
-  hi def hlDocString ctermfg=magenta	guifg=green1
+  hi def hlDocString ctermfg=green	guifg=green1
+  hi def hlDocCodeBlock ctermfg=red	guifg=red1
+  hi def hlDocInlineCode ctermfg=yellow	guifg=orange1
+  hi def link sloshDocCodeBlock		hlDocCodeBlock
+  hi def link sloshDocInlineCode	hlDocInlineCode
   if &bg == "dark"
    hi def hlLevel0 ctermfg=red		guifg=red1
    hi def hlLevel1 ctermfg=yellow	guifg=orange1

@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use crate::{CallFrame, Chunk, Continuation, GVm, VMError, VMResult, Value, mov_register};
+use crate::{CallFrame, Chunk, Continuation, GVm, VMError, VMResult, Value};
 
 impl<ENV> GVm<ENV> {
     /// Setup the rest (&) arguments for a callable.

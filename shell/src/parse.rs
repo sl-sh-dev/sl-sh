@@ -877,10 +877,10 @@ fn parse_line_inner(
 ) -> Result<ParsedJob, io::Error> {
     let mut state = ParseState::new();
     while let Some(ch) = chars.next() {
-        if let Some(end_ch) = end_char {
-            if ch == end_ch {
-                break;
-            }
+        if let Some(end_ch) = end_char
+            && ch == end_ch
+        {
+            break;
         }
         let next_char = *chars.peek().unwrap_or(&' ');
         if ch.is_whitespace() {

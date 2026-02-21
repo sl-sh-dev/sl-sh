@@ -377,10 +377,10 @@ fn get_usage(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
                                 })
                                 // return default empty string and have parse_doc_string handle error if no doc provided.
                                 .unwrap_or_default();
-                            if let Some(test) = raw_doc_string.trim().lines().next() {
-                                if test.starts_with("Usage:") {
-                                    usage = test.to_string();
-                                }
+                            if let Some(test) = raw_doc_string.trim().lines().next()
+                                && test.starts_with("Usage:")
+                            {
+                                usage = test.to_string();
                             }
                         } else {
                             usage = format!("Usage: {}", usage);

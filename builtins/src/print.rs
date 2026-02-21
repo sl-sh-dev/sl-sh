@@ -7,10 +7,10 @@ use slvm::{Interned, VMError, VMResult, Value};
 use std::io::{Write, stderr, stdout};
 
 fn is_sym(vm: &SloshVm, name: &str, intern: Interned) -> bool {
-    if let Some(i) = vm.get_if_interned(name) {
-        if intern == i {
-            return true;
-        }
+    if let Some(i) = vm.get_if_interned(name)
+        && intern == i
+    {
+        return true;
     }
     false
 }

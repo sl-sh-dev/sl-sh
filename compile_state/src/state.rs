@@ -1518,10 +1518,10 @@ impl SloshVmTrait for SloshVm {
             let mut ns = ns.to_string();
             ns.push_str("::");
             ns.push_str(sym);
-            if let Some(i) = vm.get_if_interned(&ns) {
-                if let Some(global) = vm.env().global_map.get(&i).copied().map(|i| i as u32) {
-                    return Some(global);
-                }
+            if let Some(i) = vm.get_if_interned(&ns)
+                && let Some(global) = vm.env().global_map.get(&i).copied().map(|i| i as u32)
+            {
+                return Some(global);
             }
             None
         }
@@ -1536,10 +1536,8 @@ impl SloshVmTrait for SloshVm {
                 }
                 s_i.next();
             }
-            if is_alias {
-                if let (Some(':'), Some(':')) = (s_i.next(), s_i.next()) {
-                    return true;
-                }
+            if is_alias && let (Some(':'), Some(':')) = (s_i.next(), s_i.next()) {
+                return true;
             }
             false
         }
@@ -1552,12 +1550,11 @@ impl SloshVmTrait for SloshVm {
             if let Some(alias) = alias {
                 if is_alias(alias, sym) {
                     let s = sym.replacen(alias, import, 1);
-                    if let Some(i) = self.get_if_interned(&s) {
-                        if let Some(global) =
+                    if let Some(i) = self.get_if_interned(&s)
+                        && let Some(global) =
                             self.env().global_map.get(&i).copied().map(|i| i as u32)
-                        {
-                            return Some(global);
-                        }
+                    {
+                        return Some(global);
                     }
                 }
             } else if let Some(g) = check_global(self, import, sym) {

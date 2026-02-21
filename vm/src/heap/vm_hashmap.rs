@@ -147,14 +147,14 @@ impl VMHashMap {
     }
 
     /** Returns an iterator over all the keys in the HashMap. */
-    pub fn keys(&self) -> VMMapKeys {
+    pub fn keys(&self) -> VMMapKeys<'_> {
         VMMapKeys {
             keys: self.map.keys(),
         }
     }
 
     /** Return an iterator over all the (key, value) pairs in the HashMap. */
-    pub fn iter(&self) -> VMHashMapIter {
+    pub fn iter(&self) -> VMHashMapIter<'_> {
         VMHashMapIter {
             iter: self.map.iter(),
         }

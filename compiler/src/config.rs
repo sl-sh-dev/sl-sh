@@ -40,10 +40,10 @@ fn version() {
 }
 
 fn get_arg(exe_name: &str, args: &mut Vec<OsString>) -> Option<String> {
-    if let Some(argument) = args.pop() {
-        if let Ok(arg) = argument.into_string() {
-            return Some(arg);
-        }
+    if let Some(argument) = args.pop()
+        && let Ok(arg) = argument.into_string()
+    {
+        return Some(arg);
     }
     help(exe_name);
     None
