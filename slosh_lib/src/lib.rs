@@ -33,6 +33,9 @@ use builtins::{add_global_value, add_misc_builtins};
 use sl_liner::vi::AlphanumericAndVariableKeywordRule;
 use sl_liner::{ColorClosure, Context, Prompt, keymap};
 
+#[cfg(feature = "terminal-ui")]
+use console_builtins::add_console_builtins;
+
 mod completions;
 pub mod debug;
 mod liner_rules;
@@ -434,6 +437,8 @@ pub fn set_builtins(env: &mut SloshVm) {
     add_rand_builtins(env);
     add_math_builtins(env);
     add_doc_builtins(env);
+    #[cfg(feature = "terminal-ui")]
+    add_console_builtins(env);
 }
 
 /// Loads the user's sloshrc file, has side-effects, and sets some important
@@ -700,6 +705,8 @@ pub fn run_slosh(modify_vm: impl FnOnce(&mut SloshVm)) -> i32 {
             });
         }
     }
+    #[cfg(feature = "terminal-ui")]
+    console_builtins::cleanup_console();
     status
 }
 

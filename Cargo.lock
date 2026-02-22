@@ -392,6 +392,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "console_builtins"
+version = "0.11.1"
+dependencies = [
+ "bridge_adapters",
+ "bridge_macros",
+ "bridge_types",
+ "compile_state",
+ "lazy_static",
+ "sl-console 0.10.1",
+ "slvm",
+ "static_assertions",
+]
+
+[[package]]
 name = "core-foundation-sys"
 version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2093,6 +2107,20 @@ dependencies = [
 [[package]]
 name = "sl-console"
 version = "0.10.1"
+dependencies = [
+ "crossbeam-channel",
+ "lazy_static",
+ "libc",
+ "log",
+ "numtoa",
+ "parking_lot 0.11.2",
+ "scopeguard",
+ "winapi",
+]
+
+[[package]]
+name = "sl-console"
+version = "0.10.1"
 source = "git+https://github.com/sl-sh-dev/sl-console.git#7da43882de1673e53326244f540f38f5b38dada6"
 dependencies = [
  "crossbeam-channel",
@@ -2111,7 +2139,7 @@ version = "0.7.0"
 source = "git+https://github.com/sl-sh-dev/sl-liner.git#46882f91558ba4df1956e5aefeeaf82c54995aae"
 dependencies = [
  "bytecount",
- "sl-console",
+ "sl-console 0.10.1 (git+https://github.com/sl-sh-dev/sl-console.git)",
  "unicode-segmentation",
  "unicode-width 0.1.14",
 ]
@@ -2164,6 +2192,7 @@ dependencies = [
  "chrono",
  "compile_state",
  "compiler_test_utils",
+ "console_builtins",
  "criterion",
  "glob",
  "iai-callgrind",

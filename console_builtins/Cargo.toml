@@ -1,0 +1,14 @@
+[package]
+name = "console_builtins"
+version.workspace = true
+edition = "2024"
+
+[dependencies]
+slvm = { workspace = true }
+compile_state = { workspace = true }
+bridge_adapters = { path = "../bridge_adapters" }
+bridge_macros = { path = "../bridge_macros" }
+bridge_types = { workspace = true }
+sl-console = { path = "../../sl-console" }
+lazy_static = { workspace = true }
+static_assertions = { workspace = true }
