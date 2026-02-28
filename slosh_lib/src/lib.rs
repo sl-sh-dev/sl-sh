@@ -523,14 +523,11 @@ pub fn set_builtins_and_shell_builtins(env: &mut SloshVm) {
 pub fn set_shell_builtins(env: &mut SloshVm) {
     set_environment(env);
     add_shell_builtins(env);
-    env.set_global_builtin("dump-regs", builtin_dump_regs);
 
     let uid = Sys::current_uid();
     let euid = Sys::effective_uid();
     unsafe {
         env::set_var("UID", format!("{uid}"));
-    }
-    unsafe {
         env::set_var("EUID", format!("{euid}"));
     }
     bridge_adapters::add_named_global_doc(

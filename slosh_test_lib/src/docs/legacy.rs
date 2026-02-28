@@ -107,7 +107,6 @@ pub(crate) fn unimplemented_report(vm: &mut SloshVm) -> VMResult<StatusReport> {
 
     crate::vm_with_stdout_disabled(vm);
     slosh_lib::load_builtins_lisp_less_sloshrc(vm)?;
-    slosh_lib::load_test(vm);
     crate::vm_with_stdout_enabled(vm);
     // Add all global symbols
     for g in vm.globals().keys() {
