@@ -647,6 +647,7 @@ pub fn run_slosh(modify_vm: impl FnOnce(&mut SloshVm)) -> i32 {
                 status = run_shell_with_stdin();
             }
         } else if let Some(mut command) = config.command {
+            load_core_slosh();
             for a in &config.args {
                 command.push(' ');
                 command.push_str(a);
