@@ -7,13 +7,14 @@ edition = "2024"
 [dependencies]
 clap = "*"
 semver = "*"
-mdbook = "*"
+mdbook-preprocessor = "0.5"
 anyhow = "*"
+serde = { version = "*", features = ["derive"] }
 serde_json = "*"
 env_logger = "*"
 log = "*"
-pulldown-cmark = "0.10.2"
-pulldown-cmark-to-cmark = "13.0.0"
+pulldown-cmark = "0.13"
+pulldown-cmark-to-cmark = "21"
 slosh_lib = { path = "../../slosh_lib" }
 slosh_test_lib = { path = "../../slosh_test_lib" }
 builtins = { path = "../../builtins" }
@@ -21,7 +22,6 @@ compile_state = { path = "../../compile_state" }
 bridge_adapters = { path = "../../bridge_adapters" }
 slvm = { path = "../../vm" }
 sl-compiler = { path = "../../compiler" }
-toml = "=0.5.11"
 
 [build-dependencies]
 chrono = "0.4.38"

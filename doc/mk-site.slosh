@@ -10,8 +10,6 @@
 (def slosh-rust-doc-path "src/slosh-rust-docs")
 (def all-rust-doc-path "src/all-rust-docs")
 (def help "Usage:
-(def *do-supplemental* #t)
-(def serve #f)
 
 ./mk-site.slosh build|serve [skip-supplemental]
 
@@ -51,8 +49,6 @@ they contain a lot of raw html which must be handled by mdbook.")
 			(eprn help)
 			(exit 1))))
 
-(sh "export RUST_LOG=DEBUG")
-
 (prn "args: " *args*)
 
 (prn "do supplemental: " *do-supplemental*)
@@ -60,7 +56,7 @@ they contain a lot of raw html which must be handled by mdbook.")
 (if *do-supplemental*
     (do
         (prn "clone in the legacy gh pages docs")
-        (sh (str "git clone -b gh-pages-legacy-html https://github.com/sl-sh-dev/sl-sh" legacy-doc-path))
+        (sh (str "git clone -b gh-pages-legacy-html https://github.com/sl-sh-dev/sl-sh" " " legacy-doc-path))
         (prn "Remove legacy/.git submodule directory")
         ;; don't want .git dir
         (let (legacy-git (str legacy-doc-path "/.git"))
@@ -80,15 +76,19 @@ they contain a lot of raw html which must be handled by mdbook.")
 $(cargo build --workspace)
 
 (prn "Build doc extension")
-$(cd ${PWD}/mdbook-slosh-eval)
-$(cargo build)
-$(cd -)
+(def doc-dir (env "PWD"))
+(def mdbook-eval-dir (str doc-dir "/mdbook-slosh-eval"))
+$(cargo build --manifest-path ~(str mdbook-eval-dir "/Cargo.toml"))
 
-$(export PATH=$PATH:./mdbook-slosh-eval/target/debug)
+;; Set PATH with the mdbook-slosh-eval binary for subsequent commands
+(def mdbook-path (str mdbook-eval-dir "/target/debug"))
+(def new-path (str (env "PATH") ":" mdbook-path))
 
-$(mdbook build)
+(prn "Running mdbook build with PATH=" new-path)
+(sh (str "export PATH=\"" new-path "\" && mdbook build"))
 
 (sh "./search-hack-patch.sh")
 
 (when (= args-local.1 "serve")
-    $(mdbook serve))
+    (prn "Starting mdbook serve...")
+    (sh (str "export PATH=\"" new-path "\" && mdbook serve")))

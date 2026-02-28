@@ -4,8 +4,8 @@ use bridge_adapters::lisp_adapters::SlFrom;
 use bridge_adapters::{BridgeError, BridgeResult};
 use compile_state::state::{SloshVm, SloshVmTrait};
 use lazy_static::lazy_static;
-use mdbook::book::{Book, Chapter};
-use mdbook::{BookItem, MDBook};
+use mdbook_driver::MDBook;
+use mdbook_preprocessor::book::{Book, BookItem, Chapter};
 use regex::{Regex, RegexBuilder};
 use slvm::vm_hashmap::VMHashMap;
 use slvm::{Interned, SLOSH_NIL, VMError, VMErrorObj, VMResult, Value};
@@ -969,34 +969,29 @@ pub fn get_slosh_docs(
     Ok(docs_by_section)
 }
 
-/// allows user specific forms to be identified. everything gathered recently. not in provided sections
-///
-/// provided sections will have a lot of information that the return of get_docs_by_section will have
-/// but the new invocation should have more, MUST call a version of the vm that includes init.slosh
-///
-/// this method is very specific and should be provided a list of sections gathered without init.slosh
-/// loaded and then called after its loaded.
+/// Identifies user-specific forms by subtracting vanilla slosh docs from the full
+/// set gathered after loading init.slosh. Compares at the function level (symbol +
+/// namespace) so user-defined globals are retained.
 pub fn add_user_docs_to_mdbook_less_provided_sections(
     vm: &mut SloshVm,
     md_book: &mut Book,
     provided_sections: BTreeMap<String, BTreeSet<SloshDoc>>,
 ) -> VMResult<()> {
+    // Flatten all vanilla docs into a set for function-level comparison.
+    let vanilla_docs: HashSet<SloshDoc> = provided_sections
+        .into_values()
+        .flat_map(|docs| docs.into_iter())
+        .collect();
+
     let docs_by_section_unsorted = get_docs_by_section(vm, false);
     let mut docs_by_section = BTreeMap::new();
     for (s, all_docs) in docs_by_section_unsorted {
-        if !provided_sections.contains_key(&s) {
-            let mut set = BTreeSet::new();
-            // to set
-            for d in all_docs.into_iter() {
-                let namespace = GLOBAL_NAMESPACE.to_string();
-                if d.namespace != namespace {
-                    set.insert(d);
-                }
-            }
-
-            if !set.is_empty() {
-                docs_by_section.insert(s, set);
-            }
+        let set: BTreeSet<SloshDoc> = all_docs
+            .into_iter()
+            .filter(|d| !vanilla_docs.contains(d))
+            .collect();
+        if !set.is_empty() {
+            docs_by_section.insert(s, set);
         }
     }
 
