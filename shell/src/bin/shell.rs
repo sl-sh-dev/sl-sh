@@ -40,7 +40,6 @@ fn main() {
 
             if let Err(err) = run_one_command(&command, &mut jobs) {
                 eprintln!("Error running {}: {}", command, err);
-                return;
             }
         }
     }

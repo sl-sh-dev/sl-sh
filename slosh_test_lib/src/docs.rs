@@ -1216,18 +1216,20 @@ fn search_docs(
 
     for (section, docs) in docs_by_section {
         // Check section filter
-        if let Some(ref section_filter) = query.section_filter {
-            if !query.matches_text(&section) && section != *section_filter {
-                continue;
-            }
+        if let Some(ref section_filter) = query.section_filter
+            && !query.matches_text(&section)
+            && section != *section_filter
+        {
+            continue;
         }
 
         for doc in docs {
             // Check namespace filter
-            if let Some(ref ns_filter) = query.namespace_filter {
-                if !doc.namespace.contains(ns_filter) && doc.namespace != *ns_filter {
-                    continue;
-                }
+            if let Some(ref ns_filter) = query.namespace_filter
+                && !doc.namespace.contains(ns_filter)
+                && doc.namespace != *ns_filter
+            {
+                continue;
             }
 
             let mut matched = false;
@@ -1415,13 +1417,13 @@ fn doc_search(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
 
     // Check if markdown output is requested
     let mut use_markdown = false;
-    if registers.len() > 1 {
-        if let Value::Map(handle) = &registers[1] {
-            let markdown_key = Value::Keyword(vm.intern_static("markdown"));
-            let map = vm.get_map(*handle);
-            if let Some(Value::True) = map.get(vm, markdown_key) {
-                use_markdown = true;
-            }
+    if registers.len() > 1
+        && let Value::Map(handle) = &registers[1]
+    {
+        let markdown_key = Value::Keyword(vm.intern_static("markdown"));
+        let map = vm.get_map(*handle);
+        if let Some(Value::True) = map.get(vm, markdown_key) {
+            use_markdown = true;
         }
     }
 

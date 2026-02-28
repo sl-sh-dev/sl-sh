@@ -77,7 +77,7 @@ impl HeapIo {
         Ok(())
     }
 
-    pub fn get_io(&self) -> IoGuard {
+    pub fn get_io(&self) -> IoGuard<'_> {
         let io = self.io.lock().unwrap();
         IoGuard { io }
     }

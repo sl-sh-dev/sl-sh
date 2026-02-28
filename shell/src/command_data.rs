@@ -396,35 +396,35 @@ impl Redirects {
         for r in self.redir_stack.iter_mut() {
             match r {
                 RedirType::In(ifd, RedirArg::Fd(fd_arg)) => {
-                    if let Ok(fd) = fd_arg.try_into() {
-                        if fd_set.contains(&fd) {
-                            *r = RedirType::In(*ifd, RedirArg::InternalFd(fd));
-                        }
+                    if let Ok(fd) = fd_arg.try_into()
+                        && fd_set.contains(&fd)
+                    {
+                        *r = RedirType::In(*ifd, RedirArg::InternalFd(fd));
                     }
                 }
                 RedirType::In(_, _) => {}
                 RedirType::InDirect(_, _) => {}
                 RedirType::Out(ofd, RedirArg::Fd(fd_arg)) => {
-                    if let Ok(fd) = fd_arg.try_into() {
-                        if fd_set.contains(&fd) {
-                            *r = RedirType::Out(*ofd, RedirArg::InternalFd(fd));
-                        }
+                    if let Ok(fd) = fd_arg.try_into()
+                        && fd_set.contains(&fd)
+                    {
+                        *r = RedirType::Out(*ofd, RedirArg::InternalFd(fd));
                     }
                 }
                 RedirType::Out(_, _) => {}
                 RedirType::OutTrunc(ofd, RedirArg::Fd(fd_arg)) => {
-                    if let Ok(fd) = fd_arg.try_into() {
-                        if fd_set.contains(&fd) {
-                            *r = RedirType::OutTrunc(*ofd, RedirArg::InternalFd(fd));
-                        }
+                    if let Ok(fd) = fd_arg.try_into()
+                        && fd_set.contains(&fd)
+                    {
+                        *r = RedirType::OutTrunc(*ofd, RedirArg::InternalFd(fd));
                     }
                 }
                 RedirType::OutTrunc(_, _) => {}
                 RedirType::InOut(iofd, RedirArg::Fd(fd_arg)) => {
-                    if let Ok(fd) = fd_arg.try_into() {
-                        if fd_set.contains(&fd) {
-                            *r = RedirType::InOut(*iofd, RedirArg::InternalFd(fd));
-                        }
+                    if let Ok(fd) = fd_arg.try_into()
+                        && fd_set.contains(&fd)
+                    {
+                        *r = RedirType::InOut(*iofd, RedirArg::InternalFd(fd));
                     }
                 }
                 RedirType::InOut(_, _) => {}
@@ -510,7 +510,7 @@ impl CommandWithArgs {
     }
 
     /// Iterator over the arguments for the command.
-    pub fn args_iter(&self) -> CommandArgs {
+    pub fn args_iter(&self) -> CommandArgs<'_> {
         CommandArgs {
             args: self.args(),
             index: 0,

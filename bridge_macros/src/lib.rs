@@ -6,7 +6,7 @@
 //!    and inlined? or is there a way to make them so?
 //! 5. can yet another crate solve the problem of housing typehandle/passingstyle/param/errorstrings/typedwrapper in the same place?
 //! 6. EVERY macro doesn't need the check for VarArgs, only signatures that have
-//!    VarArgs, this can be addressed in the macro.
+
 //! 7. Port tuple tests: <https://github.com/sl-sh-dev/sl-sh/blob/83cd1c93d1eea726ba138a83610155bdbfcab7aa/src/builtins_types.rs#L628>
 //! 8. To avoid needing to do lifetimes, if the return value is one of the INPUT values have
 //!    that marked in the annotation... OTHERWISE data may be copied!
@@ -188,14 +188,12 @@ fn is_valid_generic_type(
 fn get_generic_argument_from_type_path(
     type_path: &TypePath,
 ) -> Option<(&GenericArgument, &TypePath)> {
-    if type_path.path.segments.len() == 1 {
-        if let Some(path_segment) = &type_path.path.segments.iter().next_back() {
-            if let PathArguments::AngleBracketed(args) = &path_segment.arguments {
-                if let Some(ty) = args.args.iter().next_back() {
-                    return Some((ty, type_path));
-                }
-            }
-        }
+    if type_path.path.segments.len() == 1
+        && let Some(path_segment) = &type_path.path.segments.iter().next_back()
+        && let PathArguments::AngleBracketed(args) = &path_segment.arguments
+        && let Some(ty) = args.args.iter().next_back()
+    {
+        return Some((ty, type_path));
     }
     None
 }
@@ -1125,12 +1123,12 @@ fn generate_builtin_fn(
     }
     let (return_type, _) = get_return_type(original_item_fn)?;
     let mut conversions_assertions_code = vec![];
-    if let Some(return_type) = return_type {
-        if get_generic_argument_from_type(&return_type).is_none() {
-            conversions_assertions_code.push(generate_assertions_code_for_return_type_conversions(
-                &return_type,
-            ));
-        }
+    if let Some(return_type) = return_type
+        && get_generic_argument_from_type(&return_type).is_none()
+    {
+        conversions_assertions_code.push(generate_assertions_code_for_return_type_conversions(
+            &return_type,
+        ));
     }
     let tokens = quote! {
         #(#conversions_assertions_code)*
@@ -1473,13 +1471,12 @@ fn get_documentation_for_fn(original_item_fn: &ItemFn) -> MacroResult<String> {
     let mut docs = "".to_string();
     for attr in &original_item_fn.attrs {
         for path_segment in attr.path.segments.iter() {
-            if &path_segment.ident.to_string() == "doc" {
-                if let Ok(Meta::NameValue(pair)) = attr.parse_meta() {
-                    if let Lit::Str(partial_name) = &pair.lit {
-                        docs += (*partial_name.value()).trim();
-                        docs += "\n";
-                    }
-                }
+            if &path_segment.ident.to_string() == "doc"
+                && let Ok(Meta::NameValue(pair)) = attr.parse_meta()
+                && let Lit::Str(partial_name) = &pair.lit
+            {
+                docs += (*partial_name.value()).trim();
+                docs += "\n";
             }
         }
     }

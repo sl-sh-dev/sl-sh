@@ -9,18 +9,18 @@ pub fn pass1(env: &mut SloshVm, state: &mut CompileState, exp: Value) -> VMResul
         Value::Pair(_) | Value::List(_, _) => {
             let (car, cdr) = exp.get_pair(env).expect("Pair/List not a Pair or List?");
             // Do an extra pass1 on lambda's so we can get all captures upfront.
-            if let Value::Symbol(i) = car {
-                if i == fn_ || i == mac_ {
-                    // XXX boo on this collect.
-                    let cdr = cdr.iter(env).collect::<Vec<Value>>();
-                    if !cdr.is_empty() {
-                        let (mut new_state, _, _) = mk_state(env, state, cdr[0])?;
-                        for r in cdr[1..].iter() {
-                            pass1(env, &mut new_state, *r)?;
-                        }
+            if let Value::Symbol(i) = car
+                && (i == fn_ || i == mac_)
+            {
+                // XXX boo on this collect.
+                let cdr = cdr.iter(env).collect::<Vec<Value>>();
+                if !cdr.is_empty() {
+                    let (mut new_state, _, _) = mk_state(env, state, cdr[0])?;
+                    for r in cdr[1..].iter() {
+                        pass1(env, &mut new_state, *r)?;
                     }
-                    return Ok(());
                 }
+                return Ok(());
             }
             // XXX boo on this collect.
             for r in exp.iter(env).collect::<Vec<Value>>() {

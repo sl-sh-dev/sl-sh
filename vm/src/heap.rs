@@ -753,10 +753,10 @@ impl Heap {
     }
 
     pub fn get_property(&self, value: Value, prop: Interned) -> Option<Value> {
-        if let Some(map) = self.props().get(&value) {
-            if let Some(val) = map.get(&prop) {
-                return Some(*val);
-            }
+        if let Some(map) = self.props().get(&value)
+            && let Some(val) = map.get(&prop)
+        {
+            return Some(*val);
         }
         None
     }

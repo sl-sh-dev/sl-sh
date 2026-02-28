@@ -1,7 +1,6 @@
 [book]
 authors = ["gpwclark", "sstanfield"]
 language = "en"
-multilingual = false
 src = "src"
 title = "Slosh Documentation"
 

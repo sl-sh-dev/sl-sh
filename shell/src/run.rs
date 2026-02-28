@@ -52,7 +52,7 @@ fn finish_run(background: bool, mut job: Job, jobs: &mut Jobs) -> i32 {
             env::set_var("LAST_STATUS", format!("{}", 0));
         }
         let pid = if let Some(p) = job.pids().last() {
-            p.pid().try_into().unwrap_or(0)
+            p.pid().into()
         } else {
             0
         };

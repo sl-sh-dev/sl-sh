@@ -129,19 +129,16 @@ impl DestructState {
                 match r {
                     Register::Named(i, sreg) => {
                         let mut syms = state.symbols.borrow_mut();
-                        if let Some(lets) = &state.lets {
-                            if let Some(r) = lets.get(i) {
-                                let reg = syms.reserve_reg();
-                                if *r != reg {
-                                    state.chunk.encode2(
-                                        SET,
-                                        *r as u16,
-                                        reg as u16,
-                                        env.own_line(),
-                                    )?;
-                                }
-                                continue;
+                        if let Some(lets) = &state.lets
+                            && let Some(r) = lets.get(i)
+                        {
+                            let reg = syms.reserve_reg();
+                            if *r != reg {
+                                state
+                                    .chunk
+                                    .encode2(SET, *r as u16, reg as u16, env.own_line())?;
                             }
+                            continue;
                         }
                         let reg = syms.insert(*i);
                         if let Some(lets) = &mut state.lets {

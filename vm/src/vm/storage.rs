@@ -93,7 +93,7 @@ impl<ENV> GVm<ENV> {
         self.globals.reserve()
     }
 
-    pub fn get_call_stack(&self) -> CallStackIter<ENV> {
+    pub fn get_call_stack(&self) -> CallStackIter<'_, ENV> {
         CallStackIter::new(self)
     }
 

@@ -716,10 +716,10 @@ impl Globals {
     }
 
     pub fn get_property(&self, global: u32, prop: Interned) -> Option<Value> {
-        if let Some(map) = self.props.get(&global) {
-            if let Some(val) = map.get(&prop) {
-                return Some(*val);
-            }
+        if let Some(map) = self.props.get(&global)
+            && let Some(val) = map.get(&prop)
+        {
+            return Some(*val);
         }
         None
     }

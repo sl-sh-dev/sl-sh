@@ -106,11 +106,9 @@ pub fn load_one_expression(
         );
         return Err(e);
     }
-    if terminal {
-        if let Err(e) = state.chunk.encode0(RET, vm.own_line()) {
-            println!("Compile error, {} line {}: {}", name, vm.line_num(), e);
-            return Err(e);
-        }
+    if terminal && let Err(e) = state.chunk.encode0(RET, vm.own_line()) {
+        println!("Compile error, {} line {}: {}", name, vm.line_num(), e);
+        return Err(e);
     }
     Ok(state.doc_string)
 }
@@ -159,11 +157,12 @@ fn find_first_instance_of_file_in_load_path<'a>(
                 if let Some(path) = path {
                     let mut p = expand_tilde(PathBuf::from(path));
                     p.push(name);
-                    if p.exists() && !p.is_dir() {
-                        if let Ok(p) = p.into_os_string().into_string() {
-                            found = Some(p.into());
-                            break;
-                        }
+                    if p.exists()
+                        && !p.is_dir()
+                        && let Ok(p) = p.into_os_string().into_string()
+                    {
+                        found = Some(p.into());
+                        break;
                     }
                 }
             }
