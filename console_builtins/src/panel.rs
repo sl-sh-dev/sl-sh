@@ -210,13 +210,15 @@ impl PanelManager {
     }
 
     /// Close and remove a panel by name.
-    pub fn close_panel(&mut self, name: &str) -> bool {
-        if self.panels.remove(name).is_some() {
+    /// Returns the old panel's bounds if it existed, None otherwise.
+    pub fn close_panel(&mut self, name: &str) -> Option<Rect> {
+        if let Some(panel) = self.panels.remove(name) {
+            let old_bounds = panel.bounds;
             self.order.retain(|n| n != name);
             self.recalculate_layout();
-            true
+            Some(old_bounds)
         } else {
-            false
+            None
         }
     }
 

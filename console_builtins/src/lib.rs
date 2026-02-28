@@ -127,9 +127,8 @@ fn open_panel(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
 fn close_panel_builtin(environment: &mut SloshVm, name: String) -> VMResult<Value> {
     let _ = environment;
     let mut mgr = panel::PANEL_MANAGER.lock().unwrap();
-    let existed = mgr.close_panel(&name);
-    render::render_all_panels(&mgr);
-    if existed {
+    if let Some(old_bounds) = mgr.close_panel(&name) {
+        render::render_all_panels_with_cleanup(&mgr, &[old_bounds]);
         Ok(Value::True)
     } else {
         Ok(Value::Nil)
@@ -219,6 +218,35 @@ fn panel_resize() -> VMResult<Value> {
     Ok(Value::Nil)
 }
 
+/// Usage: (panel-close-after name millis)
+///
+/// Schedule a panel to close after the given number of milliseconds.
+/// Returns immediately without blocking. The panel will be closed and
+/// the display re-rendered from a background thread.
+///
+/// Section: terminal
+///
+/// Example:
+/// (panel-close-after "out" 5000)
+#[sl_sh_fn(fn_name = "panel-close-after")]
+fn panel_close_after(name: String, millis: i64) -> VMResult<Value> {
+    if millis < 0 {
+        return Err(VMError::new(
+            "console",
+            "panel-close-after: delay must be non-negative".to_string(),
+        ));
+    }
+    let panel_name = name.to_string();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(millis as u64));
+        let mut mgr = panel::PANEL_MANAGER.lock().unwrap();
+        if let Some(old_bounds) = mgr.close_panel(&panel_name) {
+            render::render_all_panels_with_cleanup(&mgr, &[old_bounds]);
+        }
+    });
+    Ok(Value::Nil)
+}
+
 /// Reset the terminal scroll region and clean up panel state.
 /// Should be called before the shell exits to leave the terminal clean.
 pub fn cleanup_console() {
@@ -252,4 +280,5 @@ Example:
     intern_panel_write(env);
     intern_panel_clear(env);
     intern_panel_resize(env);
+    intern_panel_close_after(env);
 }
