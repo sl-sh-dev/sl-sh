@@ -1,0 +1,90 @@
+#!/usr/bin/env slosh
+;; Test: Overlay mount on existing directory — real files visible,
+;; virtual files shadow real ones, readdir merges both sets.
+
+(load "test.slosh")
+
+(defn wait-for-file (path)
+  (loop (tries) (0)
+    (if (fs-exists? path)
+      #t
+      (if (>= tries 10)
+        (do (eprn (str "Timed out waiting for " path)) (exit 1))
+        (do (sleep 100) (recur (+ tries 1)))))))
+
+(defn read-file (path)
+  (wait-for-file path)
+  (let (f (fopen path :read), result "")
+    (defer (fclose f))
+    (loop (line) ((read-line f))
+      (if line
+        (do (set! result (str result line))
+            (recur (read-line f)))
+        result))
+    result))
+
+(defn assert-file-content (path expected label)
+  (prn (str "  Checking " label ": " path))
+  (let (actual (read-file path))
+    (when (and (not (= expected "")) (= actual ""))
+      (eprn (str "FAIL [" label "]: read returned empty string"))
+      (exit 1))
+    (if (= actual expected)
+      (prn (str "  OK: " label))
+      (do
+        (eprn (str "FAIL [" label "]: expected '" expected "' but got '" actual "'"))
+        (exit 1)))))
+
+(defn write-file (path content)
+  (let (f (fopen path :create :truncate :write))
+    (fpr f content)
+    (fclose f)))
+
+;; --- Setup: create a real directory with real files ---
+(def overlay-dir "/tmp/test-overlay-dir")
+$(mkdir -p /tmp/test-overlay-dir)
+(write-file "/tmp/test-overlay-dir/real-a.txt" "real-a-content")
+(write-file "/tmp/test-overlay-dir/real-b.txt" "real-b-content")
+
+;; --- Mount overlay ---
+(prn "Mounting overlay on /tmp/test-overlay-dir...")
+(def mount-id (mount-eval-fs-overlay overlay-dir))
+(prn (str "  Got mount-id: " mount-id))
+
+;; --- Test 1: Real files are visible through FUSE ---
+(prn "Test 1: Real files visible through overlay...")
+(assert-file-content (str overlay-dir "/real-a.txt") "real-a-content" "real file A")
+(assert-file-content (str overlay-dir "/real-b.txt") "real-b-content" "real file B")
+
+;; --- Test 2: Register a virtual file, verify it's visible ---
+(prn "Test 2: Virtual file visible...")
+(register-eval-file mount-id "virtual.txt" "virtual-content")
+(assert-file-content (str overlay-dir "/virtual.txt") "virtual-content" "virtual file")
+
+;; --- Test 3: Virtual file shadows a real file ---
+(prn "Test 3: Virtual file shadows real file...")
+(register-eval-file mount-id "real-a.txt" "shadowed-content")
+(assert-file-content (str overlay-dir "/real-a.txt") "shadowed-content" "shadow overrides real")
+
+;; --- Test 4: Unshadowed real file still readable ---
+(prn "Test 4: Unshadowed real file still readable...")
+(assert-file-content (str overlay-dir "/real-b.txt") "real-b-content" "unshadowed real file")
+
+;; --- Test 5: Remove shadow, real file reappears ---
+(prn "Test 5: Remove shadow, real file reappears...")
+(remove-eval-file mount-id "real-a.txt")
+(assert-file-content (str overlay-dir "/real-a.txt") "real-a-content" "real file after unshadow")
+
+;; --- Cleanup ---
+(prn "Unmounting...")
+(unmount-eval-fs mount-id)
+
+;; Verify real files survived unmount
+(prn "Verifying real files survived unmount...")
+(assert-file-content (str overlay-dir "/real-a.txt") "real-a-content" "real file post-unmount A")
+(assert-file-content (str overlay-dir "/real-b.txt") "real-b-content" "real file post-unmount B")
+
+;; Clean up temp dir
+$(rm -rf /tmp/test-overlay-dir)
+
+(prn "PASS: test-overlay")

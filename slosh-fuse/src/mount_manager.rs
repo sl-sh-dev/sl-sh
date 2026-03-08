@@ -1,3 +1,4 @@
+use crate::backing_dir::BackingDir;
 use crate::eval_fs::EvalFs;
 use crate::file_mapping::FileMapping;
 use crate::resolve::MountRegistry;
@@ -30,6 +31,27 @@ impl MountManager {
 
     /// Mount a new FUSE filesystem. Returns a mount-id string.
     pub fn mount(&mut self, mount_point: &str) -> Result<String, String> {
+        self.mount_inner(mount_point, None)
+    }
+
+    /// Mount an overlay FUSE filesystem on an existing directory.
+    /// Real files in the directory remain visible; virtual files shadow them.
+    pub fn mount_overlay(&mut self, mount_point: &str) -> Result<String, String> {
+        let path = PathBuf::from(mount_point);
+        if !path.is_dir() {
+            return Err(format!("{:?} is not an existing directory", mount_point));
+        }
+
+        // Open the backing dir fd BEFORE the FUSE mount covers it
+        let backing = BackingDir::open(mount_point)?;
+        self.mount_inner(mount_point, Some(backing))
+    }
+
+    fn mount_inner(
+        &mut self,
+        mount_point: &str,
+        backing: Option<BackingDir>,
+    ) -> Result<String, String> {
         let path = PathBuf::from(mount_point);
 
         // Create mount point if needed
@@ -51,7 +73,7 @@ impl MountManager {
         let thread = std::thread::Builder::new()
             .name(format!("fuse-{}", mount_id))
             .spawn(move || {
-                let fs = EvalFs::new(mapping_for_fuse, registry_for_fuse);
+                let fs = EvalFs::new(mapping_for_fuse, registry_for_fuse, backing);
                 let options = vec![
                     MountOption::FSName("slosh-eval".to_string()),
                     MountOption::AutoUnmount,

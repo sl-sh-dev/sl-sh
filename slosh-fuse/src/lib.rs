@@ -1,3 +1,4 @@
+pub mod backing_dir;
 pub mod eval_fs;
 pub mod file_mapping;
 pub mod proc_subst;
@@ -9,6 +10,7 @@ pub mod daemon;
 pub mod mount_manager;
 pub mod socket_server;
 
+pub use backing_dir::BackingDir;
 pub use eval_fs::EvalFs;
 pub use file_mapping::{FileMapping, FileEntry};
 pub use resolve::{MountRegistry, FileResolver};
@@ -33,6 +35,21 @@ impl FuseMount {
         mut client: DaemonClient,
     ) -> Result<Self, std::io::Error> {
         let mount_id = client.mount(mount_point.to_str().unwrap_or(""))?;
+        Ok(Self {
+            mount_point,
+            mount_id,
+            client,
+            registered_paths: Vec::new(),
+        })
+    }
+
+    /// Create an overlay mount via the daemon. Real files in the directory
+    /// remain visible; virtual files shadow them.
+    pub fn new_overlay_daemon(
+        mount_point: PathBuf,
+        mut client: DaemonClient,
+    ) -> Result<Self, std::io::Error> {
+        let mount_id = client.mount_overlay(mount_point.to_str().unwrap_or(""))?;
         Ok(Self {
             mount_point,
             mount_id,

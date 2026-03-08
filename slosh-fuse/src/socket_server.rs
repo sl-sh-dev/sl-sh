@@ -108,6 +108,14 @@ fn dispatch_command(
             }
         }
 
+        "MOUNT_OVERLAY" if parts.len() == 2 => {
+            let mount_point = parts[1];
+            match manager.lock().unwrap().mount_overlay(mount_point) {
+                Ok(mount_id) => format!("OK\t{}", mount_id),
+                Err(e) => format!("ERR\t{}", e),
+            }
+        }
+
         "REGISTER" if parts.len() == 4 => {
             let mount_id = parts[1];
             let path = parts[2];

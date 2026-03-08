@@ -76,6 +76,42 @@ fn register_eval_file(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> 
     }
 }
 
+fn mount_eval_fs_overlay(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    if registers.len() != 1 {
+        return Err(VMError::new_vm(
+            "mount-eval-fs-overlay: requires one argument (mount-path)".to_string(),
+        ));
+    }
+
+    let mount_path = registers[0].get_string(vm)?;
+    let mount_point = PathBuf::from(mount_path);
+
+    if !mount_point.is_dir() {
+        return Err(VMError::new_vm(format!(
+            "mount-eval-fs-overlay: {:?} is not an existing directory",
+            mount_path
+        )));
+    }
+
+    let config = DaemonConfig::default_for_user()
+        .map_err(|e| VMError::new_vm(format!("Failed to get daemon config: {}", e)))?;
+
+    let client = ensure_daemon_running(&config)
+        .map_err(|e| VMError::new_vm(format!("Failed to connect to FUSE daemon: {}", e)))?;
+
+    let mount = FuseMount::new_overlay_daemon(mount_point, client)
+        .map_err(|e| VMError::new_vm(format!("Failed to create overlay mount: {}", e)))?;
+
+    let mount_id = mount.mount_id.clone();
+
+    get_registry()
+        .lock()
+        .map_err(|e| VMError::new_vm(format!("Registry lock poisoned: {}", e)))?
+        .insert(mount_id.clone(), mount);
+
+    Ok(vm.alloc_string(mount_id))
+}
+
 fn unmount_eval_fs(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if registers.len() != 1 {
         return Err(VMError::new_vm(
@@ -216,6 +252,24 @@ Section: fuse
 
 Example:
 (def mount-id (mount-eval-fs "/tmp/eval-fs"))
+"#,
+    );
+
+    add_builtin(
+        env,
+        "mount-eval-fs-overlay",
+        mount_eval_fs_overlay,
+        r#"Usage: (mount-eval-fs-overlay path)
+
+Mount an overlay evaluation filesystem on an existing directory. Real files
+in the directory remain visible through the FUSE mount. Virtual files
+registered via register-eval-file shadow real files of the same name.
+Returns a mount ID.
+
+Section: fuse
+
+Example:
+(def mount-id (mount-eval-fs-overlay "/existing/dir"))
 "#,
     );
 

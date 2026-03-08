@@ -3,11 +3,12 @@ use fuser::{
     Request, FUSE_ROOT_ID,
 };
 use libc::{ENOENT, ENOTDIR};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
+use crate::backing_dir::BackingDir;
 use crate::file_mapping::FileMapping;
 use crate::resolve::{FileResolver, MountRegistry};
 
@@ -19,16 +20,22 @@ pub struct EvalFs {
     inode_to_path: HashMap<u64, String>,
     path_to_inode: HashMap<String, u64>,
     next_inode: u64,
+    backing: Option<BackingDir>,
 }
 
 impl EvalFs {
-    pub fn new(file_mapping: Arc<Mutex<FileMapping>>, registry: MountRegistry) -> Self {
+    pub fn new(
+        file_mapping: Arc<Mutex<FileMapping>>,
+        registry: MountRegistry,
+        backing: Option<BackingDir>,
+    ) -> Self {
         let mut fs = Self {
             file_mapping,
             registry,
             inode_to_path: HashMap::new(),
             path_to_inode: HashMap::new(),
             next_inode: 2, // 1 is reserved for root
+            backing,
         };
 
         // Pre-populate inodes for registered files
@@ -122,6 +129,9 @@ impl Filesystem for EvalFs {
             let size = resolver.total_size(&entry);
             let inode = self.allocate_inode(&name_str);
             reply.entry(&TTL, &Self::file_attr(inode, size), 0);
+        } else if let Some((size, true)) = self.backing.as_ref().and_then(|b| b.stat(&name_str)) {
+            let inode = self.allocate_inode(&name_str);
+            reply.entry(&TTL, &Self::file_attr(inode, size), 0);
         } else {
             reply.error(ENOENT);
         }
@@ -131,14 +141,19 @@ impl Filesystem for EvalFs {
         if ino == FUSE_ROOT_ID {
             reply.attr(&TTL, &Self::dir_attr(FUSE_ROOT_ID));
         } else if let Some(path) = self.get_path_for_inode(ino) {
+            let path = path.to_string();
             let entry = {
                 let mapping = self.file_mapping.lock().unwrap();
-                mapping.get(path).cloned()
+                mapping.get(&path).cloned()
             };
 
             if let Some(entry) = entry {
                 let mut resolver = FileResolver::new(&self.registry);
                 let size = resolver.total_size(&entry);
+                reply.attr(&TTL, &Self::file_attr(ino, size));
+            } else if let Some((size, true)) =
+                self.backing.as_ref().and_then(|b| b.stat(&path))
+            {
                 reply.attr(&TTL, &Self::file_attr(ino, size));
             } else {
                 reply.error(ENOENT);
@@ -160,13 +175,17 @@ impl Filesystem for EvalFs {
         reply: ReplyData,
     ) {
         if let Some(path) = self.get_path_for_inode(ino) {
+            let path = path.to_string();
             let entry = {
                 let mapping = self.file_mapping.lock().unwrap();
-                mapping.get(path).cloned()
+                mapping.get(&path).cloned()
             };
             if let Some(entry) = entry {
                 let mut resolver = FileResolver::new(&self.registry);
                 let data = resolver.read_range(&entry, offset as u64, size);
+                reply.data(&data);
+            } else if let Some(ref backing) = self.backing {
+                let data = backing.read_file(&path, offset as u64, size);
                 reply.data(&data);
             } else {
                 reply.error(ENOENT);
@@ -206,12 +225,34 @@ impl Filesystem for EvalFs {
         let files = mapping.list_files();
         drop(mapping);
 
+        let mut seen = HashSet::new();
+
         for (i, path) in files.iter().enumerate() {
             let index = i + entries.len();
+            seen.insert(path.clone());
             if offset <= index as i64 {
                 let inode = self.allocate_inode(path);
                 if reply.add(inode, (index + 1) as i64, FileType::RegularFile, path) {
-                    break;
+                    reply.ok();
+                    return;
+                }
+            }
+        }
+
+        // Merge backing dir entries, skipping virtual file names
+        if let Some(ref backing) = self.backing {
+            let backing_files = backing.list_files();
+            let base = entries.len() + files.len();
+            for (i, name) in backing_files.iter().enumerate() {
+                if seen.contains(name) {
+                    continue;
+                }
+                let index = base + i;
+                if offset <= index as i64 {
+                    let inode = self.allocate_inode(name);
+                    if reply.add(inode, (index + 1) as i64, FileType::RegularFile, name) {
+                        break;
+                    }
                 }
             }
         }

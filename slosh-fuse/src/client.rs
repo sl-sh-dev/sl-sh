@@ -68,6 +68,14 @@ impl DaemonClient {
         })
     }
 
+    /// Request an overlay FUSE mount on an existing directory. Returns the mount-id.
+    pub fn mount_overlay(&mut self, mount_point: &str) -> io::Result<String> {
+        let fields = self.send_command(&format!("MOUNT_OVERLAY\t{}", mount_point))?;
+        fields.into_iter().next().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidData, "no mount-id in response")
+        })
+    }
+
     /// Register a file with static content.
     pub fn register_file(
         &mut self,
