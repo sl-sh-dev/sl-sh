@@ -12,6 +12,7 @@ use std::collections::HashSet;
 pub mod bridge_macro_tests;
 pub mod collections;
 pub mod conversions;
+pub mod doc_search;
 pub mod fs_meta;
 pub mod fs_temp;
 pub mod io;

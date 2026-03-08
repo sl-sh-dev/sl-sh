@@ -11,6 +11,7 @@ compile_state = { workspace = true }
 shell = { workspace = true }
 sl-compiler = { workspace = true }
 bridge_adapters = { path = "../bridge_adapters" }
+regex = { workspace = true }
 unicode-segmentation = { workspace = true }
 unicode_reader = { workspace = true }
 bridge_types = { workspace = true }

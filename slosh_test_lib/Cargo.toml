@@ -7,7 +7,6 @@ edition = "2024"
 [dependencies]
 slosh_lib = { path = "../slosh_lib" }
 regex = { workspace = true }
-lazy_static = { workspace = true }
 bridge_adapters = { workspace = true }
 bridge_macros  = { workspace = true }
 bridge_types  = { workspace = true }

@@ -475,6 +475,7 @@ function's compiled code provides.
 
 Section: core"#,
     );
+    builtins::doc_search::add_doc_search_builtins(env);
 }
 
 fn export_args(env: &mut SloshVm) {
