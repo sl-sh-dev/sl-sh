@@ -1,0 +1,72 @@
+#!/usr/bin/env slosh
+;; Test: Concat external files, read back, modify source and re-read (lazy).
+
+(load "test.slosh")
+
+(defn wait-for-file (path)
+  (loop (tries) (0)
+    (if (fs-exists? path)
+      #t
+      (if (>= tries 10)
+        (do (eprn (str "Timed out waiting for " path)) (exit 1))
+        (do (sleep 100) (recur (+ tries 1)))))))
+
+(defn read-file (path)
+  (wait-for-file path)
+  (let (f (fopen path :read), result "")
+    (defer (fclose f))
+    (loop (line) ((read-line f))
+      (if line
+        (do (set! result (str result line))
+            (recur (read-line f)))
+        result))
+    result))
+
+(defn assert-file-content (path expected label)
+  (prn (str "  Checking " label ": " path " == '" expected "'"))
+  (let (actual (read-file path))
+    (when (and (not (= expected "")) (= actual ""))
+      (eprn (str "FAIL [" label "]: read returned empty string (file unreadable or missing?)"))
+      (exit 1))
+    (if (= actual expected)
+      (prn (str "  OK: " label))
+      (do
+        (eprn (str "FAIL [" label "]: expected '" expected "' but got '" actual "'"))
+        (exit 1)))))
+
+(defn write-file (path content)
+  (let (f (fopen path :create :truncate :write))
+    (fpr f content)
+    (fclose f)))
+
+;; create source files
+(prn "Creating external source files...")
+$(mkdir -p /tmp/concat-src)
+(write-file "/tmp/concat-src/a.txt" "AAA")
+(write-file "/tmp/concat-src/b.txt" "BBB")
+(write-file "/tmp/concat-src/c.txt" "CCC")
+
+;; mount
+(prn "Mounting filesystem at /tmp/test-concat-ext...")
+(def mount-id (mount-eval-fs "/tmp/test-concat-ext"))
+(prn (str "  Got mount-id: " mount-id))
+
+;; register concat
+(prn "Registering concat file combined.txt from a.txt + b.txt + c.txt...")
+(concat-eval-files mount-id "combined.txt"
+  "/tmp/concat-src/a.txt" "/tmp/concat-src/b.txt" "/tmp/concat-src/c.txt")
+
+;; read back
+(prn "Reading back combined.txt via FUSE...")
+(assert-file-content "/tmp/test-concat-ext/combined.txt" "AAABBBCCC" "initial concat")
+
+;; modify source B and re-read (lazy — no re-registration needed)
+(prn "Modifying b.txt to 'XXX' and re-reading...")
+(write-file "/tmp/concat-src/b.txt" "XXX")
+(assert-file-content "/tmp/test-concat-ext/combined.txt" "AAAXXXCCC" "lazy re-read after modify")
+
+;; cleanup
+(prn "Unmounting...")
+(unmount-eval-fs mount-id)
+$(rm -rf /tmp/concat-src)
+(prn "PASS: test-concat-external")

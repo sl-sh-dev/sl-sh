@@ -1,0 +1,82 @@
+#!/usr/bin/env slosh
+;; Test: Dynamic file demo — register files with evaluated content, read back, assert.
+
+(load "test.slosh")
+
+(defn wait-for-file (path)
+  (loop (tries) (0)
+    (if (fs-exists? path)
+      #t
+      (if (>= tries 10)
+        (do (eprn (str "Timed out waiting for " path)) (exit 1))
+        (do (sleep 100) (recur (+ tries 1)))))))
+
+(defn read-file (path)
+  (wait-for-file path)
+  (let (f (fopen path :read), result "")
+    (defer (fclose f))
+    (loop (line) ((read-line f))
+      (if line
+        (do (set! result (str result line))
+            (recur (read-line f)))
+        result))
+    result))
+
+(defn assert-file-content (path expected label)
+  (prn (str "  Checking " label ": " path))
+  (let (actual (read-file path))
+    (when (and (not (= expected "")) (= actual ""))
+      (eprn (str "FAIL [" label "]: read returned empty string (file unreadable or missing?)"))
+      (exit 1))
+    (if (= actual expected)
+      (prn (str "  OK: " label))
+      (do
+        (eprn (str "FAIL [" label "]: expected '" expected "' but got '" actual "'"))
+        (exit 1)))))
+
+;; Set known values for env vars we'll use
+(def test-hostname (or (env "HOSTNAME") "localhost"))
+(def test-user (or (env "USER") "slosh"))
+(def test-home (or (env "HOME") "/tmp"))
+
+;; Mount
+(prn "Mounting dynamic filesystem at /tmp/test-dynamic-demo...")
+(def mount-id (mount-eval-fs "/tmp/test-dynamic-demo"))
+(prn (str "  Got mount-id: " mount-id))
+
+;; Register a service env file with evaluated content
+(def service-content
+  (str "HOST=" test-hostname "\n"
+       "CUSTOM_TYPE=default\n"))
+
+(prn "Registering my-service.env...")
+(register-eval-file mount-id "my-service.env" service-content)
+
+;; Register a system info file
+(def sysinfo-content
+  (str "User: " test-user "\n"
+       "Home: " test-home "\n"))
+
+(prn "Registering system-info.txt...")
+(register-eval-file mount-id "system-info.txt" sysinfo-content)
+
+;; Verify file list
+(prn "Listing registered files...")
+(def files (list-eval-files mount-id))
+(prn (str "  Got: " files))
+(test::assert-equal 2 (len files) " should have exactly 2 files")
+(test::assert-true (str-contains (str files) "my-service.env") " should contain my-service.env")
+(test::assert-true (str-contains (str files) "system-info.txt") " should contain system-info.txt")
+(prn "  OK: file list correct")
+
+;; Read back and assert content matches
+(prn "Reading back my-service.env via FUSE...")
+(assert-file-content "/tmp/test-dynamic-demo/my-service.env" service-content "service env")
+
+(prn "Reading back system-info.txt via FUSE...")
+(assert-file-content "/tmp/test-dynamic-demo/system-info.txt" sysinfo-content "system info")
+
+;; Clean up
+(prn "Unmounting...")
+(unmount-eval-fs mount-id)
+(prn "PASS: test-dynamic-file-demo")

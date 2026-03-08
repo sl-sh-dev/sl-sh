@@ -1,0 +1,66 @@
+#!/usr/bin/env slosh
+;; Test: Mount, register a static file, read it back via FUSE cat, assert content matches.
+
+(load "test.slosh")
+
+(defn wait-for-file (path)
+  (loop (tries) (0)
+    (if (fs-exists? path)
+      #t
+      (if (>= tries 10)
+        (do (eprn (str "Timed out waiting for " path)) (exit 1))
+        (do (sleep 100) (recur (+ tries 1)))))))
+
+(defn read-file (path)
+  (wait-for-file path)
+  (let (f (fopen path :read), result "")
+    (defer (fclose f))
+    (loop (line) ((read-line f))
+      (if line
+        (do (set! result (str result line))
+            (recur (read-line f)))
+        result))
+    result))
+
+(defn assert-file-content (path expected label)
+  (prn (str "  Checking " label ": " path " == '" expected "'"))
+  (let (actual (read-file path))
+    (when (and (not (= expected "")) (= actual ""))
+      (eprn (str "FAIL [" label "]: read returned empty string (file unreadable or missing?)"))
+      (exit 1))
+    (if (= actual expected)
+      (prn (str "  OK: " label))
+      (do
+        (eprn (str "FAIL [" label "]: expected '" expected "' but got '" actual "'"))
+        (exit 1)))))
+
+;; setup
+(prn "Mounting filesystem at /tmp/test-static...")
+(def mount-id (mount-eval-fs "/tmp/test-static"))
+(prn (str "  Got mount-id: " mount-id))
+
+;; register and read a simple file
+(prn "Registering file hello.txt with content 'hello world'...")
+(register-eval-file mount-id "hello.txt" "hello world")
+
+(prn "Reading back hello.txt via FUSE...")
+(assert-file-content "/tmp/test-static/hello.txt" "hello world" "static read")
+
+;; register a second file to make sure multiple files work
+(prn "Registering file num.txt with content '12345'...")
+(register-eval-file mount-id "num.txt" "12345")
+
+(prn "Reading back num.txt via FUSE...")
+(assert-file-content "/tmp/test-static/num.txt" "12345" "second static read")
+
+;; overwrite the first file and verify
+(prn "Re-registering hello.txt with content 'updated'...")
+(register-eval-file mount-id "hello.txt" "updated")
+
+(prn "Reading back hello.txt after update...")
+(assert-file-content "/tmp/test-static/hello.txt" "updated" "overwrite read")
+
+;; cleanup
+(prn "Unmounting...")
+(unmount-eval-fs mount-id)
+(prn "PASS: test-static-file")

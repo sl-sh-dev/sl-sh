@@ -130,6 +130,30 @@ fn concat_eval_files(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
+fn remove_eval_file(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    if registers.len() != 2 {
+        return Err(VMError::new_vm(
+            "remove-eval-file: requires two arguments (mount-id path)".to_string(),
+        ));
+    }
+
+    let mount_id = registers[0].get_string(vm)?;
+    let path = registers[1].get_string(vm)?;
+
+    let mut registry = get_registry()
+        .lock()
+        .map_err(|e| VMError::new_vm(format!("Registry lock poisoned: {}", e)))?;
+
+    if let Some(mount) = registry.get_mut(mount_id) {
+        mount
+            .remove_file(&path)
+            .map_err(|e| VMError::new_vm(format!("Failed to remove file: {}", e)))?;
+        Ok(Value::True)
+    } else {
+        Err(VMError::new_vm(format!("Invalid mount id: {}", mount_id)))
+    }
+}
+
 fn list_eval_files(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     if registers.len() != 1 {
         return Err(VMError::new_vm(
@@ -225,6 +249,21 @@ Section: fuse
 
 Example:
 (concat-eval-files mount-id "combined.txt" "/path/a.txt" "/path/b.txt" "/path/c.txt")
+"#,
+    );
+
+    add_builtin(
+        env,
+        "remove-eval-file",
+        remove_eval_file,
+        r#"Usage: (remove-eval-file mount-id path)
+
+Remove a file from the FUSE filesystem.
+
+Section: fuse
+
+Example:
+(remove-eval-file mount-id "config.txt")
 "#,
     );
 

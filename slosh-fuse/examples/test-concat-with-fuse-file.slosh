@@ -1,0 +1,75 @@
+#!/usr/bin/env slosh
+;; Test: Concat that includes a FUSE-hosted file (internal path resolution via resolve.rs).
+
+(load "test.slosh")
+
+(defn wait-for-file (path)
+  (loop (tries) (0)
+    (if (fs-exists? path)
+      #t
+      (if (>= tries 10)
+        (do (eprn (str "Timed out waiting for " path)) (exit 1))
+        (do (sleep 100) (recur (+ tries 1)))))))
+
+(defn read-file (path)
+  (wait-for-file path)
+  (let (f (fopen path :read), result "")
+    (defer (fclose f))
+    (loop (line) ((read-line f))
+      (if line
+        (do (set! result (str result line))
+            (recur (read-line f)))
+        result))
+    result))
+
+(defn assert-file-content (path expected label)
+  (prn (str "  Checking " label ": " path " == '" expected "'"))
+  (let (actual (read-file path))
+    (when (and (not (= expected "")) (= actual ""))
+      (eprn (str "FAIL [" label "]: read returned empty string (file unreadable or missing?)"))
+      (exit 1))
+    (if (= actual expected)
+      (prn (str "  OK: " label))
+      (do
+        (eprn (str "FAIL [" label "]: expected '" expected "' but got '" actual "'"))
+        (exit 1)))))
+
+(defn write-file (path content)
+  (let (f (fopen path :create :truncate :write))
+    (fpr f content)
+    (fclose f)))
+
+;; create an external source file
+(prn "Creating external source file...")
+$(mkdir -p /tmp/concat-mixed-src)
+(write-file "/tmp/concat-mixed-src/ext.txt" "EXTERNAL")
+
+;; mount
+(prn "Mounting filesystem at /tmp/test-concat-mixed...")
+(def mount-id (mount-eval-fs "/tmp/test-concat-mixed"))
+(prn (str "  Got mount-id: " mount-id))
+
+;; register a static file inside the FUSE mount
+(prn "Registering inner.txt with content 'HELLO'...")
+(register-eval-file mount-id "inner.txt" "HELLO")
+
+;; verify inner.txt is readable
+(prn "Reading back inner.txt via FUSE...")
+(assert-file-content "/tmp/test-concat-mixed/inner.txt" "HELLO" "inner static read")
+
+;; register a concat that references both external and FUSE-internal paths
+;; The resolve.rs module should detect /tmp/test-concat-mixed/inner.txt as internal
+;; and read it directly from the file mapping, avoiding FUSE deadlock.
+(prn "Registering concat combo.txt from ext.txt + inner.txt...")
+(concat-eval-files mount-id "combo.txt"
+  "/tmp/concat-mixed-src/ext.txt" "/tmp/test-concat-mixed/inner.txt")
+
+;; read back
+(prn "Reading back combo.txt via FUSE...")
+(assert-file-content "/tmp/test-concat-mixed/combo.txt" "EXTERNALHELLO" "mixed concat")
+
+;; cleanup
+(prn "Unmounting...")
+(unmount-eval-fs mount-id)
+$(rm -rf /tmp/concat-mixed-src)
+(prn "PASS: test-concat-with-fuse-file")

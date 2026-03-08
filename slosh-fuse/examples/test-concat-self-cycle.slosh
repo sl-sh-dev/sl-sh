@@ -1,0 +1,30 @@
+#!/usr/bin/env slosh
+;; Test: Concat that references its own mount path (self-cycle). Should return empty, not hang.
+
+(load "test.slosh")
+
+;; mount
+(prn "Mounting filesystem at /tmp/test-cycle...")
+(def mount-id (mount-eval-fs "/tmp/test-cycle"))
+(prn (str "  Got mount-id: " mount-id))
+
+;; register a concat file that sources from itself (cycle)
+(prn "Registering loop.txt that sources from its own mount path...")
+(concat-eval-files mount-id "loop.txt" "/tmp/test-cycle/loop.txt")
+
+;; read with a timeout — if cycle detection fails, this would hang forever
+;; We use the shell timeout command to cap it at 5 seconds.
+(prn "Reading loop.txt via FUSE (5s timeout, expecting empty due to cycle detection)...")
+(def result ($sh "timeout" "5" "cat" "/tmp/test-cycle/loop.txt"))
+
+(prn (str "  Got result: '" result "'"))
+(if (= result "")
+  (prn "  OK: cycle detected, empty content returned")
+  (do
+    (eprn (str "FAIL [self-cycle]: expected empty string but got '" result "'"))
+    (exit 1)))
+
+;; cleanup
+(prn "Unmounting...")
+(unmount-eval-fs mount-id)
+(prn "PASS: test-concat-self-cycle")

@@ -8,7 +8,7 @@ Dynamic configuration files for services like systemd, where environment files n
 
 ```bash
 cat /tmp/dynamic/config.env
-# => HOST=meow
+# => HOST=my_hostname
 # => CUSTOM_TYPE=production
 ```
 

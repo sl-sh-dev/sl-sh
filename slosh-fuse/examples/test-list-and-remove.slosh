@@ -1,0 +1,44 @@
+#!/usr/bin/env slosh
+;; Test: Register files, list them, remove one, list again, verify.
+
+(load "test.slosh")
+
+(defn vec-contains? (v item)
+  (str-contains (str v) item))
+
+;; mount
+(prn "Mounting filesystem at /tmp/test-list...")
+(def mount-id (mount-eval-fs "/tmp/test-list"))
+(prn (str "  Got mount-id: " mount-id))
+
+;; register two files
+(prn "Registering alpha.txt and beta.txt...")
+(register-eval-file mount-id "alpha.txt" "aaa")
+(register-eval-file mount-id "beta.txt" "bbb")
+
+;; list and verify both present
+(prn "Listing files (expecting alpha.txt and beta.txt)...")
+(def files1 (list-eval-files mount-id))
+(prn (str "  Got: " files1))
+(test::assert-true (vec-contains? files1 "alpha.txt") " alpha.txt should be in list")
+(test::assert-true (vec-contains? files1 "beta.txt") " beta.txt should be in list")
+(test::assert-equal 2 (len files1) " should have exactly 2 files")
+(prn "  OK: both files present")
+
+;; remove one
+(prn "Removing alpha.txt...")
+(remove-eval-file mount-id "alpha.txt")
+
+;; list and verify only beta remains
+(prn "Listing files after removal (expecting only beta.txt)...")
+(def files2 (list-eval-files mount-id))
+(prn (str "  Got: " files2))
+(test::assert-true (vec-contains? files2 "beta.txt") " beta.txt should still be in list")
+(test::assert-false (vec-contains? files2 "alpha.txt") " alpha.txt should be gone")
+(test::assert-equal 1 (len files2) " should have exactly 1 file")
+(prn "  OK: only beta.txt remains")
+
+;; cleanup
+(prn "Unmounting...")
+(unmount-eval-fs mount-id)
+(prn "PASS: test-list-and-remove")
