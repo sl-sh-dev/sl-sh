@@ -79,8 +79,8 @@ impl FuseMount {
 pub fn run_fuse_daemon(foreground: bool) -> Result<(), Box<dyn std::error::Error>> {
     use crate::daemon::{DaemonConfig, PidFile, daemonize, init_daemon_logging};
     use crate::socket_server::run_server;
+    use std::sync::atomic::AtomicBool;
     use std::sync::Arc;
-    use std::sync::atomic::{AtomicBool, Ordering};
 
     let config = DaemonConfig::default_for_user()?;
 
@@ -96,34 +96,11 @@ pub fn run_fuse_daemon(foreground: bool) -> Result<(), Box<dyn std::error::Error
     log::info!("FUSE daemon starting (pid={})", std::process::id());
 
     let shutdown = Arc::new(AtomicBool::new(false));
-
-    // Install signal handler for SIGTERM
-    let shut = Arc::clone(&shutdown);
-    unsafe {
-        libc::signal(libc::SIGTERM, signal_handler as libc::sighandler_t);
-        libc::signal(libc::SIGINT, signal_handler as libc::sighandler_t);
-    }
-    SHUTDOWN_FLAG.store(
-        Arc::into_raw(shut) as usize,
-        std::sync::atomic::Ordering::SeqCst,
-    );
+    signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(&shutdown))?;
+    signal_hook::flag::register(signal_hook::consts::SIGINT, Arc::clone(&shutdown))?;
 
     run_server(&config.socket_path, shutdown)?;
 
     log::info!("FUSE daemon exiting");
     Ok(())
-}
-
-// Global pointer to the shutdown flag for the signal handler
-static SHUTDOWN_FLAG: std::sync::atomic::AtomicUsize =
-    std::sync::atomic::AtomicUsize::new(0);
-
-extern "C" fn signal_handler(_sig: libc::c_int) {
-    let ptr = SHUTDOWN_FLAG.load(std::sync::atomic::Ordering::SeqCst);
-    if ptr != 0 {
-        let flag = unsafe {
-            &*(ptr as *const std::sync::atomic::AtomicBool)
-        };
-        flag.store(true, std::sync::atomic::Ordering::SeqCst);
-    }
 }

@@ -1,4 +1,3 @@
-use crate::file_mapping::FileMapping;
 use crate::mount_manager::MountManager;
 use base64::Engine;
 use std::io::{BufRead, BufReader, Write};
@@ -31,7 +30,7 @@ pub fn run_server(
                 std::thread::Builder::new()
                     .name("fuse-client".to_string())
                     .spawn(move || {
-                        if let Err(e) = handle_client(stream, mgr, shut) {
+                        if let Err(e) = handle_client(stream, mgr, &shut) {
                             log::error!("Client handler error: {}", e);
                         }
                         log::info!("Client disconnected");
@@ -66,7 +65,7 @@ pub fn run_server(
 fn handle_client(
     stream: UnixStream,
     manager: Arc<Mutex<MountManager>>,
-    shutdown: Arc<AtomicBool>,
+    shutdown: &AtomicBool,
 ) -> std::io::Result<()> {
     stream.set_nonblocking(false)?;
     let reader = BufReader::new(stream.try_clone()?);

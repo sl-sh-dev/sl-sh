@@ -11,3 +11,4 @@ env_logger = "0.11"
 base64 = "0.21"
 tempfile = "3.0"
 nix = { workspace = true, features = ["signal", "process", "fs"] }
+signal-hook = "0.3"

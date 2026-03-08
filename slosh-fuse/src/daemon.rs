@@ -2,6 +2,8 @@ use std::fs::{self, File};
 use std::io;
 use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
+use nix::sys::stat::umask;
+
 
 /// Paths used by the FUSE daemon.
 pub struct DaemonConfig {
@@ -120,17 +122,21 @@ pub fn daemonize() -> io::Result<()> {
         Err(e) => return Err(io::Error::new(io::ErrorKind::Other, e)),
     }
 
+    // Clear the file mode creation mask
+    umask(Mode::empty());
+
+    // Change working directory so we don't hold a mountpoint
+    std::env::set_current_dir("/")?;
+
     // Redirect stdio to /dev/null
     let devnull = fs::OpenOptions::new()
         .read(true)
         .write(true)
         .open("/dev/null")?;
     let fd = devnull.as_raw_fd();
-    unsafe {
-        libc::dup2(fd, 0);
-        libc::dup2(fd, 1);
-        libc::dup2(fd, 2);
-    }
+    unistd::dup2(fd, 0);
+    unistd::dup2(fd, 1);
+    unistd::dup2(fd, 2);
 
     Ok(())
 }
