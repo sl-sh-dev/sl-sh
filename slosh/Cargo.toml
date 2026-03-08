@@ -4,10 +4,6 @@ version.workspace = true
 edition = "2024"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[features]
-default = []
-lisp-test = ["dep:regex", "dep:lazy_static", "dep:mdbook", "dep:env_logger"]
-
 [dependencies]
 unicode_reader = { workspace = true }
 sl-compiler = { workspace = true }
@@ -20,12 +16,6 @@ compile_state = { workspace = true }
 shell = { path = "../shell" }
 unicode-width = { workspace = true }
 glob = { workspace = true }
-
-# lisp-test dependencies
-regex = { workspace = true, optional = true }
-lazy_static = { workspace = true, optional = true }
-mdbook = { workspace = true, optional = true }
-env_logger = { workspace = true, optional = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
