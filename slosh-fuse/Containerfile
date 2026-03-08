@@ -1,0 +1,56 @@
+# Containerfile — development toolchain for slosh-fuse (volume-mounted source)
+#
+# This is the primary development container. Source code is mounted at runtime
+# (not copied), so edits are reflected instantly and incremental builds are fast.
+# Includes socat for debugging the daemon's Unix domain socket.
+# Runs as non-root user "slosh" with XDG dirs pre-created.
+#
+# Build the image (from repo root, once or after changing this file):
+#   docker build -t dyn-slosh-fuse -f slosh-fuse/Containerfile .
+#
+# Run unit tests (no FUSE device needed):
+#   docker run --rm -v "$PWD:/home/slosh/src" dyn-slosh-fuse cargo test -p slosh-fuse
+#
+# Run the full integration test (needs FUSE device access):
+#   docker run --rm -v "$PWD:/home/slosh/src" --cap-add SYS_ADMIN --device /dev/fuse \
+#       dyn-slosh-fuse bash slosh-fuse/test-fuse.sh
+#
+# Build slosh-fuse:
+#   docker run --rm -v "$PWD:/home/slosh/src" dyn-slosh-fuse cargo build -p slosh-fuse
+#
+# Interactive shell for debugging:
+#   docker run --rm -it -v "$PWD:/home/slosh/src" --cap-add SYS_ADMIN --device /dev/fuse \
+#       dyn-slosh-fuse bash
+
+FROM ubuntu:24.04
+
+RUN apt-get update && apt-get install -y \
+    fuse3 \
+    libfuse3-dev \
+    build-essential \
+    curl \
+    pkg-config \
+    git \
+    socat \
+    && rm -rf /var/lib/apt/lists/*
+
+# Allow non-root users to use allow_other mount option
+RUN echo 'user_allow_other' >> /etc/fuse.conf
+
+# Create non-root user with XDG directories
+RUN useradd -m -s /bin/bash slosh \
+    && mkdir -p /home/slosh/.config /home/slosh/.local/share \
+    && chown -R slosh:slosh /home/slosh
+
+# Install Rust for the slosh user
+USER slosh
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/home/slosh/.cargo/bin:${PATH}"
+
+# Trust volume-mounted source (host UID differs from container user)
+RUN git config --global --add safe.directory /home/slosh/src
+
+# Pre-fetch crate index so first build is faster
+RUN cargo init /tmp/warmup && cd /tmp/warmup && cargo fetch 2>/dev/null; rm -rf /tmp/warmup
+
+WORKDIR /home/slosh/src

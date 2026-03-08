@@ -2,8 +2,7 @@ use std::fs::{self, File};
 use std::io;
 use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
-use nix::sys::stat::umask;
-
+use nix::sys::stat::{umask, Mode};
 
 /// Paths used by the FUSE daemon.
 pub struct DaemonConfig {
@@ -103,7 +102,7 @@ impl Drop for PidFile {
 /// Returns `Ok(())` in the daemon (grandchild) process.
 /// The parent and intermediate child processes call `std::process::exit(0)`.
 pub fn daemonize() -> io::Result<()> {
-    use nix::unistd::{ForkResult, fork, setsid};
+    use nix::unistd::{self, ForkResult, fork, setsid};
 
     // First fork
     match unsafe { fork() } {
@@ -134,9 +133,9 @@ pub fn daemonize() -> io::Result<()> {
         .write(true)
         .open("/dev/null")?;
     let fd = devnull.as_raw_fd();
-    unistd::dup2(fd, 0);
-    unistd::dup2(fd, 1);
-    unistd::dup2(fd, 2);
+    unistd::dup2(fd, 0)?;
+    unistd::dup2(fd, 1)?;
+    unistd::dup2(fd, 2)?;
 
     Ok(())
 }
@@ -151,6 +150,7 @@ pub fn init_daemon_logging(log_path: &Path) -> io::Result<()> {
     env_logger::Builder::new()
         .target(env_logger::Target::Pipe(Box::new(file)))
         .filter_level(log::LevelFilter::Info)
+        .parse_default_env()
         .format(|buf, record| {
             use std::io::Write;
             writeln!(

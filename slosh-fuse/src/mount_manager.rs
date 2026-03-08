@@ -1,5 +1,6 @@
 use crate::eval_fs::EvalFs;
 use crate::file_mapping::FileMapping;
+use crate::resolve::MountRegistry;
 use fuser::{MountOption, Session};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -15,6 +16,7 @@ struct MountState {
 pub struct MountManager {
     mounts: HashMap<String, MountState>,
     next_id: u64,
+    registry: MountRegistry,
 }
 
 impl MountManager {
@@ -22,6 +24,7 @@ impl MountManager {
         Self {
             mounts: HashMap::new(),
             next_id: 1,
+            registry: MountRegistry::new(),
         }
     }
 
@@ -42,14 +45,17 @@ impl MountManager {
         let mount_id = format!("mount-{}", self.next_id);
         self.next_id += 1;
 
+        self.registry.add(&path, Arc::clone(&mapping));
+        let registry_for_fuse = self.registry.clone();
+
         let thread = std::thread::Builder::new()
             .name(format!("fuse-{}", mount_id))
             .spawn(move || {
-                let fs = EvalFs::new(mapping_for_fuse);
+                let fs = EvalFs::new(mapping_for_fuse, registry_for_fuse);
                 let options = vec![
                     MountOption::FSName("slosh-eval".to_string()),
                     MountOption::AutoUnmount,
-                    MountOption::DefaultPermissions,
+                    MountOption::AllowOther,
                 ];
 
                 match Session::new(fs, mount_path.as_ref(), &options) {
@@ -88,6 +94,8 @@ impl MountManager {
     pub fn unmount(&mut self, mount_id: &str) -> Result<(), String> {
         let state = self.mounts.remove(mount_id)
             .ok_or_else(|| format!("unknown mount-id: {}", mount_id))?;
+
+        self.registry.remove(&state.mount_point);
 
         let mount_str = state.mount_point.to_string_lossy().to_string();
         Self::fusermount_unmount(&mount_str)?;

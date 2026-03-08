@@ -1,0 +1,56 @@
+# Containerfile_static — self-contained build (source copied into image)
+#
+# This container copies the source tree into the image at build time and
+# compiles everything during `docker build`. The resulting image is standalone
+# and doesn't need the host source tree at runtime. Slower to rebuild after
+# edits (re-sends build context + full recompile), but useful for testing a
+# stable version more robustly or for CI.
+# Runs as non-root user "slosh" with XDG dirs pre-created.
+#
+# Make sure .dockerignore excludes target/ and .git/ to keep context small.
+#
+# Build the image (from repo root, copies source and compiles):
+#   docker build -t slosh-fuse-static -f slosh-fuse/Containerfile_static .
+#
+# Run unit tests:
+#   docker run --rm slosh-fuse-static cargo test -p slosh-fuse
+#
+# Run the full integration test:
+#   docker run --rm --cap-add SYS_ADMIN --device /dev/fuse \
+#       slosh-fuse-static bash slosh-fuse/test-fuse.sh
+
+FROM ubuntu:24.04
+
+RUN apt-get update && apt-get install -y \
+    fuse3 \
+    libfuse3-dev \
+    build-essential \
+    curl \
+    pkg-config \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Allow non-root users to use allow_other mount option
+RUN echo 'user_allow_other' >> /etc/fuse.conf
+
+# Create non-root user with XDG directories
+RUN useradd -m -s /bin/bash slosh \
+    && mkdir -p /home/slosh/.config /home/slosh/.local/share \
+    && chown -R slosh:slosh /home/slosh
+
+# Install Rust for the slosh user
+USER slosh
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/home/slosh/.cargo/bin:${PATH}"
+
+# Pre-fetch crate index so first build is faster
+RUN cargo init /tmp/warmup && cd /tmp/warmup && cargo fetch 2>/dev/null; rm -rf /tmp/warmup
+
+COPY --chown=slosh:slosh . /home/slosh/src
+WORKDIR /home/slosh/src
+
+# Build slosh-fuse crate (binary + lib)
+RUN cargo build -p slosh-fuse
+
+# Build slosh with fuse feature
+RUN cargo build -p slosh_lib --features fuse

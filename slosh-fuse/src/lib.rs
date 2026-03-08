@@ -1,6 +1,7 @@
 pub mod eval_fs;
 pub mod file_mapping;
 pub mod proc_subst;
+pub mod resolve;
 
 pub mod auto_start;
 pub mod client;
@@ -10,6 +11,7 @@ pub mod socket_server;
 
 pub use eval_fs::EvalFs;
 pub use file_mapping::{FileMapping, FileEntry};
+pub use resolve::{MountRegistry, FileResolver};
 
 use std::path::PathBuf;
 

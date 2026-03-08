@@ -59,10 +59,50 @@ Requires Linux with libfuse3 (FUSE doesn't work natively on macOS).
 ```bash
 # On Linux
 cargo build -p slosh --features fuse
+```
 
-# On macOS, use an Apple Container
-container build -t slosh-fuse -f Containerfile .
-container run --name slosh-fuse slosh-fuse bash /src/slosh-fuse/test-fuse.sh
+### Containers (for macOS or CI)
+
+Two Containerfiles live in `slosh-fuse/`. Both are built from the **repo root** and
+run as a non-root `slosh` user with `~/.config` and `~/.local/share` pre-created.
+
+#### `Containerfile` — active development
+
+Source code is **volume-mounted** at runtime, not copied into the image. Edits are
+reflected instantly and incremental builds are fast. Includes `socat` for socket debugging.
+
+```bash
+# Build the toolchain image (once, or after changing the Containerfile)
+docker build -t dyn-slosh-fuse -f slosh-fuse/Containerfile .
+
+# Run unit tests (no FUSE device needed)
+docker run --rm -v "$PWD:/home/slosh/src" dyn-slosh-fuse cargo test -p slosh-fuse
+
+# Run the full integration test
+docker run --rm -v "$PWD:/home/slosh/src" --cap-add SYS_ADMIN --device /dev/fuse \
+    dyn-slosh-fuse bash slosh-fuse/test-fuse.sh
+
+# Interactive shell for debugging
+docker run --rm -it -v "$PWD:/home/slosh/src" --cap-add SYS_ADMIN --device /dev/fuse \
+    dyn-slosh-fuse bash
+```
+
+#### `Containerfile_static` — stable/CI testing
+
+Source is **copied into the image** and compiled during `docker build`. The resulting
+image is self-contained. Slower to rebuild after edits, but useful for testing a stable
+version more robustly or in CI where you want a reproducible artifact.
+
+```bash
+# Build (copies source, compiles everything)
+docker build -t slosh-fuse-static -f slosh-fuse/Containerfile_static .
+
+# Run unit tests
+docker run --rm slosh-fuse-static cargo test -p slosh-fuse
+
+# Run the full integration test
+docker run --rm --cap-add SYS_ADMIN --device /dev/fuse \
+    slosh-fuse-static bash slosh-fuse/test-fuse.sh
 ```
 
 ## Testing

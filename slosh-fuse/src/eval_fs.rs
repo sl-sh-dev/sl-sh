@@ -9,20 +9,23 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
 use crate::file_mapping::FileMapping;
+use crate::resolve::{FileResolver, MountRegistry};
 
 const TTL: Duration = Duration::from_secs(1);
 
 pub struct EvalFs {
     file_mapping: Arc<Mutex<FileMapping>>,
+    registry: MountRegistry,
     inode_to_path: HashMap<u64, String>,
     path_to_inode: HashMap<String, u64>,
     next_inode: u64,
 }
 
 impl EvalFs {
-    pub fn new(file_mapping: Arc<Mutex<FileMapping>>) -> Self {
+    pub fn new(file_mapping: Arc<Mutex<FileMapping>>, registry: MountRegistry) -> Self {
         let mut fs = Self {
             file_mapping,
+            registry,
             inode_to_path: HashMap::new(),
             path_to_inode: HashMap::new(),
             next_inode: 2, // 1 is reserved for root
@@ -109,12 +112,14 @@ impl Filesystem for EvalFs {
 
         let name_str = name.to_string_lossy();
 
-        let size = {
+        let entry = {
             let mapping = self.file_mapping.lock().unwrap();
-            mapping.get(&name_str).map(|e| e.total_size())
+            mapping.get(&name_str).cloned()
         };
 
-        if let Some(size) = size {
+        if let Some(entry) = entry {
+            let mut resolver = FileResolver::new(&self.registry);
+            let size = resolver.total_size(&entry);
             let inode = self.allocate_inode(&name_str);
             reply.entry(&TTL, &Self::file_attr(inode, size), 0);
         } else {
@@ -126,12 +131,14 @@ impl Filesystem for EvalFs {
         if ino == FUSE_ROOT_ID {
             reply.attr(&TTL, &Self::dir_attr(FUSE_ROOT_ID));
         } else if let Some(path) = self.get_path_for_inode(ino) {
-            let size = {
+            let entry = {
                 let mapping = self.file_mapping.lock().unwrap();
-                mapping.get(path).map(|e| e.total_size())
+                mapping.get(path).cloned()
             };
 
-            if let Some(size) = size {
+            if let Some(entry) = entry {
+                let mut resolver = FileResolver::new(&self.registry);
+                let size = resolver.total_size(&entry);
                 reply.attr(&TTL, &Self::file_attr(ino, size));
             } else {
                 reply.error(ENOENT);
@@ -153,11 +160,13 @@ impl Filesystem for EvalFs {
         reply: ReplyData,
     ) {
         if let Some(path) = self.get_path_for_inode(ino) {
-            let data = {
+            let entry = {
                 let mapping = self.file_mapping.lock().unwrap();
-                mapping.get(path).map(|e| e.read_range(offset as u64, size))
+                mapping.get(path).cloned()
             };
-            if let Some(data) = data {
+            if let Some(entry) = entry {
+                let mut resolver = FileResolver::new(&self.registry);
+                let data = resolver.read_range(&entry, offset as u64, size);
                 reply.data(&data);
             } else {
                 reply.error(ENOENT);
