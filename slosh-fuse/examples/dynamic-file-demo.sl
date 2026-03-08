@@ -1,37 +1,32 @@
 #!/usr/bin/env slosh
 
 ;; Dynamic File Demo
-;; This demonstrates how dynamic files would work with the FUSE integration
+;; Demonstrates FUSE integration with static content evaluated at registration time
 
-;; Simulate mounting a dynamic filesystem
+;; Mount a dynamic filesystem
 (def mount-id (mount-eval-fs "/tmp/slosh-dynamic"))
 
 ;; Register a systemd-style environment file
-;; This would dynamically generate content based on slosh expressions
+;; Content is evaluated NOW and sent to the FUSE server
 (register-eval-file mount-id "my-service.env"
-  "(str \"HOST=\" (or (env \"HOSTNAME\") \"localhost\") \"\\n\"
-        \"CUSTOM_TYPE=\" (or *custom-type* \"default\") \"\\n\"
-        \"TIMESTAMP=\" (current-time-millis) \"\\n\")")
+  (str "HOST=" (or (env "HOSTNAME") "localhost") "\n"
+       "CUSTOM_TYPE=" (or *custom-type* "default") "\n"))
 
-;; Register another dynamic file showing system info
+;; Register another file showing system info
 (register-eval-file mount-id "system-info.txt"
-  "(str \"User: \" (env \"USER\") \"\\n\"
-        \"Home: \" (env \"HOME\") \"\\n\"
-        \"Shell: \" (env \"SHELL\") \"\\n\"
-        \"PWD: \" (env \"PWD\") \"\\n\")")
+  (str "User: " (env "USER") "\n"
+       "Home: " (env "HOME") "\n"
+       "Shell: " (env "SHELL") "\n"))
 
 ;; List registered files
 (println "Registered files:")
 (doseq [file (list-eval-files mount-id)]
   (println "  " file))
 
-;; Demonstrate what the content would look like
-(println "\nFile contents would be:")
-(println "--- my-service.env ---")
-(println (eval-file-expression mount-id "my-service.env"))
-(println "\n--- system-info.txt ---")
-(println (eval-file-expression mount-id "system-info.txt"))
+;; Files are now readable at the mount point:
+;;   cat /tmp/slosh-dynamic/my-service.env
+;;   cat /tmp/slosh-dynamic/system-info.txt
 
 ;; Clean up
 (unmount-eval-fs mount-id)
-(println "\nFilesystem unmounted.")
+(println "Filesystem unmounted.")

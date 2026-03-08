@@ -18,6 +18,22 @@ members = [
     "slosh-fuse",
 ]
 
+# slosh-fuse requires libfuse (Linux only), exclude from default builds
+default-members = [
+    "slosh",
+    "slosh_lib",
+    "compiler",
+    "vm",
+    "builtins",
+    "compile_state",
+    "shell",
+    "bridge_macros",
+    "bridge_types",
+    "bridge_adapters",
+    "slosh_test",
+    "slosh_test_lib",
+]
+
 exclude = ["legacy"]
 
 [profile.release]

@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 use std::fs;
-use std::io::Write;
 use std::os::unix::fs::symlink;
-use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd};
-use std::path::{Path, PathBuf};
+use std::os::unix::io::AsRawFd;
+use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 
@@ -34,7 +33,7 @@ impl ProcSubst {
     pub fn create_file(&self, name: &str, command: &str) -> Result<PathBuf, std::io::Error> {
         // Create the symlink path
         let symlink_path = self.base_dir.join(name);
-        
+
         // Ensure parent directory exists
         if let Some(parent) = symlink_path.parent() {
             fs::create_dir_all(parent)?;
@@ -58,7 +57,7 @@ impl ProcSubst {
 
         // Store process info (leak the fd to keep it open)
         std::mem::forget(stdout);
-        
+
         let info = ProcInfo {
             process: child,
             fd,
@@ -74,21 +73,21 @@ impl ProcSubst {
     /// Remove a virtual file
     pub fn remove_file(&self, name: &str) -> Result<(), std::io::Error> {
         let mut processes = self.processes.lock().unwrap();
-        
+
         if let Some(mut info) = processes.remove(name) {
             // Remove the symlink
             let _ = fs::remove_file(&info.symlink_path);
-            
+
             // Kill the process
             let _ = info.process.kill();
             let _ = info.process.wait();
-            
+
             // Close the file descriptor
             unsafe {
                 libc::close(info.fd);
             }
         }
-        
+
         Ok(())
     }
 
@@ -120,7 +119,7 @@ impl Drop for ProcSubst {
                 libc::close(info.fd);
             }
         }
-        
+
         // Remove base directory
         let _ = fs::remove_dir_all(&self.base_dir);
     }
@@ -135,17 +134,17 @@ mod tests {
     #[test]
     fn test_proc_subst() {
         let ps = ProcSubst::new().unwrap();
-        
+
         // Create a virtual file
         let path = ps.create_file("test.txt", "echo 'Hello, World!'").unwrap();
-        
+
         // Read from it
         let mut file = File::open(&path).unwrap();
         let mut contents = String::new();
         file.read_to_string(&mut contents).unwrap();
-        
+
         assert_eq!(contents.trim(), "Hello, World!");
-        
+
         // Clean up
         ps.remove_file("test.txt").unwrap();
     }

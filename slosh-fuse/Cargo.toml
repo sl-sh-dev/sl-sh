@@ -12,11 +12,5 @@ fuser = "0.14"
 libc = "0.2"
 log = "0.4"
 env_logger = "0.11"
-uuid = { version = "1.0", features = ["v4"] }
+base64 = "0.21"
 tempfile = "3.0"
-
-# No slosh dependencies to avoid circular dependency
-
-[dependencies.nix]
-version = "0.27"
-features = ["signal", "process", "fs"]

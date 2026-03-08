@@ -1444,17 +1444,6 @@ checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
 
 [[package]]
 name = "nix"
-version = "0.27.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2eb04e9c688eff1c89d72b407f168cf79bb9e867a9d3323ed6c01519eb9cc053"
-dependencies = [
- "bitflags 2.8.0",
- "cfg-if",
- "libc",
-]
-
-[[package]]
-name = "nix"
 version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "71e2746dc3a24dd78b3cfcb7be93368c6de9963d30f43a6a73998a9cf4b17b46"
@@ -2116,7 +2105,7 @@ dependencies = [
  "cfg-if",
  "chrono",
  "glob",
- "nix 0.29.0",
+ "nix",
  "sl-liner",
 ]
 
@@ -2212,13 +2201,12 @@ dependencies = [
 name = "slosh-fuse"
 version = "0.11.1"
 dependencies = [
+ "base64",
  "env_logger",
  "fuser",
  "libc",
  "log",
- "nix 0.27.1",
  "tempfile",
- "uuid",
 ]
 
 [[package]]
@@ -2235,7 +2223,6 @@ dependencies = [
  "criterion",
  "glob",
  "iai-callgrind",
- "nix 0.27.1",
  "shell",
  "sl-compiler",
  "sl-liner",
