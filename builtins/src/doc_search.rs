@@ -927,7 +927,7 @@ fn search_docs(
     for (section, docs) in docs_by_section {
         // Check section filter
         if let Some(ref section_filter) = query.section_filter {
-            if !query.matches_text(&section) && section != *section_filter {
+            if section != *section_filter {
                 continue;
             }
         }
@@ -935,7 +935,7 @@ fn search_docs(
         for doc in docs {
             // Check namespace filter
             if let Some(ref ns_filter) = query.namespace_filter {
-                if !doc.namespace.contains(ns_filter) && doc.namespace != *ns_filter {
+                if doc.namespace != *ns_filter {
                     continue;
                 }
             }
