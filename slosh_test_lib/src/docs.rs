@@ -153,6 +153,12 @@ impl Namespace {
         match self {
             Namespace::Global => {
                 for g in vm.globals().clone().keys() {
+                    // Skip namespace-qualified symbols (contain "::") - they'll
+                    // be collected when iterating their named namespace.
+                    let name = vm.get_interned(*g);
+                    if name.contains("::") {
+                        continue;
+                    }
                     self.get_doc(g, docs, vm, require_proper_format)?;
                 }
             }
@@ -420,6 +426,11 @@ impl SloshDoc {
         if let Some(slot) = slot {
             let doc_string = DocStringSection::new_incomplete(slot, &sym, vm);
             let symbol = sym.display_value(vm);
+            let mut full_name: Vec<_> = symbol.split("::").collect();
+            let symbol = full_name
+                .pop()
+                .expect("Symbol should never be an empty.")
+                .to_string();
             let symbol_type = sym.display_type(vm).to_string();
             let namespace = namespace.display(vm);
             Ok(SloshDoc {
