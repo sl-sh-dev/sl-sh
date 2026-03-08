@@ -4,9 +4,10 @@ use slvm::{VMError, VMResult, Value};
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
 
 use slosh_fuse::FuseMount;
+use slosh_fuse::auto_start::ensure_daemon_running;
+use slosh_fuse::daemon::DaemonConfig;
 
 use std::sync::OnceLock;
 static MOUNT_REGISTRY: OnceLock<Mutex<HashMap<String, FuseMount>>> = OnceLock::new();
@@ -31,52 +32,16 @@ fn mount_eval_fs(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
             .map_err(|e| VMError::new_vm(format!("Failed to create mount point: {}", e)))?;
     }
 
-    let mount_id = format!("mount-{}", uuid::Uuid::new_v4());
-    let mut mount = FuseMount::new(mount_point.clone());
+    let config = DaemonConfig::default_for_user()
+        .map_err(|e| VMError::new_vm(format!("Failed to get daemon config: {}", e)))?;
 
-    let server_name = "slosh-fuse-server";
+    let client = ensure_daemon_running(&config)
+        .map_err(|e| VMError::new_vm(format!("Failed to connect to FUSE daemon: {}", e)))?;
 
-    let possible_paths = vec![
-        std::env::current_exe()
-            .ok()
-            .and_then(|p| p.parent().map(|p| p.join(server_name))),
-        std::env::current_dir()
-            .ok()
-            .map(|p| {
-                p.join("target")
-                    .join(if cfg!(debug_assertions) { "debug" } else { "release" })
-                    .join(server_name)
-            }),
-        Some(PathBuf::from(server_name)),
-    ];
+    let mount = FuseMount::new_daemon(mount_point, client)
+        .map_err(|e| VMError::new_vm(format!("Failed to create mount: {}", e)))?;
 
-    let server_path = possible_paths
-        .into_iter()
-        .flatten()
-        .find(|p| p.exists())
-        .ok_or_else(|| {
-            VMError::new_vm(
-                "Could not find slosh-fuse-server binary. \
-                 Build it with 'cargo build --bin slosh-fuse-server'"
-                    .to_string(),
-            )
-        })?;
-
-    let mut child = Command::new(&server_path)
-        .arg(mount_point.to_str().unwrap())
-        .stdin(Stdio::piped())
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .map_err(|e| {
-            VMError::new_vm(format!(
-                "Failed to spawn FUSE server at {:?}: {}",
-                server_path, e
-            ))
-        })?;
-
-    mount.stdin_handle = child.stdin.take();
-    mount.process_handle = Some(child);
+    let mount_id = mount.mount_id.clone();
 
     get_registry()
         .lock()
@@ -174,18 +139,18 @@ fn list_eval_files(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
 
     let mount_id = registers[0].get_string(vm)?;
 
-    let registry = get_registry()
+    let mut registry = get_registry()
         .lock()
         .map_err(|e| VMError::new_vm(format!("Registry lock poisoned: {}", e)))?;
 
-    if let Some(mount) = registry.get(mount_id) {
-        let files: Vec<Value> = mount
-            .registered_paths
+    if let Some(mount) = registry.get_mut(mount_id) {
+        let files = mount.list_files()
+            .map_err(|e| VMError::new_vm(format!("Failed to list files: {}", e)))?;
+        let values: Vec<Value> = files
             .iter()
             .map(|f| vm.alloc_string(f.clone()))
             .collect();
-
-        Ok(vm.alloc_vector(files))
+        Ok(vm.alloc_vector(values))
     } else {
         Err(VMError::new_vm(format!("Invalid mount id: {}", mount_id)))
     }
@@ -221,6 +186,7 @@ pub fn add_fuse_builtins(env: &mut SloshVm) {
         r#"Usage: (mount-eval-fs path)
 
 Mount an evaluation filesystem at the specified path. Returns a mount ID.
+Uses a shared per-user FUSE daemon (auto-started if needed).
 
 Section: fuse
 
@@ -236,7 +202,7 @@ Example:
         r#"Usage: (register-eval-file mount-id path content)
 
 Register a file with static content in the FUSE filesystem.
-Content is evaluated at registration time and sent to the FUSE server.
+Content is evaluated at registration time and sent to the FUSE daemon.
 
 Section: fuse
 

@@ -2206,6 +2206,7 @@ dependencies = [
  "fuser",
  "libc",
  "log",
+ "nix",
  "tempfile",
 ]
 

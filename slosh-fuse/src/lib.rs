@@ -2,62 +2,58 @@ pub mod eval_fs;
 pub mod file_mapping;
 pub mod proc_subst;
 
+pub mod auto_start;
+pub mod client;
+pub mod daemon;
+pub mod mount_manager;
+pub mod socket_server;
+
 pub use eval_fs::EvalFs;
 pub use file_mapping::{FileMapping, FileEntry};
 
-use base64::Engine;
-use std::io::Write;
 use std::path::PathBuf;
-use std::process::ChildStdin;
 
+use crate::client::DaemonClient;
+
+/// A handle to a single FUSE mount managed by the daemon.
 pub struct FuseMount {
     pub mount_point: PathBuf,
-    pub process_handle: Option<std::process::Child>,
-    pub stdin_handle: Option<ChildStdin>,
+    pub mount_id: String,
+    client: DaemonClient,
     pub registered_paths: Vec<String>,
 }
 
 impl FuseMount {
-    pub fn new(mount_point: PathBuf) -> Self {
-        Self {
+    /// Create a new mount via the daemon. Calls `client.mount()` to get a
+    /// mount-id from the running daemon.
+    pub fn new_daemon(
+        mount_point: PathBuf,
+        mut client: DaemonClient,
+    ) -> Result<Self, std::io::Error> {
+        let mount_id = client.mount(mount_point.to_str().unwrap_or(""))?;
+        Ok(Self {
             mount_point,
-            process_handle: None,
-            stdin_handle: None,
+            mount_id,
+            client,
             registered_paths: Vec::new(),
-        }
-    }
-
-    fn send_command(&mut self, cmd: &str) -> Result<(), std::io::Error> {
-        if let Some(ref mut stdin) = self.stdin_handle {
-            stdin.write_all(cmd.as_bytes())?;
-            stdin.flush()?;
-            Ok(())
-        } else {
-            Err(std::io::Error::new(
-                std::io::ErrorKind::NotConnected,
-                "FUSE server stdin not connected",
-            ))
-        }
+        })
     }
 
     pub fn register_file(&mut self, path: &str, content: &[u8]) -> Result<(), std::io::Error> {
-        let b64 = base64::engine::general_purpose::STANDARD.encode(content);
-        let cmd = format!("REGISTER\t{}\t{}\n", path, b64);
-        self.send_command(&cmd)?;
+        self.client.register_file(&self.mount_id, path, content)?;
         if !self.registered_paths.contains(&path.to_string()) {
             self.registered_paths.push(path.to_string());
         }
         Ok(())
     }
 
-    pub fn register_concat_file(&mut self, vpath: &str, source_paths: &[&str]) -> Result<(), std::io::Error> {
-        let mut cmd = format!("CONCAT\t{}", vpath);
-        for p in source_paths {
-            cmd.push('\t');
-            cmd.push_str(p);
-        }
-        cmd.push('\n');
-        self.send_command(&cmd)?;
+    pub fn register_concat_file(
+        &mut self,
+        vpath: &str,
+        source_paths: &[&str],
+    ) -> Result<(), std::io::Error> {
+        self.client
+            .register_concat(&self.mount_id, vpath, source_paths)?;
         if !self.registered_paths.contains(&vpath.to_string()) {
             self.registered_paths.push(vpath.to_string());
         }
@@ -65,20 +61,69 @@ impl FuseMount {
     }
 
     pub fn remove_file(&mut self, path: &str) -> Result<(), std::io::Error> {
-        let cmd = format!("REMOVE\t{}\n", path);
-        self.send_command(&cmd)?;
+        self.client.remove_file(&self.mount_id, path)?;
         self.registered_paths.retain(|p| p != path);
         Ok(())
     }
 
     pub fn unmount(&mut self) -> Result<(), std::io::Error> {
-        // Drop stdin to signal EOF to the server's reader thread
-        self.stdin_handle.take();
+        self.client.unmount(&self.mount_id)
+    }
 
-        if let Some(mut handle) = self.process_handle.take() {
-            handle.kill()?;
-            handle.wait()?;
-        }
-        Ok(())
+    pub fn list_files(&mut self) -> Result<Vec<String>, std::io::Error> {
+        self.client.list_files(&self.mount_id)
+    }
+}
+
+/// Entry point for the daemon process. Called from `slosh --fuse-daemon`.
+pub fn run_fuse_daemon(foreground: bool) -> Result<(), Box<dyn std::error::Error>> {
+    use crate::daemon::{DaemonConfig, PidFile, daemonize, init_daemon_logging};
+    use crate::socket_server::run_server;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    let config = DaemonConfig::default_for_user()?;
+
+    if !foreground {
+        daemonize()?;
+    }
+
+    // Acquire PID file (single instance check)
+    let _pid_file = PidFile::acquire(&config.pid_file)?;
+
+    // Set up logging to file
+    init_daemon_logging(&config.log_file)?;
+    log::info!("FUSE daemon starting (pid={})", std::process::id());
+
+    let shutdown = Arc::new(AtomicBool::new(false));
+
+    // Install signal handler for SIGTERM
+    let shut = Arc::clone(&shutdown);
+    unsafe {
+        libc::signal(libc::SIGTERM, signal_handler as libc::sighandler_t);
+        libc::signal(libc::SIGINT, signal_handler as libc::sighandler_t);
+    }
+    SHUTDOWN_FLAG.store(
+        Arc::into_raw(shut) as usize,
+        std::sync::atomic::Ordering::SeqCst,
+    );
+
+    run_server(&config.socket_path, shutdown)?;
+
+    log::info!("FUSE daemon exiting");
+    Ok(())
+}
+
+// Global pointer to the shutdown flag for the signal handler
+static SHUTDOWN_FLAG: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
+extern "C" fn signal_handler(_sig: libc::c_int) {
+    let ptr = SHUTDOWN_FLAG.load(std::sync::atomic::Ordering::SeqCst);
+    if ptr != 0 {
+        let flag = unsafe {
+            &*(ptr as *const std::sync::atomic::AtomicBool)
+        };
+        flag.store(true, std::sync::atomic::Ordering::SeqCst);
     }
 }

@@ -14,17 +14,29 @@ cat /tmp/dynamic/config.env
 
 ## Architecture
 
-Content is **evaluated at registration time** in the parent slosh process, then sent as static bytes to a child FUSE server process via stdin (base64-encoded, tab-delimited protocol). This avoids the complexity of IPC-based expression evaluation since the Slosh VM is `thread_local!` and can't be accessed from child processes.
+A single per-user FUSE daemon manages all mounts. The daemon:
+- Is the slosh binary itself, started with `--fuse-daemon`
+- Manages multiple mount points (one FUSE session thread per mount)
+- Accepts connections from multiple REPL instances via Unix domain socket
+- Auto-starts when a REPL first needs it
+- Detaches from terminal (double-fork + setsid)
+- Uses a PID file with advisory lock for single-instance enforcement
+
+Content is **evaluated at registration time** in the REPL, then sent as static bytes to the daemon via Unix socket (base64-encoded, tab-delimited protocol).
 
 Components:
-1. **slosh-fuse crate** - FUSE filesystem serving static file content, plus the `FuseMount` parent-side handle
-2. **slosh-fuse-server binary** - Child process that mounts FUSE and reads `REGISTER`/`REMOVE` commands from stdin
-3. **Builtin functions** (in slosh_lib) - `mount-eval-fs`, `register-eval-file`, `unmount-eval-fs`, `list-eval-files`, `list-mounts`
+1. **slosh-fuse crate** - FUSE filesystem, daemon core, socket server, and client library
+2. **Builtin functions** (in slosh_lib) - `mount-eval-fs`, `register-eval-file`, `unmount-eval-fs`, `concat-eval-files`, `list-eval-files`, `list-mounts`
+
+Runtime files (under `$HOME/.local/share/slosh/`):
+- `fuse-daemon.pid` - PID file with advisory lock
+- `fuse.sock` - Unix domain socket
+- `fuse-daemon.log` - Daemon log output
 
 ## Usage
 
 ```lisp
-;; Mount a dynamic filesystem
+;; Mount a dynamic filesystem (auto-starts daemon if needed)
 (def mount-id (mount-eval-fs "/tmp/dynamic"))
 
 ;; Register a file with content (evaluated now, served statically)
@@ -33,9 +45,8 @@ Components:
 
 ;; The file /tmp/dynamic/config.env is now readable
 
-;; To update content, re-register:
-(register-eval-file mount-id "config.env"
-  (str "HOST=" (hostname) "\n" "TYPE=" *my-global-var* "\n"))
+;; Concatenate multiple real files as a single virtual file
+(concat-eval-files mount-id "combined.txt" "/path/a.txt" "/path/b.txt")
 
 ;; Unmount when done
 (unmount-eval-fs mount-id)
@@ -47,8 +58,7 @@ Requires Linux with libfuse3 (FUSE doesn't work natively on macOS).
 
 ```bash
 # On Linux
-cargo build -p slosh-fuse
-cargo build -p slosh_lib --features fuse
+cargo build -p slosh --features fuse
 
 # On macOS, use an Apple Container
 container build -t slosh-fuse -f Containerfile .
@@ -58,17 +68,26 @@ container run --name slosh-fuse slosh-fuse bash /src/slosh-fuse/test-fuse.sh
 ## Testing
 
 ```bash
-# Standalone FUSE server test (inside container or on Linux)
+# Daemon test (inside container or on Linux, requires socat)
 bash slosh-fuse/test-fuse.sh
+
+# Manual daemon testing
+slosh --fuse-daemon-foreground &
+echo -e "PING" | socat - UNIX-CONNECT:$HOME/.local/share/slosh/fuse.sock
 ```
 
 ## Protocol
 
-The parent communicates with the FUSE server child via stdin using tab-delimited lines:
+The REPL communicates with the daemon via Unix domain socket using tab-delimited request/response lines:
 
 ```
-REGISTER\t<path>\t<base64-content>\n
-REMOVE\t<path>\n
+Request:                                          Response:
+MOUNT\t<mount_point>\n                         -> OK\t<mount-id>\n
+REGISTER\t<mount-id>\t<path>\t<base64>\n       -> OK\n
+CONCAT\t<mount-id>\t<vpath>\t<p1>\t<p2>...\n   -> OK\n
+REMOVE\t<mount-id>\t<path>\n                   -> OK\n
+UNMOUNT\t<mount-id>\n                          -> OK\n
+LIST\t<mount-id>\n                             -> OK\t<path1>\t<path2>...\n
+PING\n                                         -> OK\tPONG\n
+(any error)                                    -> ERR\t<message>\n
 ```
-
-The server uses `AutoUnmount` so the filesystem is automatically unmounted when the server process exits.

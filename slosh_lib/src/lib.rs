@@ -648,6 +648,19 @@ pub fn run(modify_vm: impl FnOnce(&mut SloshVm)) -> i32 {
 pub fn run_slosh(modify_vm: impl FnOnce(&mut SloshVm)) -> i32 {
     let mut status = 0;
     if let Some(config) = get_config() {
+        // Handle --fuse-daemon before VM initialization (daemon doesn't need VM)
+        #[cfg(feature = "fuse")]
+        if config.fuse_daemon || config.fuse_daemon_foreground {
+            let foreground = config.fuse_daemon_foreground;
+            match slosh_fuse::run_fuse_daemon(foreground) {
+                Ok(()) => return 0,
+                Err(e) => {
+                    eprintln!("FUSE daemon error: {}", e);
+                    return 1;
+                }
+            }
+        }
+
         ENV.with(|renv| {
             let mut env = renv.borrow_mut();
             env.pause_gc();

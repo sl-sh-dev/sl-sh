@@ -5,6 +5,8 @@ pub struct Config {
     pub command: Option<String>,
     pub script: Option<String>,
     pub args: Vec<String>,
+    pub fuse_daemon: bool,
+    pub fuse_daemon_foreground: bool,
 }
 
 pub const VERSION_STRING: &str = env!("VERSION_STRING");
@@ -16,8 +18,10 @@ USAGE:
     sl-sh [FLAGS] [OPTIONS] [args]
 
 FLAGS:
-    -v, --version  Print the version, platform and revision of sl-sh then exit.
-    -h, --help     Print help (this) and exit.
+    -v, --version              Print the version, platform and revision of sl-sh then exit.
+    -h, --help                 Print help (this) and exit.
+    --fuse-daemon              Start as FUSE daemon (detaches from terminal).
+    --fuse-daemon-foreground   Start as FUSE daemon in foreground (for debugging).
 
 OPTIONS:
     -c             Command to run instead of entering the REPL.
@@ -47,6 +51,8 @@ pub fn get_config() -> Option<Config> {
     let mut command: Option<String> = None;
     let mut script: Option<String> = None;
     let mut command_args: Vec<String> = Vec::new();
+    let mut fuse_daemon = false;
+    let mut fuse_daemon_foreground = false;
 
     let mut args: Vec<OsString> = env::args_os().collect();
 
@@ -72,6 +78,12 @@ pub fn get_config() -> Option<Config> {
                         help(&exe_name);
                         return None;
                     }
+                    "--fuse-daemon" => {
+                        fuse_daemon = true;
+                    }
+                    "--fuse-daemon-foreground" => {
+                        fuse_daemon_foreground = true;
+                    }
                     _ => {
                         if command.is_none() && script.is_none() {
                             script = Some(arg);
@@ -90,5 +102,7 @@ pub fn get_config() -> Option<Config> {
         command,
         script,
         args: command_args,
+        fuse_daemon,
+        fuse_daemon_foreground,
     })
 }
