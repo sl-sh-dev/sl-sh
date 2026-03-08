@@ -84,11 +84,12 @@ $(cargo build --manifest-path ~(str mdbook-eval-dir "/Cargo.toml"))
 (def mdbook-path (str mdbook-eval-dir "/target/debug"))
 (def new-path (str (env "PATH") ":" mdbook-path))
 
-(prn "Running mdbook build with PATH=" new-path)
-(sh (str "export PATH=\"" new-path "\" && mdbook build"))
-
-(sh "./search-hack-patch.sh")
-
-(when (= args-local.1 "serve")
-    (prn "Starting mdbook serve...")
-    (sh (str "export PATH=\"" new-path "\" && mdbook serve")))
+(if (= args-local.1 "serve")
+    (do
+        (prn "Starting mdbook serve...")
+        $(rm -rf book)
+        (sh (str "export PATH=\"" new-path "\" && mdbook serve")))
+    (do
+        (prn "Running mdbook build with PATH=" new-path)
+        (sh (str "export PATH=\"" new-path "\" && mdbook build"))
+        (sh "./search-hack-patch.sh")))
