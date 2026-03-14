@@ -70,10 +70,12 @@ impl MountManager {
         self.registry.add(&path, Arc::clone(&mapping));
         let registry_for_fuse = self.registry.clone();
 
+        let backing_pair = backing.map(|b| (path.clone(), b));
+
         let thread = std::thread::Builder::new()
             .name(format!("fuse-{}", mount_id))
             .spawn(move || {
-                let fs = EvalFs::new(mapping_for_fuse, registry_for_fuse, backing);
+                let fs = EvalFs::new(mapping_for_fuse, registry_for_fuse, backing_pair);
                 let options = vec![
                     MountOption::FSName("slosh-eval".to_string()),
                     MountOption::AutoUnmount,

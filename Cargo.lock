@@ -2245,6 +2245,7 @@ dependencies = [
  "criterion",
  "glob",
  "iai-callgrind",
+ "regex",
  "shell",
  "sl-compiler",
  "sl-liner",

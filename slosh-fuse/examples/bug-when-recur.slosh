@@ -1,0 +1,15 @@
+#!/usr/bin/env slosh
+;; Bug reproduction: `when` + `recur` only executes the first iteration.
+;; Expected: loop runs 3 times, result is "abc"
+;; Actual: loop runs once, result is "a"
+
+(load "test.slosh")
+
+;; This FAILS — only the first iteration runs
+(let (result "")
+  (loop (items) ('("a" "b" "c"))
+    (when (not (= items '()))
+      (set! result (str result (car items)))
+      (recur (cdr items))))
+  (prn (str "when+recur result: '" result "' (expected 'abc')"))
+  (test::assert-equal "abc" result " when+recur should iterate all items"))

@@ -1,7 +1,6 @@
 pub mod backing_dir;
 pub mod eval_fs;
 pub mod file_mapping;
-pub mod proc_subst;
 pub mod resolve;
 
 pub mod auto_start;

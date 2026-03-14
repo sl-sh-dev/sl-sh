@@ -1,5 +1,3 @@
-use crate::docs::{legacy, legacy_docs};
-use bridge_macros::sl_sh_fn;
 use compile_state::state::{SloshVm, SloshVmTrait};
 use slvm::{VMResult, Value};
 use std::collections::HashSet;
@@ -141,7 +139,7 @@ pub(crate) fn unimplemented_report(vm: &mut SloshVm) -> VMResult<StatusReport> {
         }
     }
 
-    let metadata = legacy_docs::full_legacy_sl_sh_forms_metadata();
+    let metadata = full_legacy_sl_sh_forms_metadata();
     let mut completed = 0;
     let mut yet_to_be_implemented = 0;
     let mut status_entries = Vec::new();
@@ -224,9 +222,9 @@ pub(crate) fn unimplemented_report(vm: &mut SloshVm) -> VMResult<StatusReport> {
 ///
 /// Example:
 /// #t
-#[sl_sh_fn(fn_name = "legacy-report", takes_env = true)]
+#[bridge_macros::sl_sh_fn(fn_name = "legacy-report", takes_env = true)]
 pub fn legacy_report(environment: &mut SloshVm) -> VMResult<String> {
-    legacy::build_report(environment)
+    build_report(environment)
 }
 
 pub fn get_legacy_sl_sh_form_syms(vm: &mut SloshVm, _registers: &[Value]) -> VMResult<Value> {

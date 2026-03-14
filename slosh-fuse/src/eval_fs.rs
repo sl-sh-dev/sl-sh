@@ -5,6 +5,7 @@ use fuser::{
 use libc::{ENOENT, ENOTDIR};
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
@@ -20,14 +21,15 @@ pub struct EvalFs {
     inode_to_path: HashMap<u64, String>,
     path_to_inode: HashMap<String, u64>,
     next_inode: u64,
-    backing: Option<BackingDir>,
+    /// For overlay mounts: (mount_point, backing_dir).
+    backing: Option<(PathBuf, BackingDir)>,
 }
 
 impl EvalFs {
     pub fn new(
         file_mapping: Arc<Mutex<FileMapping>>,
         registry: MountRegistry,
-        backing: Option<BackingDir>,
+        backing: Option<(PathBuf, BackingDir)>,
     ) -> Self {
         let mut fs = Self {
             file_mapping,
@@ -65,6 +67,10 @@ impl EvalFs {
 
     fn get_path_for_inode(&self, inode: u64) -> Option<&str> {
         self.inode_to_path.get(&inode).map(|s| s.as_str())
+    }
+
+    fn backing_ref(&self) -> Option<(&PathBuf, &BackingDir)> {
+        self.backing.as_ref().map(|(p, b)| (p, b))
     }
 
     fn file_attr(inode: u64, size: u64) -> FileAttr {
@@ -125,13 +131,21 @@ impl Filesystem for EvalFs {
         };
 
         if let Some(entry) = entry {
-            let mut resolver = FileResolver::new(&self.registry);
+            let backing = self.backing_ref();
+            let mut resolver = FileResolver::new(&self.registry, backing);
+            if let Some((ref mp, _)) = self.backing {
+                resolver.mark_visited(mp.join(name_str.as_ref()));
+            }
             let size = resolver.total_size(&entry);
             let inode = self.allocate_inode(&name_str);
             reply.entry(&TTL, &Self::file_attr(inode, size), 0);
-        } else if let Some((size, true)) = self.backing.as_ref().and_then(|b| b.stat(&name_str)) {
-            let inode = self.allocate_inode(&name_str);
-            reply.entry(&TTL, &Self::file_attr(inode, size), 0);
+        } else if let Some((_, ref b)) = self.backing {
+            if let Some((size, true)) = b.stat(&name_str) {
+                let inode = self.allocate_inode(&name_str);
+                reply.entry(&TTL, &Self::file_attr(inode, size), 0);
+            } else {
+                reply.error(ENOENT);
+            }
         } else {
             reply.error(ENOENT);
         }
@@ -148,13 +162,19 @@ impl Filesystem for EvalFs {
             };
 
             if let Some(entry) = entry {
-                let mut resolver = FileResolver::new(&self.registry);
+                let backing = self.backing_ref();
+                let mut resolver = FileResolver::new(&self.registry, backing);
+                if let Some((ref mp, _)) = self.backing {
+                    resolver.mark_visited(mp.join(&path));
+                }
                 let size = resolver.total_size(&entry);
                 reply.attr(&TTL, &Self::file_attr(ino, size));
-            } else if let Some((size, true)) =
-                self.backing.as_ref().and_then(|b| b.stat(&path))
-            {
-                reply.attr(&TTL, &Self::file_attr(ino, size));
+            } else if let Some((_, ref b)) = self.backing {
+                if let Some((size, true)) = b.stat(&path) {
+                    reply.attr(&TTL, &Self::file_attr(ino, size));
+                } else {
+                    reply.error(ENOENT);
+                }
             } else {
                 reply.error(ENOENT);
             }
@@ -181,10 +201,14 @@ impl Filesystem for EvalFs {
                 mapping.get(&path).cloned()
             };
             if let Some(entry) = entry {
-                let mut resolver = FileResolver::new(&self.registry);
+                let backing = self.backing_ref();
+                let mut resolver = FileResolver::new(&self.registry, backing);
+                if let Some((ref mp, _)) = self.backing {
+                    resolver.mark_visited(mp.join(&path));
+                }
                 let data = resolver.read_range(&entry, offset as u64, size);
                 reply.data(&data);
-            } else if let Some(ref backing) = self.backing {
+            } else if let Some((_, ref backing)) = self.backing {
                 let data = backing.read_file(&path, offset as u64, size);
                 reply.data(&data);
             } else {
@@ -240,7 +264,7 @@ impl Filesystem for EvalFs {
         }
 
         // Merge backing dir entries, skipping virtual file names
-        if let Some(ref backing) = self.backing {
+        if let Some((_, ref backing)) = self.backing {
             let backing_files = backing.list_files();
             let base = entries.len() + files.len();
             for (i, name) in backing_files.iter().enumerate() {

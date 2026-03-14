@@ -33,6 +33,7 @@ use builtins::{add_global_value, add_misc_builtins};
 use sl_liner::vi::AlphanumericAndVariableKeywordRule;
 use sl_liner::{ColorClosure, Context, Prompt, keymap};
 
+pub mod docs;
 mod completions;
 pub mod debug;
 mod liner_rules;
@@ -441,19 +442,16 @@ pub fn set_builtins(env: &mut SloshVm) {
     add_rand_builtins(env);
     add_math_builtins(env);
     add_doc_builtins(env);
+    docs::add_doc_search_builtins(env);
 }
 
 #[cfg(feature = "fuse")]
 mod fuse_bindings;
 
-#[cfg(feature = "fuse")]
-mod proc_subst_bindings;
-
 /// Add FUSE builtins if the feature is enabled
 #[cfg(feature = "fuse")]
 pub fn add_fuse_builtins(env: &mut SloshVm) {
     fuse_bindings::add_fuse_builtins(env);
-    proc_subst_bindings::add_proc_subst_builtins(env);
 }
 
 /// Loads the user's sloshrc file, has side-effects, and sets some important
@@ -528,11 +526,17 @@ Section: shell"#
     env.set_global_property(si, key, s);
 }
 
-pub fn set_builtins_and_shell_builtins(env: &mut SloshVm) {
+pub fn set_builtins_and_shell_builtins_with_vm(env: &mut SloshVm, modify_vm: impl FnOnce(&mut SloshVm)) {
     set_builtins(env);
+    modify_vm(env);
     set_shell_builtins(env);
     #[cfg(feature = "fuse")]
     add_fuse_builtins(env);
+}
+
+pub fn set_builtins_and_shell_builtins(env: &mut SloshVm) {
+    let noop = |_| {};
+    set_builtins_and_shell_builtins_with_vm(env, noop);
 }
 
 pub fn set_shell_builtins(env: &mut SloshVm) {
@@ -664,11 +668,7 @@ pub fn run_slosh(modify_vm: impl FnOnce(&mut SloshVm)) -> i32 {
         ENV.with(|renv| {
             let mut env = renv.borrow_mut();
             env.pause_gc();
-            set_builtins(&mut env);
-            modify_vm(&mut env);
-            set_shell_builtins(&mut env);
-            #[cfg(feature = "fuse")]
-            add_fuse_builtins(&mut env);
+            set_builtins_and_shell_builtins_with_vm(&mut env, modify_vm);
             env.unpause_gc();
         });
         if config.command.is_none() && config.script.is_none() {

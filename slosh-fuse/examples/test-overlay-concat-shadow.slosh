@@ -1,0 +1,88 @@
+#!/usr/bin/env slosh
+;; Test: Overlay concat that shadows a real file and appends to it.
+;; The concat references the same filename it shadows — the resolver
+;; should read the original from the backing dir (not cycle).
+
+(load "test.slosh")
+
+(defn wait-for-file (path)
+  (loop (tries) (0)
+    (if (fs-exists? path)
+      #t
+      (if (>= tries 10)
+        (do (eprn (str "Timed out waiting for " path)) (exit 1))
+        (do (sleep 100) (recur (+ tries 1)))))))
+
+(defn read-file (path)
+  (wait-for-file path)
+  (let (f (fopen path :read), result "")
+    (defer (fclose f))
+    (loop (line) ((read-line f))
+      (if line
+        (do (set! result (str result line))
+            (recur (read-line f)))
+        result))
+    result))
+
+(defn assert-file-content (path expected label)
+  (prn (str "  Checking " label ": " path))
+  (let (actual (read-file path))
+    (when (and (not (= expected "")) (= actual ""))
+      (eprn (str "FAIL [" label "]: read returned empty string"))
+      (exit 1))
+    (if (= actual expected)
+      (prn (str "  OK: " label))
+      (do
+        (eprn (str "FAIL [" label "]: expected '" expected "' but got '" actual "'"))
+        (exit 1)))))
+
+(defn write-file (path content)
+  (let (f (fopen path :create :truncate :write))
+    (fpr f content)
+    (fclose f)))
+
+;; --- Setup: create directory with a real config file ---
+(def overlay-dir "/tmp/test-overlay-concat")
+$(mkdir -p /tmp/test-overlay-concat)
+(write-file "/tmp/test-overlay-concat/config.txt" "line1=original")
+
+;; Also create an extra-lines file outside the overlay
+(write-file "/tmp/test-overlay-extra.txt" "\nline2=appended")
+
+;; --- Mount overlay ---
+(prn "Mounting overlay...")
+(def mount-id (mount-eval-fs-overlay overlay-dir))
+(prn (str "  Got mount-id: " mount-id))
+
+;; --- Test 1: Real file visible before any concat ---
+(prn "Test 1: Real file visible before concat...")
+(assert-file-content
+  (str overlay-dir "/config.txt")
+  "line1=original"
+  "real config before shadow")
+
+;; --- Test 2: Shadow config.txt with concat of itself + extra ---
+(prn "Test 2: Concat shadow (original + appended line)...")
+(concat-eval-files mount-id "config.txt"
+  (str overlay-dir "/config.txt")
+  "/tmp/test-overlay-extra.txt")
+
+(assert-file-content
+  (str overlay-dir "/config.txt")
+  "line1=original\nline2=appended"
+  "concat shadow with append")
+
+;; --- Test 3: Remove shadow, original reappears ---
+(prn "Test 3: Remove shadow, original reappears...")
+(remove-eval-file mount-id "config.txt")
+(assert-file-content
+  (str overlay-dir "/config.txt")
+  "line1=original"
+  "original after unshadow")
+
+;; --- Cleanup ---
+(prn "Unmounting...")
+(unmount-eval-fs mount-id)
+$(rm -rf /tmp/test-overlay-concat /tmp/test-overlay-extra.txt)
+
+(prn "PASS: test-overlay-concat-shadow")

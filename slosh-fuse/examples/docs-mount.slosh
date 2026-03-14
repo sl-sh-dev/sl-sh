@@ -1,0 +1,47 @@
+#!/usr/bin/env slosh
+;; Mount/unmount slosh documentation as markdown files via FUSE.
+;;
+;; Usage:
+;;   slosh docs-mount.slosh mount <path>     Mount docs at <path>
+;;   slosh docs-mount.slosh unmount <path>   Unmount docs at <path>
+;;
+;; Each section becomes a .md file under the mount point.
+
+(defn do-mount (path)
+  (prn (str "Mounting docs at " path "..."))
+  (let (mid (mount-eval-fs path)
+        sections (docs-by-section))
+    (seq-for key in (hash-keys sections)
+      (let (filename (str key ".md")
+            content (get sections key))
+        (register-eval-file mid filename content)
+        (prn (str "  registered " filename))))
+    (prn (str "Done. mount-id=" mid))
+    (prn "Press enter to unmount, or Ctrl-C to leave mounted.")
+    (read-line)
+    (prn "Unmounting...")
+    (unmount-eval-fs mid)
+    (prn "Unmounted.")))
+
+(defn do-unmount (path)
+  ;; fusermount -u is the standard way to unmount a FUSE fs externally
+  ($sh "fusermount" "-u" path)
+  (prn (str "Unmounted " path)))
+
+(defn print-usage ()
+  (prn "Usage: slosh docs-mount.slosh <command> <path>")
+  (prn "  mount   <path>   Mount docs as .md files at <path>")
+  (prn "  unmount <path>   Unmount docs at <path>"))
+
+(let (args *args*)
+  (if (< (len args) 3)
+    (do (print-usage) (exit 1))
+    (let (cmd (get args 1)
+          path (get args 2))
+      (if (= cmd "mount")
+        (do-mount path)
+        (if (= cmd "unmount")
+          (do-unmount path)
+          (do (eprn (str "Unknown command: " cmd))
+              (print-usage)
+              (exit 1)))))))

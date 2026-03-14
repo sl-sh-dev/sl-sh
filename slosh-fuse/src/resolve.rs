@@ -4,6 +4,7 @@ use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+use crate::backing_dir::BackingDir;
 use crate::file_mapping::{FileEntry, FileMapping};
 
 struct MountInfo {
@@ -67,14 +68,29 @@ impl MountRegistry {
 pub struct FileResolver<'a> {
     registry: &'a MountRegistry,
     visited: HashSet<PathBuf>,
+    /// Optional backing dir for overlay mounts: (mount_point, backing_dir).
+    /// When a concat source would cycle back to a file under this mount,
+    /// the resolver reads from the backing dir instead.
+    backing: Option<(&'a PathBuf, &'a BackingDir)>,
 }
 
 impl<'a> FileResolver<'a> {
-    pub fn new(registry: &'a MountRegistry) -> Self {
+    pub fn new(
+        registry: &'a MountRegistry,
+        backing: Option<(&'a PathBuf, &'a BackingDir)>,
+    ) -> Self {
         Self {
             registry,
             visited: HashSet::new(),
+            backing,
         }
+    }
+
+    /// Mark a path as already visited. Use this to pre-seed the visited set
+    /// with the file currently being resolved, so that self-referencing
+    /// concat sources fall through to the backing dir immediately.
+    pub fn mark_visited(&mut self, path: PathBuf) {
+        self.visited.insert(path);
     }
 
     /// Compute total size for a FileEntry, resolving internal paths.
@@ -108,6 +124,10 @@ impl<'a> FileResolver<'a> {
     /// Get the size of a file at `path`, resolving internal paths and detecting cycles.
     fn file_size(&mut self, path: &Path) -> u64 {
         if self.visited.contains(path) {
+            // Cycle — try backing dir fallback
+            if let Some(size) = self.backing_dir_size(path) {
+                return size;
+            }
             log::warn!("Cycle detected resolving size for {:?}", path);
             return 0;
         }
@@ -120,7 +140,10 @@ impl<'a> FileResolver<'a> {
             };
             let result = match entry {
                 Some(entry) => self.total_size(&entry),
-                None => 0,
+                None => {
+                    // Not in mapping — try backing dir
+                    self.backing_dir_size(path).unwrap_or(0)
+                }
             };
             self.visited.remove(path);
             return result;
@@ -170,6 +193,10 @@ impl<'a> FileResolver<'a> {
     /// Read bytes from a file, resolving internal paths and detecting cycles.
     fn read_file(&mut self, path: &Path, offset: u64, size: u32) -> Vec<u8> {
         if self.visited.contains(path) {
+            // Cycle — try backing dir fallback
+            if let Some(data) = self.backing_dir_read(path, offset, size) {
+                return data;
+            }
             log::warn!("Cycle detected reading {:?}", path);
             return Vec::new();
         }
@@ -182,7 +209,11 @@ impl<'a> FileResolver<'a> {
             };
             let result = match entry {
                 Some(entry) => self.read_range(&entry, offset, size),
-                None => Vec::new(),
+                None => {
+                    // Not in mapping — try backing dir
+                    self.backing_dir_read(path, offset, size)
+                        .unwrap_or_default()
+                }
             };
             self.visited.remove(path);
             return result;
@@ -190,6 +221,25 @@ impl<'a> FileResolver<'a> {
 
         // External file
         read_external_file(path, offset, size)
+    }
+
+    /// Try to get the size of a file via the backing dir.
+    /// Only succeeds if path is under the backing dir's mount point.
+    fn backing_dir_size(&self, path: &Path) -> Option<u64> {
+        let (mount_point, backing) = self.backing?;
+        let rel = path.strip_prefix(mount_point).ok()?;
+        let name = rel.to_string_lossy();
+        let (size, is_regular) = backing.stat(&name)?;
+        if is_regular { Some(size) } else { None }
+    }
+
+    /// Try to read from a file via the backing dir.
+    /// Only succeeds if path is under the backing dir's mount point.
+    fn backing_dir_read(&self, path: &Path, offset: u64, size: u32) -> Option<Vec<u8>> {
+        let (mount_point, backing) = self.backing?;
+        let rel = path.strip_prefix(mount_point).ok()?;
+        let name = rel.to_string_lossy();
+        Some(backing.read_file(&name, offset, size))
     }
 
     /// Try to resolve a path as internal to a FUSE mount.
@@ -271,7 +321,7 @@ mod tests {
     #[test]
     fn static_entry_passthrough() {
         let registry = make_registry();
-        let mut resolver = FileResolver::new(&registry);
+        let mut resolver = FileResolver::new(&registry, None);
         let entry = FileEntry::new_static(b"hello world".to_vec());
 
         assert_eq!(resolver.total_size(&entry), 11);
@@ -288,10 +338,10 @@ mod tests {
         let (_f2, p2) = create_temp_file(b"bbb");
         let entry = FileEntry::new_concat(vec![p1, p2]);
 
-        let mut resolver = FileResolver::new(&registry);
+        let mut resolver = FileResolver::new(&registry, None);
         assert_eq!(resolver.total_size(&entry), 6);
         assert_eq!(resolver.read_range(&entry, 0, 6), b"aaabbb");
-        assert_eq!(resolver.read_range(&entry, 2, 3), b"ab");
+        assert_eq!(resolver.read_range(&entry, 2, 3), b"abb");
     }
 
     // Test 3: Concat with internal static file
@@ -313,7 +363,7 @@ mod tests {
         let internal_path = mount_path.join("inner.txt");
 
         let entry = FileEntry::new_concat(vec![p_ext, internal_path]);
-        let mut resolver = FileResolver::new(&registry);
+        let mut resolver = FileResolver::new(&registry, None);
 
         assert_eq!(resolver.total_size(&entry), 8); // 3 + 5
         assert_eq!(resolver.read_range(&entry, 0, 8), b"EXTINNER");
@@ -343,7 +393,7 @@ mod tests {
 
         // Top-level concat references inner_concat.txt
         let entry = FileEntry::new_concat(vec![mount_path.join("inner_concat.txt")]);
-        let mut resolver = FileResolver::new(&registry);
+        let mut resolver = FileResolver::new(&registry, None);
 
         assert_eq!(resolver.total_size(&entry), 7); // EXT(3) + LEAF(4)
         assert_eq!(resolver.read_range(&entry, 0, 7), b"EXTLEAF");
@@ -366,7 +416,7 @@ mod tests {
         registry.add(mount_path, Arc::clone(&mapping));
 
         let entry = FileEntry::new_concat(vec![mount_path.join("a.txt")]);
-        let mut resolver = FileResolver::new(&registry);
+        let mut resolver = FileResolver::new(&registry, None);
 
         assert_eq!(resolver.total_size(&entry), 0);
         assert_eq!(resolver.read_range(&entry, 0, 100), b"");
@@ -389,7 +439,7 @@ mod tests {
         registry.add(mount_path, Arc::clone(&mapping));
 
         let entry = FileEntry::new_concat(vec![mount_path.join("a.txt")]);
-        let mut resolver = FileResolver::new(&registry);
+        let mut resolver = FileResolver::new(&registry, None);
 
         assert_eq!(resolver.total_size(&entry), 0);
         assert_eq!(resolver.read_range(&entry, 0, 100), b"");
@@ -416,7 +466,7 @@ mod tests {
             p_ext,
             mount_path.join("internal.txt"),
         ]);
-        let mut resolver = FileResolver::new(&registry);
+        let mut resolver = FileResolver::new(&registry, None);
 
         assert_eq!(resolver.total_size(&entry), 8); // 5 + 3
     }
@@ -449,7 +499,7 @@ mod tests {
         symlink(&real_file, &link_path).unwrap();
 
         let entry = FileEntry::new_concat(vec![link_path]);
-        let mut resolver = FileResolver::new(&registry);
+        let mut resolver = FileResolver::new(&registry, None);
 
         // Should resolve via canonicalize -> internal mapping, not read PLACEHOLDER
         assert_eq!(resolver.total_size(&entry), 5);
@@ -485,9 +535,86 @@ mod tests {
 
         // Reading a.txt -> link.txt -> (canonicalize) -> mount/a.txt -> cycle!
         let entry = FileEntry::new_concat(vec![mount_path.join("a.txt")]);
-        let mut resolver = FileResolver::new(&registry);
+        let mut resolver = FileResolver::new(&registry, None);
 
         assert_eq!(resolver.total_size(&entry), 0);
         assert_eq!(resolver.read_range(&entry, 0, 100), b"");
+    }
+
+    // Test 10: Concat shadows backing dir file — reads original via backing dir
+    #[test]
+    fn concat_shadow_reads_backing_dir() {
+        let mount_dir = tempfile::tempdir().unwrap();
+        let mount_path = mount_dir.path();
+
+        // Create a real file in the directory (before it would be overlaid)
+        fs::write(mount_path.join("config.txt"), b"ORIGINAL").unwrap();
+
+        let backing = BackingDir::open(mount_path.to_str().unwrap()).unwrap();
+
+        // Create a concat that shadows config.txt: original + extra line
+        let (_f_extra, p_extra) = create_temp_file(b"\nEXTRA");
+
+        let mapping = make_mapping();
+        {
+            let mut m = mapping.lock().unwrap();
+            // config.txt is a concat of itself (backing) + extra
+            m.register_concat(
+                "config.txt",
+                vec![mount_path.join("config.txt"), p_extra],
+            );
+        }
+
+        let registry = make_registry();
+        registry.add(mount_path, Arc::clone(&mapping));
+
+        let entry = mapping.lock().unwrap().get("config.txt").unwrap().clone();
+        let mp = mount_path.to_path_buf();
+        let mut resolver = FileResolver::new(&registry, Some((&mp, &backing)));
+        // Pre-seed visited with the file being resolved (as eval_fs.rs does),
+        // so self-referencing sources fall through to backing dir immediately.
+        resolver.mark_visited(mount_path.join("config.txt"));
+
+        // Without backing dir fallback this would be 0 (cycle).
+        // With it, we get ORIGINAL (8) + \nEXTRA (6) = 14.
+        assert_eq!(resolver.total_size(&entry), 14);
+
+        let mut resolver2 = FileResolver::new(&registry, Some((&mp, &backing)));
+        resolver2.mark_visited(mount_path.join("config.txt"));
+        assert_eq!(resolver2.read_range(&entry, 0, 20), b"ORIGINAL\nEXTRA");
+    }
+
+    // Test 11: Backing dir fallback for file not in mapping
+    #[test]
+    fn backing_dir_fallback_not_in_mapping() {
+        let mount_dir = tempfile::tempdir().unwrap();
+        let mount_path = mount_dir.path();
+
+        // Create a real file that won't be in the mapping
+        fs::write(mount_path.join("real.txt"), b"REALDATA").unwrap();
+
+        let backing = BackingDir::open(mount_path.to_str().unwrap()).unwrap();
+
+        // Create a concat that references real.txt (not in mapping)
+        let mapping = make_mapping();
+        {
+            let mut m = mapping.lock().unwrap();
+            m.register_concat(
+                "combined.txt",
+                vec![mount_path.join("real.txt")],
+            );
+        }
+
+        let registry = make_registry();
+        registry.add(mount_path, Arc::clone(&mapping));
+
+        let entry = mapping.lock().unwrap().get("combined.txt").unwrap().clone();
+        let mp = mount_path.to_path_buf();
+        let mut resolver = FileResolver::new(&registry, Some((&mp, &backing)));
+
+        // real.txt is under the mount but not in the mapping.
+        // Without backing dir, this would return 0. With it, reads the real file.
+        assert_eq!(resolver.total_size(&entry), 8);
+        assert_eq!(resolver.read_range(&entry, 0, 20), b"REALDATA");
     }
 }

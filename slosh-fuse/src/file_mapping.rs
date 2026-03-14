@@ -2,16 +2,17 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub enum FileEntry {
-    Static { content: Vec<u8> },
+    Static { content: Arc<Vec<u8>> },
     Concat { source_paths: Vec<PathBuf> },
 }
 
 impl FileEntry {
     pub fn new_static(content: Vec<u8>) -> Self {
-        FileEntry::Static { content }
+        FileEntry::Static { content: Arc::new(content) }
     }
 
     pub fn new_concat(source_paths: Vec<PathBuf>) -> Self {
@@ -258,7 +259,7 @@ mod tests {
         f1.write_all(b"newcontent").unwrap();
         f1.flush().unwrap();
 
-        assert_eq!(entry.total_size(), 13); // 10 + 3... wait: "newcontent" = 10, "data" = 4
+        assert_eq!(entry.total_size(), 14); // "newcontent" = 10, "data" = 4
         assert_eq!(entry.read_range(0, 14), b"newcontentdata");
     }
 
