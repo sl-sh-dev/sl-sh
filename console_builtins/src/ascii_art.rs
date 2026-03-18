@@ -134,13 +134,18 @@ pub fn gif_to_ascii_frames(
         let buf = frame.buffer();
         let (w, h) = (buf.width() as usize, buf.height() as usize);
 
-        // Convert RGBA to lightness [0.0, 1.0]
+        // Convert RGBA to lightness [0.0, 1.0], compositing over white.
+        // Transparent pixels must become white (lightness 1.0 = space)
+        // so that GIF transparency doesn't render as dark characters.
         let lightness: Vec<f32> = buf
             .pixels()
             .map(|p| {
-                let [r, g, b, _a] = p.0;
-                // Perceptual luminance
-                (0.2126 * r as f32 + 0.7152 * g as f32 + 0.0722 * b as f32) / 255.0
+                let [r, g, b, a] = p.0;
+                let alpha = a as f32 / 255.0;
+                let luminance =
+                    0.2126 * r as f32 + 0.7152 * g as f32 + 0.0722 * b as f32;
+                // Alpha-composite over white (255.0)
+                (luminance * alpha + 255.0 * (1.0 - alpha)) / 255.0
             })
             .collect();
 
