@@ -16,6 +16,7 @@ members = [
     "slosh_test",
     "slosh_test_lib",
     "console_builtins",
+    "ascii_shapes",
 ]
 
 exclude = ["legacy"]
@@ -67,3 +68,4 @@ env_logger = "0.11.5"
 criterion = "0.5"
 iai-callgrind = "0.14"
 console_builtins = { path = "console_builtins" }
+ascii_shapes = { path = "ascii_shapes" }
