@@ -3,6 +3,7 @@ use bridge_macros::sl_sh_fn;
 use compile_state::state::SloshVm;
 use slvm::{VMError, VMResult, Value};
 
+pub mod ascii_art;
 pub mod panel;
 pub mod render;
 
@@ -281,4 +282,57 @@ Example:
     intern_panel_clear(env);
     intern_panel_resize(env);
     intern_panel_close_after(env);
+
+    add_builtin(
+        env,
+        "lightness->ascii",
+        ascii_art::builtin_lightness_to_ascii,
+        r#"Usage: (lightness->ascii lightness-vec img-w img-h [:cols N] [:contrast F])
+
+Convert a flat vector of lightness floats ([0.0, 1.0]) to an ASCII art string.
+lightness-vec is row-major, img-w x img-h pixels.
+
+:cols    - output width in characters (default 80)
+:contrast - contrast exponent, 1.0 = none (default 1.2)
+
+Section: ascii-art
+
+Example:
+(lightness->ascii my-data 100 50 :cols 40 :contrast 1.5)"#,
+    );
+
+    add_builtin(
+        env,
+        "image->ascii",
+        ascii_art::builtin_image_to_ascii,
+        r#"Usage: (image->ascii path [:cols N] [:contrast F])
+
+Load a PNG or JPEG image and convert it to an ASCII art string.
+
+:cols    - output width in characters (default 80)
+:contrast - contrast exponent, 1.0 = none (default 1.2)
+
+Section: ascii-art
+
+Example:
+(image->ascii "/path/to/photo.png" :cols 80 :contrast 1.5)"#,
+    );
+
+    add_builtin(
+        env,
+        "text->ascii",
+        ascii_art::builtin_text_to_ascii,
+        r#"Usage: (text->ascii text [:cols N] [:size F] [:contrast F])
+
+Render a text string as large ASCII art using JetBrains Mono.
+
+:cols    - output width in characters (default 60)
+:size    - font rasterization size in pixels (default 48.0)
+:contrast - contrast exponent, 1.0 = none (default 1.5)
+
+Section: ascii-art
+
+Example:
+(text->ascii "Hello" :cols 60 :size 48.0 :contrast 1.5)"#,
+    );
 }

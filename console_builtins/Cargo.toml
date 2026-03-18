@@ -12,3 +12,6 @@ bridge_types = { workspace = true }
 sl-console = { path = "../../sl-console" }
 lazy_static = { workspace = true }
 static_assertions = { workspace = true }
+ascii_shapes = { workspace = true }
+image = { workspace = true }
+fontdue = { workspace = true }
