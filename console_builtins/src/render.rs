@@ -29,52 +29,56 @@ fn draw_vertical_separator(out: &mut impl Write, col: u16, start_row: u16, heigh
 }
 
 /// Render a single panel's separator and content.
+/// The content area is explicitly cleared before drawing to prevent
+/// afterimage artifacts during rapid updates (e.g. GIF animation).
 fn render_panel(out: &mut impl Write, panel: &Panel) {
     let bounds = panel.bounds;
     if bounds.width == 0 || bounds.height == 0 {
         return;
     }
 
-    match panel.edge {
+    let content_area = match panel.edge {
         DockEdge::Top => {
             let sep_row = bounds.row + bounds.height - 1;
             draw_horizontal_separator(out, bounds.col, sep_row, bounds.width);
-            render_content(out, panel, Rect {
+            Rect {
                 col: bounds.col,
                 row: bounds.row,
                 width: bounds.width,
                 height: bounds.height.saturating_sub(1),
-            });
+            }
         }
         DockEdge::Bottom => {
             draw_horizontal_separator(out, bounds.col, bounds.row, bounds.width);
-            render_content(out, panel, Rect {
+            Rect {
                 col: bounds.col,
                 row: bounds.row + 1,
                 width: bounds.width,
                 height: bounds.height.saturating_sub(1),
-            });
+            }
         }
         DockEdge::Left => {
             let sep_col = bounds.col + bounds.width - 1;
             draw_vertical_separator(out, sep_col, bounds.row, bounds.height);
-            render_content(out, panel, Rect {
+            Rect {
                 col: bounds.col,
                 row: bounds.row,
                 width: bounds.width.saturating_sub(1),
                 height: bounds.height,
-            });
+            }
         }
         DockEdge::Right => {
             draw_vertical_separator(out, bounds.col, bounds.row, bounds.height);
-            render_content(out, panel, Rect {
+            Rect {
                 col: bounds.col + 1,
                 row: bounds.row,
                 width: bounds.width.saturating_sub(1),
                 height: bounds.height,
-            });
+            }
         }
-    }
+    };
+    clear_rect(out, content_area);
+    render_content(out, panel, content_area);
 }
 
 /// Render content lines into a specific rectangle, respecting scroll offset.
@@ -170,4 +174,27 @@ pub fn render_all_panels_with_cleanup(mgr: &PanelManager, closed_bounds: &[Rect]
 /// Convenience wrapper for rendering when no panels were just closed.
 pub fn render_all_panels(mgr: &PanelManager) {
     render_all_panels_with_cleanup(mgr, &[]);
+}
+
+/// Re-render a single panel's content.  Temporarily resets the scroll
+/// region so Goto can reach the panel area, then restores it.  Saves and
+/// restores the cursor position so the shell prompt is not disturbed.
+/// Everything is buffered into a single flush to minimise the window
+/// where the scroll region is open.
+pub fn render_panel_only(panel: &Panel, main_area: Rect) {
+    let mut out = std::io::stdout().lock();
+    // Save cursor + hide it
+    let _ = write!(out, "{}", sl_console::cursor::Save);
+    let _ = write!(out, "{}", sl_console::cursor::Hide);
+    // Temporarily open the scroll region so Goto can reach panel rows
+    let _ = write!(out, "\x1B[r");
+    // Render the panel
+    render_panel(&mut out, panel);
+    // Restore scroll region to main area
+    let scroll_bottom = main_area.row + main_area.height.saturating_sub(1);
+    let _ = write!(out, "\x1B[{};{}r", main_area.row, scroll_bottom);
+    // Restore cursor + show it
+    let _ = write!(out, "{}", sl_console::cursor::Restore);
+    let _ = write!(out, "{}", sl_console::cursor::Show);
+    let _ = out.flush();
 }

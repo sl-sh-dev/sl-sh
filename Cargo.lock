@@ -434,6 +434,7 @@ dependencies = [
  "bridge_types",
  "compile_state",
  "fontdue",
+ "gif",
  "image",
  "lazy_static",
  "sl-console 0.10.1",

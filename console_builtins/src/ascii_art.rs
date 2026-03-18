@@ -1,8 +1,5 @@
 use compile_state::state::SloshVm;
-use image::codecs::gif::GifDecoder;
-use image::AnimationDecoder;
 use slvm::{VMError, VMResult, Value};
-use std::io::BufReader;
 
 /// Convert a lightness grid to an ASCII art string.
 ///
@@ -106,51 +103,76 @@ pub fn image_to_ascii(path: &str, cols: usize, contrast: f32) -> Result<String, 
 
 /// Decode a GIF into a vec of (ascii_string, delay_ms) pairs.
 ///
-/// Each frame is converted to grayscale, then to ASCII art via
-/// `lightness_to_ascii`. The delay for each frame comes from the GIF
-/// frame metadata (in hundredths of a second, converted to milliseconds).
+/// Each frame is decoded independently and composited over a WHITE
+/// background (not over the previous frame). This prevents "ghosting"
+/// from GIF disposal methods that accumulate previous frame content
+/// through transparent pixels.
 pub fn gif_to_ascii_frames(
     path: &str,
     cols: usize,
     contrast: f32,
 ) -> Result<Vec<(String, u64)>, String> {
-    let file = std::fs::File::open(path).map_err(|e| format!("failed to open GIF: {e}"))?;
-    let reader = BufReader::new(file);
-    let decoder = GifDecoder::new(reader).map_err(|e| format!("failed to decode GIF: {e}"))?;
-    let frames = decoder
-        .into_frames()
-        .collect_frames()
-        .map_err(|e| format!("failed to collect GIF frames: {e}"))?;
+    use gif::DecodeOptions;
 
-    if frames.is_empty() {
-        return Err("GIF has no frames".to_string());
+    let file = std::fs::File::open(path).map_err(|e| format!("failed to open GIF: {e}"))?;
+    let mut opts = DecodeOptions::new();
+    opts.set_color_output(gif::ColorOutput::RGBA);
+    let mut decoder = opts
+        .read_info(file)
+        .map_err(|e| format!("failed to decode GIF: {e}"))?;
+
+    let canvas_w = decoder.width() as usize;
+    let canvas_h = decoder.height() as usize;
+    if canvas_w == 0 || canvas_h == 0 {
+        return Err("GIF has zero dimensions".to_string());
     }
 
-    let mut result = Vec::with_capacity(frames.len());
-    for frame in &frames {
-        let duration: std::time::Duration = frame.delay().into();
-        let delay_ms = (duration.as_millis() as u64).max(10);
+    let mut result = Vec::new();
+    while let Some(raw_frame) = decoder
+        .read_next_frame()
+        .map_err(|e| format!("failed to read GIF frame: {e}"))?
+    {
+        // Delay is in centiseconds; convert to ms, minimum 10ms.
+        let delay_ms = (raw_frame.delay as u64 * 10).max(10);
 
-        let buf = frame.buffer();
-        let (w, h) = (buf.width() as usize, buf.height() as usize);
+        let left = raw_frame.left as usize;
+        let top = raw_frame.top as usize;
+        let fw = raw_frame.width as usize;
+        let fh = raw_frame.height as usize;
 
-        // Convert RGBA to lightness [0.0, 1.0], compositing over white.
-        // Transparent pixels must become white (lightness 1.0 = space)
-        // so that GIF transparency doesn't render as dark characters.
-        let lightness: Vec<f32> = buf
-            .pixels()
-            .map(|p| {
-                let [r, g, b, a] = p.0;
-                let alpha = a as f32 / 255.0;
-                let luminance =
-                    0.2126 * r as f32 + 0.7152 * g as f32 + 0.0722 * b as f32;
-                // Alpha-composite over white (255.0)
-                (luminance * alpha + 255.0 * (1.0 - alpha)) / 255.0
-            })
-            .collect();
+        // Start with a white canvas (lightness 1.0 everywhere).
+        let mut lightness = vec![1.0_f32; canvas_w * canvas_h];
 
-        let ascii = lightness_to_ascii(&lightness, w, h, cols, contrast);
+        // Blit this frame's pixels onto the white canvas.
+        // RGBA — 4 bytes per pixel.
+        for y in 0..fh {
+            let cy = top + y;
+            if cy >= canvas_h {
+                break;
+            }
+            for x in 0..fw {
+                let cx = left + x;
+                if cx >= canvas_w {
+                    break;
+                }
+                let idx = (y * fw + x) * 4;
+                let r = raw_frame.buffer[idx] as f32;
+                let g = raw_frame.buffer[idx + 1] as f32;
+                let b = raw_frame.buffer[idx + 2] as f32;
+                let a = raw_frame.buffer[idx + 3] as f32 / 255.0;
+                // Composite over white: lum * alpha + white * (1 - alpha)
+                let luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+                lightness[cy * canvas_w + cx] =
+                    (luminance * a + 255.0 * (1.0 - a)) / 255.0;
+            }
+        }
+
+        let ascii = lightness_to_ascii(&lightness, canvas_w, canvas_h, cols, contrast);
         result.push((ascii, delay_ms));
+    }
+
+    if result.is_empty() {
+        return Err("GIF has no frames".to_string());
     }
     Ok(result)
 }
@@ -605,21 +627,95 @@ pub fn builtin_gif_to_ascii(vm: &mut SloshVm, registers: &[Value]) -> VMResult<V
     // Spawn background playback thread
     let panel_name_owned = panel_name.clone();
     std::thread::spawn(move || {
-        use crate::panel::PANEL_MANAGER;
-        use crate::render;
+        use crate::panel::{DockEdge, PANEL_MANAGER};
+        use std::fmt::Write as FmtWrite;
+        use std::io::Write as IoWrite;
 
         loop {
             for (ascii, delay_ms) in &frames {
                 {
-                    let mut mgr = PANEL_MANAGER.lock().unwrap();
-                    if mgr.get_panel(&panel_name_owned).is_none() {
-                        return;
+                    let mgr = PANEL_MANAGER.lock().unwrap();
+                    let main_area = mgr.main_area;
+                    let panel = match mgr.get_panel(&panel_name_owned) {
+                        Some(p) => p,
+                        None => return, // panel closed — stop playback
+                    };
+
+                    // Compute the content area (panel bounds minus separator).
+                    let bounds = panel.bounds;
+                    let (area_col, area_row, area_w, area_h) = match panel.edge {
+                        DockEdge::Top => (
+                            bounds.col,
+                            bounds.row,
+                            bounds.width,
+                            bounds.height.saturating_sub(1),
+                        ),
+                        DockEdge::Bottom => (
+                            bounds.col,
+                            bounds.row + 1,
+                            bounds.width,
+                            bounds.height.saturating_sub(1),
+                        ),
+                        DockEdge::Left => (
+                            bounds.col,
+                            bounds.row,
+                            bounds.width.saturating_sub(1),
+                            bounds.height,
+                        ),
+                        DockEdge::Right => (
+                            bounds.col + 1,
+                            bounds.row,
+                            bounds.width.saturating_sub(1),
+                            bounds.height,
+                        ),
+                    };
+                    let content_w = area_w as usize;
+                    let content_h = area_h as usize;
+
+                    // Build the entire frame output as one string so it
+                    // hits the terminal in a single write() call.
+                    let ascii_lines: Vec<&str> = ascii.lines().collect();
+                    let mut buf = String::with_capacity(
+                        (content_w + 20) * content_h,
+                    );
+
+                    // Save cursor, hide it, open scroll region
+                    let _ = write!(buf, "\x1B7\x1B[?25l\x1B[r");
+
+                    for row_idx in 0..content_h {
+                        // Goto this row
+                        let _ = write!(
+                            buf,
+                            "\x1B[{};{}H",
+                            area_row as usize + row_idx,
+                            area_col,
+                        );
+                        // Write the ASCII line (or spaces) padded to
+                        // exactly content_w characters.
+                        let line = ascii_lines.get(row_idx).copied().unwrap_or("");
+                        let mut written = 0;
+                        for ch in line.chars().take(content_w) {
+                            buf.push(ch);
+                            written += 1;
+                        }
+                        for _ in written..content_w {
+                            buf.push(' ');
+                        }
                     }
-                    mgr.get_panel_mut(&panel_name_owned).unwrap().clear();
-                    mgr.get_panel_mut(&panel_name_owned)
-                        .unwrap()
-                        .write_text(ascii);
-                    render::render_all_panels(&mgr);
+
+                    // Restore scroll region, cursor, show cursor
+                    let scroll_bottom =
+                        main_area.row + main_area.height.saturating_sub(1);
+                    let _ = write!(
+                        buf,
+                        "\x1B[{};{}r\x1B8\x1B[?25h",
+                        main_area.row, scroll_bottom,
+                    );
+
+                    // Single atomic write + flush
+                    let mut out = std::io::stdout().lock();
+                    let _ = out.write_all(buf.as_bytes());
+                    let _ = out.flush();
                 }
                 std::thread::sleep(std::time::Duration::from_millis(*delay_ms));
             }
