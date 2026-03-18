@@ -17,5 +17,5 @@ Public API
 Usage
 
 - Normal build: cargo build — uses checked-in generated.rs, no font dependencies
-- Regenerate: cargo build -p ascii_shapes --features generate — re-rasterizes the font and overwritesnerated.rs
+- Regenerate: cargo build -p ascii_shapes --features generate — re-rasterizes the font and overwrites0wwnerated.rs
 - Add a new font: drop a .ttf in fonts/, update build.rs to point at it, run with --features generate

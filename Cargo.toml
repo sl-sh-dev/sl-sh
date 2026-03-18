@@ -69,5 +69,5 @@ criterion = "0.5"
 iai-callgrind = "0.14"
 console_builtins = { path = "console_builtins" }
 ascii_shapes = { path = "ascii_shapes" }
-image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif"] }
 fontdue = "0.9"

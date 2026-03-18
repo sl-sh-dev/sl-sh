@@ -1,5 +1,8 @@
 use compile_state::state::SloshVm;
+use image::codecs::gif::GifDecoder;
+use image::AnimationDecoder;
 use slvm::{VMError, VMResult, Value};
+use std::io::BufReader;
 
 /// Convert a lightness grid to an ASCII art string.
 ///
@@ -99,6 +102,52 @@ pub fn image_to_ascii(path: &str, cols: usize, contrast: f32) -> Result<String, 
         cols,
         contrast,
     ))
+}
+
+/// Decode a GIF into a vec of (ascii_string, delay_ms) pairs.
+///
+/// Each frame is converted to grayscale, then to ASCII art via
+/// `lightness_to_ascii`. The delay for each frame comes from the GIF
+/// frame metadata (in hundredths of a second, converted to milliseconds).
+pub fn gif_to_ascii_frames(
+    path: &str,
+    cols: usize,
+    contrast: f32,
+) -> Result<Vec<(String, u64)>, String> {
+    let file = std::fs::File::open(path).map_err(|e| format!("failed to open GIF: {e}"))?;
+    let reader = BufReader::new(file);
+    let decoder = GifDecoder::new(reader).map_err(|e| format!("failed to decode GIF: {e}"))?;
+    let frames = decoder
+        .into_frames()
+        .collect_frames()
+        .map_err(|e| format!("failed to collect GIF frames: {e}"))?;
+
+    if frames.is_empty() {
+        return Err("GIF has no frames".to_string());
+    }
+
+    let mut result = Vec::with_capacity(frames.len());
+    for frame in &frames {
+        let duration: std::time::Duration = frame.delay().into();
+        let delay_ms = (duration.as_millis() as u64).max(10);
+
+        let buf = frame.buffer();
+        let (w, h) = (buf.width() as usize, buf.height() as usize);
+
+        // Convert RGBA to lightness [0.0, 1.0]
+        let lightness: Vec<f32> = buf
+            .pixels()
+            .map(|p| {
+                let [r, g, b, _a] = p.0;
+                // Perceptual luminance
+                (0.2126 * r as f32 + 0.7152 * g as f32 + 0.0722 * b as f32) / 255.0
+            })
+            .collect();
+
+        let ascii = lightness_to_ascii(&lightness, w, h, cols, contrast);
+        result.push((ascii, delay_ms));
+    }
+    Ok(result)
 }
 
 /// Render text as large ASCII art.
@@ -453,6 +502,131 @@ pub fn builtin_text_to_ascii(vm: &mut SloshVm, registers: &[Value]) -> VMResult<
     Ok(vm.alloc_string(result))
 }
 
+/// Parse a keyword argument value as a boolean from the VM registers.
+fn parse_kw_bool(vm: &SloshVm, val: &Value, kw_name: &str, fn_name: &str) -> VMResult<bool> {
+    match val {
+        Value::True => Ok(true),
+        Value::False | Value::Nil => Ok(false),
+        _ => Err(VMError::new(
+            "ascii-art",
+            format!(
+                "{fn_name}: :{kw_name} requires a boolean, got {}",
+                val.display_type(vm)
+            ),
+        )),
+    }
+}
+
+/// (gif->ascii path panel-name [:cols N] [:contrast F] [:loop BOOL])
+///
+/// Decode a GIF file and play its frames as ASCII art in the named panel.
+/// Returns immediately; frames are played from a background thread.
+/// The animation stops when the panel is closed.
+///
+/// :cols     - output width in characters (default 80)
+/// :contrast - contrast exponent, 1.0 = none (default 1.2)
+/// :loop     - loop forever (default #t), set to #f for single play
+pub fn builtin_gif_to_ascii(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
+    let fn_name = "gif->ascii";
+    let mut args = registers.iter();
+
+    // First arg: file path
+    let path_val = args.next().ok_or_else(|| {
+        VMError::new("ascii-art", format!("{fn_name}: requires a file path"))
+    })?;
+    let path = val_to_string(vm, path_val, fn_name, "path")?;
+
+    // Second arg: panel name
+    let panel_val = args.next().ok_or_else(|| {
+        VMError::new(
+            "ascii-art",
+            format!("{fn_name}: requires a panel name"),
+        )
+    })?;
+    let panel_name = val_to_string(vm, panel_val, fn_name, "panel-name")?;
+
+    // Defaults
+    let mut cols: usize = 80;
+    let mut contrast: f32 = 1.2;
+    let mut do_loop = true;
+
+    // Keyword args
+    while let Some(arg) = args.next() {
+        if let Value::Keyword(i) = arg {
+            match vm.get_interned(*i) {
+                "cols" => {
+                    let val = args.next().ok_or_else(|| {
+                        VMError::new("ascii-art", format!("{fn_name}: :cols requires a value"))
+                    })?;
+                    cols = parse_kw_int(vm, val, "cols", fn_name)?;
+                }
+                "contrast" => {
+                    let val = args.next().ok_or_else(|| {
+                        VMError::new(
+                            "ascii-art",
+                            format!("{fn_name}: :contrast requires a value"),
+                        )
+                    })?;
+                    contrast = parse_kw_float(vm, val, "contrast", fn_name)?;
+                }
+                "loop" => {
+                    let val = args.next().ok_or_else(|| {
+                        VMError::new("ascii-art", format!("{fn_name}: :loop requires a value"))
+                    })?;
+                    do_loop = parse_kw_bool(vm, val, "loop", fn_name)?;
+                }
+                other => {
+                    return Err(VMError::new(
+                        "ascii-art",
+                        format!("{fn_name}: unknown keyword :{other}"),
+                    ));
+                }
+            }
+        } else {
+            return Err(VMError::new(
+                "ascii-art",
+                format!(
+                    "{fn_name}: expected keyword argument, got {}",
+                    arg.display_type(vm)
+                ),
+            ));
+        }
+    }
+
+    // Pre-compute all frames
+    let frames = gif_to_ascii_frames(&path, cols, contrast)
+        .map_err(|e| VMError::new("ascii-art", format!("{fn_name}: {e}")))?;
+
+    // Spawn background playback thread
+    let panel_name_owned = panel_name.clone();
+    std::thread::spawn(move || {
+        use crate::panel::PANEL_MANAGER;
+        use crate::render;
+
+        loop {
+            for (ascii, delay_ms) in &frames {
+                {
+                    let mut mgr = PANEL_MANAGER.lock().unwrap();
+                    if mgr.get_panel(&panel_name_owned).is_none() {
+                        return;
+                    }
+                    mgr.get_panel_mut(&panel_name_owned).unwrap().clear();
+                    mgr.get_panel_mut(&panel_name_owned)
+                        .unwrap()
+                        .write_text(ascii);
+                    render::render_all_panels(&mgr);
+                }
+                std::thread::sleep(std::time::Duration::from_millis(*delay_ms));
+            }
+            if !do_loop {
+                return;
+            }
+        }
+    });
+
+    Ok(Value::Nil)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -526,5 +700,11 @@ mod tests {
     fn text_to_ascii_empty_string() {
         let result = text_to_ascii("", 40, 48.0, 1.5);
         assert!(result.is_empty());
+    }
+
+    #[test]
+    fn gif_to_ascii_frames_nonexistent_file() {
+        let result = gif_to_ascii_frames("/nonexistent/path.gif", 40, 1.2);
+        assert!(result.is_err());
     }
 }

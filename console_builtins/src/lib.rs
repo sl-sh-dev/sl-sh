@@ -320,6 +320,26 @@ Example:
 
     add_builtin(
         env,
+        "gif->ascii",
+        ascii_art::builtin_gif_to_ascii,
+        r#"Usage: (gif->ascii path panel-name [:cols N] [:contrast F] [:loop BOOL])
+
+Decode a GIF file and play its frames as ASCII art in the named panel.
+Returns immediately; frames are played from a background thread.
+The animation stops when the panel is closed.
+
+:cols     - output width in characters (default 80)
+:contrast - contrast exponent, 1.0 = none (default 1.2)
+:loop     - loop forever (default #t), set #f for single play
+
+Section: ascii-art
+
+Example:
+(gif->ascii "anim.gif" "out" :cols 40 :contrast 1.2 :loop #t)"#,
+    );
+
+    add_builtin(
+        env,
         "text->ascii",
         ascii_art::builtin_text_to_ascii,
         r#"Usage: (text->ascii text [:cols N] [:size F] [:contrast F])
