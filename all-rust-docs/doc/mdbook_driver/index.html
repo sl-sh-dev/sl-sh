@@ -1,0 +1,56 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="High-level library for running mdBook."><title>mdbook_driver - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-77263533.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="mdbook_driver" data-themes="" data-resource-suffix="" data-rustdoc-version="1.94.0 (4a4ef493e 2026-03-02)" data-channel="1.94.0" data-search-js="search-9e2438ea.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-c38705f0.js" ><script src="../static.files/storage-e2aeef58.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-7bab91a1.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-ffcac47a.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Crate mdbook_driver</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../mdbook_driver/index.html">mdbook_<wbr>driver</a><span class="version">0.5.2</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#additional-crates" title="Additional crates">Additional crates</a></li><li><a href="#cargo-features" title="Cargo features">Cargo features</a></li><li><a href="#examples" title="Examples">Examples</a></li></ul><h3><a href="#modules">Crate Items</a></h3><ul class="block"><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#structs" title="Structs">Structs</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>mdbook_<wbr>driver</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/mdbook_driver/lib.rs.html#1-131">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>High-level library for running mdBook.</p>
+<p>This is the high-level library for running
+<a href="https://rust-lang.github.io/mdBook/">mdBook</a>. There are several
+reasons for using the programmatic API (over the CLI):</p>
+<ul>
+<li>Integrate mdBook in a current project.</li>
+<li>Extend the capabilities of mdBook.</li>
+<li>Do some processing or test before building your book.</li>
+<li>Accessing the public API to help create a new Renderer.</li>
+</ul>
+<h3 id="additional-crates"><a class="doc-anchor" href="#additional-crates">§</a>Additional crates</h3>
+<p>In addition to <code>mdbook-driver</code>, there are several other crates available
+for using and extending mdBook:</p>
+<ul>
+<li><a href="../mdbook_preprocessor/index.html" title="mod mdbook_preprocessor"><code>mdbook_preprocessor</code></a>: Provides support for implementing preprocessors.</li>
+<li><a href="../mdbook_renderer/index.html" title="mod mdbook_renderer"><code>mdbook_renderer</code></a>: Provides support for implementing renderers.</li>
+<li><a href="../mdbook_markdown/index.html" title="mod mdbook_markdown"><code>mdbook_markdown</code></a>: The Markdown renderer.</li>
+<li><a href="../mdbook_summary/index.html" title="mod mdbook_summary"><code>mdbook_summary</code></a>: The <code>SUMMARY.md</code> parser.</li>
+<li><a href="../mdbook_html/index.html" title="mod mdbook_html"><code>mdbook_html</code></a>: The HTML renderer.</li>
+<li><a href="../mdbook_core/index.html" title="mod mdbook_core"><code>mdbook_core</code></a>: An internal library that is used by the other crates
+for shared types. Types from this crate are rexported from the other
+crates as appropriate.</li>
+</ul>
+<h3 id="cargo-features"><a class="doc-anchor" href="#cargo-features">§</a>Cargo features</h3>
+<p>The following cargo features are available:</p>
+<ul>
+<li><code>search</code>: Enables the search index in the HTML renderer.</li>
+</ul>
+<h3 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h3>
+<p>If creating a new book from scratch, you’ll want to get a <a href="init/struct.BookBuilder.html" title="struct mdbook_driver::init::BookBuilder"><code>init::BookBuilder</code></a> via
+the <a href="struct.MDBook.html#method.init" title="associated function mdbook_driver::MDBook::init"><code>MDBook::init()</code></a> method.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>mdbook_driver::MDBook;
+<span class="kw">use </span>mdbook_driver::config::Config;
+
+<span class="kw">let </span>root_dir = <span class="string">"/path/to/book/root"</span>;
+
+<span class="comment">// create a default config and change a couple things
+</span><span class="kw">let </span><span class="kw-2">mut </span>cfg = Config::default();
+cfg.book.title = <span class="prelude-val">Some</span>(<span class="string">"My Book"</span>.to_string());
+cfg.book.authors.push(<span class="string">"Michael-F-Bryan"</span>.to_string());
+
+MDBook::init(root_dir)
+    .create_gitignore(<span class="bool-val">true</span>)
+    .with_config(cfg)
+    .build()
+    .expect(<span class="string">"Book generation failed"</span>);</code></pre></div>
+<p>You can also load an existing book and build it.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>mdbook_driver::MDBook;
+
+<span class="kw">let </span>root_dir = <span class="string">"/path/to/book/root"</span>;
+
+<span class="kw">let </span><span class="kw-2">mut </span>md = MDBook::load(root_dir)
+    .expect(<span class="string">"Unable to load the book"</span>);
+md.build().expect(<span class="string">"Building failed"</span>);</code></pre></div></div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="book/index.html" title="mod mdbook_driver::book">book</a></dt><dd>A tree structure representing a book.</dd><dt><a class="mod" href="builtin_preprocessors/index.html" title="mod mdbook_driver::builtin_preprocessors">builtin_<wbr>preprocessors</a></dt><dd>Built-in preprocessors.</dd><dt><a class="mod" href="builtin_renderers/index.html" title="mod mdbook_driver::builtin_renderers">builtin_<wbr>renderers</a></dt><dd>Built-in renderers.</dd><dt><a class="mod" href="config/index.html" title="mod mdbook_driver::config">config</a></dt><dd>Mdbook’s configuration system.</dd><dt><a class="mod" href="errors/index.html" title="mod mdbook_driver::errors">errors</a></dt><dd>The error types used in mdbook.</dd><dt><a class="mod" href="init/index.html" title="mod mdbook_driver::init">init</a></dt><dd>Support for initializing a new book.</dd></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.MDBook.html" title="struct mdbook_driver::MDBook">MDBook</a></dt><dd>The object used to manage and build a book.</dd></dl></section></div></main></body></html>

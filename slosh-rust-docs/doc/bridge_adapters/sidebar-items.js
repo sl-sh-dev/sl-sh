@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BridgeError"],"fn":["add_builtin","add_named_global_doc"],"mod":["lisp_adapters"],"type":["BridgeResult"]};

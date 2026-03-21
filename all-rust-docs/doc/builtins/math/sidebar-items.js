@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["abs","add_math_builtins","arccos","arcsin","arctan","ceil","cos","exp","floor","fract","log","log2","max","min","pow","rem_as_percent","rem_as_rem","rem_euclid","round","sin","sqrt","tan","two_pow"]};

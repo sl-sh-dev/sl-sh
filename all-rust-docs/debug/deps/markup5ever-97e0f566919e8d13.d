@@ -1,0 +1,10 @@
+/home/runner/work/sl-sh/sl-sh/doc/src/all-rust-docs/debug/deps/markup5ever-97e0f566919e8d13.d: /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.36.1/lib.rs /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.36.1/interface/mod.rs /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.36.1/interface/tree_builder.rs /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.36.1/serialize.rs /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.36.1/util/buffer_queue.rs /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.36.1/util/smallcharset.rs
+
+/home/runner/work/sl-sh/sl-sh/doc/src/all-rust-docs/debug/deps/libmarkup5ever-97e0f566919e8d13.rmeta: /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.36.1/lib.rs /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.36.1/interface/mod.rs /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.36.1/interface/tree_builder.rs /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.36.1/serialize.rs /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.36.1/util/buffer_queue.rs /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.36.1/util/smallcharset.rs
+
+/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.36.1/lib.rs:
+/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.36.1/interface/mod.rs:
+/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.36.1/interface/tree_builder.rs:
+/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.36.1/serialize.rs:
+/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.36.1/util/buffer_queue.rs:
+/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.36.1/util/smallcharset.rs:

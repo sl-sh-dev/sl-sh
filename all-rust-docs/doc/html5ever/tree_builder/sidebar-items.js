@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["NodeOrText","PushFlag","QuirksMode"],"fn":["create_element","html_elem"],"struct":["ActiveFormattingIter","Attribute","ElementFlags","TreeBuilder","TreeBuilderOpts"],"trait":["ElemName","Tracer","TreeSink"]};

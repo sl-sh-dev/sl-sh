@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["book","builtin_preprocessors","builtin_renderers","config","errors","init"],"struct":["MDBook"]};

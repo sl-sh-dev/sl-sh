@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_print_builtins","builtin_dump_regs","builtin_dump_stack","dasm","display_value","dump_globals","dump_regs_raw","epr","eprn","fpr","fprn","pr","pretty_value","prn"]};

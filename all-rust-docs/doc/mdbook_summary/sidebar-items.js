@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["SummaryItem"],"fn":["parse_summary"],"struct":["Link","SectionNumber","Summary"]};

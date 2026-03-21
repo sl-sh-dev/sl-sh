@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["NodeOrText","QuirksMode","TokenizerResult"],"fn":["create_element"],"mod":["tree_builder"],"struct":["Attribute","ElementFlags","ExpandedName","QualName"],"trait":["ElemName","Tracer","TreeSink"]};

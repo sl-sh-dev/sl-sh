@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_builtins","add_forms_and_supplementary_docs","add_user_docs_to_mdbook_less_provided_sections","get_slosh_docs","link_supplementary_docs"],"mod":["legacy"],"struct":["EXEMPTIONS","SloshDoc"],"trait":["AsMd"]};

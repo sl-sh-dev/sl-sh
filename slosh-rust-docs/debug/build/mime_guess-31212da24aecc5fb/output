@@ -1,0 +1,1 @@
+cargo:rustc-env=MIME_TYPES_GENERATED_PATH=/home/runner/work/sl-sh/sl-sh/doc/src/slosh-rust-docs/debug/build/mime_guess-31212da24aecc5fb/out/mime_types_generated.rs

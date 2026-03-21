@@ -1,0 +1,1 @@
+{"rustc":18276270781310494267,"features":"[]","declared_features":"[\"alloc\", \"debug\", \"default\", \"simd\", \"std\", \"unstable-doc\", \"unstable-recover\"]","target":13376497836617006023,"profile":9931943418909300187,"path":10402526846963879691,"deps":[],"local":[{"Precalculated":"0.7.14"}],"rustflags":[],"config":8247474407144887393,"compile_kind":0}
