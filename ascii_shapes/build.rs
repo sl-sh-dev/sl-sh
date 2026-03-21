@@ -5,22 +5,6 @@ mod codegen {
     use std::io::Write;
     use std::path::Path;
 
-    /// Unicode ranges to include in the shape vector table.
-    /// Each range is checked against the font — only characters that have
-    /// glyphs in the font are actually included.
-    const CHAR_RANGES: &[(u32, u32, &str)] = &[
-        (0x0020, 0x007E, "Basic Latin (printable ASCII)"),
-        (0x00A0, 0x00FF, "Latin-1 Supplement"),
-        (0x2190, 0x21FF, "Arrows"),
-        (0x2200, 0x22FF, "Mathematical Operators"),
-        (0x2300, 0x23FF, "Miscellaneous Technical"),
-        (0x2500, 0x257F, "Box Drawing"),
-        (0x2580, 0x259F, "Block Elements"),
-        (0x25A0, 0x25FF, "Geometric Shapes"),
-        (0x2600, 0x26FF, "Miscellaneous Symbols"),
-        (0x2700, 0x27BF, "Dingbats"),
-    ];
-
     /// Rasterize size in pixels. Larger = more accurate shape vectors.
     /// This only affects the build-time computation, not runtime.
     const RASTER_SIZE: f32 = 64.0;
@@ -79,10 +63,60 @@ mod codegen {
         result
     }
 
+    /// Returns true for characters that are useful for shape-based matching.
+    /// Excludes control characters, combining marks, and other categories
+    /// that don't render as standalone visible glyphs.
+    fn is_useful_char(ch: char) -> bool {
+        // Always include printable ASCII
+        if (' '..='~').contains(&ch) {
+            return true;
+        }
+        // Skip C0/C1 control characters and surrogates
+        if ch < '\u{00A0}' {
+            return false;
+        }
+        // Skip combining diacritical marks (U+0300..U+036F) — they modify
+        // the previous character rather than standing alone.
+        if ('\u{0300}'..='\u{036F}').contains(&ch) {
+            return false;
+        }
+        // Skip variation selectors and other non-visible modifiers
+        if ('\u{FE00}'..='\u{FE0F}').contains(&ch) {
+            return false;
+        }
+        // Skip private use area (powerline glyphs, etc. — non-standard)
+        if ('\u{E000}'..='\u{F8FF}').contains(&ch) {
+            return false;
+        }
+        true
+    }
+
+    fn squared_distance(a: &[f32; 6], b: &[f32; 6]) -> f32 {
+        let mut sum = 0.0_f32;
+        for i in 0..6 {
+            let d = a[i] - b[i];
+            sum += d * d;
+        }
+        sum
+    }
+
     pub fn generate() {
-        let font_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("fonts")
-            .join("JetBrainsMono-Regular.ttf");
+        // Font path: use ASCII_SHAPES_FONT env var if set, otherwise the
+        // bundled JetBrains Mono.
+        let font_path = match std::env::var("ASCII_SHAPES_FONT") {
+            Ok(p) => {
+                let p = Path::new(&p).to_path_buf();
+                println!("cargo::warning=Using custom font: {}", p.display());
+                p
+            }
+            Err(_) => {
+                let p = Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("fonts")
+                    .join("JetBrainsMono-Regular.ttf");
+                println!("cargo::warning=Using bundled font: {}", p.display());
+                p
+            }
+        };
 
         let font_data = std::fs::read(&font_path).unwrap_or_else(|e| {
             panic!("Failed to read font at {}: {}", font_path.display(), e);
@@ -92,24 +126,14 @@ mod codegen {
             panic!("Failed to parse font: {}", e);
         });
 
-        // Collect all characters to rasterize: union of CHAR_RANGES filtered
-        // by what the font actually supports.
-        let font_chars = font.chars();
-        let mut chars_to_process: Vec<char> = Vec::new();
-        for &(start, end, label) in CHAR_RANGES {
-            let mut count = 0u32;
-            for cp in start..=end {
-                if let Some(ch) = char::from_u32(cp) {
-                    if font_chars.contains_key(&ch) {
-                        chars_to_process.push(ch);
-                        count += 1;
-                    }
-                }
-            }
-            println!("cargo::warning={}: {} chars", label, count);
-        }
+        // Use every character the font supports, filtered to useful glyphs.
+        let mut chars_to_process: Vec<char> = font
+            .chars()
+            .keys()
+            .copied()
+            .filter(|&ch| is_useful_char(ch))
+            .collect();
         chars_to_process.sort();
-        chars_to_process.dedup();
 
         let mut char_vectors: BTreeMap<char, [f32; 6]> = BTreeMap::new();
 
@@ -168,38 +192,80 @@ mod codegen {
             }
         }
 
-        // Generate the PHF map source code.
+        // --- Quantized lookup table generation ---
+
+        let n: usize = std::env::var("ASCII_SHAPES_QUANT_LEVELS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(8);
+
+        let table_size = n.pow(6);
+        println!("cargo::warning=Quantization levels: {n}, table size: {table_size}");
+
+        // Collect all character vectors into a Vec for brute-force search.
+        let entries: Vec<(char, [f32; 6])> = char_vectors.into_iter().collect();
+
+        let mut lookup = vec![' ' as u32; table_size];
+
+        for flat_idx in 0..table_size {
+            // Decompose flat index into 6 quantized coordinates.
+            let mut remaining = flat_idx;
+            let mut query = [0.0_f32; 6];
+            for dim in (0..6).rev() {
+                let q = remaining % n;
+                remaining /= n;
+                // Bucket center: (q + 0.5) / n
+                query[dim] = (q as f32 + 0.5) / n as f32;
+            }
+
+            // Brute-force nearest neighbor.
+            let mut best_ch = ' ';
+            let mut best_dist = f32::MAX;
+            for &(ch, ref vec) in &entries {
+                let dist = squared_distance(&query, vec);
+                if dist < best_dist {
+                    best_dist = dist;
+                    best_ch = ch;
+                }
+            }
+
+            lookup[flat_idx] = best_ch as u32;
+        }
+
+        // Write generated.rs
         let out_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
         let out_path = out_dir.join("generated.rs");
         let mut file = std::fs::File::create(&out_path).unwrap();
 
-        writeln!(file, "//! Auto-generated shape vector data.").unwrap();
-        writeln!(file, "//! DO NOT EDIT — regenerate with `cargo build --features generate`.").unwrap();
+        writeln!(file, "//! Auto-generated quantized lookup table.").unwrap();
+        writeln!(file, "//! DO NOT EDIT — regenerate with `cargo build -p ascii_shapes --features generate`.").unwrap();
         writeln!(file, "//!").unwrap();
-        writeln!(file, "//! Font: JetBrains Mono Regular").unwrap();
+        writeln!(file, "//! Font: {}", font_path.display()).unwrap();
         writeln!(file, "//! Raster size: {RASTER_SIZE}px").unwrap();
-        writeln!(file, "//! Characters: {}", char_vectors.len()).unwrap();
+        writeln!(file, "//! Characters: {}", entries.len()).unwrap();
+        writeln!(file, "//! Quantization levels: {n}").unwrap();
+        writeln!(file, "//! Table size: {table_size}").unwrap();
+        writeln!(file).unwrap();
+        writeln!(file, "pub const N: usize = {n};").unwrap();
         writeln!(file).unwrap();
 
-        let mut map_builder = phf_codegen::Map::new();
-        for (&ch, vector) in &char_vectors {
-            let value = format!(
-                "[{:.6}, {:.6}, {:.6}, {:.6}, {:.6}, {:.6}]",
-                vector[0], vector[1], vector[2], vector[3], vector[4], vector[5]
-            );
-            // phf_codegen expects the key as a string that will be a Rust expression
-            map_builder.entry(ch, &value);
+        // Write the lookup table, 16 entries per line, as hex u32 values.
+        let cols = 16;
+        writeln!(file, "pub static LOOKUP: [u32; {}] = [", table_size).unwrap();
+        for (i, &val) in lookup.iter().enumerate() {
+            if i % cols == 0 {
+                write!(file, "    ").unwrap();
+            }
+            write!(file, "0x{:08X},", val).unwrap();
+            if i % cols == cols - 1 || i == table_size - 1 {
+                writeln!(file).unwrap();
+            }
         }
+        writeln!(file, "];").unwrap();
 
-        writeln!(
-            file,
-            "pub static SHAPE_VECTORS: phf::Map<char, [f32; 6]> = {};",
-            map_builder.build()
-        )
-        .unwrap();
-
-        println!("cargo::rerun-if-changed=fonts/JetBrainsMono-Regular.ttf");
+        println!("cargo::rerun-if-changed={}", font_path.display());
         println!("cargo::rerun-if-changed=build.rs");
+        println!("cargo::rerun-if-env-changed=ASCII_SHAPES_QUANT_LEVELS");
     }
 }
 

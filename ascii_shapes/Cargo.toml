@@ -5,11 +5,7 @@ edition = "2024"
 description = "Shape-aware ASCII character matching for image-to-text rendering"
 
 [features]
-generate = ["dep:fontdue", "dep:phf_codegen"]
-
-[dependencies]
-phf = { version = "0.11", features = ["macros"] }
+generate = ["dep:fontdue"]
 
 [build-dependencies]
 fontdue = { version = "0.9", optional = true }
-phf_codegen = { version = "0.11", optional = true }
