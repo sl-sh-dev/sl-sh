@@ -5,8 +5,21 @@ mod codegen {
     use std::io::Write;
     use std::path::Path;
 
-    /// The 95 printable ASCII characters (0x20 through 0x7E).
-    const PRINTABLE_ASCII: std::ops::RangeInclusive<u8> = 0x20..=0x7E;
+    /// Unicode ranges to include in the shape vector table.
+    /// Each range is checked against the font — only characters that have
+    /// glyphs in the font are actually included.
+    const CHAR_RANGES: &[(u32, u32, &str)] = &[
+        (0x0020, 0x007E, "Basic Latin (printable ASCII)"),
+        (0x00A0, 0x00FF, "Latin-1 Supplement"),
+        (0x2190, 0x21FF, "Arrows"),
+        (0x2200, 0x22FF, "Mathematical Operators"),
+        (0x2300, 0x23FF, "Miscellaneous Technical"),
+        (0x2500, 0x257F, "Box Drawing"),
+        (0x2580, 0x259F, "Block Elements"),
+        (0x25A0, 0x25FF, "Geometric Shapes"),
+        (0x2600, 0x26FF, "Miscellaneous Symbols"),
+        (0x2700, 0x27BF, "Dingbats"),
+    ];
 
     /// Rasterize size in pixels. Larger = more accurate shape vectors.
     /// This only affects the build-time computation, not runtime.
@@ -79,16 +92,36 @@ mod codegen {
             panic!("Failed to parse font: {}", e);
         });
 
-        // Rasterize all printable ASCII characters and compute shape vectors.
+        // Collect all characters to rasterize: union of CHAR_RANGES filtered
+        // by what the font actually supports.
+        let font_chars = font.chars();
+        let mut chars_to_process: Vec<char> = Vec::new();
+        for &(start, end, label) in CHAR_RANGES {
+            let mut count = 0u32;
+            for cp in start..=end {
+                if let Some(ch) = char::from_u32(cp) {
+                    if font_chars.contains_key(&ch) {
+                        chars_to_process.push(ch);
+                        count += 1;
+                    }
+                }
+            }
+            println!("cargo::warning={}: {} chars", label, count);
+        }
+        chars_to_process.sort();
+        chars_to_process.dedup();
+
         let mut char_vectors: BTreeMap<char, [f32; 6]> = BTreeMap::new();
 
-        // First, get the metrics for a reference character to determine cell size.
+        // Get the metrics for a reference character to determine cell size.
         let (ref_metrics, _) = font.rasterize('M', RASTER_SIZE);
         let cell_width = ref_metrics.advance_width as usize;
         let cell_height = (RASTER_SIZE * 1.2) as usize; // approximate line height
 
-        for byte in PRINTABLE_ASCII {
-            let ch = byte as char;
+        println!("cargo::warning=Total characters to rasterize: {}", chars_to_process.len());
+
+        for ch in &chars_to_process {
+            let ch = *ch;
             let (metrics, bitmap) = font.rasterize(ch, RASTER_SIZE);
 
             // Place the glyph bitmap into a full cell-sized canvas.
@@ -145,6 +178,7 @@ mod codegen {
         writeln!(file, "//!").unwrap();
         writeln!(file, "//! Font: JetBrains Mono Regular").unwrap();
         writeln!(file, "//! Raster size: {RASTER_SIZE}px").unwrap();
+        writeln!(file, "//! Characters: {}", char_vectors.len()).unwrap();
         writeln!(file).unwrap();
 
         let mut map_builder = phf_codegen::Map::new();

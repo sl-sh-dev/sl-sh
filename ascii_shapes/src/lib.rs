@@ -352,21 +352,30 @@ mod tests {
     }
 
     #[test]
-    fn best_char_returns_space_for_empty() {
+    fn best_char_returns_near_empty_for_empty() {
         let empty = [0.0_f32; 6];
         let ch = best_char(&empty, 1.0);
-        assert_eq!(ch, ' ', "all-zero sampling should match space");
+        // Should match space or a very light character
+        let v = shape_vector(ch).unwrap();
+        let magnitude: f32 = v.iter().map(|x| x * x).sum();
+        assert!(
+            magnitude < 0.1,
+            "all-zero sampling should match a near-empty character, got '{}' (U+{:04X}) with magnitude {}",
+            ch, ch as u32, magnitude
+        );
     }
 
     #[test]
     fn best_char_returns_dense_for_full() {
         let full = [1.0_f32; 6];
         let ch = best_char(&full, 1.0);
-        // Should be a dense character like @ or M or #
+        // Should be a dense character like @ M # W or █
+        let v = shape_vector(ch).unwrap();
+        let magnitude: f32 = v.iter().map(|x| x * x).sum();
         assert!(
-            ['@', 'M', '#', 'W', '$', '%', 'B', '&'].contains(&ch),
-            "all-1.0 sampling should match a dense character, got '{}'",
-            ch
+            magnitude > 3.0,
+            "all-1.0 sampling should match a dense character, got '{}' (U+{:04X}) with magnitude {}",
+            ch, ch as u32, magnitude
         );
     }
 
@@ -463,6 +472,12 @@ mod tests {
         let empty = [0.0_f32; 6];
         let no_external = [0.0_f32; 10];
         let ch = best_char_directional(&empty, &no_external, 1.0);
-        assert_eq!(ch, ' ', "all-zero with no external should match space");
+        let v = shape_vector(ch).unwrap();
+        let magnitude: f32 = v.iter().map(|x| x * x).sum();
+        assert!(
+            magnitude < 0.1,
+            "all-zero with no external should match a near-empty character, got '{}' (U+{:04X}) with magnitude {}",
+            ch, ch as u32, magnitude
+        );
     }
 }
