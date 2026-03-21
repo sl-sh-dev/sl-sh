@@ -904,11 +904,13 @@ fn parse_line_inner(
                 }
                 '"' if state.last_ch != '\\' => {
                     let arg_str = read_string(jobs, chars)?;
+                    let resolved = arg_str.resolve_arg(jobs)?.to_string_lossy().to_string();
                     // Single quote in token to avoid future expansions in string.
+                    // Escape any literal single quotes in the content with '\'' so
+                    // they survive the downstream expansion pipeline (expand_braces,
+                    // expand_params_comms, expand_globs, strip_quotes).
                     state.token().push('\'');
-                    state
-                        .token()
-                        .push_str(&arg_str.resolve_arg(jobs)?.to_string_lossy());
+                    state.token().push_str(&resolved.replace('\'', "'\\''"));
                     state.token().push('\'');
                     state.last_ch = ch;
                 }
