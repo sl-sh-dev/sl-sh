@@ -54,7 +54,7 @@ nix = "0.29"
 chrono = "0.4.38"
 
 static_assertions = "1.1.0"
-rand = "0.8.5"
+rand = "0.9.3"
 walkdir = "2.5.0"
 same-file = "1.0.6"
 trybuild = "1.0.101"
