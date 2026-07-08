@@ -206,6 +206,7 @@ mod codegen {
         let entries: Vec<(char, [f32; 6])> = char_vectors.into_iter().collect();
 
         let mut lookup = vec![' ' as u32; table_size];
+        let mut lookup_ascii = vec![' ' as u32; table_size];
 
         for flat_idx in 0..table_size {
             // Decompose flat index into 6 quantized coordinates.
@@ -218,18 +219,26 @@ mod codegen {
                 query[dim] = (q as f32 + 0.5) / n as f32;
             }
 
-            // Brute-force nearest neighbor.
+            // Brute-force nearest neighbor for both full and ASCII-only.
             let mut best_ch = ' ';
             let mut best_dist = f32::MAX;
+            let mut best_ascii_ch = ' ';
+            let mut best_ascii_dist = f32::MAX;
+
             for &(ch, ref vec) in &entries {
                 let dist = squared_distance(&query, vec);
                 if dist < best_dist {
                     best_dist = dist;
                     best_ch = ch;
                 }
+                if (' '..='~').contains(&ch) && dist < best_ascii_dist {
+                    best_ascii_dist = dist;
+                    best_ascii_ch = ch;
+                }
             }
 
             lookup[flat_idx] = best_ch as u32;
+            lookup_ascii[flat_idx] = best_ascii_ch as u32;
         }
 
         // Write generated.rs
@@ -237,27 +246,44 @@ mod codegen {
         let out_path = out_dir.join("generated.rs");
         let mut file = std::fs::File::create(&out_path).unwrap();
 
-        writeln!(file, "//! Auto-generated quantized lookup table.").unwrap();
+        let ascii_count = entries.iter().filter(|(ch, _)| (' '..='~').contains(ch)).count();
+
+        writeln!(file, "//! Auto-generated quantized lookup tables.").unwrap();
         writeln!(file, "//! DO NOT EDIT — regenerate with `cargo build -p ascii_shapes --features generate`.").unwrap();
         writeln!(file, "//!").unwrap();
         writeln!(file, "//! Font: {}", font_path.display()).unwrap();
         writeln!(file, "//! Raster size: {RASTER_SIZE}px").unwrap();
-        writeln!(file, "//! Characters: {}", entries.len()).unwrap();
+        writeln!(file, "//! Characters: {} (full), {} (ASCII-only)", entries.len(), ascii_count).unwrap();
         writeln!(file, "//! Quantization levels: {n}").unwrap();
-        writeln!(file, "//! Table size: {table_size}").unwrap();
+        writeln!(file, "//! Table size: {table_size} per table").unwrap();
         writeln!(file).unwrap();
         writeln!(file, "pub const N: usize = {n};").unwrap();
         writeln!(file).unwrap();
 
-        // Write the lookup table, 16 entries per line, as hex u32 values.
-        let cols = 16;
+        // Write both lookup tables, 16 entries per line, as hex u32 values.
+        let output_cols = 16;
+
         writeln!(file, "pub static LOOKUP: [u32; {}] = [", table_size).unwrap();
         for (i, &val) in lookup.iter().enumerate() {
-            if i % cols == 0 {
+            if i % output_cols == 0 {
                 write!(file, "    ").unwrap();
             }
             write!(file, "0x{:08X},", val).unwrap();
-            if i % cols == cols - 1 || i == table_size - 1 {
+            if i % output_cols == output_cols - 1 || i == table_size - 1 {
+                writeln!(file).unwrap();
+            }
+        }
+        writeln!(file, "];").unwrap();
+
+        writeln!(file).unwrap();
+
+        writeln!(file, "pub static LOOKUP_ASCII: [u32; {}] = [", table_size).unwrap();
+        for (i, &val) in lookup_ascii.iter().enumerate() {
+            if i % output_cols == 0 {
+                write!(file, "    ").unwrap();
+            }
+            write!(file, "0x{:08X},", val).unwrap();
+            if i % output_cols == output_cols - 1 || i == table_size - 1 {
                 writeln!(file).unwrap();
             }
         }

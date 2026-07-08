@@ -287,13 +287,14 @@ Example:
         env,
         "lightness->ascii",
         ascii_art::builtin_lightness_to_ascii,
-        r#"Usage: (lightness->ascii lightness-vec img-w img-h [:cols N] [:contrast F])
+        r#"Usage: (lightness->ascii lightness-vec img-w img-h [:cols N] [:contrast F] [:ascii BOOL])
 
 Convert a flat vector of lightness floats ([0.0, 1.0]) to an ASCII art string.
 lightness-vec is row-major, img-w x img-h pixels.
 
-:cols    - output width in characters (default 80)
+:cols     - output width in characters (default 80)
 :contrast - contrast exponent, 1.0 = none (default 1.2)
+:ascii    - restrict to printable ASCII only (default #f)
 
 Section: ascii-art
 
@@ -305,12 +306,13 @@ Example:
         env,
         "image->ascii",
         ascii_art::builtin_image_to_ascii,
-        r#"Usage: (image->ascii path [:cols N] [:contrast F])
+        r#"Usage: (image->ascii path [:cols N] [:contrast F] [:ascii BOOL])
 
 Load a PNG or JPEG image and convert it to an ASCII art string.
 
-:cols    - output width in characters (default 80)
+:cols     - output width in characters (default 80)
 :contrast - contrast exponent, 1.0 = none (default 1.2)
+:ascii    - restrict to printable ASCII only (default #f)
 
 Section: ascii-art
 
@@ -322,7 +324,7 @@ Example:
         env,
         "gif->ascii",
         ascii_art::builtin_gif_to_ascii,
-        r#"Usage: (gif->ascii path panel-name [:cols N] [:contrast F] [:loop BOOL])
+        r#"Usage: (gif->ascii path panel-name [:cols N] [:contrast F] [:loop BOOL] [:ascii BOOL])
 
 Decode a GIF file and play its frames as ASCII art in the named panel.
 Returns immediately; frames are played from a background thread.
@@ -331,6 +333,7 @@ The animation stops when the panel is closed.
 :cols     - output width in characters (default 80)
 :contrast - contrast exponent, 1.0 = none (default 1.2)
 :loop     - loop forever (default #t), set #f for single play
+:ascii    - restrict to printable ASCII only (default #f)
 
 Section: ascii-art
 
@@ -342,13 +345,14 @@ Example:
         env,
         "text->ascii",
         ascii_art::builtin_text_to_ascii,
-        r#"Usage: (text->ascii text [:cols N] [:size F] [:contrast F])
+        r#"Usage: (text->ascii text [:cols N] [:size F] [:contrast F] [:ascii BOOL])
 
 Render a text string as large ASCII art using JetBrains Mono.
 
-:cols    - output width in characters (default 60)
-:size    - font rasterization size in pixels (default 48.0)
+:cols     - output width in characters (default 60)
+:size     - font rasterization size in pixels (default 48.0)
 :contrast - contrast exponent, 1.0 = none (default 1.5)
+:ascii    - restrict to printable ASCII only (default #f)
 
 Section: ascii-art
 

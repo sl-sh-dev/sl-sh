@@ -12,6 +12,7 @@ pub fn lightness_to_ascii(
     img_h: usize,
     cols: usize,
     contrast: f32,
+    ascii_only: bool,
 ) -> String {
     if img_w == 0 || img_h == 0 || cols == 0 {
         return String::new();
@@ -53,7 +54,7 @@ pub fn lightness_to_ascii(
                 cell_w,
                 cell_h,
             );
-            let ch = ascii_shapes::best_char_directional(&internal, &sv, contrast);
+            let ch = ascii_shapes::best_char_directional(&internal, &sv, contrast, ascii_only);
             result.push(ch);
         }
     }
@@ -87,7 +88,12 @@ fn extract_cell(
 }
 
 /// Load an image file and convert to ASCII art string.
-pub fn image_to_ascii(path: &str, cols: usize, contrast: f32) -> Result<String, String> {
+pub fn image_to_ascii(
+    path: &str,
+    cols: usize,
+    contrast: f32,
+    ascii_only: bool,
+) -> Result<String, String> {
     let img = image::open(path).map_err(|e| format!("failed to open image: {e}"))?;
     let gray = img.to_luma8();
     let (w, h) = gray.dimensions();
@@ -98,21 +104,21 @@ pub fn image_to_ascii(path: &str, cols: usize, contrast: f32) -> Result<String, 
         h as usize,
         cols,
         contrast,
+        ascii_only,
     ))
 }
 
 /// Decode a GIF into a vec of (ascii_string, delay_ms) pairs.
 ///
-/// Each frame is decoded independently and composited over a WHITE
-/// background (not over the previous frame). This prevents "ghosting"
-/// from GIF disposal methods that accumulate previous frame content
-/// through transparent pixels.
+/// Maintains a persistent RGBA canvas across frames and handles GIF
+/// disposal methods properly so incremental frames composite correctly.
 pub fn gif_to_ascii_frames(
     path: &str,
     cols: usize,
     contrast: f32,
+    ascii_only: bool,
 ) -> Result<Vec<(String, u64)>, String> {
-    use gif::DecodeOptions;
+    use gif::{DecodeOptions, DisposalMethod};
 
     let file = std::fs::File::open(path).map_err(|e| format!("failed to open GIF: {e}"))?;
     let mut opts = DecodeOptions::new();
@@ -127,6 +133,9 @@ pub fn gif_to_ascii_frames(
         return Err("GIF has zero dimensions".to_string());
     }
 
+    // Persistent RGBA canvas — starts as opaque white.
+    let mut canvas = vec![255u8; canvas_w * canvas_h * 4];
+
     let mut result = Vec::new();
     while let Some(raw_frame) = decoder
         .read_next_frame()
@@ -139,12 +148,16 @@ pub fn gif_to_ascii_frames(
         let top = raw_frame.top as usize;
         let fw = raw_frame.width as usize;
         let fh = raw_frame.height as usize;
+        let dispose = raw_frame.dispose;
 
-        // Start with a white canvas (lightness 1.0 everywhere).
-        let mut lightness = vec![1.0_f32; canvas_w * canvas_h];
+        // Save canvas before compositing if we need to restore it later.
+        let saved = if dispose == DisposalMethod::Previous {
+            Some(canvas.clone())
+        } else {
+            None
+        };
 
-        // Blit this frame's pixels onto the white canvas.
-        // RGBA — 4 bytes per pixel.
+        // Composite this frame's pixels onto the persistent canvas.
         for y in 0..fh {
             let cy = top + y;
             if cy >= canvas_h {
@@ -155,20 +168,56 @@ pub fn gif_to_ascii_frames(
                 if cx >= canvas_w {
                     break;
                 }
-                let idx = (y * fw + x) * 4;
-                let r = raw_frame.buffer[idx] as f32;
-                let g = raw_frame.buffer[idx + 1] as f32;
-                let b = raw_frame.buffer[idx + 2] as f32;
-                let a = raw_frame.buffer[idx + 3] as f32 / 255.0;
-                // Composite over white: lum * alpha + white * (1 - alpha)
-                let luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-                lightness[cy * canvas_w + cx] =
-                    (luminance * a + 255.0 * (1.0 - a)) / 255.0;
+                let src = (y * fw + x) * 4;
+                let dst = (cy * canvas_w + cx) * 4;
+                let a = raw_frame.buffer[src + 3] as f32 / 255.0;
+                if a > 0.0 {
+                    for c in 0..3 {
+                        canvas[dst + c] = (raw_frame.buffer[src + c] as f32 * a
+                            + canvas[dst + c] as f32 * (1.0 - a))
+                            as u8;
+                    }
+                    canvas[dst + 3] = 255;
+                }
             }
         }
 
-        let ascii = lightness_to_ascii(&lightness, canvas_w, canvas_h, cols, contrast);
+        // Convert canvas to lightness for ASCII rendering.
+        let lightness: Vec<f32> = canvas
+            .chunks_exact(4)
+            .map(|px| {
+                (0.2126 * px[0] as f32 + 0.7152 * px[1] as f32 + 0.0722 * px[2] as f32)
+                    / 255.0
+            })
+            .collect();
+
+        let ascii = lightness_to_ascii(&lightness, canvas_w, canvas_h, cols, contrast, ascii_only);
         result.push((ascii, delay_ms));
+
+        // Apply disposal method for next frame.
+        match dispose {
+            DisposalMethod::Previous => {
+                canvas = saved.unwrap();
+            }
+            DisposalMethod::Background => {
+                // Clear the frame region to white.
+                for y in 0..fh {
+                    let cy = top + y;
+                    if cy >= canvas_h {
+                        break;
+                    }
+                    for x in 0..fw {
+                        let cx = left + x;
+                        if cx >= canvas_w {
+                            break;
+                        }
+                        let dst = (cy * canvas_w + cx) * 4;
+                        canvas[dst..dst + 4].copy_from_slice(&[255, 255, 255, 255]);
+                    }
+                }
+            }
+            _ => {} // Keep / Any — leave canvas as-is
+        }
     }
 
     if result.is_empty() {
@@ -181,7 +230,7 @@ pub fn gif_to_ascii_frames(
 ///
 /// Rasterizes `text` using JetBrains Mono at `font_size`, then converts
 /// the resulting bitmap to ASCII art with `cols` output width.
-pub fn text_to_ascii(text: &str, cols: usize, font_size: f32, contrast: f32) -> String {
+pub fn text_to_ascii(text: &str, cols: usize, font_size: f32, contrast: f32, ascii_only: bool) -> String {
     let font_data = include_bytes!("../../ascii_shapes/fonts/JetBrainsMono-Regular.ttf");
     let font = fontdue::Font::from_bytes(
         font_data as &[u8],
@@ -255,7 +304,7 @@ pub fn text_to_ascii(text: &str, cols: usize, font_size: f32, contrast: f32) -> 
         cursor_x += advance;
     }
 
-    lightness_to_ascii(&lightness, bitmap_w, bitmap_h, cols, contrast)
+    lightness_to_ascii(&lightness, bitmap_w, bitmap_h, cols, contrast, ascii_only)
 }
 
 // ---------------------------------------------------------------------------
@@ -316,7 +365,7 @@ fn val_to_string(vm: &SloshVm, val: &Value, fn_name: &str, arg_desc: &str) -> VM
     }
 }
 
-/// (lightness->ascii lightness-vec img-w img-h [:cols N] [:contrast F])
+/// (lightness->ascii lightness-vec img-w img-h [:cols N] [:contrast F] [:ascii BOOL])
 ///
 /// Convert a flat vector of lightness floats to an ASCII art string.
 pub fn builtin_lightness_to_ascii(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
@@ -371,6 +420,7 @@ pub fn builtin_lightness_to_ascii(vm: &mut SloshVm, registers: &[Value]) -> VMRe
     // Defaults
     let mut cols: usize = 80;
     let mut contrast: f32 = 1.2;
+    let mut ascii_only = false;
 
     // Keyword args
     while let Some(arg) = args.next() {
@@ -387,6 +437,12 @@ pub fn builtin_lightness_to_ascii(vm: &mut SloshVm, registers: &[Value]) -> VMRe
                         VMError::new("ascii-art", format!("{fn_name}: :contrast requires a value"))
                     })?;
                     contrast = parse_kw_float(vm, val, "contrast", fn_name)?;
+                }
+                "ascii" => {
+                    let val = args.next().ok_or_else(|| {
+                        VMError::new("ascii-art", format!("{fn_name}: :ascii requires a value"))
+                    })?;
+                    ascii_only = parse_kw_bool(vm, val, "ascii", fn_name)?;
                 }
                 other => {
                     return Err(VMError::new(
@@ -406,11 +462,11 @@ pub fn builtin_lightness_to_ascii(vm: &mut SloshVm, registers: &[Value]) -> VMRe
         }
     }
 
-    let result = lightness_to_ascii(&lightness, img_w, img_h, cols, contrast);
+    let result = lightness_to_ascii(&lightness, img_w, img_h, cols, contrast, ascii_only);
     Ok(vm.alloc_string(result))
 }
 
-/// (image->ascii path [:cols N] [:contrast F])
+/// (image->ascii path [:cols N] [:contrast F] [:ascii BOOL])
 ///
 /// Load a PNG/JPG image and convert to ASCII art string.
 pub fn builtin_image_to_ascii(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
@@ -426,6 +482,7 @@ pub fn builtin_image_to_ascii(vm: &mut SloshVm, registers: &[Value]) -> VMResult
     // Defaults
     let mut cols: usize = 80;
     let mut contrast: f32 = 1.2;
+    let mut ascii_only = false;
 
     // Keyword args
     while let Some(arg) = args.next() {
@@ -442,6 +499,12 @@ pub fn builtin_image_to_ascii(vm: &mut SloshVm, registers: &[Value]) -> VMResult
                         VMError::new("ascii-art", format!("{fn_name}: :contrast requires a value"))
                     })?;
                     contrast = parse_kw_float(vm, val, "contrast", fn_name)?;
+                }
+                "ascii" => {
+                    let val = args.next().ok_or_else(|| {
+                        VMError::new("ascii-art", format!("{fn_name}: :ascii requires a value"))
+                    })?;
+                    ascii_only = parse_kw_bool(vm, val, "ascii", fn_name)?;
                 }
                 other => {
                     return Err(VMError::new(
@@ -461,13 +524,13 @@ pub fn builtin_image_to_ascii(vm: &mut SloshVm, registers: &[Value]) -> VMResult
         }
     }
 
-    match image_to_ascii(&path, cols, contrast) {
+    match image_to_ascii(&path, cols, contrast, ascii_only) {
         Ok(result) => Ok(vm.alloc_string(result)),
         Err(e) => Err(VMError::new("ascii-art", format!("{fn_name}: {e}"))),
     }
 }
 
-/// (text->ascii text [:cols N] [:size F] [:contrast F])
+/// (text->ascii text [:cols N] [:size F] [:contrast F] [:ascii BOOL])
 ///
 /// Rasterize text into large ASCII art using JetBrains Mono.
 pub fn builtin_text_to_ascii(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
@@ -484,6 +547,7 @@ pub fn builtin_text_to_ascii(vm: &mut SloshVm, registers: &[Value]) -> VMResult<
     let mut cols: usize = 60;
     let mut font_size: f32 = 48.0;
     let mut contrast: f32 = 1.5;
+    let mut ascii_only = false;
 
     // Keyword args
     while let Some(arg) = args.next() {
@@ -507,6 +571,12 @@ pub fn builtin_text_to_ascii(vm: &mut SloshVm, registers: &[Value]) -> VMResult<
                     })?;
                     contrast = parse_kw_float(vm, val, "contrast", fn_name)?;
                 }
+                "ascii" => {
+                    let val = args.next().ok_or_else(|| {
+                        VMError::new("ascii-art", format!("{fn_name}: :ascii requires a value"))
+                    })?;
+                    ascii_only = parse_kw_bool(vm, val, "ascii", fn_name)?;
+                }
                 other => {
                     return Err(VMError::new(
                         "ascii-art",
@@ -525,7 +595,7 @@ pub fn builtin_text_to_ascii(vm: &mut SloshVm, registers: &[Value]) -> VMResult<
         }
     }
 
-    let result = text_to_ascii(&text, cols, font_size, contrast);
+    let result = text_to_ascii(&text, cols, font_size, contrast, ascii_only);
     Ok(vm.alloc_string(result))
 }
 
@@ -544,7 +614,7 @@ fn parse_kw_bool(vm: &SloshVm, val: &Value, kw_name: &str, fn_name: &str) -> VMR
     }
 }
 
-/// (gif->ascii path panel-name [:cols N] [:contrast F] [:loop BOOL])
+/// (gif->ascii path panel-name [:cols N] [:contrast F] [:loop BOOL] [:ascii BOOL])
 ///
 /// Decode a GIF file and play its frames as ASCII art in the named panel.
 /// Returns immediately; frames are played from a background thread.
@@ -553,6 +623,7 @@ fn parse_kw_bool(vm: &SloshVm, val: &Value, kw_name: &str, fn_name: &str) -> VMR
 /// :cols     - output width in characters (default 80)
 /// :contrast - contrast exponent, 1.0 = none (default 1.2)
 /// :loop     - loop forever (default #t), set to #f for single play
+/// :ascii    - restrict to printable ASCII only (default #f)
 pub fn builtin_gif_to_ascii(vm: &mut SloshVm, registers: &[Value]) -> VMResult<Value> {
     let fn_name = "gif->ascii";
     let mut args = registers.iter();
@@ -576,6 +647,7 @@ pub fn builtin_gif_to_ascii(vm: &mut SloshVm, registers: &[Value]) -> VMResult<V
     let mut cols: usize = 80;
     let mut contrast: f32 = 1.2;
     let mut do_loop = true;
+    let mut ascii_only = false;
 
     // Keyword args
     while let Some(arg) = args.next() {
@@ -602,6 +674,12 @@ pub fn builtin_gif_to_ascii(vm: &mut SloshVm, registers: &[Value]) -> VMResult<V
                     })?;
                     do_loop = parse_kw_bool(vm, val, "loop", fn_name)?;
                 }
+                "ascii" => {
+                    let val = args.next().ok_or_else(|| {
+                        VMError::new("ascii-art", format!("{fn_name}: :ascii requires a value"))
+                    })?;
+                    ascii_only = parse_kw_bool(vm, val, "ascii", fn_name)?;
+                }
                 other => {
                     return Err(VMError::new(
                         "ascii-art",
@@ -621,7 +699,7 @@ pub fn builtin_gif_to_ascii(vm: &mut SloshVm, registers: &[Value]) -> VMResult<V
     }
 
     // Pre-compute all frames
-    let frames = gif_to_ascii_frames(&path, cols, contrast)
+    let frames = gif_to_ascii_frames(&path, cols, contrast, ascii_only)
         .map_err(|e| VMError::new("ascii-art", format!("{fn_name}: {e}")))?;
 
     // Spawn background playback thread
@@ -679,8 +757,8 @@ pub fn builtin_gif_to_ascii(vm: &mut SloshVm, registers: &[Value]) -> VMResult<V
                         (content_w + 20) * content_h,
                     );
 
-                    // Save cursor, hide it, open scroll region
-                    let _ = write!(buf, "\x1B7\x1B[?25l\x1B[r");
+                    // Begin synchronized output, save cursor, hide it, open scroll region
+                    let _ = write!(buf, "\x1B[?2026h\x1B7\x1B[?25l\x1B[r");
 
                     for row_idx in 0..content_h {
                         // Goto this row
@@ -703,12 +781,12 @@ pub fn builtin_gif_to_ascii(vm: &mut SloshVm, registers: &[Value]) -> VMResult<V
                         }
                     }
 
-                    // Restore scroll region, cursor, show cursor
+                    // Restore scroll region, cursor, show cursor, end synchronized output
                     let scroll_bottom =
                         main_area.row + main_area.height.saturating_sub(1);
                     let _ = write!(
                         buf,
-                        "\x1B[{};{}r\x1B8\x1B[?25h",
+                        "\x1B[{};{}r\x1B8\x1B[?25h\x1B[?2026l",
                         main_area.row, scroll_bottom,
                     );
 
@@ -737,7 +815,7 @@ mod tests {
         let w = 80;
         let h = 40;
         let lightness = vec![1.0_f32; w * h];
-        let result = lightness_to_ascii(&lightness, w, h, 10, 1.2);
+        let result = lightness_to_ascii(&lightness, w, h, 10, 1.2, false);
         assert!(!result.is_empty());
         // All-white should produce sparse/light characters (not dense ones).
         // With quantization, exact space isn't guaranteed for the all-zero
@@ -757,7 +835,7 @@ mod tests {
         let w = 80;
         let h = 40;
         let lightness = vec![0.0_f32; w * h];
-        let result = lightness_to_ascii(&lightness, w, h, 10, 1.0);
+        let result = lightness_to_ascii(&lightness, w, h, 10, 1.0, false);
         assert!(!result.is_empty());
         // All-black should produce dense characters (not spaces)
         for ch in result.chars() {
@@ -773,7 +851,7 @@ mod tests {
         let h = 80;
         let cols = 10;
         let lightness = vec![0.5_f32; w * h];
-        let result = lightness_to_ascii(&lightness, w, h, cols, 1.0);
+        let result = lightness_to_ascii(&lightness, w, h, cols, 1.0, false);
         let lines: Vec<&str> = result.lines().collect();
         // cell_w = 100/10 = 10, cell_h = 20, rows = 80/20 = 4
         assert_eq!(lines.len(), 4);
@@ -784,19 +862,19 @@ mod tests {
 
     #[test]
     fn lightness_to_ascii_empty_input() {
-        assert_eq!(lightness_to_ascii(&[], 0, 0, 10, 1.0), "");
-        assert_eq!(lightness_to_ascii(&[0.5], 1, 1, 0, 1.0), "");
+        assert_eq!(lightness_to_ascii(&[], 0, 0, 10, 1.0, false), "");
+        assert_eq!(lightness_to_ascii(&[0.5], 1, 1, 0, 1.0, false), "");
     }
 
     #[test]
     fn image_to_ascii_nonexistent_file() {
-        let result = image_to_ascii("/nonexistent/path.png", 80, 1.2);
+        let result = image_to_ascii("/nonexistent/path.png", 80, 1.2, false);
         assert!(result.is_err());
     }
 
     #[test]
     fn text_to_ascii_produces_output() {
-        let result = text_to_ascii("Hello", 40, 64.0, 1.5);
+        let result = text_to_ascii("Hello", 40, 64.0, 1.5, false);
         assert!(!result.is_empty(), "text->ascii should produce output for 'Hello'");
         let lines: Vec<&str> = result.lines().collect();
         assert!(lines.len() > 1, "text->ascii should produce multiple lines");
@@ -804,13 +882,13 @@ mod tests {
 
     #[test]
     fn text_to_ascii_empty_string() {
-        let result = text_to_ascii("", 40, 48.0, 1.5);
+        let result = text_to_ascii("", 40, 48.0, 1.5, false);
         assert!(result.is_empty());
     }
 
     #[test]
     fn gif_to_ascii_frames_nonexistent_file() {
-        let result = gif_to_ascii_frames("/nonexistent/path.gif", 40, 1.2);
+        let result = gif_to_ascii_frames("/nonexistent/path.gif", 40, 1.2, false);
         assert!(result.is_err());
     }
 }

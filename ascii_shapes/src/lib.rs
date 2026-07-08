@@ -88,40 +88,54 @@ fn quantized_index(sv: &ShapeVector) -> usize {
 
 /// Look up the best-matching character for a shape vector via the
 /// precomputed quantized table. O(1).
+///
+/// When `ascii_only` is true, uses the ASCII-only table (printable
+/// ASCII 0x20-0x7E only).
 #[inline]
-fn lookup_char(sv: &ShapeVector) -> char {
+fn lookup_char(sv: &ShapeVector, ascii_only: bool) -> char {
     let idx = quantized_index(sv);
     // Safety: the table is exactly N^6 entries and quantized_index
     // is bounded to [0, N^6 - 1].
-    char::from_u32(generated::LOOKUP[idx]).unwrap_or(' ')
+    let table = if ascii_only {
+        &generated::LOOKUP_ASCII
+    } else {
+        &generated::LOOKUP
+    };
+    char::from_u32(table[idx]).unwrap_or(' ')
 }
 
-/// Find the ASCII character whose shape vector best matches the given
-/// sampling vector.
+/// Find the best-matching character for a sampling vector.
 ///
 /// The `contrast` parameter (>= 1.0) enhances edges by raising normalized
 /// sampling vector components to this power before matching.  A value of
 /// 1.0 means no contrast enhancement.
-pub fn best_char(sampling: &ShapeVector, contrast: f32) -> char {
+///
+/// When `ascii_only` is true, only the 95 printable ASCII characters
+/// (0x20-0x7E) are considered.
+pub fn best_char(sampling: &ShapeVector, contrast: f32, ascii_only: bool) -> char {
     let adjusted = if contrast > 1.0 {
         apply_contrast(sampling, contrast)
     } else {
         *sampling
     };
 
-    lookup_char(&adjusted)
+    lookup_char(&adjusted, ascii_only)
 }
 
-/// Find the best matching ASCII character using both global and directional
+/// Find the best matching character using both global and directional
 /// contrast enhancement.
 ///
 /// This is the full algorithm from the article.  The `external` vector
 /// contains 10 samples from neighboring cells.  Both global and directional
 /// contrast are applied with the given `exponent` before matching.
+///
+/// When `ascii_only` is true, only the 95 printable ASCII characters
+/// (0x20-0x7E) are considered.
 pub fn best_char_directional(
     sampling: &ShapeVector,
     external: &ExternalVector,
     exponent: f32,
+    ascii_only: bool,
 ) -> char {
     let adjusted = if exponent > 1.0 {
         let global = apply_contrast(sampling, exponent);
@@ -130,7 +144,7 @@ pub fn best_char_directional(
         *sampling
     };
 
-    lookup_char(&adjusted)
+    lookup_char(&adjusted, ascii_only)
 }
 
 /// Apply global contrast enhancement to a sampling vector.
@@ -335,7 +349,7 @@ mod tests {
         // With quantization, the all-zero input maps to bucket center
         // (0.5/N, ...) which may match a very sparse character rather
         // than exact space. Just verify it's a light/sparse character.
-        let ch = best_char(&[0.0; 6], 1.0);
+        let ch = best_char(&[0.0; 6], 1.0, false);
         // Should not be a dense character
         assert_ne!(ch, '#', "all-zero should not match '#'");
         assert_ne!(ch, '@', "all-zero should not match '@'");
@@ -345,8 +359,27 @@ mod tests {
     #[test]
     fn best_char_returns_dense_for_full() {
         let full = [1.0_f32; 6];
-        let ch = best_char(&full, 1.0);
+        let ch = best_char(&full, 1.0, false);
         assert_ne!(ch, ' ', "all-1.0 sampling should not match space, got '{ch}'");
+    }
+
+    #[test]
+    fn ascii_only_returns_printable_ascii() {
+        // Verify that ascii_only mode returns only chars in 0x20..=0x7E.
+        let test_vectors: &[[f32; 6]] = &[
+            [0.0; 6],
+            [1.0; 6],
+            [0.5; 6],
+            [0.8, 0.2, 0.5, 0.1, 0.9, 0.3],
+        ];
+        for sv in test_vectors {
+            let ch = best_char(sv, 1.0, true);
+            assert!(
+                (' '..='~').contains(&ch),
+                "ascii_only should return printable ASCII, got '{ch}' (U+{:04X})",
+                ch as u32
+            );
+        }
     }
 
     #[test]
@@ -441,7 +474,7 @@ mod tests {
     fn best_char_directional_matches_basic() {
         let empty = [0.0_f32; 6];
         let no_external = [0.0_f32; 10];
-        let ch = best_char_directional(&empty, &no_external, 1.0);
+        let ch = best_char_directional(&empty, &no_external, 1.0, false);
         // With quantization, exact space isn't guaranteed for all-zero.
         // Just verify it returns a valid, sparse character.
         assert_ne!(ch, '#', "all-zero should not match '#'");
